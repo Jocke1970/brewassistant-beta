@@ -1,9 +1,174 @@
 # =========================
 # BREWASSISTANT NOTIFICATIONS
 # =========================
-# TODO:
-# - spunding reminder
-# - dry hop reminder
-# - cold crash ready
-# - transfer ready
+# Notification layer for:
+# - step reminders
+# - readiness notifications
 # - temperature warnings
+# - basic process alerts
+#
+# Notes:
+# - Uses persistent notifications for safe default behavior.
+# - Can later be extended with notify.mobile_app_* or other channels.
+
+automation:
+  - alias: FWK - Spunding Reminder
+    id: fwk_spunding_reminder
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_spunding_active
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Spunding is now due.
+            Install the spunding valve and set target pressure to about
+            {{ states('sensor.recipe_runtime_spunding_target_bar') }} bar.
+
+  - alias: FWK - Dry Hop Reminder
+    id: fwk_dry_hop_reminder
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_dry_hop_active
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Dry hop window is now active.
+            Add the planned dry hop charge for the current recipe.
+
+  - alias: FWK - Ready For Cold Crash Notification
+    id: fwk_ready_for_cold_crash_notification
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_ready_for_cold_crash
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Fermentation appears ready for cold crash.
+            SG is stable and close to target FG.
+            Recommended cold crash target:
+            {{ states('sensor.recipe_runtime_cold_crash_temp') }} °C.
+
+  - alias: FWK - Ready For Transfer Notification
+    id: fwk_ready_for_transfer_notification
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_ready_for_transfer
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Transfer is now ready.
+            Cold crash minimum duration has been reached.
+            Recommended transfer pressure:
+            {{ states('sensor.recipe_runtime_transfer_pressure_bar') }} bar.
+
+  - alias: FWK - Temperature High Warning
+    id: fwk_temperature_high_warning
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_temperature_too_high
+        to: "on"
+        for: "00:15:00"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant Warning"
+          message: >
+            Fermentation temperature is above the recommended range.
+            Live temp: {{ states('sensor.fwk_live_temp') }} °C.
+            Recommended max:
+            {{ states('sensor.recipe_runtime_primary_temp_high') }} °C.
+
+  - alias: FWK - Temperature Low Warning
+    id: fwk_temperature_low_warning
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_temperature_too_low
+        to: "on"
+        for: "00:15:00"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant Warning"
+          message: >
+            Fermentation temperature is below the recommended range.
+            Live temp: {{ states('sensor.fwk_live_temp') }} °C.
+            Recommended min:
+            {{ states('sensor.recipe_runtime_primary_temp_low') }} °C.
+
+  - alias: FWK - Batch Started Notification
+    id: fwk_batch_started_notification
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_batch_active
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Batch started.
+            Recipe source: {{ states('sensor.recipe_runtime_source') }}.
+            OG target: {{ states('sensor.recipe_runtime_og') }}.
+            FG target: {{ states('sensor.recipe_runtime_fg') }}.
+
+  - alias: FWK - Batch Completed Notification
+    id: fwk_batch_completed_notification
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_transferred_to_keg
+        to: "on"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant"
+          message: >
+            Batch marked as transferred to keg.
+            BrewAssistant workflow for this batch is complete.
+
+  - alias: FWK - Preview Spunding Notification
+    id: fwk_preview_spunding_notification
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_spunding_preview
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_spunding_installed
+        state: "off"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant Preview"
+          message: >
+            Spunding is approaching.
+            Prepare your spunding setup soon.
+
+  - alias: FWK - Preview Dry Hop Notification
+    id: fwk_preview_dry_hop_notification
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_dry_hop_preview
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_dry_hop_added
+        state: "off"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: "BrewAssistant Preview"
+          message: >
+            Dry hop window is approaching.
+            Current SG: {{ states('sensor.fwk_live_sg') }}.
