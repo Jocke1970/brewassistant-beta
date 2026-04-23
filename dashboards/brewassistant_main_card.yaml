@@ -1,7 +1,587 @@
-# BrewAssistant main card
-# TODO:
-# - recipe name
-# - status
-# - next step
-# - SG / temp / age
-# - expand/collapse behavior
+type: custom:stack-in-card
+mode: vertical
+cards:
+  - type: custom:button-card
+    entity: sensor.fwk_process_status
+    name: BrewAssistant
+    show_state: true
+    show_label: true
+    show_name: true
+    show_icon: true
+    icon: |
+      [[[
+        const s = states['sensor.fwk_process_status']?.state ?? 'Idle';
+        if (s === 'Cold crash') return 'mdi:snowflake';
+        if (s === 'Ready for cold crash') return 'mdi:thermometer-chevron-down';
+        if (s === 'Ready for transfer') return 'mdi:transfer-right';
+        if (s === 'Dry hop now') return 'mdi:leaf-circle';
+        if (s === 'Install spunding') return 'mdi:gauge';
+        if (s === 'Finished / transferred to keg') return 'mdi:check-circle';
+        if (s === 'Primary fermentation') return 'mdi:beer';
+        return 'mdi:beer-outline';
+      ]]]
+    custom_fields:
+      toggle:
+        card:
+          type: custom:button-card
+          entity: input_boolean.fwk_show_details
+          show_name: false
+          show_state: false
+          tap_action:
+            action: toggle
+          icon: |
+            [[[
+              return entity?.state === 'on'
+                ? 'mdi:chevron-up'
+                : 'mdi:chevron-down';
+            ]]]
+          styles:
+            card:
+              - width: 42px
+              - height: 42px
+              - border-radius: 50%
+              - padding: 0
+              - background: |
+                  [[[
+                    return entity?.state === 'on'
+                      ? 'rgba(255,255,255,0.20)'
+                      : 'rgba(255,255,255,0.10)';
+                  ]]]
+              - box-shadow: none
+            icon:
+              - width: 22px
+              - color: white
+    label: |
+      [[[
+        const next = states['sensor.fwk_next_step']?.state ?? 'No data';
+        const sg = states['sensor.fwk_live_sg']?.state;
+        const temp = states['sensor.fwk_live_temp']?.state;
+        const days = states['sensor.fwk_batch_age_days']?.state;
+        const att = states['sensor.fwk_attenuation']?.state;
+        const chamber = states['climate.fermentation_chamber']?.state ?? 'unknown';
+
+        const sgText = (sg && sg !== 'unknown' && sg !== 'unavailable')
+          ? Number(sg).toFixed(3)
+          : 'unknown';
+
+        const tempText = (temp && temp !== 'unknown' && temp !== 'unavailable')
+          ? `${Number(temp).toFixed(1)} °C`
+          : 'unknown';
+
+        const dayText = (days && days !== 'unknown' && days !== 'unavailable')
+          ? `${Number(days).toFixed(1)} d`
+          : '0.0 d';
+
+        const attText = (att && att !== 'unknown' && att !== 'unavailable')
+          ? `${Number(att).toFixed(0)} %`
+          : '0 %';
+
+        return `Next: ${next}<br>SG: ${sgText} • Temp: ${tempText} • Age: ${dayText} • Att: ${attText}<br>Chamber: ${chamber}`;
+      ]]]
+    tap_action:
+      action: more-info
+      entity: climate.fermentation_chamber
+    hold_action:
+      action: none
+    styles:
+      grid:
+        - grid-template-areas: '"i n toggle" "i s toggle" "l l l"'
+        - grid-template-columns: 64px 1fr 48px
+        - grid-template-rows: min-content min-content min-content
+      card:
+        - padding: 18px
+        - border-radius: 24px
+        - box-shadow: 0 12px 32px rgba(0,0,0,0.32)
+        - background: |
+            [[[
+              const state = entity?.state ?? '';
+              if (state === 'Cold crash') {
+                return 'linear-gradient(135deg, rgba(90,180,255,0.30), rgba(20,30,60,0.94))';
+              }
+              if (state === 'Ready for cold crash') {
+                return 'linear-gradient(135deg, rgba(120,200,255,0.22), rgba(30,40,70,0.94))';
+              }
+              if (state === 'Dry hop now') {
+                return 'linear-gradient(135deg, rgba(70,180,90,0.28), rgba(25,35,25,0.94))';
+              }
+              if (state === 'Install spunding') {
+                return 'linear-gradient(135deg, rgba(255,190,70,0.28), rgba(45,30,15,0.94))';
+              }
+              if (state === 'Ready for transfer') {
+                return 'linear-gradient(135deg, rgba(220,200,90,0.22), rgba(45,40,18,0.94))';
+              }
+              if (state === 'Finished / transferred to keg') {
+                return 'linear-gradient(135deg, rgba(90,220,140,0.26), rgba(20,45,28,0.94))';
+              }
+              if (state === 'Primary fermentation') {
+                return 'linear-gradient(135deg, rgba(255,170,70,0.22), rgba(40,25,12,0.94))';
+              }
+              return 'linear-gradient(135deg, rgba(120,120,120,0.18), rgba(30,30,30,0.94))';
+            ]]]
+      icon:
+        - color: white
+        - width: 42px
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 1.2rem
+        - font-weight: 700
+        - color: white
+      state:
+        - justify-self: start
+        - align-self: start
+        - font-size: 1rem
+        - font-weight: 600
+        - color: rgba(255,255,255,0.92)
+      label:
+        - justify-self: start
+        - margin-top: 10px
+        - font-size: 0.92rem
+        - line-height: 1.45
+        - color: rgba(255,255,255,0.82)
+      custom_fields:
+        toggle:
+          - justify-self: end
+          - align-self: start
+
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.fwk_live_temp
+        name: Ferment Temp
+        icon: mdi:thermometer
+        show_state: true
+        tap_action:
+          action: more-info
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - background: |
+                [[[
+                  const temp = parseFloat(entity?.state);
+                  if (isNaN(temp)) return 'rgba(80,80,80,0.18)';
+                  if (temp < 14) return 'rgba(70,140,255,0.18)';
+                  if (temp <= 16) return 'rgba(70,200,120,0.18)';
+                  return 'rgba(255,170,70,0.18)';
+                ]]]
+          name:
+            - font-size: 0.88rem
+            - font-weight: 600
+          state:
+            - font-size: 1.08rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        entity: sensor.fwk_live_sg
+        name: Gravity
+        icon: mdi:chart-line
+        show_state: true
+        state_display: |
+          [[[
+            const v = entity?.state;
+            if (!v || v === 'unknown' || v === 'unavailable') return 'unknown';
+            return Number(v).toFixed(3);
+          ]]]
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - background: rgba(120,170,255,0.16)
+          name:
+            - font-size: 0.88rem
+            - font-weight: 600
+          state:
+            - font-size: 1.08rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        entity: sensor.fwk_batch_age_days
+        name: Batch Age
+        icon: mdi:calendar-clock
+        show_state: true
+        state_display: |
+          [[[
+            const v = entity?.state;
+            if (!v || v === 'unknown' || v === 'unavailable') return '0.0 d';
+            return `${Number(v).toFixed(1)} d`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - background: rgba(255,255,255,0.08)
+          name:
+            - font-size: 0.88rem
+            - font-weight: 600
+          state:
+            - font-size: 1.08rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        entity: sensor.fwk_attenuation
+        name: Attenuation
+        icon: mdi:percent
+        show_state: true
+        state_display: |
+          [[[
+            const v = entity?.state;
+            if (!v || v === 'unknown' || v === 'unavailable') return '0 %';
+            return `${Number(v).toFixed(0)} %`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - background: rgba(255,255,255,0.08)
+          name:
+            - font-size: 0.88rem
+            - font-weight: 600
+          state:
+            - font-size: 1.08rem
+            - font-weight: 700
+
+  - type: conditional
+    conditions:
+      - entity: sensor.fwk_current_action_stage
+        state_not: "none"
+    card:
+      type: custom:stack-in-card
+      mode: vertical
+      cards:
+        - type: custom:button-card
+          entity: sensor.fwk_current_action_stage
+          name: Current Action
+          show_state: true
+          show_label: true
+          show_icon: true
+          icon: |
+            [[[
+              const stage = entity?.state ?? 'none';
+              if (stage === 'spunding') return 'mdi:gauge';
+              if (stage === 'dry_hop') return 'mdi:leaf';
+              if (stage === 'cold_crash') return 'mdi:snowflake';
+              if (stage === 'transfer') return 'mdi:transfer-right';
+              return 'mdi:play-circle-outline';
+            ]]]
+          label: |
+            [[[
+              const stage = entity?.state ?? 'none';
+              if (stage === 'spunding') return 'Install spunding valve and confirm when done.';
+              if (stage === 'dry_hop') return 'Add dry hop charge and mark the step completed.';
+              if (stage === 'cold_crash') return 'Start cold crash when ready.';
+              if (stage === 'transfer') return 'Perform closed transfer to keg.';
+              return 'No active action.';
+            ]]]
+          styles:
+            card:
+              - border-radius: 22px
+              - padding: 16px
+              - background: |
+                  [[[
+                    const stage = entity?.state ?? 'none';
+                    if (stage === 'spunding') return 'linear-gradient(135deg, rgba(255,190,70,0.22), rgba(55,35,10,0.88))';
+                    if (stage === 'dry_hop') return 'linear-gradient(135deg, rgba(90,210,110,0.20), rgba(20,45,20,0.88))';
+                    if (stage === 'cold_crash') return 'linear-gradient(135deg, rgba(100,190,255,0.20), rgba(15,35,60,0.88))';
+                    if (stage === 'transfer') return 'linear-gradient(135deg, rgba(180,220,100,0.20), rgba(35,45,15,0.88))';
+                    return 'rgba(255,255,255,0.08)';
+                  ]]]
+            name:
+              - font-size: 1rem
+              - font-weight: 700
+            state:
+              - font-size: 1.05rem
+              - font-weight: 700
+            label:
+              - margin-top: 8px
+              - font-size: 0.9rem
+              - line-height: 1.4
+
+        - type: grid
+          columns: 4
+          square: false
+          cards:
+            - type: conditional
+              conditions:
+                - entity: sensor.fwk_current_action_stage
+                  state: spunding
+              card:
+                type: custom:button-card
+                name: Mark Spunding
+                icon: mdi:gauge
+                tap_action:
+                  action: call-service
+                  service: script.fwk_mark_spunding_installed
+                styles:
+                  card:
+                    - border-radius: 18px
+                    - padding: 12px
+                    - background: linear-gradient(135deg, rgba(255,190,70,0.20), rgba(55,35,10,0.85))
+                  name:
+                    - font-size: 0.82rem
+                    - font-weight: 700
+
+            - type: conditional
+              conditions:
+                - entity: sensor.fwk_current_action_stage
+                  state: dry_hop
+              card:
+                type: custom:button-card
+                name: Mark Dry Hop
+                icon: mdi:leaf
+                tap_action:
+                  action: call-service
+                  service: script.fwk_mark_dry_hop_added
+                styles:
+                  card:
+                    - border-radius: 18px
+                    - padding: 12px
+                    - background: linear-gradient(135deg, rgba(90,210,110,0.20), rgba(20,45,20,0.85))
+                  name:
+                    - font-size: 0.82rem
+                    - font-weight: 700
+
+            - type: conditional
+              conditions:
+                - entity: sensor.fwk_current_action_stage
+                  state: cold_crash
+              card:
+                type: custom:button-card
+                name: Start Cold Crash
+                icon: mdi:snowflake
+                tap_action:
+                  action: call-service
+                  service: script.fwk_start_cold_crash
+                styles:
+                  card:
+                    - border-radius: 18px
+                    - padding: 12px
+                    - background: linear-gradient(135deg, rgba(100,190,255,0.20), rgba(15,35,60,0.85))
+                  name:
+                    - font-size: 0.82rem
+                    - font-weight: 700
+
+            - type: conditional
+              conditions:
+                - entity: sensor.fwk_current_action_stage
+                  state: transfer
+              card:
+                type: custom:button-card
+                name: Mark Transfer
+                icon: mdi:transfer-right
+                tap_action:
+                  action: call-service
+                  service: script.fwk_mark_transferred_to_keg
+                styles:
+                  card:
+                    - border-radius: 18px
+                    - padding: 12px
+                    - background: linear-gradient(135deg, rgba(180,220,100,0.20), rgba(35,45,15,0.85))
+                  name:
+                    - font-size: 0.82rem
+                    - font-weight: 700
+
+  - type: conditional
+    conditions:
+      - entity: sensor.fwk_next_action_stage
+        state_not: "none"
+    card:
+      type: custom:button-card
+      entity: sensor.fwk_next_action_stage
+      name: Next Up
+      show_state: true
+      show_label: true
+      icon: mdi:progress-clock
+      label: |
+        [[[
+          const stage = entity?.state ?? 'none';
+          if (stage === 'spunding') return 'Spunding is approaching.';
+          if (stage === 'dry_hop') return 'Dry hop window is approaching.';
+          if (stage === 'cold_crash') return 'Cold crash is approaching.';
+          if (stage === 'transfer') return 'Transfer is coming up.';
+          return 'No upcoming action.';
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 16px
+          - background: rgba(255,255,255,0.08)
+        name:
+          - font-size: 1rem
+          - font-weight: 700
+        state:
+          - font-size: 1rem
+          - font-weight: 700
+        label:
+          - margin-top: 8px
+          - font-size: 0.9rem
+          - line-height: 1.4
+
+  - type: grid
+    columns: 5
+    square: false
+    cards:
+      - type: custom:button-card
+        name: Start
+        icon: mdi:play-circle
+        tap_action:
+          action: call-service
+          service: script.fwk_start_batch
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: linear-gradient(135deg, rgba(70,200,120,0.20), rgba(20,50,30,0.85))
+          name:
+            - font-size: 0.82rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        name: Spunding
+        icon: mdi:gauge
+        tap_action:
+          action: call-service
+          service: script.fwk_mark_spunding_installed
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: linear-gradient(135deg, rgba(255,190,70,0.20), rgba(55,35,10,0.85))
+          name:
+            - font-size: 0.82rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        name: Dry Hop
+        icon: mdi:leaf
+        tap_action:
+          action: call-service
+          service: script.fwk_mark_dry_hop_added
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: linear-gradient(135deg, rgba(90,210,110,0.20), rgba(20,45,20,0.85))
+          name:
+            - font-size: 0.82rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        name: Cold Crash
+        icon: mdi:snowflake
+        tap_action:
+          action: call-service
+          service: script.fwk_start_cold_crash
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: linear-gradient(135deg, rgba(100,190,255,0.20), rgba(15,35,60,0.85))
+          name:
+            - font-size: 0.82rem
+            - font-weight: 700
+
+      - type: custom:button-card
+        name: Transfer
+        icon: mdi:transfer-right
+        tap_action:
+          action: call-service
+          service: script.fwk_mark_transferred_to_keg
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: linear-gradient(135deg, rgba(180,220,100,0.20), rgba(35,45,15,0.85))
+          name:
+            - font-size: 0.82rem
+            - font-weight: 700
+
+  - type: conditional
+    conditions:
+      - entity: input_boolean.fwk_show_details
+        state: "on"
+    card:
+      type: entities
+      title: BrewAssistant Details
+      show_header_toggle: false
+      entities:
+        - entity: climate.fermentation_chamber
+          name: Fermentation Chamber
+        - entity: sensor.fwk_process_status
+          name: Process Status
+        - entity: sensor.fwk_next_step
+          name: Next Step
+        - entity: sensor.fwk_current_action_stage
+          name: Current Action Stage
+        - entity: sensor.fwk_next_action_stage
+          name: Next Action Stage
+        - entity: sensor.fwk_live_sg
+          name: Live SG
+        - entity: sensor.fwk_live_temp
+          name: Live Temperature
+        - entity: sensor.fwk_batch_age_hours
+          name: Batch Age Hours
+        - entity: sensor.fwk_batch_age_days
+          name: Batch Age Days
+        - entity: sensor.fwk_attenuation
+          name: Attenuation
+        - entity: sensor.fwk_gravity_points_left
+          name: Gravity Points Left
+        - entity: sensor.fwk_fermentation_pace
+          name: Fermentation Pace
+        - entity: sensor.recipe_runtime_name
+          name: Recipe Runtime Name
+        - entity: sensor.recipe_runtime_source
+          name: Recipe Runtime Source
+        - entity: sensor.recipe_runtime_og
+          name: Recipe Runtime OG
+        - entity: sensor.recipe_runtime_fg
+          name: Recipe Runtime FG
+        - entity: sensor.recipe_runtime_primary_temp
+          name: Recipe Runtime Primary Temp
+        - entity: sensor.recipe_runtime_primary_temp_low
+          name: Recipe Runtime Primary Temp Low
+        - entity: sensor.recipe_runtime_primary_temp_high
+          name: Recipe Runtime Primary Temp High
+        - entity: sensor.recipe_runtime_dry_hop_sg_low
+          name: Dry Hop SG Low
+        - entity: sensor.recipe_runtime_dry_hop_sg_high
+          name: Dry Hop SG High
+        - entity: sensor.recipe_runtime_spunding_after_hours
+          name: Spunding After Hours
+        - entity: sensor.recipe_runtime_spunding_target_bar
+          name: Spunding Target Bar
+        - entity: sensor.recipe_runtime_cold_crash_temp
+          name: Cold Crash Temp
+        - entity: sensor.recipe_runtime_cold_crash_days_min
+          name: Cold Crash Days Min
+        - entity: sensor.recipe_runtime_transfer_pressure_bar
+          name: Transfer Pressure Bar
+        - entity: binary_sensor.fwk_spunding_preview
+          name: Spunding Preview
+        - entity: binary_sensor.fwk_spunding_active
+          name: Spunding Active
+        - entity: binary_sensor.fwk_dry_hop_preview
+          name: Dry Hop Preview
+        - entity: binary_sensor.fwk_dry_hop_active
+          name: Dry Hop Active
+        - entity: binary_sensor.fwk_cold_crash_preview
+          name: Cold Crash Preview
+        - entity: binary_sensor.fwk_cold_crash_active_card
+          name: Cold Crash Active Card
+        - entity: binary_sensor.fwk_transfer_preview
+          name: Transfer Preview
+        - entity: binary_sensor.fwk_transfer_active
+          name: Transfer Active
+        - entity: binary_sensor.fwk_ready_for_cold_crash
+          name: Ready For Cold Crash
+        - entity: binary_sensor.fwk_ready_for_transfer
+          name: Ready For Transfer
+        - entity: binary_sensor.fwk_temperature_too_high
+          name: Temperature Too High
+        - entity: binary_sensor.fwk_temperature_too_low
+          name: Temperature Too Low
+        - entity: binary_sensor.fwk_sg_stable_2_days
+          name: SG Stable 2 Days
