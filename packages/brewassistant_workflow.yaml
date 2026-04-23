@@ -1,8 +1,357 @@
 # =========================
 # BREWASSISTANT WORKFLOW
 # =========================
-# TODO:
+# Decision engine for:
 # - process status
-# - current action selector
-# - preview/active binary sensors
-# - scripts
+# - next step
+# - current action stage
+# - next action stage
+# - step preview / active states
+# - readiness logic
+# - workflow scripts
+#
+# Depends on:
+# - brewassistant_helpers.yaml
+# - brewassistant_runtime.yaml
+
+template:
+  - sensor:
+      - name: "FWK Process Status"
+        unique_id: fwk_process_status
+        icon: >
+          {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+            mdi:check-circle
+          {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            mdi:snowflake
+          {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+            mdi:transfer-right
+          {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+            mdi:thermometer-chevron-down
+          {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            mdi:leaf-circle
+          {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            mdi:gauge
+          {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+            mdi:beer
+          {% else %}
+            mdi:beer-outline
+          {% endif %}
+        state: >
+          {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+            Finished / transferred to keg
+          {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            Cold crash
+          {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+            Ready for transfer
+          {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+            Ready for cold crash
+          {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            Dry hop now
+          {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            Install spunding
+          {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+            Primary fermentation
+          {% else %}
+            Idle
+          {% endif %}
+
+      - name: "FWK Next Step"
+        unique_id: fwk_next_step
+        state: >
+          {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+            Batch completed
+          {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+            Perform closed transfer to keg
+          {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            Maintain cold crash and positive pressure
+          {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+            Start cold crash
+          {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            Add dry hop charge
+          {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+            Prepare dry hop
+          {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            Install spunding valve
+          {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+            Prepare spunding setup
+          {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+            Monitor fermentation
+          {% else %}
+            Start a new batch
+          {% endif %}
+
+      - name: "FWK Current Action Stage"
+        unique_id: fwk_current_action_stage
+        state: >
+          {% if is_state('binary_sensor.fwk_transfer_active', 'on') %}
+            transfer
+          {% elif is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+            cold_crash
+          {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            dry_hop
+          {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            spunding
+          {% else %}
+            none
+          {% endif %}
+
+      - name: "FWK Next Action Stage"
+        unique_id: fwk_next_action_stage
+        state: >
+          {% if is_state('binary_sensor.fwk_transfer_preview', 'on')
+                and not is_state('binary_sensor.fwk_transfer_active', 'on') %}
+            transfer
+          {% elif is_state('binary_sensor.fwk_cold_crash_preview', 'on')
+                and not is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+            cold_crash
+          {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on')
+                and not is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            dry_hop
+          {% elif is_state('binary_sensor.fwk_spunding_preview', 'on')
+                and not is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            spunding
+          {% else %}
+            none
+          {% endif %}
+
+  - binary_sensor:
+      # -------------------------
+      # Core readiness
+      # -------------------------
+      - name: "FWK Ready For Cold Crash"
+        unique_id: fwk_ready_for_cold_crash
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+            and is_state('binary_sensor.fwk_sg_stable_2_days', 'on')
+            and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.002)
+          }}
+
+      - name: "FWK Ready For Transfer"
+        unique_id: fwk_ready_for_transfer
+        state: >
+          {{
+            is_state('input_boolean.fwk_cold_crash_active', 'on')
+            and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+            and (states('sensor.fwk_cold_crash_days') | float(0) >=
+                 states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
+          }}
+
+      # -------------------------
+      # Spunding
+      # -------------------------
+      - name: "FWK Spunding Preview"
+        unique_id: fwk_spunding_preview
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_spunding_installed', 'off')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and (states('sensor.fwk_batch_age_hours') | float(0) >=
+                 (states('sensor.recipe_runtime_spunding_after_hours') | float(24) - 6))
+            and (states('sensor.fwk_batch_age_hours') | float(0) <
+                 states('sensor.recipe_runtime_spunding_after_hours') | float(24))
+          }}
+
+      - name: "FWK Spunding Active"
+        unique_id: fwk_spunding_active
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_spunding_installed', 'off')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and (states('sensor.fwk_batch_age_hours') | float(0) >=
+                 states('sensor.recipe_runtime_spunding_after_hours') | float(24))
+          }}
+
+      # -------------------------
+      # Dry hop
+      # -------------------------
+      - name: "FWK Dry Hop Preview"
+        unique_id: fwk_dry_hop_preview
+        state: >
+          {% set sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %}
+          {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %}
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_dry_hop_added', 'off')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and sg > high
+            and sg <= (high + 0.002)
+            and sg >= low
+          }}
+
+      - name: "FWK Dry Hop Active"
+        unique_id: fwk_dry_hop_active
+        state: >
+          {% set sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %}
+          {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %}
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_dry_hop_added', 'off')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and sg <= high
+            and sg >= low
+          }}
+
+      # -------------------------
+      # Cold crash
+      # -------------------------
+      - name: "FWK Cold Crash Preview"
+        unique_id: fwk_cold_crash_preview
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+            and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.004)
+            and is_state('binary_sensor.fwk_ready_for_cold_crash', 'off')
+          }}
+
+      - name: "FWK Cold Crash Active Card"
+        unique_id: fwk_cold_crash_active_card
+        state: >
+          {{
+            is_state('binary_sensor.fwk_ready_for_cold_crash', 'on')
+          }}
+
+      # -------------------------
+      # Transfer
+      # -------------------------
+      - name: "FWK Transfer Preview"
+        unique_id: fwk_transfer_preview
+        state: >
+          {{
+            is_state('input_boolean.fwk_cold_crash_active', 'on')
+            and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+            and (states('sensor.fwk_cold_crash_days') | float(0) > 0)
+            and (states('sensor.fwk_cold_crash_days') | float(0) <
+                 states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
+          }}
+
+      - name: "FWK Transfer Active"
+        unique_id: fwk_transfer_active
+        state: >
+          {{
+            is_state('binary_sensor.fwk_ready_for_transfer', 'on')
+          }}
+
+script:
+  fwk_start_batch:
+    alias: FWK - Start Batch
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_batch_active
+
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.fwk_spunding_installed
+            - input_boolean.fwk_dry_hop_added
+            - input_boolean.fwk_cold_crash_active
+            - input_boolean.fwk_transferred_to_keg
+
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.fwk_batch_start
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.fwk_cold_crash_start
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      - action: input_number.set_value
+        target:
+          entity_id:
+            - input_number.fwk_sg_today
+            - input_number.fwk_sg_yesterday
+            - input_number.fwk_sg_two_days_ago
+        data:
+          value: "{{ states('sensor.fwk_live_sg') | float(1.045) }}"
+
+  fwk_mark_spunding_installed:
+    alias: FWK - Mark Spunding Installed
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_spunding_installed
+
+  fwk_mark_dry_hop_added:
+    alias: FWK - Mark Dry Hop Added
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_dry_hop_added
+
+  fwk_start_cold_crash:
+    alias: FWK - Start Cold Crash
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_cold_crash_active
+
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.fwk_cold_crash_start
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  fwk_mark_transferred_to_keg:
+    alias: FWK - Mark Transferred To Keg
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_transferred_to_keg
+
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.fwk_batch_active
+
+  fwk_reset_batch:
+    alias: FWK - Reset Batch
+    sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.fwk_batch_active
+            - input_boolean.fwk_spunding_installed
+            - input_boolean.fwk_dry_hop_added
+            - input_boolean.fwk_cold_crash_active
+            - input_boolean.fwk_transferred_to_keg
+
+automation:
+  - alias: FWK - Save Daily SG Snapshot
+    id: fwk_save_daily_sg_snapshot
+    trigger:
+      - platform: time
+        at: "12:00:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_batch_active
+        state: "on"
+    action:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.fwk_sg_two_days_ago
+        data:
+          value: "{{ states('input_number.fwk_sg_yesterday') | float(1.009) }}"
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.fwk_sg_yesterday
+        data:
+          value: "{{ states('input_number.fwk_sg_today') | float(1.009) }}"
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.fwk_sg_today
+        data:
+          value: "{{ states('sensor.fwk_live_sg') | float(1.009) }}"
