@@ -1,7 +1,206 @@
 # =========================
 # BREWASSISTANT HELPERS
 # =========================
-# TODO:
-# - batch lifecycle helpers
-# - step completion helpers
-# - fallback recipe helpers
+# Foundation helpers for:
+# - batch lifecycle
+# - step completion
+# - UI expand/collapse
+# - fallback recipe values
+# - SG history snapshots
+#
+# Safe to use before Brewfather entity mapping is finalized.
+# Brewfather and/or BeerXML values can later override or complement these.
+
+input_boolean:
+  fwk_batch_active:
+    name: FWK Batch Active
+    icon: mdi:beer
+
+  fwk_spunding_installed:
+    name: FWK Spunding Installed
+    icon: mdi:gauge
+
+  fwk_dry_hop_added:
+    name: FWK Dry Hop Added
+    icon: mdi:leaf
+
+  fwk_cold_crash_active:
+    name: FWK Cold Crash Active
+    icon: mdi:snowflake
+
+  fwk_transferred_to_keg:
+    name: FWK Transferred To Keg
+    icon: mdi:transfer-right
+
+  fwk_show_details:
+    name: FWK Show Details
+    icon: mdi:chevron-down-circle
+
+input_datetime:
+  fwk_batch_start:
+    name: FWK Batch Start
+    has_date: true
+    has_time: true
+
+  fwk_cold_crash_start:
+    name: FWK Cold Crash Start
+    has_date: true
+    has_time: true
+
+input_number:
+  # -------------------------
+  # Manual fallback recipe values
+  # Used when Brewfather / BeerXML values are unavailable
+  # -------------------------
+  recipe_fallback_og:
+    name: Recipe Fallback OG
+    min: 1.000
+    max: 1.200
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:target
+    initial: 1.045
+
+  recipe_fallback_fg:
+    name: Recipe Fallback FG
+    min: 1.000
+    max: 1.100
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:flag-checkered
+    initial: 1.009
+
+  recipe_fallback_primary_temp:
+    name: Recipe Fallback Primary Temp
+    min: 0
+    max: 30
+    step: 0.5
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    initial: 15
+
+  recipe_fallback_primary_temp_low:
+    name: Recipe Fallback Primary Temp Low
+    min: 0
+    max: 30
+    step: 0.5
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-low
+    initial: 14
+
+  recipe_fallback_primary_temp_high:
+    name: Recipe Fallback Primary Temp High
+    min: 0
+    max: 30
+    step: 0.5
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-high
+    initial: 16
+
+  recipe_fallback_dry_hop_sg_low:
+    name: Recipe Fallback Dry Hop SG Low
+    min: 1.000
+    max: 1.100
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:leaf
+    initial: 1.012
+
+  recipe_fallback_dry_hop_sg_high:
+    name: Recipe Fallback Dry Hop SG High
+    min: 1.000
+    max: 1.100
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:leaf
+    initial: 1.014
+
+  recipe_fallback_spunding_after_hours:
+    name: Recipe Fallback Spunding After Hours
+    min: 0
+    max: 168
+    step: 1
+    mode: box
+    unit_of_measurement: h
+    icon: mdi:clock-outline
+    initial: 24
+
+  recipe_fallback_spunding_target_bar:
+    name: Recipe Fallback Spunding Target Bar
+    min: 0
+    max: 2
+    step: 0.1
+    mode: box
+    unit_of_measurement: bar
+    icon: mdi:gauge
+    initial: 0.8
+
+  recipe_fallback_cold_crash_temp:
+    name: Recipe Fallback Cold Crash Temp
+    min: -2
+    max: 10
+    step: 0.5
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:snowflake-thermometer
+    initial: 1
+
+  recipe_fallback_cold_crash_days_min:
+    name: Recipe Fallback Cold Crash Days Min
+    min: 0
+    max: 14
+    step: 1
+    mode: box
+    unit_of_measurement: d
+    icon: mdi:calendar-range
+    initial: 2
+
+  recipe_fallback_transfer_pressure_bar:
+    name: Recipe Fallback Transfer Pressure Bar
+    min: 0
+    max: 2
+    step: 0.1
+    mode: box
+    unit_of_measurement: bar
+    icon: mdi:gas-cylinder
+    initial: 0.2
+
+  # -------------------------
+  # SG snapshots for stability checks
+  # -------------------------
+  fwk_sg_today:
+    name: FWK SG Today
+    min: 1.000
+    max: 1.200
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:calendar-today
+    initial: 1.009
+
+  fwk_sg_yesterday:
+    name: FWK SG Yesterday
+    min: 1.000
+    max: 1.200
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:calendar
+    initial: 1.009
+
+  fwk_sg_two_days_ago:
+    name: FWK SG Two Days Ago
+    min: 1.000
+    max: 1.200
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+    icon: mdi:calendar-blank
+    initial: 1.009
