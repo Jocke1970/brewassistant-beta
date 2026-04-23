@@ -1,8 +1,282 @@
 # =========================
 # BREWASSISTANT RUNTIME
 # =========================
-# TODO:
-# - recipe runtime sensors
-# - live fermentation sensors
-# - SG change calculations
-# - attenuation calculations
+# Runtime layer for:
+# - normalized live fermentation values
+# - normalized recipe values (fallback-first for now)
+# - batch age calculations
+# - attenuation and gravity progress
+# - temperature recommendation
+#
+# Current live entities:
+# - climate.fermentation_chamber
+# - sensor.yellow_pill_temperature
+# - sensor.yellow_pill_gravity_2
+#
+# Brewfather mapping can be layered in later by replacing the fallback-first
+# recipe_runtime_* sensors with source-priority logic.
+
+template:
+  - sensor:
+      # -------------------------
+      # Live runtime
+      # -------------------------
+      - name: "FWK Live SG"
+        unique_id: fwk_live_sg
+        unit_of_measurement: SG
+        state: >
+          {% set sg = states('sensor.yellow_pill_gravity_2') %}
+          {% if sg not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ sg | float(0) | round(3) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Live Temp"
+        unique_id: fwk_live_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set temp = states('sensor.yellow_pill_temperature') %}
+          {% if temp not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ temp | float(0) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Batch Age Hours"
+        unique_id: fwk_batch_age_hours
+        unit_of_measurement: h
+        state: >
+          {% if is_state('input_boolean.fwk_batch_active', 'on') %}
+            {% set start = states('input_datetime.fwk_batch_start') %}
+            {% if start not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ ((as_timestamp(now()) - as_timestamp(start)) / 3600) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "FWK Batch Age Days"
+        unique_id: fwk_batch_age_days
+        unit_of_measurement: d
+        state: >
+          {% if is_state('input_boolean.fwk_batch_active', 'on') %}
+            {% set start = states('input_datetime.fwk_batch_start') %}
+            {% if start not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ ((as_timestamp(now()) - as_timestamp(start)) / 86400) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "FWK Cold Crash Days"
+        unique_id: fwk_cold_crash_days
+        unit_of_measurement: d
+        state: >
+          {% if is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            {% set start = states('input_datetime.fwk_cold_crash_start') %}
+            {% if start not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ ((as_timestamp(now()) - as_timestamp(start)) / 86400) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+
+      # -------------------------
+      # Recipe runtime (fallback-first)
+      # -------------------------
+      - name: "Recipe Runtime Name"
+        unique_id: recipe_runtime_name
+        state: >
+          Manual / fallback recipe
+
+      - name: "Recipe Runtime OG"
+        unique_id: recipe_runtime_og
+        unit_of_measurement: SG
+        state: >
+          {{ states('input_number.recipe_fallback_og') | float(1.045) | round(3) }}
+
+      - name: "Recipe Runtime FG"
+        unique_id: recipe_runtime_fg
+        unit_of_measurement: SG
+        state: >
+          {{ states('input_number.recipe_fallback_fg') | float(1.009) | round(3) }}
+
+      - name: "Recipe Runtime Primary Temp"
+        unique_id: recipe_runtime_primary_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {{ states('input_number.recipe_fallback_primary_temp') | float(15) | round(1) }}
+
+      - name: "Recipe Runtime Primary Temp Low"
+        unique_id: recipe_runtime_primary_temp_low
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {{ states('input_number.recipe_fallback_primary_temp_low') | float(14) | round(1) }}
+
+      - name: "Recipe Runtime Primary Temp High"
+        unique_id: recipe_runtime_primary_temp_high
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {{ states('input_number.recipe_fallback_primary_temp_high') | float(16) | round(1) }}
+
+      - name: "Recipe Runtime Dry Hop SG Low"
+        unique_id: recipe_runtime_dry_hop_sg_low
+        unit_of_measurement: SG
+        state: >
+          {{ states('input_number.recipe_fallback_dry_hop_sg_low') | float(1.012) | round(3) }}
+
+      - name: "Recipe Runtime Dry Hop SG High"
+        unique_id: recipe_runtime_dry_hop_sg_high
+        unit_of_measurement: SG
+        state: >
+          {{ states('input_number.recipe_fallback_dry_hop_sg_high') | float(1.014) | round(3) }}
+
+      - name: "Recipe Runtime Spunding After Hours"
+        unique_id: recipe_runtime_spunding_after_hours
+        unit_of_measurement: h
+        state: >
+          {{ states('input_number.recipe_fallback_spunding_after_hours') | float(24) | round(0) }}
+
+      - name: "Recipe Runtime Spunding Target Bar"
+        unique_id: recipe_runtime_spunding_target_bar
+        unit_of_measurement: bar
+        state: >
+          {{ states('input_number.recipe_fallback_spunding_target_bar') | float(0.8) | round(1) }}
+
+      - name: "Recipe Runtime Cold Crash Temp"
+        unique_id: recipe_runtime_cold_crash_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {{ states('input_number.recipe_fallback_cold_crash_temp') | float(1) | round(1) }}
+
+      - name: "Recipe Runtime Cold Crash Days Min"
+        unique_id: recipe_runtime_cold_crash_days_min
+        unit_of_measurement: d
+        state: >
+          {{ states('input_number.recipe_fallback_cold_crash_days_min') | float(2) | round(0) }}
+
+      - name: "Recipe Runtime Transfer Pressure Bar"
+        unique_id: recipe_runtime_transfer_pressure_bar
+        unit_of_measurement: bar
+        state: >
+          {{ states('input_number.recipe_fallback_transfer_pressure_bar') | float(0.2) | round(1) }}
+
+      - name: "Recipe Runtime Source"
+        unique_id: recipe_runtime_source
+        state: >
+          manual_fallback
+
+      # -------------------------
+      # Derived runtime
+      # -------------------------
+      - name: "FWK Attenuation"
+        unique_id: fwk_attenuation
+        unit_of_measurement: "%"
+        icon: mdi:percent
+        state: >
+          {% set og = states('sensor.recipe_runtime_og') | float(1.045) %}
+          {% set fg = states('sensor.recipe_runtime_fg') | float(1.009) %}
+          {% set sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set denom = (og - fg) %}
+          {% if sg > 0 and denom > 0 %}
+            {{ (((og - sg) / denom) * 100) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "FWK Gravity Points Left"
+        unique_id: fwk_gravity_points_left
+        unit_of_measurement: SG
+        icon: mdi:chart-bell-curve-cumulative
+        state: >
+          {% set sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set fg = states('sensor.recipe_runtime_fg') | float(1.009) %}
+          {% if sg > 0 %}
+            {{ (sg - fg) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "FWK Temperature Recommendation"
+        unique_id: fwk_temperature_recommendation
+        state: >
+          {% if is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            Target about {{ states('sensor.recipe_runtime_cold_crash_temp') }} °C
+          {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+            Target {{ states('sensor.recipe_runtime_primary_temp_low') }}–{{ states('sensor.recipe_runtime_primary_temp_high') }} °C
+          {% else %}
+            No active batch
+          {% endif %}
+
+      - name: "FWK Fermentation Pace"
+        unique_id: fwk_fermentation_pace
+        icon: mdi:speedometer
+        state: >
+          {% set sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set today = states('input_number.fwk_sg_today') | float(0) %}
+          {% if sg == 0 or today == 0 %}
+            Unknown
+          {% else %}
+            {% set delta = (today - sg) | round(3) %}
+            {% if delta >= 0.008 %}
+              Fast
+            {% elif delta >= 0.004 %}
+              Moderate
+            {% elif delta > 0.001 %}
+              Slow
+            {% elif delta >= -0.001 %}
+              Stable
+            {% else %}
+              Check sensor trend
+            {% endif %}
+          {% endif %}
+
+  - binary_sensor:
+      - name: "FWK Temperature Too High"
+        unique_id: fwk_temperature_too_high
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and (states('sensor.fwk_live_temp') | float(0) >
+                 states('sensor.recipe_runtime_primary_temp_high') | float(16))
+          }}
+
+      - name: "FWK Temperature Too Low"
+        unique_id: fwk_temperature_too_low
+        state: >
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and is_state('input_boolean.fwk_cold_crash_active', 'off')
+            and (states('sensor.fwk_live_temp') | float(99) <
+                 states('sensor.recipe_runtime_primary_temp_low') | float(14))
+          }}
+
+      - name: "FWK SG Stable 2 Days"
+        unique_id: fwk_sg_stable_2_days
+        state: >
+          {% set now_sg = states('sensor.fwk_live_sg') | float(0) %}
+          {% set day1 = states('input_number.fwk_sg_today') | float(0) %}
+          {% set day2 = states('input_number.fwk_sg_yesterday') | float(0) %}
+          {% set day3 = states('input_number.fwk_sg_two_days_ago') | float(0) %}
+          {% set fg = states('sensor.recipe_runtime_fg') | float(1.009) %}
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and now_sg > 0
+            and abs(now_sg - day1) <= 0.001
+            and abs(day1 - day2) <= 0.001
+            and abs(day2 - day3) <= 0.001
+            and now_sg <= (fg + 0.001)
+          }}
