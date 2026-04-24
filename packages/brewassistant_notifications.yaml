@@ -10,8 +10,158 @@
 # Notes:
 # - Uses persistent notifications for safe default behavior.
 # - Can later be extended with notify.mobile_app_* or other channels.
+# =========================
+# BREWASSISTANT NOTIFICATIONS
+# =========================
+
+input_boolean:
+  fwk_notify_lock:
+    name: FWK Notify Lock
+    initial: off
 
 automation:
+
+  # -------------------------
+  # DRY HOP
+  # -------------------------
+  - alias: FWK Notify - Dry Hop
+    id: fwk_notify_dry_hop
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_dry_hop_active
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_notify_lock
+        state: "off"
+    action:
+      - service: notify.notify
+        data:
+          title: "🍺 Dry Hop"
+          message: "Dry hop window reached. Time to add hops."
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_notify_lock
+
+  # -------------------------
+  # SPUNDING
+  # -------------------------
+  - alias: FWK Notify - Spunding
+    id: fwk_notify_spunding
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_spunding_active
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_notify_lock
+        state: "off"
+    action:
+      - service: notify.notify
+        data:
+          title: "⚙️ Spunding"
+          message: "Time to install spunding valve."
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_notify_lock
+
+  # -------------------------
+  # COLD CRASH READY
+  # -------------------------
+  - alias: FWK Notify - Cold Crash Ready
+    id: fwk_notify_cold_crash_ready
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_ready_for_cold_crash
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_notify_lock
+        state: "off"
+    action:
+      - service: notify.notify
+        data:
+          title: "❄️ Cold Crash"
+          message: "Beer is ready for cold crash."
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_notify_lock
+
+  # -------------------------
+  # TRANSFER READY
+  # -------------------------
+  - alias: FWK Notify - Transfer Ready
+    id: fwk_notify_transfer_ready
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_ready_for_transfer
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_notify_lock
+        state: "off"
+    action:
+      - service: notify.notify
+        data:
+          title: "🍺 Transfer"
+          message: "Ready for closed transfer to keg."
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.fwk_notify_lock
+
+  # -------------------------
+  # CHAMBER TOO WARM
+  # -------------------------
+  - alias: FWK Notify - Chamber Too Warm
+    id: fwk_notify_chamber_warm
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_chamber_running_too_warm
+        to: "on"
+        for: "00:10:00"
+    action:
+      - service: notify.notify
+        data:
+          title: "🔥 Chamber Warning"
+          message: "Chamber target is warmer than recipe."
+
+  # -------------------------
+  # CHAMBER TOO COLD
+  # -------------------------
+  - alias: FWK Notify - Chamber Too Cold
+    id: fwk_notify_chamber_cold
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fwk_chamber_running_too_cold
+        to: "on"
+        for: "00:10:00"
+    action:
+      - service: notify.notify
+        data:
+          title: "❄️ Chamber Warning"
+          message: "Chamber target is colder than recipe."
+
+  # -------------------------
+  # LIVE TEMP DRIFT
+  # -------------------------
+  - alias: FWK Notify - Temp Drift
+    id: fwk_notify_temp_drift
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.fwk_live_vs_recipe_delta
+        above: 1.5
+        for: "00:10:00"
+      - platform: numeric_state
+        entity_id: sensor.fwk_live_vs_recipe_delta
+        below: -1.5
+        for: "00:10:00"
+    action:
+      - service: notify.notify
+        data:
+          title: "🌡️ Temp Drift"
+          message: >
+            Fermentation temperature deviates from recipe target.
+
   - alias: FWK - Spunding Reminder
     id: fwk_spunding_reminder
     trigger:
