@@ -1,86 +1,116 @@
-# Integration Strategy
+# BrewAssistant – Integration Strategy
 
-## Goal
+## Current Integrations
 
-Combine Brewfather, RAPT-style live fermentation logic, and Home Assistant UI into one coherent system.
+## Brewfather
 
-## Primary Strategy
+Primary entity:
 
-## Brewfather First
-Use Brewfather as the primary source for:
-- recipe identity
-- fermentation schedule
-- recipe notes
-- target temperatures
-- future process steps
-- batch timing context
+- `sensor.brewfather_all_batches_data`
 
-## Live Sensor First for Reality Checks
-Use live fermentation sensors as the source of truth for:
-- actual gravity
-- actual fermentation temperature
-- progress toward FG
-- stability over time
-- pace of fermentation
+Used for:
 
-## Manual Fallbacks
-Use manual helpers only when recipe values are not available from Brewfather or BeerXML.
+- recipe name
+- batch status
+- batch number
+- fermentation start
+- fermentation end
+- fermentation steps
+- primary fermentation temperature
+- cold crash temperature
+- days left
 
-## Optional BeerXML Layer
-BeerXML should be treated as:
-- import support
-- backup recipe source
-- parser-driven supplement
-- useful for portability and archival use
+Known current limitation:
 
-It should not be the only required path if Brewfather already provides the current batch context.
+- OG and FG are not yet confirmed from Brewfather data
+- `measuredOg` may be `null`
+- readings may be empty
 
-## Why This Strategy
+Therefore:
 
-A purely BeerXML-driven system is static.
+- OG and FG remain fallback-backed for now
 
-A purely live-sensor-driven system lacks recipe intent.
+## RAPT / Yellow Pill
 
-A Brewfather + live data hybrid gives:
-- plan
-- live reality
-- decision logic
+Current live entities:
 
-## Source Priority Rules
+- `sensor.yellow_pill_temperature`
+- `sensor.yellow_pill_gravity_2`
 
-### Recipe values
-1. Brewfather raw/attribute data
-2. Brewfather standard sensors
-3. BeerXML parsed runtime data
-4. manual fallback helpers
+Used for:
 
-### Live values
-1. Yellow Pill / RAPT live sensor data
-2. derived snapshots / rolling calculations
-3. manual override only if explicitly added later
+- live fermentation temperature
+- live gravity
+- attenuation
+- gravity points left
+- stability logic
 
-## Expected Unknowns
+Note:
 
-Before final implementation, the project must verify:
-- where Brewfather exposes OG and FG
-- whether dry hop events appear as structured data or notes only
-- whether spunding rules exist only in notes / manual inputs
-- whether experimental all-batches data is stable enough to depend on
+- when the Pill is not in liquid, gravity values may be unrealistic
 
-## Safe Design Rules
+## Fermentation Chamber
 
-- never hardcode UI logic directly to raw integration entities if a runtime entity can exist
-- never assume Brewfather exposes all fields as top-level sensors
-- keep fallback helpers available even when Brewfather works
-- keep live gravity logic independent from recipe-source logic
+Entity:
 
-## Long-Term Path
+- `climate.fermentation_chamber`
 
-### v1
-Brewfather-first runtime package with fallback helpers
+Known attributes:
 
-### v2
-Optional BeerXML import bridge
+- `current_temperature`
+- `target_temp_low`
+- `target_temp_high`
+- `hvac_action`
+- `hvac_modes`
+- `preset_mode`
 
-### v3
-Reusable custom integration or advanced package system
+Used for:
+
+- chamber midpoint
+- chamber span
+- recipe vs chamber delta
+- alignment status
+- semiauto target application
+
+## Kegerator
+
+Entity:
+
+- `climate.kegerator_kylskap`
+
+Known attributes:
+
+- `current_temperature`
+- `temperature`
+- `hvac_action`
+- `hvac_modes`
+- `min_temp`
+- `max_temp`
+
+Used for:
+
+- current temperature
+- target temperature
+- delta
+- cooling/action status
+
+## Source Priority
+
+Recipe runtime:
+
+1. Brewfather all batches data
+2. fallback helpers
+
+Live runtime:
+
+1. Yellow Pill / RAPT sensors
+2. fallback / unavailable handling
+
+Chamber target:
+
+1. Brewfather/runtime active recipe target
+2. manual fallback target
+
+## Safety Principle
+
+BrewAssistant should observe first, suggest second, and only apply settings with explicit semiauto or guarded auto-apply logic.

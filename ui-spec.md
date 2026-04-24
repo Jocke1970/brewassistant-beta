@@ -1,123 +1,89 @@
-# UI Specification
+# BrewAssistant – UI Specification
 
-## Purpose
+## Design Style
 
-Define the desired dashboard behavior for BrewAssistant.
+Current style:
 
-The UI should feel clean, operational, and focused on the current brewing task.
+- premium dark cards
+- high contrast text
+- soft gradients
+- rounded corners
+- compact but readable status labels
+- expandable details
 
-## Core Principles
+## Main BrewAssistant Card
 
-- show current state first
-- show only relevant actions
-- reduce clutter
-- expose the next step before it becomes urgent
-- hide completed steps
-- keep details available but collapsed
+File:
 
-## Main Layout
+- `brewassistant_main_card_dark_v1.yaml`
 
-## 1. Main Batch Card
-Always visible.
+Shows:
 
-### Shows
 - recipe name
-- current status
+- process status
 - next step
 - SG
 - fermentation temperature
 - batch age
-- attenuation / progress
-- optional chamber status
+- attenuation
+- Brewfather planned summary
 
-## 2. Current Action Card
-Shows the single most relevant operational step right now.
+Includes:
 
-Possible stages:
-- Spunding
-- Dry Hop
-- Cold Crash
-- Transfer
+- details toggle
+- current action card
+- next action card
+- manual workflow buttons
+- expanded diagnostic details
 
-Only one should be active as the primary action.
+## Chamber Card
 
-## 3. Next Up Card
-Optional smaller preview card for the next likely upcoming step.
+File:
 
-This helps reduce surprise without cluttering the UI.
+- `brewassistant_chamber_card_v1_2_semiauto.yaml`
 
-## 4. Details Drawer
-Collapsed by default.
+Shows:
 
-### Contains
-- runtime details
-- source information
+- fermentation chamber status
+- recipe target
+- suggested chamber range
+- chamber target range
+- live vs recipe delta
+- recipe vs chamber delta
+- alignment status
+
+Includes:
+
+- power button
+- Apply Brewfather Target button
+- details sections
 - diagnostics
-- recipe data
-- chamber references
-- debug entities
 
-## Step Card Behavior
+## Kegerator Card
 
-Each step card should support:
-- hidden
-- preview
-- active
-- completed
+File:
 
-Completed cards should disappear from the action area.
+- `brewassistant_kegerator_card_v1_1_premium.yaml`
 
-## Expand / Collapse
+Shows:
 
-Main cards should support:
-- a toggle in the top right corner
-- internal detail visibility helpers
-- consistent behavior across brewing cards
+- kegerator climate state
+- current temperature from climate attribute
+- target temperature from climate attribute
+- calculated delta
+- cooling status
+- fan/status details
 
-Suggested helper:
-- `input_boolean.fwk_show_details`
+Includes expandable sections:
 
-## Visual Language
+- Modes
+- Temps
+- Status
 
-### Main Batch Card
-- premium gradient background
-- status color adapts to phase
-- clean summary text
-- compact but readable
+## UI Rules
 
-### Action Cards
-- stronger emphasis than preview cards
-- clear action button
-- obvious “why this is showing now”
-
-### Preview Cards
-- softer styling
-- lower urgency
-- short “coming soon” phrasing
-
-## Suggested Sections
-
-### Summary
-Main batch card
-
-### Action
-Current action card
-
-### Upcoming
-Next up preview
-
-### Details
-Collapsible diagnostics and raw process information
-
-## Responsive Goal
-
-The UI should remain useful on:
-- desktop dashboards
-- wall panels
-- mobile views later
-
-## Non-Goals for v1
-
-- no overloaded all-in-one mega-card
-- no forcing every step to always be visible
-- no dependence on manual reading of raw sensors in the UI
+- avoid light backgrounds with light text
+- keep top cards dark and high contrast
+- use `climate.*` attributes directly when they are the source of truth
+- keep details hidden unless needed
+- keep action cards focused on the current step

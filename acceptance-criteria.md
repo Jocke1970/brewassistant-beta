@@ -1,65 +1,67 @@
-# Acceptance Criteria
+# BrewAssistant – Acceptance Criteria
 
-## Purpose
+## Functional v1
 
-Define when core BrewAssistant features are considered complete.
+A functional v1 is considered working when:
 
-## Foundation
+- helpers load without duplicate warnings
+- runtime sensors load
+- workflow sensors load
+- chamber sensors load
+- smart automation sensors load
+- dashboard cards render without major visual issues
 
-### Runtime Data
-- recipe runtime sensors exist
-- live runtime sensors exist
-- source priority is documented
-- fallback helpers work when source data is missing
+## Brewfather Runtime
 
-### Decision Engine
-- the system can determine current process status
-- the system can determine next step
-- the system can determine current action stage
-- the system can determine next action stage
+Expected behavior:
 
-## Step Visibility
+- when Brewfather is online:
+  - recipe name comes from Brewfather
+  - status comes from Brewfather
+  - primary temp comes from Brewfather fermentation step
+  - cold crash temp comes from Brewfather fermentation step
+  - source is `brewfather_all_batches_data`
 
-### Spunding
-- preview appears before due time
-- active state appears when spunding is due
-- card disappears after spunding is marked installed
+- when Brewfather is offline:
+  - runtime falls back safely
+  - dashboard still works
+  - no templates should break
 
-### Dry Hop
-- preview appears before SG enters dry hop window
-- active state appears inside dry hop window
-- card disappears after dry hop is marked added
+## Chamber
 
-### Cold Crash
-- preview appears when fermentation nears terminal
-- active state appears when cold crash is ready
-- card disappears after cold crash is started
+Expected behavior:
 
-### Transfer
-- preview appears during active cold crash before minimum duration is reached
-- active state appears when transfer is ready
-- card disappears after transfer is marked completed
+- chamber midpoint is calculated from target low/high
+- recipe active target is shown
+- recipe vs chamber delta is calculated
+- live vs recipe delta is calculated
+- alignment status is readable
+- Apply Brewfather Target sets chamber range safely
+
+## Kegerator
+
+Expected behavior:
+
+- current temp is read from `climate.kegerator_kylskap.attributes.current_temperature`
+- target temp is read from `climate.kegerator_kylskap.attributes.temperature`
+- delta is calculated directly in the card
+- cooling status is shown
+- details sections open/close correctly
+
+## Notifications
+
+Expected behavior:
+
+- process notifications are generated at relevant state transitions
+- chamber mismatch warnings do not spam immediately
+- notification lock can be reset with batch reset
 
 ## UI
 
-### Main Dashboard
-- main batch card is always visible
-- current action card shows only one primary active step
-- next up card shows only one preview step
-- details section can be expanded and collapsed
+Expected behavior:
 
-### Cleanliness
-- completed steps do not clutter the dashboard
-- irrelevant future steps remain hidden
-- the dashboard emphasizes what matters now
-
-## Operational Usefulness
-- the user can run the full workflow with scripts and buttons
-- notifications fire at the correct stage transitions
-- recipe-aware values influence process timing
-- live SG and temperature influence recommendations
-
-## GitHub Readiness
-- documentation exists for architecture, roadmap, state machine, and data model
-- file layout is documented
-- implementation order is documented
+- main card text is readable
+- chamber card text is readable
+- kegerator card text is readable
+- dark mode style is consistent
+- expanded details are optional
