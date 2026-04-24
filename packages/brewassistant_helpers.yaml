@@ -11,6 +11,31 @@
 # Safe to use before Brewfather entity mapping is finalized.
 # Brewfather and/or BeerXML values can later override or complement these.
 
+template:
+  - binary_sensor:
+      - name: Kegerator Compressor Active
+        unique_id: kegerator_compressor_active
+        device_class: power
+        icon: mdi:fridge-industrial
+        state: >
+          {{ states('sensor.extra_koksmaskin_switch_0_power') | float(0) > 20 }}
+        attributes:
+          power_w: >
+            {{ states('sensor.extra_koksmaskin_switch_0_power') | float(0) }}
+          threshold_w: 20
+          source_sensor: sensor.extra_koksmaskin_switch_0_power
+          
+input_select:
+  kegerator_card_section:
+    name: Kegerator Card Section
+    options:
+      - none
+      - modes
+      - temps
+      - status
+    initial: none
+    icon: mdi:fridge-industrial
+    
 input_boolean:
   fwk_batch_active:
     name: FWK Batch Active
