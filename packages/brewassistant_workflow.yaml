@@ -13,6 +13,11 @@
 # Depends on:
 # - brewassistant_helpers.yaml
 # - brewassistant_runtime.yaml
+#
+# Brewfather-aware notes:
+# - Uses recipe_runtime_status and recipe_runtime_* values where useful
+# - Keeps manual/fallback process rules for OG/FG, spunding timing, dry hop SG window
+# - Batch age uses fwk_batch_start for operational control
 
 template:
   - sensor:
@@ -33,10 +38,13 @@ template:
             mdi:gauge
           {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
             mdi:beer
+          {% elif states('sensor.recipe_runtime_status') not in ['unknown', 'unavailable', 'none', ''] %}
+            mdi:clipboard-text-clock
           {% else %}
             mdi:beer-outline
           {% endif %}
         state: >
+          {% set bf_status = states('sensor.recipe_runtime_status') %}
           {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
             Finished / transferred to keg
           {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
@@ -51,12 +59,47 @@ template:
             Install spunding
           {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
             Primary fermentation
+          {% elif bf_status not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ bf_status }}
           {% else %}
             Idle
           {% endif %}
 
       - name: "FWK Next Step"
         unique_id: fwk_next_step
+        icon: mdi:timeline-text
+        state: >
+          {% set bf_status = states('sensor.recipe_runtime_status') %}
+          {% set bf_days_left = states('sensor.recipe_runtime_fermenting_days_left') | float(0) %}
+          {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+            Batch completed
+          {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+            Perform closed transfer to keg
+          {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            Maintain cold crash and positive pressure
+          {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+            Start cold crash
+          {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+            Add dry hop charge
+          {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+            Prepare dry hop
+          {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+            Install spunding valve
+          {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+            Prepare spunding setup
+          {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+            Monitor fermentation
+          {% elif bf_status == 'Fermenting' and bf_days_left > 0 %}
+            Follow Brewfather fermentation plan
+          {% elif bf_status not in ['unknown', 'unavailable', 'none', ''] %}
+            Check Brewfather batch status
+          {% else %}
+            Start a new batch
+          {% endif %}
+
+      - name: "FWK Next Step"
+        unique_id: fwk_next_step_clean
+        icon: mdi:timeline-text
         state: >
           {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
             Batch completed
@@ -114,10 +157,21 @@ template:
             none
           {% endif %}
 
+      - name: "FWK Planned Summary"
+        unique_id: fwk_planned_summary
+        state: >
+          {% set recipe = states('sensor.recipe_runtime_name') %}
+          {% set status = states('sensor.recipe_runtime_status') %}
+          {% set primary = states('sensor.recipe_runtime_primary_temp') %}
+          {% set crash = states('sensor.recipe_runtime_cold_crash_temp') %}
+          {% set left = states('sensor.recipe_runtime_fermenting_days_left') %}
+          {% if recipe not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ recipe }} | {{ status }} | {{ primary }} °C -> {{ crash }} °C | {{ left }} d left
+          {% else %}
+            No Brewfather recipe context
+          {% endif %}
+
   - binary_sensor:
-      # -------------------------
-      # Core readiness
-      # -------------------------
       - name: "FWK Ready For Cold Crash"
         unique_id: fwk_ready_for_cold_crash
         state: >
@@ -139,9 +193,6 @@ template:
                  states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
           }}
 
-      # -------------------------
-      # Spunding
-      # -------------------------
       - name: "FWK Spunding Preview"
         unique_id: fwk_spunding_preview
         state: >
@@ -166,9 +217,6 @@ template:
                  states('sensor.recipe_runtime_spunding_after_hours') | float(24))
           }}
 
-      # -------------------------
-      # Dry hop
-      # -------------------------
       - name: "FWK Dry Hop Preview"
         unique_id: fwk_dry_hop_preview
         state: >
@@ -198,9 +246,6 @@ template:
             and sg >= low
           }}
 
-      # -------------------------
-      # Cold crash
-      # -------------------------
       - name: "FWK Cold Crash Preview"
         unique_id: fwk_cold_crash_preview
         state: >
@@ -219,9 +264,6 @@ template:
             is_state('binary_sensor.fwk_ready_for_cold_crash', 'on')
           }}
 
-      # -------------------------
-      # Transfer
-      # -------------------------
       - name: "FWK Transfer Preview"
         unique_id: fwk_transfer_preview
         state: >
@@ -275,7 +317,9 @@ script:
             - input_number.fwk_sg_yesterday
             - input_number.fwk_sg_two_days_ago
         data:
-          value: "{{ states('sensor.fwk_live_sg') | float(1.045) }}"
+          value: >
+            {% set sg = states('sensor.fwk_live_sg') | float(1.045) %}
+            {{ [1.200, [1.000, sg] | max] | min }}
 
   fwk_mark_spunding_installed:
     alias: FWK - Mark Spunding Installed
@@ -326,6 +370,7 @@ script:
             - input_boolean.fwk_dry_hop_added
             - input_boolean.fwk_cold_crash_active
             - input_boolean.fwk_transferred_to_keg
+            - input_boolean.fwk_notify_lock
 
 automation:
   - alias: FWK - Save Daily SG Snapshot
@@ -354,4 +399,38 @@ automation:
         target:
           entity_id: input_number.fwk_sg_today
         data:
-          value: "{{ states('sensor.fwk_live_sg') | float(1.009) }}"
+          value: >
+            {% set sg = states('sensor.fwk_live_sg') | float(1.009) %}
+            {{ [1.200, [1.000, sg] | max] | min }}
+            
+  - alias: FWK - Auto Start Batch From Brewfather
+    id: fwk_auto_start_batch_from_brewfather
+    trigger:
+      - platform: state
+        entity_id: sensor.recipe_runtime_status
+        to: "Fermenting"
+      - platform: state
+        entity_id: sensor.recipe_runtime_source
+        to: "brewfather_all_batches_data"
+    condition:
+      - condition: state
+        entity_id: input_boolean.fwk_batch_active
+        state: "off"
+      - condition: state
+        entity_id: sensor.recipe_runtime_source
+        state: "brewfather_all_batches_data"
+      - condition: state
+        entity_id: sensor.recipe_runtime_status
+        state: "Fermenting"
+    action:
+      - service: script.fwk_start_batch
+
+  - alias: FWK - Auto Reset After Batch Completed
+    id: fwk_auto_reset_after_batch_completed
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_transferred_to_keg
+        to: "on"
+        for: "12:00:00"
+    action:
+      - service: script.fwk_reset_batch
