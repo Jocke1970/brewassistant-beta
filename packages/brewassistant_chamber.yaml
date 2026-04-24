@@ -1,0 +1,221 @@
+# =========================
+# BREWASSISTANT CHAMBER
+# =========================
+# Chamber intelligence layer for:
+# - chamber target midpoint/span
+# - recipe vs chamber delta
+# - live vs recipe delta
+# - alignment status
+# - chamber action visibility
+#
+# Current assumptions:
+# - climate.fermentation_chamber is the active fermentation chamber
+# - sensor.fwk_live_temp is the live fermentation temperature (Yellow Pill)
+# - sensor.recipe_runtime_primary_temp is the planned recipe fermentation temp
+# - sensor.recipe_runtime_cold_crash_temp is the planned cold crash temp
+#
+# This package is intentionally observational first.
+# It does not auto-write chamber targets.
+# It helps answer:
+# - Is the chamber aligned with the recipe?
+# - Is the live temp above/below plan?
+# - Is the chamber currently heating/cooling/idle/off?
+# - Is cold crash mode aligned?
+
+template:
+  - sensor:
+      - name: "FWK Chamber Target Midpoint"
+        unique_id: fwk_chamber_target_midpoint
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set low = state_attr('climate.fermentation_chamber', 'target_temp_low') %}
+          {% set high = state_attr('climate.fermentation_chamber', 'target_temp_high') %}
+          {% if low is not none and high is not none %}
+            {{ ((low | float(0) + high | float(0)) / 2) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Chamber Target Span"
+        unique_id: fwk_chamber_target_span
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set low = state_attr('climate.fermentation_chamber', 'target_temp_low') %}
+          {% set high = state_attr('climate.fermentation_chamber', 'target_temp_high') %}
+          {% if low is not none and high is not none %}
+            {{ (high | float(0) - low | float(0)) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Recipe Active Target Temp"
+        unique_id: fwk_recipe_active_target_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% if is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            {{ states('sensor.recipe_runtime_cold_crash_temp') | float(1) | round(1) }}
+          {% else %}
+            {{ states('sensor.recipe_runtime_primary_temp') | float(15) | round(1) }}
+          {% endif %}
+
+      - name: "FWK Recipe vs Chamber Delta"
+        unique_id: fwk_recipe_vs_chamber_delta
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set recipe = states('sensor.fwk_recipe_active_target_temp') %}
+          {% set chamber = states('sensor.fwk_chamber_target_midpoint') %}
+          {% if recipe not in ['unknown', 'unavailable', 'none', ''] and chamber not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ (chamber | float(0) - recipe | float(0)) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Live vs Recipe Delta"
+        unique_id: fwk_live_vs_recipe_delta
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state: >
+          {% set recipe = states('sensor.fwk_recipe_active_target_temp') %}
+          {% set live = states('sensor.fwk_live_temp') %}
+          {% if recipe not in ['unknown', 'unavailable', 'none', ''] and live not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ (live | float(0) - recipe | float(0)) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "FWK Chamber Action"
+        unique_id: fwk_chamber_action
+        state: >
+          {% set climate_state = states('climate.fermentation_chamber') %}
+          {% set hvac = state_attr('climate.fermentation_chamber', 'hvac_action') %}
+          {% if climate_state == 'off' %}
+            Off
+          {% elif hvac in ['heating', 'heat'] %}
+            Heating
+          {% elif hvac in ['cooling', 'cool'] %}
+            Cooling
+          {% elif hvac in ['idle'] %}
+            Idle
+          {% else %}
+            Waiting
+          {% endif %}
+
+      - name: "FWK Chamber Alignment Status"
+        unique_id: fwk_chamber_alignment_status
+        icon: >
+          {% set climate_state = states('climate.fermentation_chamber') %}
+          {% set delta = states('sensor.fwk_recipe_vs_chamber_delta') | float(99) %}
+          {% if climate_state == 'off' %}
+            mdi:power
+          {% elif delta | abs <= 0.5 %}
+            mdi:check-circle
+          {% elif delta > 0.5 %}
+            mdi:thermometer-high
+          {% elif delta < -0.5 %}
+            mdi:thermometer-low
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+        state: >
+          {% set climate_state = states('climate.fermentation_chamber') %}
+          {% set delta = states('sensor.fwk_recipe_vs_chamber_delta') | float(99) %}
+          {% if climate_state == 'off' %}
+            Chamber off
+          {% elif delta | abs <= 0.5 %}
+            On recipe
+          {% elif delta > 0.5 %}
+            Chamber target warmer than recipe
+          {% elif delta < -0.5 %}
+            Chamber target colder than recipe
+          {% else %}
+            Unknown
+          {% endif %}
+
+      - name: "FWK Chamber Summary"
+        unique_id: fwk_chamber_summary
+        state: >
+          {% set recipe = states('sensor.fwk_recipe_active_target_temp') %}
+          {% set live = states('sensor.fwk_live_temp') %}
+          {% set mid = states('sensor.fwk_chamber_target_midpoint') %}
+          {% set span = states('sensor.fwk_chamber_target_span') %}
+          {% set action = states('sensor.fwk_chamber_action') %}
+          {% if recipe not in ['unknown', 'unavailable', 'none', ''] and mid not in ['unknown', 'unavailable', 'none', ''] %}
+            Recipe {{ recipe }} °C | Chamber {{ mid }} °C (span {{ span }} °C) | Live {{ live }} °C | {{ action }}
+          {% else %}
+            Chamber summary unavailable
+          {% endif %}
+
+      - name: "FWK Suggested Chamber Range"
+        unique_id: fwk_suggested_chamber_range
+        state: >
+          {% set target = states('sensor.fwk_recipe_active_target_temp') | float(15) %}
+          {{ (target - 0.5) | round(1) }} – {{ (target + 0.5) | round(1) }} °C
+          
+  - binary_sensor:
+      - name: "FWK Chamber On Recipe"
+        unique_id: fwk_chamber_on_recipe
+        state: >
+          {% set climate_state = states('climate.fermentation_chamber') %}
+          {% set delta = states('sensor.fwk_recipe_vs_chamber_delta') | float(99) %}
+          {{
+            climate_state != 'off'
+            and (delta | abs <= 0.5)
+          }}
+
+      - name: "FWK Chamber Running Too Warm"
+        unique_id: fwk_chamber_running_too_warm
+        state: >
+          {% set delta = states('sensor.fwk_recipe_vs_chamber_delta') | float(-99) %}
+          {{
+            states('climate.fermentation_chamber') != 'off'
+            and delta > 0.5
+          }}
+
+      - name: "FWK Chamber Running Too Cold"
+        unique_id: fwk_chamber_running_too_cold
+        state: >
+          {% set delta = states('sensor.fwk_recipe_vs_chamber_delta') | float(99) %}
+          {{
+            states('climate.fermentation_chamber') != 'off'
+            and delta < -0.5
+          }}
+
+      - name: "FWK Live Temp Above Recipe"
+        unique_id: fwk_live_temp_above_recipe
+        state: >
+          {% set delta = states('sensor.fwk_live_vs_recipe_delta') | float(-99) %}
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and delta > 0.5
+          }}
+
+      - name: "FWK Live Temp Below Recipe"
+        unique_id: fwk_live_temp_below_recipe
+        state: >
+          {% set delta = states('sensor.fwk_live_vs_recipe_delta') | float(99) %}
+          {{
+            is_state('input_boolean.fwk_batch_active', 'on')
+            and delta < -0.5
+          }}
+
+script:
+  fwk_apply_brewfather_target:
+    alias: FWK - Apply Brewfather Target to Chamber
+    mode: single
+    sequence:
+      - variables:
+          target: "{{ states('sensor.fwk_recipe_active_target_temp') | float(15) }}"
+          low: "{{ (target - 0.5) | round(1) }}"
+          high: "{{ (target + 0.5) | round(1) }}"
+
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.fermentation_chamber
+        data:
+          hvac_mode: heat_cool
+          target_temp_low: "{{ low }}"
+          target_temp_high: "{{ high }}"
