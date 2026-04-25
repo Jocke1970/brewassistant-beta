@@ -155,7 +155,7 @@ cards:
         - box-shadow: 0 10px 26px rgba(0,0,0,0.28)
         - overflow: hidden
       grid:
-        - grid-template-areas: "\"i n power\" \"i l power\""
+        - grid-template-areas: '"i n power" "i l power"'
         - grid-template-columns: 52px 1fr 42px
         - grid-template-rows: min-content 1fr
       icon:
@@ -187,6 +187,7 @@ cards:
         power:
           - justify-self: end
           - align-self: start
+
   - type: horizontal-stack
     cards:
       - type: custom:button-card
@@ -223,6 +224,7 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
+
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Target
@@ -253,6 +255,7 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
+
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Delta
@@ -323,6 +326,7 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
+
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Cooling
@@ -334,7 +338,10 @@ cards:
         label: |
           [[[
             const action = entity?.attributes?.hvac_action;
-            if (action === 'cooling') return 'Active';
+            const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+
+            if (compressor === 'on') return 'Active';
+            if (action === 'cooling') return 'Cooling';
             if (action === 'idle') return 'Idle';
             return action ?? '-';
           ]]]
@@ -345,14 +352,22 @@ cards:
             - background: |
                 [[[
                   const action = entity?.attributes?.hvac_action;
-                  if (action === 'cooling') return 'rgba(70,140,255,0.22)';
+                  const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+
+                  if (compressor === 'on' || action === 'cooling') {
+                    return 'rgba(70,140,255,0.22)';
+                  }
+
                   return 'rgba(255,255,255,0.08)';
                 ]]]
             - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
           icon:
             - color: |
                 [[[
-                  return entity?.attributes?.hvac_action === 'cooling'
+                  const action = entity?.attributes?.hvac_action;
+                  const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+
+                  return compressor === 'on' || action === 'cooling'
                     ? '#90caf9'
                     : 'rgba(255,255,255,0.55)';
                 ]]]
@@ -364,49 +379,9 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
+
   - type: horizontal-stack
     cards:
-      - type: custom:button-card
-        entity: input_select.kegerator_card_section
-        name: Modes
-        icon: mdi:tune-variant
-        tap_action:
-          action: call-service
-          service: input_select.select_option
-          target:
-            entity_id: input_select.kegerator_card_section
-          data:
-            option: |
-              [[[
-                return entity.state === 'modes' ? 'none' : 'modes';
-              ]]]
-        styles:
-          card:
-            - height: 44px
-            - border-radius: 16px
-            - font-size: 12px
-            - font-weight: 700
-            - background: |
-                [[[
-                  return entity.state === 'modes'
-                    ? 'rgba(33,150,243,0.24)'
-                    : 'rgba(255,255,255,0.08)';
-                ]]]
-            - box-shadow: |
-                [[[
-                  return entity.state === 'modes'
-                    ? '0 0 18px rgba(33,150,243,0.35)'
-                    : '0 4px 14px rgba(0,0,0,0.12)';
-                ]]]
-          icon:
-            - color: |
-                [[[
-                  return entity.state === 'modes' ? '#90caf9' : 'rgba(255,255,255,0.55)';
-                ]]]
-            - width: 18px
-          name:
-            - color: white
-            - font-weight: 800
       - type: custom:button-card
         entity: input_select.kegerator_card_section
         name: Temps
@@ -448,9 +423,10 @@ cards:
           name:
             - color: white
             - font-weight: 800
+
       - type: custom:button-card
         entity: input_select.kegerator_card_section
-        name: Status
+        name: System
         icon: mdi:information-outline
         tap_action:
           action: call-service
@@ -489,59 +465,7 @@ cards:
           name:
             - color: white
             - font-weight: 800
-  - type: conditional
-    conditions:
-      - entity: input_select.kegerator_card_section
-        state: modes
-    card:
-      type: vertical-stack
-      cards:
-        - type: custom:button-card
-          entity: climate.kegerator_kylskap
-          name: Kegerator Mode
-          icon: mdi:tune-variant
-          show_state: true
-          show_label: true
-          tap_action:
-            action: more-info
-          label: |
-            [[[
-              const hvac = entity?.state ?? 'unknown';
-              const action = entity?.attributes?.hvac_action ?? 'unknown';
-              const min = entity?.attributes?.min_temp ?? '-';
-              const max = entity?.attributes?.max_temp ?? '-';
-              const step = entity?.attributes?.target_temp_step ?? '-';
 
-              return `HVAC: ${hvac} · Action: ${action} · Range: ${min}-${max} °C · Step: ${step}`;
-            ]]]
-          styles:
-            card:
-              - border-radius: 18px
-              - padding: 14px
-              - background: >-
-                  linear-gradient(135deg, rgba(45,45,55,0.96),
-                  rgba(20,20,30,0.96))
-              - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
-            icon:
-              - color: "#90caf9"
-            name:
-              - font-weight: 800
-              - color: white
-            state:
-              - color: rgba(255,255,255,0.88)
-              - font-weight: 700
-            label:
-              - font-size: 13px
-              - color: rgba(255,255,255,0.92)
-              - white-space: normal
-        - type: entities
-          title: Modes
-          show_header_toggle: false
-          entities:
-            - entity: climate.kegerator_kylskap
-              name: Thermostat
-            - entity: input_select.kegerator_card_section
-              name: Active section
   - type: conditional
     conditions:
       - entity: input_select.kegerator_card_section
@@ -565,6 +489,7 @@ cards:
               attribute: temperature
               name: Target temperature
               suffix: °C
+
         - type: custom:button-card
           entity: climate.kegerator_kylskap
           name: Temperature Summary
@@ -620,6 +545,7 @@ cards:
               - font-size: 13px
               - color: rgba(255,255,255,0.92)
               - white-space: normal
+
   - type: conditional
     conditions:
       - entity: input_select.kegerator_card_section
@@ -628,15 +554,18 @@ cards:
       type: vertical-stack
       cards:
         - type: entities
-          title: Status
+          title: System
           show_header_toggle: false
           entities:
             - entity: climate.kegerator_kylskap
               name: Kegerator climate
             - entity: binary_sensor.kegerator_compressor_active
               name: Compressor
+            - entity: sensor.extra_koksmaskin_switch_0_power
+              name: Power usage
             - entity: switch.kegerator_fan
               name: Fan
+
         - type: custom:button-card
           entity: climate.kegerator_kylskap
           name: System Status
@@ -649,8 +578,14 @@ cards:
             [[[
               const fan = states['switch.kegerator_fan']?.state;
               const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+              const powerRaw = states['sensor.extra_koksmaskin_switch_0_power']?.state;
               const hvac = entity?.state ?? 'unknown';
               const action = entity?.attributes?.hvac_action ?? 'unknown';
+
+              const powerTxt =
+                powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
+                  ? `${parseFloat(powerRaw).toFixed(1)} W`
+                  : '-';
 
               const fanTxt =
                 fan === 'on' ? 'Fan running' :
@@ -662,7 +597,7 @@ cards:
                 compressor === 'off' ? 'Compressor idle' :
                 'Compressor unavailable';
 
-              return `${compressorTxt} · ${fanTxt} · HVAC ${hvac} · ${action}`;
+              return `${compressorTxt} · ${powerTxt} · ${fanTxt} · HVAC ${hvac} · ${action}`;
             ]]]
           styles:
             card:
