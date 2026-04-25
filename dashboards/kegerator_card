@@ -1,0 +1,683 @@
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: climate.kegerator_kylskap
+    name: Kegerator
+    icon: mdi:fridge-industrial
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: climate.kegerator_kylskap
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:power
+          tap_action:
+            action: call-service
+            service: |
+              [[[
+                return entity?.state === 'off'
+                  ? 'climate.turn_on'
+                  : 'climate.turn_off';
+              ]]]
+            target:
+              entity_id: climate.kegerator_kylskap
+          styles:
+            card:
+              - width: 42px
+              - height: 42px
+              - border-radius: 50%
+              - padding: 0
+              - background: rgba(255,255,255,0.15)
+              - box-shadow: none
+            icon:
+              - width: 22px
+              - color: |
+                  [[[
+                    const hvac = entity?.state;
+                    const isOn = hvac !== 'off' && hvac !== 'unavailable' && hvac !== 'unknown';
+                    return isOn ? '#90caf9' : 'rgba(255,255,255,0.65)';
+                  ]]]
+    label: |
+      [[[
+        const climateCurrentRaw = entity?.attributes?.current_temperature;
+        const externalRaw = states['sensor.kyl_temperatur_4']?.state;
+        const fan = states['switch.kegerator_fan']?.state;
+        const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+
+        const hvac = entity?.state ?? 'unknown';
+        const hvacAction = entity?.attributes?.hvac_action ?? 'unknown';
+        const targetRaw = entity?.attributes?.temperature;
+
+        const current =
+          climateCurrentRaw !== undefined &&
+          climateCurrentRaw !== null &&
+          climateCurrentRaw !== 'unknown' &&
+          climateCurrentRaw !== 'unavailable'
+            ? parseFloat(climateCurrentRaw)
+            : (
+              externalRaw &&
+              externalRaw !== 'unknown' &&
+              externalRaw !== 'unavailable'
+                ? parseFloat(externalRaw)
+                : null
+            );
+
+        const target =
+          targetRaw !== undefined &&
+          targetRaw !== null &&
+          targetRaw !== 'unknown' &&
+          targetRaw !== 'unavailable'
+            ? parseFloat(targetRaw)
+            : null;
+
+        const currentTxt = current !== null ? `${current.toFixed(1)} °C` : 'unavailable';
+        const targetTxt = target !== null ? `${target.toFixed(1)} °C` : 'unavailable';
+        const deltaTxt = current !== null && target !== null
+          ? `${(current - target) > 0 ? '+' : ''}${(current - target).toFixed(1)} °C`
+          : 'unavailable';
+
+        const modeTxt =
+          hvac === 'cool' ? 'Cooling enabled' :
+          hvac === 'off' ? 'Off' :
+          hvac;
+
+        const actionTxt =
+          hvacAction === 'cooling' ? 'Cooling' :
+          hvacAction === 'idle' ? 'Idle' :
+          hvacAction;
+
+        const compressorTxt =
+          compressor === 'on' ? 'Running' :
+          compressor === 'off' ? 'Idle' :
+          'unavailable';
+
+        const fanTxt =
+          fan === 'on' ? 'On' :
+          fan === 'off' ? 'Off' :
+          '-';
+
+        return `
+          <div style="line-height: 1.45;">
+            <div style="font-size: 12px; opacity: 0.78;">Kyla</div>
+            <div>Now: ${currentTxt}</div>
+            <div>Target: ${targetTxt} · Delta: ${deltaTxt}</div>
+            <div>Mode: ${modeTxt} · Action: ${actionTxt}</div>
+            <div>Status: ${entity?.state ?? 'unavailable'}</div>
+            <div>Cooling: ${hvac === 'cool' ? 'On' : 'Off'} · Compressor: ${compressorTxt}</div>
+            <div>Fan: ${fanTxt}</div>
+          </div>
+        `;
+      ]]]
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 18px
+        - min-height: 165px
+        - background: |
+            [[[
+              const action = entity?.attributes?.hvac_action;
+              const hvac = entity?.state;
+              const current = entity?.attributes?.current_temperature;
+              const target = entity?.attributes?.temperature;
+
+              let delta = null;
+              if (current !== undefined && current !== null && target !== undefined && target !== null) {
+                delta = Number(current) - Number(target);
+              }
+
+              if (hvac === 'off') {
+                return 'linear-gradient(135deg, #34343a, #242428)';
+              }
+
+              if (action === 'cooling') {
+                return 'linear-gradient(135deg, #0d47a1, #1e3a5f)';
+              }
+
+              if (delta !== null && !isNaN(delta) && delta > 1.0) {
+                return 'linear-gradient(135deg, #6d4c00, #332300)';
+              }
+
+              if (delta !== null && !isNaN(delta) && Math.abs(delta) <= 0.5) {
+                return 'linear-gradient(135deg, #005739, #063324)';
+              }
+
+              return 'linear-gradient(135deg, #26354d, #18202e)';
+            ]]]
+        - color: white
+        - box-shadow: 0 10px 26px rgba(0,0,0,0.28)
+        - overflow: hidden
+      grid:
+        - grid-template-areas: "\"i n power\" \"i l power\""
+        - grid-template-columns: 52px 1fr 42px
+        - grid-template-rows: min-content 1fr
+      icon:
+        - width: 32px
+        - color: white
+      img_cell:
+        - width: 52px
+        - height: 52px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.14)
+        - align-self: start
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 18px
+        - font-weight: 900
+        - color: white
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      label:
+        - justify-self: start
+        - align-self: start
+        - text-align: left
+        - font-size: 13px
+        - font-weight: 600
+        - white-space: normal
+        - color: white
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      custom_fields:
+        power:
+          - justify-self: end
+          - align-self: start
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        entity: climate.kegerator_kylskap
+        name: Current
+        icon: mdi:thermometer
+        show_state: false
+        show_label: true
+        tap_action:
+          action: more-info
+        label: |
+          [[[
+            const climateCurrent = entity?.attributes?.current_temperature;
+            const external = states['sensor.kyl_temperatur_4']?.state;
+            const v = climateCurrent !== undefined && climateCurrent !== null
+              ? climateCurrent
+              : external;
+            if (v === undefined || v === null || v === 'unknown' || v === 'unavailable') return '-';
+            return `${parseFloat(v).toFixed(1)} °C`;
+          ]]]
+        styles:
+          card:
+            - height: 102px
+            - border-radius: 18px
+            - background: rgba(120,170,255,0.16)
+            - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+          icon:
+            - color: "#90caf9"
+            - width: 34px
+          name:
+            - font-weight: 800
+            - color: white
+          label:
+            - font-size: 13px
+            - font-weight: 700
+            - color: rgba(255,255,255,0.92)
+      - type: custom:button-card
+        entity: climate.kegerator_kylskap
+        name: Target
+        icon: mdi:crosshairs-gps
+        show_state: false
+        show_label: true
+        tap_action:
+          action: more-info
+        label: |
+          [[[
+            const t = entity?.attributes?.temperature;
+            if (t === undefined || t === null || t === 'unknown' || t === 'unavailable') return '-';
+            return `${parseFloat(t).toFixed(1)} °C`;
+          ]]]
+        styles:
+          card:
+            - height: 102px
+            - border-radius: 18px
+            - background: rgba(255,255,255,0.08)
+            - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+          icon:
+            - color: "#90caf9"
+            - width: 34px
+          name:
+            - font-weight: 800
+            - color: white
+          label:
+            - font-size: 13px
+            - font-weight: 700
+            - color: rgba(255,255,255,0.92)
+      - type: custom:button-card
+        entity: climate.kegerator_kylskap
+        name: Delta
+        icon: mdi:delta
+        show_state: false
+        show_label: true
+        tap_action:
+          action: more-info
+        label: |
+          [[[
+            const climateCurrent = entity?.attributes?.current_temperature;
+            const external = states['sensor.kyl_temperatur_4']?.state;
+            const targetRaw = entity?.attributes?.temperature;
+
+            const currentRaw = climateCurrent !== undefined && climateCurrent !== null
+              ? climateCurrent
+              : external;
+
+            if (
+              currentRaw === undefined ||
+              currentRaw === null ||
+              currentRaw === 'unknown' ||
+              currentRaw === 'unavailable' ||
+              targetRaw === undefined ||
+              targetRaw === null ||
+              targetRaw === 'unknown' ||
+              targetRaw === 'unavailable'
+            ) return '-';
+
+            const delta = parseFloat(currentRaw) - parseFloat(targetRaw);
+            return `${delta > 0 ? '+' : ''}${delta.toFixed(1)} °C`;
+          ]]]
+        styles:
+          card:
+            - height: 102px
+            - border-radius: 18px
+            - background: |
+                [[[
+                  const climateCurrent = entity?.attributes?.current_temperature;
+                  const external = states['sensor.kyl_temperatur_4']?.state;
+                  const targetRaw = entity?.attributes?.temperature;
+                  const currentRaw = climateCurrent !== undefined && climateCurrent !== null ? climateCurrent : external;
+
+                  if (
+                    currentRaw === undefined ||
+                    currentRaw === null ||
+                    currentRaw === 'unknown' ||
+                    currentRaw === 'unavailable' ||
+                    targetRaw === undefined ||
+                    targetRaw === null ||
+                    targetRaw === 'unknown' ||
+                    targetRaw === 'unavailable'
+                  ) return 'rgba(255,255,255,0.08)';
+
+                  const delta = parseFloat(currentRaw) - parseFloat(targetRaw);
+                  if (delta > 1.0) return 'rgba(255,170,70,0.18)';
+                  if (delta < -1.0) return 'rgba(70,140,255,0.18)';
+                  return 'rgba(70,200,120,0.18)';
+                ]]]
+            - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+          icon:
+            - color: "#90caf9"
+            - width: 34px
+          name:
+            - font-weight: 800
+            - color: white
+          label:
+            - font-size: 13px
+            - font-weight: 700
+            - color: rgba(255,255,255,0.92)
+      - type: custom:button-card
+        entity: climate.kegerator_kylskap
+        name: Cooling
+        icon: mdi:snowflake
+        show_state: false
+        show_label: true
+        tap_action:
+          action: more-info
+        label: |
+          [[[
+            const action = entity?.attributes?.hvac_action;
+            if (action === 'cooling') return 'Active';
+            if (action === 'idle') return 'Idle';
+            return action ?? '-';
+          ]]]
+        styles:
+          card:
+            - height: 102px
+            - border-radius: 18px
+            - background: |
+                [[[
+                  const action = entity?.attributes?.hvac_action;
+                  if (action === 'cooling') return 'rgba(70,140,255,0.22)';
+                  return 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+          icon:
+            - color: |
+                [[[
+                  return entity?.attributes?.hvac_action === 'cooling'
+                    ? '#90caf9'
+                    : 'rgba(255,255,255,0.55)';
+                ]]]
+            - width: 34px
+          name:
+            - font-weight: 800
+            - color: white
+          label:
+            - font-size: 13px
+            - font-weight: 700
+            - color: rgba(255,255,255,0.92)
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        entity: input_select.kegerator_card_section
+        name: Modes
+        icon: mdi:tune-variant
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          target:
+            entity_id: input_select.kegerator_card_section
+          data:
+            option: |
+              [[[
+                return entity.state === 'modes' ? 'none' : 'modes';
+              ]]]
+        styles:
+          card:
+            - height: 44px
+            - border-radius: 16px
+            - font-size: 12px
+            - font-weight: 700
+            - background: |
+                [[[
+                  return entity.state === 'modes'
+                    ? 'rgba(33,150,243,0.24)'
+                    : 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: |
+                [[[
+                  return entity.state === 'modes'
+                    ? '0 0 18px rgba(33,150,243,0.35)'
+                    : '0 4px 14px rgba(0,0,0,0.12)';
+                ]]]
+          icon:
+            - color: |
+                [[[
+                  return entity.state === 'modes' ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                ]]]
+            - width: 18px
+          name:
+            - color: white
+            - font-weight: 800
+      - type: custom:button-card
+        entity: input_select.kegerator_card_section
+        name: Temps
+        icon: mdi:thermometer-lines
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          target:
+            entity_id: input_select.kegerator_card_section
+          data:
+            option: |
+              [[[
+                return entity.state === 'temps' ? 'none' : 'temps';
+              ]]]
+        styles:
+          card:
+            - height: 44px
+            - border-radius: 16px
+            - font-size: 12px
+            - font-weight: 700
+            - background: |
+                [[[
+                  return entity.state === 'temps'
+                    ? 'rgba(33,150,243,0.24)'
+                    : 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: |
+                [[[
+                  return entity.state === 'temps'
+                    ? '0 0 18px rgba(33,150,243,0.35)'
+                    : '0 4px 14px rgba(0,0,0,0.12)';
+                ]]]
+          icon:
+            - color: |
+                [[[
+                  return entity.state === 'temps' ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                ]]]
+            - width: 18px
+          name:
+            - color: white
+            - font-weight: 800
+      - type: custom:button-card
+        entity: input_select.kegerator_card_section
+        name: Status
+        icon: mdi:information-outline
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          target:
+            entity_id: input_select.kegerator_card_section
+          data:
+            option: |
+              [[[
+                return entity.state === 'status' ? 'none' : 'status';
+              ]]]
+        styles:
+          card:
+            - height: 44px
+            - border-radius: 16px
+            - font-size: 12px
+            - font-weight: 700
+            - background: |
+                [[[
+                  return entity.state === 'status'
+                    ? 'rgba(33,150,243,0.24)'
+                    : 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: |
+                [[[
+                  return entity.state === 'status'
+                    ? '0 0 18px rgba(33,150,243,0.35)'
+                    : '0 4px 14px rgba(0,0,0,0.12)';
+                ]]]
+          icon:
+            - color: |
+                [[[
+                  return entity.state === 'status' ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                ]]]
+            - width: 18px
+          name:
+            - color: white
+            - font-weight: 800
+  - type: conditional
+    conditions:
+      - entity: input_select.kegerator_card_section
+        state: modes
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          entity: climate.kegerator_kylskap
+          name: Kegerator Mode
+          icon: mdi:tune-variant
+          show_state: true
+          show_label: true
+          tap_action:
+            action: more-info
+          label: |
+            [[[
+              const hvac = entity?.state ?? 'unknown';
+              const action = entity?.attributes?.hvac_action ?? 'unknown';
+              const min = entity?.attributes?.min_temp ?? '-';
+              const max = entity?.attributes?.max_temp ?? '-';
+              const step = entity?.attributes?.target_temp_step ?? '-';
+
+              return `HVAC: ${hvac} · Action: ${action} · Range: ${min}-${max} °C · Step: ${step}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 14px
+              - background: >-
+                  linear-gradient(135deg, rgba(45,45,55,0.96),
+                  rgba(20,20,30,0.96))
+              - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+            icon:
+              - color: "#90caf9"
+            name:
+              - font-weight: 800
+              - color: white
+            state:
+              - color: rgba(255,255,255,0.88)
+              - font-weight: 700
+            label:
+              - font-size: 13px
+              - color: rgba(255,255,255,0.92)
+              - white-space: normal
+        - type: entities
+          title: Modes
+          show_header_toggle: false
+          entities:
+            - entity: climate.kegerator_kylskap
+              name: Thermostat
+            - entity: input_select.kegerator_card_section
+              name: Active section
+  - type: conditional
+    conditions:
+      - entity: input_select.kegerator_card_section
+        state: temps
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: Temperatures
+          show_header_toggle: false
+          entities:
+            - entity: sensor.kyl_temperatur_4
+              name: External temperature sensor
+            - type: attribute
+              entity: climate.kegerator_kylskap
+              attribute: current_temperature
+              name: Climate current temperature
+              suffix: °C
+            - type: attribute
+              entity: climate.kegerator_kylskap
+              attribute: temperature
+              name: Target temperature
+              suffix: °C
+        - type: custom:button-card
+          entity: climate.kegerator_kylskap
+          name: Temperature Summary
+          icon: mdi:thermometer-lines
+          show_state: false
+          show_label: true
+          tap_action:
+            action: more-info
+          label: |
+            [[[
+              const climateCurrent = entity?.attributes?.current_temperature;
+              const external = states['sensor.kyl_temperatur_4']?.state;
+              const targetRaw = entity?.attributes?.temperature;
+              const currentRaw = climateCurrent !== undefined && climateCurrent !== null ? climateCurrent : external;
+
+              if (
+                currentRaw === undefined ||
+                currentRaw === null ||
+                currentRaw === 'unknown' ||
+                currentRaw === 'unavailable' ||
+                targetRaw === undefined ||
+                targetRaw === null ||
+                targetRaw === 'unknown' ||
+                targetRaw === 'unavailable'
+              ) {
+                return 'Temperature data unavailable';
+              }
+
+              const current = parseFloat(currentRaw);
+              const target = parseFloat(targetRaw);
+              const delta = current - target;
+
+              let status = 'Stable';
+              if (delta > 0.6) status = 'Too warm';
+              if (delta < -0.6) status = 'Too cold';
+
+              return `Current ${current.toFixed(1)} °C · Target ${target.toFixed(1)} °C · Delta ${delta > 0 ? '+' : ''}${delta.toFixed(1)} °C · ${status}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 14px
+              - background: >-
+                  linear-gradient(135deg, rgba(45,45,55,0.96),
+                  rgba(20,20,30,0.96))
+              - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+            icon:
+              - color: "#90caf9"
+            name:
+              - font-weight: 800
+              - color: white
+            label:
+              - font-size: 13px
+              - color: rgba(255,255,255,0.92)
+              - white-space: normal
+  - type: conditional
+    conditions:
+      - entity: input_select.kegerator_card_section
+        state: status
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: Status
+          show_header_toggle: false
+          entities:
+            - entity: climate.kegerator_kylskap
+              name: Kegerator climate
+            - entity: binary_sensor.kegerator_compressor_active
+              name: Compressor
+            - entity: switch.kegerator_fan
+              name: Fan
+        - type: custom:button-card
+          entity: climate.kegerator_kylskap
+          name: System Status
+          icon: mdi:information-outline
+          show_state: false
+          show_label: true
+          tap_action:
+            action: more-info
+          label: |
+            [[[
+              const fan = states['switch.kegerator_fan']?.state;
+              const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+              const hvac = entity?.state ?? 'unknown';
+              const action = entity?.attributes?.hvac_action ?? 'unknown';
+
+              const fanTxt =
+                fan === 'on' ? 'Fan running' :
+                fan === 'off' ? 'Fan off' :
+                'Fan unavailable';
+
+              const compressorTxt =
+                compressor === 'on' ? 'Compressor running' :
+                compressor === 'off' ? 'Compressor idle' :
+                'Compressor unavailable';
+
+              return `${compressorTxt} · ${fanTxt} · HVAC ${hvac} · ${action}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 14px
+              - background: >-
+                  linear-gradient(135deg, rgba(45,45,55,0.96),
+                  rgba(20,20,30,0.96))
+              - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
+            icon:
+              - color: "#90caf9"
+            name:
+              - font-weight: 800
+              - color: white
+            label:
+              - font-size: 13px
+              - color: rgba(255,255,255,0.92)
+              - white-space: normal
