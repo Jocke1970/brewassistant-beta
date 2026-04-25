@@ -25,12 +25,276 @@ template:
           threshold_w: 20
           source_sensor: sensor.extra_koksmaskin_switch_0_power
           
+      # =========================
+      # BREWASSISTANT SYSTEM HEALTH
+      # =========================
+
+      - name: BrewAssistant Kegerator Power Sensor OK
+        unique_id: brewassistant_kegerator_power_sensor_ok
+        icon: mdi:flash
+        state: >
+          {{ states('sensor.extra_koksmaskin_switch_0_power') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.extra_koksmaskin_switch_0_power
+          current_value: >
+            {{ states('sensor.extra_koksmaskin_switch_0_power') }}
+
+      - name: BrewAssistant Kegerator Temperature Sensor OK
+        unique_id: brewassistant_kegerator_temperature_sensor_ok
+        icon: mdi:thermometer-check
+        state: >
+          {{ states('sensor.kyl_temperatur_4') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.kyl_temperatur_4
+          current_value: >
+            {{ states('sensor.kyl_temperatur_4') }}
+
+      - name: BrewAssistant Kegerator Climate OK
+        unique_id: brewassistant_kegerator_climate_ok
+        icon: mdi:fridge-industrial
+        state: >
+          {{ states('climate.kegerator_kylskap') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_entity: climate.kegerator_kylskap
+          current_state: >
+            {{ states('climate.kegerator_kylskap') }}
+          hvac_action: >
+            {{ state_attr('climate.kegerator_kylskap', 'hvac_action') }}
+
+      - name: BrewAssistant Fermentation Chamber OK
+        unique_id: brewassistant_fermentation_chamber_ok
+        icon: mdi:thermostat
+        state: >
+          {{ states('climate.fermentation_chamber') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_entity: climate.fermentation_chamber
+          current_state: >
+            {{ states('climate.fermentation_chamber') }}
+          hvac_action: >
+            {{ state_attr('climate.fermentation_chamber', 'hvac_action') }}
+
+      - name: BrewAssistant RAPT Pill Temperature OK
+        unique_id: brewassistant_rapt_pill_temperature_ok
+        icon: mdi:thermometer-check
+        state: >
+          {{ states('sensor.yellow_pill_temperature') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.yellow_pill_temperature
+          current_value: >
+            {{ states('sensor.yellow_pill_temperature') }}
+
+      - name: BrewAssistant RAPT Pill Gravity OK
+        unique_id: brewassistant_rapt_pill_gravity_ok
+        icon: mdi:chart-line
+        state: >
+          {{ states('sensor.yellow_pill_specific_gravity') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.yellow_pill_specific_gravity
+          current_value: >
+            {{ states('sensor.yellow_pill_specific_gravity') }}
+
+      - name: BrewAssistant Brewfather Batch OK
+        unique_id: brewassistant_brewfather_batch_ok
+        icon: mdi:beer
+        state: >
+          {{ states('sensor.brewfather_active_batch') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.brewfather_active_batch
+          current_value: >
+            {{ states('sensor.brewfather_active_batch') }}
+
+      - name: BrewAssistant Kegerator Too Warm
+        unique_id: brewassistant_kegerator_too_warm
+        icon: mdi:thermometer-alert
+        state: >
+          {% set current = states('sensor.kyl_temperatur_4') | float(none) %}
+          {% set target = state_attr('climate.kegerator_kylskap', 'temperature') | float(none) %}
+          {{ current is not none and target is not none and current > target + 2.0 }}
+        attributes:
+          current_temperature: >
+            {{ states('sensor.kyl_temperatur_4') }}
+          target_temperature: >
+            {{ state_attr('climate.kegerator_kylskap', 'temperature') }}
+          threshold_delta_c: 2.0
+
+      - name: BrewAssistant Kegerator Too Cold
+        unique_id: brewassistant_kegerator_too_cold
+        icon: mdi:snowflake-alert
+        state: >
+          {% set current = states('sensor.kyl_temperatur_4') | float(none) %}
+          {% set target = state_attr('climate.kegerator_kylskap', 'temperature') | float(none) %}
+          {{ current is not none and target is not none and current < target - 2.0 }}
+        attributes:
+          current_temperature: >
+            {{ states('sensor.kyl_temperatur_4') }}
+          target_temperature: >
+            {{ state_attr('climate.kegerator_kylskap', 'temperature') }}
+          threshold_delta_c: -2.0
+
+      - name: BrewAssistant Fermentation Chamber Too Warm
+        unique_id: brewassistant_fermentation_chamber_too_warm
+        icon: mdi:thermometer-alert
+        state: >
+          {% set current = state_attr('climate.fermentation_chamber', 'current_temperature') | float(none) %}
+          {% set target = states('sensor.brewfather_fermentation_temperature') | float(none) %}
+          {{ current is not none and target is not none and current > target + 1.5 }}
+        attributes:
+          current_temperature: >
+            {{ state_attr('climate.fermentation_chamber', 'current_temperature') }}
+          recipe_target_temperature: >
+            {{ states('sensor.brewfather_fermentation_temperature') }}
+          threshold_delta_c: 1.5
+
+      - name: BrewAssistant Fermentation Chamber Too Cold
+        unique_id: brewassistant_fermentation_chamber_too_cold
+        icon: mdi:snowflake-alert
+        state: >
+          {% set current = state_attr('climate.fermentation_chamber', 'current_temperature') | float(none) %}
+          {% set target = states('sensor.brewfather_fermentation_temperature') | float(none) %}
+          {{ current is not none and target is not none and current < target - 1.5 }}
+        attributes:
+          current_temperature: >
+            {{ state_attr('climate.fermentation_chamber', 'current_temperature') }}
+          recipe_target_temperature: >
+            {{ states('sensor.brewfather_fermentation_temperature') }}
+          threshold_delta_c: -1.5
+
+      - name: BrewAssistant Compressor Running Long
+        unique_id: brewassistant_compressor_running_long
+        icon: mdi:timer-alert
+        state: >
+          {{ is_state('binary_sensor.kegerator_compressor_active', 'on') }}
+        delay_on:
+          minutes: 45
+        attributes:
+          source_sensor: binary_sensor.kegerator_compressor_active
+          power_w: >
+            {{ states('sensor.extra_koksmaskin_switch_0_power') }}
+
+      - name: BrewAssistant Any Problem Active
+        unique_id: brewassistant_any_problem_active
+        icon: mdi:alert-circle
+        state: >
+          {{
+            is_state('binary_sensor.brewassistant_kegerator_power_sensor_ok', 'off')
+
+            or is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_ok', 'off')
+            or is_state('binary_sensor.brewassistant_kegerator_climate_ok', 'off')
+            or is_state('binary_sensor.brewassistant_fermentation_chamber_ok', 'off')
+            or is_state('binary_sensor.brewassistant_rapt_pill_temperature_ok', 'off')
+            or is_state('binary_sensor.brewassistant_rapt_pill_gravity_ok', 'off')
+            or is_state('binary_sensor.brewassistant_kegerator_too_warm', 'on')
+            or is_state('binary_sensor.brewassistant_kegerator_too_cold', 'on')
+            or is_state('binary_sensor.brewassistant_fermentation_chamber_too_warm', 'on')
+            or is_state('binary_sensor.brewassistant_fermentation_chamber_too_cold', 'on')
+            or is_state('binary_sensor.brewassistant_compressor_running_long', 'on')
+            or is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on')
+            or is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on')
+            or is_state('binary_sensor.brewassistant_fermentation_temperature_sensor_battery_low', 'on')
+          }}
+
+  - sensor:
+      - name: BrewAssistant Problem Count
+        unique_id: brewassistant_problem_count
+        icon: mdi:counter
+        state: >
+          {% set problems = [
+            is_state('binary_sensor.brewassistant_kegerator_power_sensor_ok', 'off'),
+            is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_ok', 'off'),
+            is_state('binary_sensor.brewassistant_kegerator_climate_ok', 'off'),
+            is_state('binary_sensor.brewassistant_fermentation_chamber_ok', 'off'),
+            is_state('binary_sensor.brewassistant_rapt_pill_temperature_ok', 'off'),
+            is_state('binary_sensor.brewassistant_rapt_pill_gravity_ok', 'off'),
+            is_state('binary_sensor.brewassistant_kegerator_too_warm', 'on'),
+            is_state('binary_sensor.brewassistant_kegerator_too_cold', 'on'),
+            is_state('binary_sensor.brewassistant_fermentation_chamber_too_warm', 'on'),
+            is_state('binary_sensor.brewassistant_fermentation_chamber_too_cold', 'on'),
+            is_state('binary_sensor.brewassistant_compressor_running_long', 'on'),
+            is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on'),
+            is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on'),
+            is_state('binary_sensor.brewassistant_fermentation_temperature_sensor_battery_low', 'on')
+          ] %}
+          {{ problems | select('eq', true) | list | count }}
+        attributes:
+          summary: >
+            {% set count = states('sensor.brewassistant_problem_count') | int(0) %}
+            {% if count == 0 %}
+              All systems nominal
+            {% elif count == 1 %}
+              1 active problem
+            {% else %}
+              {{ count }} active problems
+            {% endif %}
+
+      - name: BrewAssistant Health Status
+        unique_id: brewassistant_health_status
+        icon: mdi:heart-pulse
+        state: >
+          {% set count = states('sensor.brewassistant_problem_count') | int(0) %}
+          {% if count == 0 %}
+            OK
+          {% elif count <= 2 %}
+            Warning
+          {% else %}
+            Critical
+          {% endif %}
+        attributes:
+          problem_count: >
+            {{ states('sensor.brewassistant_problem_count') }}
+          kegerator_power_sensor: >
+            {{ states('binary_sensor.brewassistant_kegerator_power_sensor_ok') }}
+          kegerator_temperature_sensor: >
+            {{ states('binary_sensor.brewassistant_kegerator_temperature_sensor_ok') }}
+          kegerator_climate: >
+            {{ states('binary_sensor.brewassistant_kegerator_climate_ok') }}
+          fermentation_chamber: >
+            {{ states('binary_sensor.brewassistant_fermentation_chamber_ok') }}
+          rapt_pill_temperature: >
+            {{ states('binary_sensor.brewassistant_rapt_pill_temperature_ok') }}
+          rapt_pill_gravity: >
+            {{ states('binary_sensor.brewassistant_rapt_pill_gravity_ok') }}
+
+      - name: BrewAssistant RAPT Pill Battery Low
+        unique_id: brewassistant_rapt_pill_battery_low
+        icon: mdi:battery-alert
+        state: >
+          {% set batt = states('sensor.yellow_pill_battery') | float(none) %}
+          {{ batt is not none and batt < 20 }}
+        attributes:
+          source_sensor: sensor.yellow_pill_battery
+          current_battery_percent: >
+            {{ states('sensor.yellow_pill_battery') }}
+          threshold_percent: 20
+
+      - name: BrewAssistant Kegerator Temperature Sensor Battery Low
+        unique_id: brewassistant_kegerator_temperature_sensor_battery_low
+        icon: mdi:battery-alert
+        state: >
+          {% set batt = states('sensor.kyl_temperatur_4_battery') | float(none) %}
+          {{ batt is not none and batt < 20 }}
+        attributes:
+          source_sensor: sensor.kyl_temperatur_4_battery
+          current_battery_percent: >
+            {{ states('sensor.kyl_temperatur_4_battery') }}
+          threshold_percent: 20
+
+      - name: BrewAssistant Fermentation Temperature Sensor Battery Low
+        unique_id: brewassistant_fermentation_temperature_sensor_battery_low
+        icon: mdi:battery-alert
+        state: >
+          {% set batt = states('sensor.yellow_pill_battery') | float(none) %}
+          {{ batt is not none and batt < 20 }}
+        attributes:
+          source_sensor: sensor.yellow_pill_battery
+          current_battery_percent: >
+            {{ states('sensor.yellow_pill_battery') }}
+          threshold_percent: 20
+
 input_select:
   kegerator_card_section:
     name: Kegerator Card Section
     options:
       - none
-      - modes
       - temps
       - status
     initial: none
