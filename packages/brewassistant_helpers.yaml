@@ -87,11 +87,11 @@ template:
         unique_id: brewassistant_rapt_pill_gravity_ok
         icon: mdi:chart-line
         state: >
-          {{ states('sensor.yellow_pill_specific_gravity') not in ['unknown', 'unavailable', 'none', ''] }}
+          {{ states('sensor.yellow_pill_gravity_2') not in ['unknown', 'unavailable', 'none', ''] }}
         attributes:
-          source_sensor: sensor.yellow_pill_specific_gravity
+          source_sensor: sensor.yellow_pill_gravity_2
           current_value: >
-            {{ states('sensor.yellow_pill_specific_gravity') }}
+            {{ states('sensor.yellow_pill_gravity_2') }}
 
       - name: BrewAssistant Brewfather Batch OK
         unique_id: brewassistant_brewfather_batch_ok
@@ -191,7 +191,49 @@ template:
             or is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on')
             or is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on')
             or is_state('binary_sensor.brewassistant_fermentation_temperature_sensor_battery_low', 'on')
+            or is_state('binary_sensor.brewassistant_rapt_pill_battery_sensor_ok', 'off')
+            or is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on')
+            or is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on')
           }}
+
+      - name: BrewAssistant RAPT Pill Battery Sensor OK
+        unique_id: brewassistant_rapt_pill_battery_sensor_ok
+        icon: mdi:battery-check
+        state: >
+          {{ states('sensor.yellow_pill_battery') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          source_sensor: sensor.yellow_pill_battery
+          current_battery_percent: >
+            {{ states('sensor.yellow_pill_battery') }}
+          note: >
+            RAPT Pill battery value may be unreliable if it reports 0 while battery is actually near full.
+
+      - name: BrewAssistant RAPT Pill Battery Low
+        unique_id: brewassistant_rapt_pill_battery_low
+        icon: mdi:battery-alert
+        state: >
+          {% set batt = states('sensor.yellow_pill_battery') | float(none) %}
+          {{ batt is not none and batt > 0 and batt < 20 }}
+        attributes:
+          source_sensor: sensor.yellow_pill_battery
+          current_battery_percent: >
+            {{ states('sensor.yellow_pill_battery') }}
+          threshold_percent: 20
+          ignored_zero_value: true
+          note: >
+            A value of 0 is ignored because this RAPT Pill battery sensor currently appears unreliable.
+
+      - name: BrewAssistant Kegerator Temperature Sensor Battery Low
+        unique_id: brewassistant_kegerator_temperature_sensor_battery_low
+        icon: mdi:battery-alert
+        state: >
+          {% set batt = states('sensor.kyl_batteri_4') | float(none) %}
+          {{ batt is not none and batt < 20 }}
+        attributes:
+          source_sensor: sensor.kyl_batteri_4
+          current_battery_percent: >
+            {{ states('sensor.kyl_batteri_4') }}
+          threshold_percent: 20
 
   - sensor:
       - name: BrewAssistant Problem Count
@@ -213,6 +255,9 @@ template:
             is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on'),
             is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on'),
             is_state('binary_sensor.brewassistant_fermentation_temperature_sensor_battery_low', 'on')
+            is_state('binary_sensor.brewassistant_rapt_pill_battery_sensor_ok', 'off'),
+            is_state('binary_sensor.brewassistant_rapt_pill_battery_low', 'on'),
+            is_state('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'on')
           ] %}
           {{ problems | select('eq', true) | list | count }}
         attributes:
