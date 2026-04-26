@@ -1,109 +1,132 @@
-# BrewAssistant
+# BrewAssistant v4 🍺
 
-BrewAssistant is a Home Assistant based brewing workflow system for recipe-aware and sensor-aware fermentation, chamber control, and kegerator monitoring.
+Premium Home Assistant dashboard and helper package for homebrewing workflows.
 
-It combines:
+BrewAssistant v4 focuses on a practical brewing control panel with clear status cards, expandable workflows, problem detection, and hardware abstraction so physical devices can be replaced without rebuilding the dashboard.
 
-- **Brewfather** for recipe context, fermentation plan, target temperatures, and batch status
-- **RAPT / Yellow Pill** for live fermentation temperature and gravity
-- **Home Assistant** for workflow logic, state machine, notifications, semiauto control, and premium dashboards
+## Current status
 
-## Current Status
+**Recommended release label:** `v1.2-dashboard-cleanup`
 
-BrewAssistant is now at an early functional v1 stage.
+Included modules:
 
-Implemented:
+- Problem Center v1.1
+- FWK / Fermentation Process card
+- Fermentation Chamber card
+- Kegerator Premium card
+- Hot Side Premium Workflow v1.1
+- Helper abstraction for future Shelly 4-outlet power strip
+- RAPT Pill / gravity / temperature status integration
+- Brewfather/runtime recipe fallback support
 
-- Core helpers
-- Runtime sensor layer
-- Workflow / state machine
-- Notifications v1
-- Chamber intelligence layer
-- Smart automation layer v2
-- Brewfather-aware runtime
-- Premium fermentation dashboard
-- Premium fermentation chamber card
-- Premium kegerator card
+## Design principles
 
-## Core Concepts
+BrewAssistant uses a simple separation:
 
-BrewAssistant separates the system into layers:
+```text
+Dashboard cards
+  use stable BrewAssistant entities
 
-1. **Recipe runtime**
-   - Brewfather first
-   - manual fallback when Brewfather is unavailable
+Helpers / templates
+  map BrewAssistant entities to physical integrations
 
-2. **Live runtime**
-   - Yellow Pill / RAPT temperature and gravity
+Physical devices
+  Shelly, RAPT, Brewfather, climate entities, sensors
+```
 
-3. **Workflow engine**
-   - process status
-   - next step
-   - current action
-   - next action
+This makes it easier to replace hardware later. For example, when replacing a temporary power sensor with a Shelly power strip, the dashboard should keep using:
 
-4. **Chamber intelligence**
-   - recipe target vs chamber target
-   - live temp vs recipe target
-   - alignment status
+```yaml
+sensor.brewassistant_kegerator_power_w
+binary_sensor.kegerator_compressor_active
+```
 
-5. **Smart automation**
-   - semiauto target application
-   - guarded optional auto-apply
-   - cold crash suggestions
+Only the helper/template mapping should need to change.
 
-6. **UI**
-   - clean current-state-first dashboard
-   - expandable detail sections
-   - premium dark card style
+## Main UI modules
 
-## Main Packages
+### Problem Center
 
-Recommended package files:
+A top-level health panel showing:
 
-- `brewassistant_helpers.yaml`
-- `brewassistant_runtime.yaml`
-- `brewassistant_workflow.yaml`
-- `brewassistant_notifications.yaml`
-- `brewassistant_chamber.yaml`
-- `brewassistant_smart_automation_v2.yaml`
+- overall BrewAssistant health
+- active problem count
+- kegerator status
+- chamber status
+- RAPT SG status
+- Brewfather status
+- battery status
+- compressor/power status
 
-## Dashboard Files
+### FWK / Fermentation Process
 
-Recommended dashboard/card files:
+Workflow card for fermentation batches, including:
 
-- `brewassistant_main_card_dark_v1.yaml`
-- `brewassistant_chamber_card_v1_2_semiauto.yaml`
-- `brewassistant_kegerator_card_v1_1_premium.yaml`
+- top status card
+- enable/power button
+- fermentation temperature
+- gravity
+- planned temperature
+- days left
+- Start / Spunding / Dry Hop / Cold Crash / Transfer actions
+- expandable details section
 
-## Current Live Entities
+### Fermentation Chamber
 
-Known live entities used in the current system:
+Climate-control card for fermentation chamber logic.
 
-- `climate.fermentation_chamber`
-- `climate.kegerator_kylskap`
-- `sensor.yellow_pill_temperature`
-- `sensor.yellow_pill_gravity_2`
-- `sensor.kyl_temperatur_4`
+### Kegerator Premium
 
-## Current Brewfather Source
+Premium kegerator card with:
 
-Primary Brewfather source:
+- current/target/delta/cooling
+- compressor state
+- fan state
+- expandable Temps/System sections
 
-- `sensor.brewfather_all_batches_data`
+### Hot Side Premium Workflow
 
-Used for:
+Brew day workflow card with:
 
-- recipe name
-- batch status
-- batch number
-- fermentation steps
-- primary target temperature
-- cold crash target temperature
-- fermenting days left
+- power/enable button
+- recipe and batch
+- current phase/instruction
+- next action
+- timer
+- mash/chill targets
+- Start / Previous / Next / Pause / Timer / Reset
+- settings section
 
-## Notes
+## Required custom cards
 
-OG and FG are currently still fallback-backed unless verified from Brewfather data.
+Install through HACS or manually:
 
-The system is designed to remain useful even when Brewfather is offline.
+- `custom:button-card`
+- `custom:stack-in-card`
+- `custom:vertical-stack-in-card`
+- `custom:mushroom-template-card`
+- `custom:mushroom-entity-card`
+- `card-mod`
+
+## Suggested repository structure
+
+```text
+BrewAssistant-v4/
+├── README.md
+├── CHANGELOG.md
+├── docs/
+│   ├── INSTALLATION.md
+│   ├── DASHBOARD.md
+│   ├── HELPERS.md
+│   ├── PROBLEM_CENTER.md
+│   ├── POWER_CENTER_PREP.md
+│   ├── HOT_SIDE.md
+│   ├── FWK_WORKFLOW.md
+│   └── ENTITY_MAP.md
+└── packages/
+    └── brewassistant_helpers.yaml
+```
+
+## Safety note
+
+BrewAssistant is a dashboard/helper layer. It should not be treated as a certified safety controller. Use physical temperature limits, safe wiring, proper fusing, and manufacturer-approved power ratings for all heating/cooling equipment.
