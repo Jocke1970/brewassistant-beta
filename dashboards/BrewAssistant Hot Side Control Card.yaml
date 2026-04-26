@@ -87,7 +87,7 @@ cards:
         - padding-top: 6px
 
   # ============================================================
-  # PROGRESS BAR
+  # PROGRESS BAR - SAFE VERSION
   # ============================================================
   - type: custom:button-card
     entity: sensor.brewassistant_hot_side_progress
@@ -96,31 +96,63 @@ cards:
     show_state: false
     styles:
       card:
-        - height: 12px
-        - padding: 0
-        - margin: 0 16px 10px 16px
-        - border-radius: 999px
-        - background: rgba(255,255,255,0.08)
-        - overflow: hidden
+        - height: 34px
+        - padding: 8px 46px 10px 46px
+        - margin: 0
+        - border-radius: 0
+        - background: transparent
+        - box-shadow: none
+        - overflow: visible
+        - box-sizing: border-box
       custom_fields:
         bar:
-          - height: 100%
-          - width: |
-              [[[
-                const p = parseFloat(entity?.state || 0);
-                return `${Math.max(0, Math.min(100, p))}%`;
-              ]]]
-          - background: |
-              [[[
-                const phase = states['input_select.brewassistant_hot_side_phase']?.state;
-                if (phase === 'Chill') return 'linear-gradient(90deg, #3aa7ff, #9ee7ff)';
-                if (phase === 'Done') return 'linear-gradient(90deg, #2ee881, #b7ffd4)';
-                return 'linear-gradient(90deg, #ff8a3d, #ffd36b)';
-              ]]]
-          - border-radius: 999px
-          - box-shadow: 0 0 16px rgba(255,170,70,0.35)
+          - width: 100%
+          - height: 16px
+          - display: block
     custom_fields:
-      bar: ""
+      bar: |
+        [[[
+          const p = Math.max(2, Math.min(100, parseFloat(entity?.state || 0)));
+          const phase = states['input_select.brewassistant_hot_side_phase']?.state;
+
+          let fill = 'linear-gradient(90deg, #ff8a3d, #ffd36b)';
+          let glow = '0 0 14px rgba(255,170,70,0.30)';
+
+          if (phase === 'Idle') {
+            fill = 'rgba(255,255,255,0.20)';
+            glow = 'none';
+          }
+
+          if (phase === 'Chill') {
+            fill = 'linear-gradient(90deg, #3aa7ff, #9ee7ff)';
+            glow = '0 0 14px rgba(90,190,255,0.32)';
+          }
+
+          if (phase === 'Done') {
+            fill = 'linear-gradient(90deg, #2ee881, #b7ffd4)';
+            glow = '0 0 14px rgba(80,255,160,0.32)';
+          }
+
+          return `
+            <div style="
+              height:16px;
+              width:100%;
+              border-radius:999px;
+              background:rgba(255,255,255,0.10);
+              overflow:hidden;
+              box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);
+            ">
+              <div style="
+                height:16px;
+                width:${p}%;
+                max-width:100%;
+                border-radius:999px;
+                background:${fill};
+                box-shadow:${glow};
+              "></div>
+            </div>
+          `;
+        ]]]
 
   # ============================================================
   # RECIPE / BATCH INFO
