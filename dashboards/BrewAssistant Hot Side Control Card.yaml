@@ -27,21 +27,27 @@ cards:
             [[[
               const status = entity?.state;
               const phase = states['input_select.brewassistant_hot_side_phase']?.state;
+
               if (status === 'Paused') {
                 return 'linear-gradient(135deg, rgba(120,120,120,0.35), rgba(40,40,40,0.92))';
               }
+
               if (phase === 'Boil' || phase === 'Heat To Boil') {
                 return 'linear-gradient(135deg, rgba(255,120,40,0.45), rgba(60,22,8,0.95))';
               }
+
               if (phase === 'Mash Rest' || phase === 'Mash In' || phase === 'Mash Out') {
                 return 'linear-gradient(135deg, rgba(255,180,80,0.35), rgba(60,40,10,0.94))';
               }
+
               if (phase === 'Chill') {
                 return 'linear-gradient(135deg, rgba(70,170,255,0.38), rgba(8,26,50,0.95))';
               }
+
               if (phase === 'Done') {
                 return 'linear-gradient(135deg, rgba(70,220,140,0.36), rgba(10,45,28,0.95))';
               }
+
               return 'linear-gradient(135deg, rgba(255,150,60,0.28), rgba(25,18,12,0.96))';
             ]]]
         - box-shadow: 0 0 24px rgba(255, 140, 50, 0.18)
@@ -415,43 +421,165 @@ cards:
             - font-weight: 700
 
   # ============================================================
-  # SETTINGS EXPANDER-LITE
+  # SETTINGS / HOT SIDE TUNING
   # ============================================================
-  - type: entities
-    title: Hot Side Inställningar
-    show_header_toggle: false
-    entities:
-      - entity: input_boolean.brewassistant_hot_side_auto_start_timers
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.brewassistant_hot_side_auto_start_timers
         name: Autostarta timers
-      - entity: input_boolean.brewassistant_hot_side_notifications
+        icon: mdi:timer-play
+        tap_action:
+          action: toggle
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.brewassistant_hot_side_notifications
         name: Notiser
-      - entity: input_number.brewassistant_hot_side_strike_water_temp
-        name: Mäskvatten / strike temp
-      - entity: input_number.brewassistant_hot_side_mash_target_temp
+        icon: mdi:bell-ring
+        tap_action:
+          action: toggle
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_strike_water_temp
+        name: Strike temp
+        icon: mdi:thermometer-chevron-up
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_mash_target_temp
         name: Mäsktemperatur
-      - entity: input_number.brewassistant_hot_side_mash_minutes
+        icon: mdi:thermometer-water
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_mash_minutes
         name: Mäsk minuter
-      - entity: input_number.brewassistant_hot_side_mashout_minutes
+        icon: mdi:timer-sand
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_mashout_minutes
         name: Mash-out minuter
-      - entity: input_number.brewassistant_hot_side_boil_minutes
+        icon: mdi:timer-sand-complete
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_boil_minutes
         name: Kok minuter
-      - entity: input_number.brewassistant_hot_side_whirlpool_minutes
+        icon: mdi:pot-steam
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_whirlpool_minutes
         name: Whirlpool minuter
-      - entity: input_number.brewassistant_hot_side_chill_target_temp
+        icon: mdi:weather-tornado
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_number.brewassistant_hot_side_chill_target_temp
         name: Kylmål
-      - entity: input_text.brewassistant_hot_side_manual_recipe_name
-        name: Manuellt receptnamn
-      - entity: input_text.brewassistant_hot_side_manual_batch_name
-        name: Manuellt batchnamn
-    card_mod:
-      style: |
-        ha-card {
-          margin: 4px 12px 12px 12px;
-          border-radius: 20px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.07);
-          overflow: hidden;
-        }
+        icon: mdi:snowflake-thermometer
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_text.brewassistant_hot_side_manual_recipe_name
+        name: Manuellt recept
+        icon: mdi:beer
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+
+      - type: custom:mushroom-entity-card
+        entity: input_text.brewassistant_hot_side_manual_batch_name
+        name: Manuell batch
+        icon: mdi:clipboard-text
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
 
 card_mod:
   style: |
