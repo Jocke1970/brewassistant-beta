@@ -1,0 +1,262 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: climate.fermentation_chamber
+    name: Fermentation Chamber
+    icon: mdi:cup
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      apply:
+        card:
+          type: custom:button-card
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:crosshairs-gps
+          tap_action:
+            action: call-service
+            service: script.fwk_apply_brewfather_target
+          styles:
+            card:
+              - width: 36px
+              - height: 36px
+              - border-radius: 50%
+              - padding: 0
+              - background: rgba(144,202,249,0.24)
+              - box-shadow: none
+            icon:
+              - width: 20px
+              - color: rgba(255,255,255,0.96)
+      power:
+        card:
+          type: custom:button-card
+          entity: climate.fermentation_chamber
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:power
+          tap_action:
+            action: call-service
+            service: |
+              [[[
+                return entity?.state === 'off'
+                  ? 'climate.turn_on'
+                  : 'climate.turn_off';
+              ]]]
+            target:
+              entity_id: climate.fermentation_chamber
+          styles:
+            card:
+              - width: 36px
+              - height: 36px
+              - border-radius: 50%
+              - padding: 0
+              - background: rgba(255,255,255,0.12)
+              - box-shadow: none
+            icon:
+              - width: 21px
+              - color: |
+                  [[[
+                    const hvac = entity?.state;
+                    const isOn = hvac !== 'off' && hvac !== 'unavailable' && hvac !== 'unknown';
+                    return isOn ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                  ]]]
+    label: |
+      [[[
+        const currentRaw = entity?.attributes?.current_temperature;
+        const targetLowRaw = entity?.attributes?.target_temp_low;
+        const targetHighRaw = entity?.attributes?.target_temp_high;
+        const targetRaw = entity?.attributes?.temperature;
+        const hvac = entity?.state ?? 'unknown';
+        const action = entity?.attributes?.hvac_action ?? 'unknown';
+
+        const recipeTargetRaw = states['sensor.fwk_recipe_active_target_temp']?.state;
+        const suggestedRaw = states['sensor.fwk_suggested_chamber_range']?.state;
+        const alignmentRaw = states['sensor.fwk_chamber_alignment_status']?.state;
+        const chamberActionRaw = states['sensor.fwk_chamber_action']?.state;
+
+        const current =
+          currentRaw !== undefined &&
+          currentRaw !== null &&
+          currentRaw !== 'unknown' &&
+          currentRaw !== 'unavailable'
+            ? parseFloat(currentRaw)
+            : null;
+
+        const recipeTarget =
+          recipeTargetRaw &&
+          recipeTargetRaw !== 'unknown' &&
+          recipeTargetRaw !== 'unavailable'
+            ? parseFloat(recipeTargetRaw)
+            : null;
+
+        const targetLow =
+          targetLowRaw !== undefined &&
+          targetLowRaw !== null &&
+          targetLowRaw !== 'unknown' &&
+          targetLowRaw !== 'unavailable'
+            ? parseFloat(targetLowRaw)
+            : null;
+
+        const targetHigh =
+          targetHighRaw !== undefined &&
+          targetHighRaw !== null &&
+          targetHighRaw !== 'unknown' &&
+          targetHighRaw !== 'unavailable'
+            ? parseFloat(targetHighRaw)
+            : null;
+
+        const target =
+          targetRaw !== undefined &&
+          targetRaw !== null &&
+          targetRaw !== 'unknown' &&
+          targetRaw !== 'unavailable'
+            ? parseFloat(targetRaw)
+            : null;
+
+        const nowTxt = current !== null ? `${current.toFixed(1)} °C` : '-';
+        const recipeTxt = recipeTarget !== null ? `${recipeTarget.toFixed(1)} °C` : '-';
+
+        let suggestedTxt = '-';
+        if (suggestedRaw && suggestedRaw !== 'unknown' && suggestedRaw !== 'unavailable') {
+          suggestedTxt = suggestedRaw;
+        } else if (recipeTarget !== null) {
+          suggestedTxt = `${(recipeTarget - 0.5).toFixed(1)}–${(recipeTarget + 0.5).toFixed(1)} °C`;
+        }
+
+        let chamberTxt = '-';
+        if (targetLow !== null && targetHigh !== null) {
+          chamberTxt = `${targetLow.toFixed(1)}–${targetHigh.toFixed(1)} °C`;
+        } else if (target !== null) {
+          chamberTxt = `${target.toFixed(1)} °C`;
+        }
+
+        const alignment =
+          alignmentRaw &&
+          alignmentRaw !== 'unknown' &&
+          alignmentRaw !== 'unavailable'
+            ? alignmentRaw
+            : hvac === 'off'
+              ? 'Chamber off'
+              : action === 'cooling'
+                ? 'Cooling'
+                : action === 'heating'
+                  ? 'Heating'
+                  : 'Idle';
+
+        const modeTxt =
+          hvac === 'heat_cool' ? 'Auto' :
+          hvac === 'cool' ? 'Cooling' :
+          hvac === 'heat' ? 'Heating' :
+          hvac === 'off' ? 'Av' :
+          hvac;
+
+        const chamberAction =
+          chamberActionRaw &&
+          chamberActionRaw !== 'unknown' &&
+          chamberActionRaw !== 'unavailable'
+            ? chamberActionRaw
+            : '-';
+
+        return `
+          <div style="line-height: 1.45;">
+            <div style="font-size: 12px; opacity: 0.78;">${modeTxt}</div>
+            <div>Now: ${nowTxt}</div>
+            <div>Recipe target: ${recipeTxt}</div>
+            <div>Suggested: ${suggestedTxt}</div>
+            <div>Chamber: ${chamberTxt}</div>
+            <div>Action: ${chamberAction}</div>
+            <div>Alignment: ${alignment}</div>
+          </div>
+        `;
+      ]]]
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 18px
+        - min-height: 180px
+        - color: white
+        - background: |
+            [[[
+              const hvac = entity?.state;
+              const action = entity?.attributes?.hvac_action;
+              const alignment = states['sensor.fwk_chamber_alignment_status']?.state ?? '';
+
+              if (hvac === 'off') {
+                return 'linear-gradient(135deg, #34343a, #242428)';
+              }
+
+              if (action === 'cooling') {
+                return 'linear-gradient(135deg, #0d47a1, #1e3a5f)';
+              }
+
+              if (action === 'heating') {
+                return 'linear-gradient(135deg, #6d2c00, #3b1d00)';
+              }
+
+              if (alignment === 'On recipe') {
+                return 'linear-gradient(135deg, #005739, #063324)';
+              }
+
+              if (alignment === 'Chamber target warmer than recipe') {
+                return 'linear-gradient(135deg, #6d4c00, #332300)';
+              }
+
+              if (alignment === 'Chamber target colder than recipe') {
+                return 'linear-gradient(135deg, #0d47a1, #1e3a5f)';
+              }
+
+              return 'linear-gradient(135deg, #3a3a40, #242428)';
+            ]]]
+        - box-shadow: 0 10px 26px rgba(0,0,0,0.24)
+        - overflow: hidden
+      grid:
+        - grid-template-areas: "\"i n apply power\" \"i l apply power\""
+        - grid-template-columns: 52px 1fr 38px 38px
+        - grid-template-rows: min-content 1fr
+      img_cell:
+        - width: 52px
+        - height: 52px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.14)
+        - align-self: start
+      icon:
+        - width: 32px
+        - color: white
+      name:
+        - justify-self: start
+        - align-self: end
+        - text-align: left
+        - font-size: 18px
+        - font-weight: 900
+        - color: white
+        - white-space: normal
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      label:
+        - justify-self: start
+        - align-self: start
+        - text-align: left
+        - font-size: 13px
+        - font-weight: 600
+        - color: white
+        - white-space: normal
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      custom_fields:
+        apply:
+          - justify-self: end
+          - align-self: start
+        power:
+          - justify-self: end
+          - align-self: start
+card_mod:
+  style: |
+    ha-card {
+      background: transparent !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
