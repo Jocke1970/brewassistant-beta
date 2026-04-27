@@ -93,7 +93,7 @@ cards:
         - box-shadow: 0 10px 26px rgba(0,0,0,0.28)
         - overflow: hidden
       grid:
-        - grid-template-areas: '"i n" "i l"'
+        - grid-template-areas: "\"i n\" \"i l\""
         - grid-template-columns: 52px 1fr
         - grid-template-rows: min-content 1fr
       icon:
@@ -121,7 +121,6 @@ cards:
         - white-space: normal
         - color: white
         - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
-
   - type: grid
     columns: 3
     square: false
@@ -163,7 +162,6 @@ cards:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
-
       - type: custom:button-card
         entity: binary_sensor.brewassistant_fermentation_chamber_ok
         name: Chamber
@@ -201,7 +199,6 @@ cards:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
-
       - type: custom:button-card
         entity: binary_sensor.brewassistant_rapt_pill_gravity_ok
         name: RAPT SG
@@ -239,7 +236,6 @@ cards:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
-
       - type: custom:button-card
         entity: binary_sensor.brewassistant_brewfather_batch_ok
         name: Brewfather
@@ -277,7 +273,6 @@ cards:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
-
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low
         name: Battery
@@ -348,7 +343,6 @@ cards:
             - font-weight: 800
             - font-size: 12px
             - white-space: normal
-
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_power_sensor_ok
         name: Compressor
@@ -359,7 +353,7 @@ cards:
           action: more-info
         label: |
           [[[
-            const power = states['sensor.extra_koksmaskin_switch_0_power']?.state;
+            const power = states['sensor.brewassistant_kegerator_power_w']?.state;
             const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
 
             if (entity?.state !== 'on') return 'Problem';
@@ -401,7 +395,6 @@ cards:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
-
   - type: custom:button-card
     entity: sensor.brewassistant_problem_count
     name: Active Problems
@@ -467,7 +460,7 @@ cards:
             ]]]
         - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
       grid:
-        - grid-template-areas: '"i n" "i l"'
+        - grid-template-areas: "\"i n\" \"i l\""
         - grid-template-columns: 48px 1fr
         - grid-template-rows: min-content 1fr
       img_cell:
