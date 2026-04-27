@@ -155,7 +155,7 @@ cards:
         - box-shadow: 0 10px 26px rgba(0,0,0,0.28)
         - overflow: hidden
       grid:
-        - grid-template-areas: '"i n power" "i l power"'
+        - grid-template-areas: "\"i n power\" \"i l power\""
         - grid-template-columns: 52px 1fr 42px
         - grid-template-rows: min-content 1fr
       icon:
@@ -187,7 +187,6 @@ cards:
         power:
           - justify-self: end
           - align-self: start
-
   - type: horizontal-stack
     cards:
       - type: custom:button-card
@@ -224,7 +223,6 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
-
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Target
@@ -255,7 +253,6 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
-
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Delta
@@ -326,7 +323,6 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
-
       - type: custom:button-card
         entity: climate.kegerator_kylskap
         name: Cooling
@@ -379,7 +375,6 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
-
   - type: horizontal-stack
     cards:
       - type: custom:button-card
@@ -423,7 +418,6 @@ cards:
           name:
             - color: white
             - font-weight: 800
-
       - type: custom:button-card
         entity: input_select.kegerator_card_section
         name: System
@@ -465,7 +459,6 @@ cards:
           name:
             - color: white
             - font-weight: 800
-
   - type: conditional
     conditions:
       - entity: input_select.kegerator_card_section
@@ -489,7 +482,6 @@ cards:
               attribute: temperature
               name: Target temperature
               suffix: °C
-
         - type: custom:button-card
           entity: climate.kegerator_kylskap
           name: Temperature Summary
@@ -545,7 +537,6 @@ cards:
               - font-size: 13px
               - color: rgba(255,255,255,0.92)
               - white-space: normal
-
   - type: conditional
     conditions:
       - entity: input_select.kegerator_card_section
@@ -561,11 +552,10 @@ cards:
               name: Kegerator climate
             - entity: binary_sensor.kegerator_compressor_active
               name: Compressor
-            - entity: sensor.extra_koksmaskin_switch_0_power
+            - entity: sensor.brewassistant_kegerator_power_w
               name: Power usage
             - entity: switch.kegerator_fan
               name: Fan
-
         - type: custom:button-card
           entity: climate.kegerator_kylskap
           name: System Status
@@ -578,7 +568,7 @@ cards:
             [[[
               const fan = states['switch.kegerator_fan']?.state;
               const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
-              const powerRaw = states['sensor.extra_koksmaskin_switch_0_power']?.state;
+              const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
               const hvac = entity?.state ?? 'unknown';
               const action = entity?.attributes?.hvac_action ?? 'unknown';
 
