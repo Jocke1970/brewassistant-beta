@@ -203,6 +203,19 @@ cards:
         tap_action:
           action: more-info
         entity: sensor.brewassistant_smart_liquid_temp
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
       - type: custom:mushroom-template-card
         primary: Target
         secondary: "{{ states('sensor.brewassistant_smart_target_temp') }} °C"
@@ -212,15 +225,26 @@ cards:
         tap_action:
           action: more-info
         entity: sensor.brewassistant_smart_target_temp
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
       - type: custom:mushroom-template-card
         primary: Delta
         secondary: "{{ states('sensor.brewassistant_smart_temp_delta') }} °C"
         icon: mdi:delta
         icon_color: >
           {% set d = states('sensor.brewassistant_smart_temp_delta') | float(0)
-          %}
-
-          {% if d < -0.25 %}
+          %} {% if d < -0.25 %}
             orange
           {% elif d > 0.25 %}
             red
@@ -231,15 +255,26 @@ cards:
         tap_action:
           action: more-info
         entity: sensor.brewassistant_smart_temp_delta
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
       - type: custom:mushroom-template-card
         primary: Trend
         secondary: "{{ states('sensor.brewassistant_smart_temp_rate') }} °C/h"
         icon: mdi:chart-line
         icon_color: >
           {% set r = states('sensor.brewassistant_smart_temp_rate') | float(0)
-          %}
-
-          {% if r >= 0.25 %}
+          %} {% if r >= 0.25 %}
             orange
           {% elif r <= -0.25 %}
             blue
@@ -250,6 +285,19 @@ cards:
         tap_action:
           action: more-info
         entity: sensor.brewassistant_smart_temp_rate
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
       - type: custom:mushroom-template-card
         primary: Puls
         secondary: "{{ states('sensor.brewassistant_smart_heat_pulse_minutes') }} min"
@@ -259,6 +307,19 @@ cards:
         tap_action:
           action: more-info
         entity: sensor.brewassistant_smart_heat_pulse_minutes
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
       - type: custom:mushroom-template-card
         primary: Cooldown
         secondary: "{{ states('timer.brewassistant_smart_heat_cooldown') }}"
@@ -273,6 +334,19 @@ cards:
         tap_action:
           action: more-info
         entity: timer.brewassistant_smart_heat_cooldown
+        card_mod:
+          style: |
+            ha-card {
+              min-height: 104px;
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              --card-primary-font-size: 14px;
+              --card-primary-font-weight: 800;
+              --card-secondary-font-size: 12px;
+              --card-secondary-color: rgba(255,255,255,0.78);
+            }
   - type: conditional
     conditions:
       - entity: input_boolean.brewassistant_smart_show_details
@@ -291,6 +365,14 @@ cards:
                     box-shadow: none;
                     color: white;
                     padding: 0 4px;
+                  }
+                  ha-markdown {
+                    padding: 0 !important;
+                  }
+                  h2 {
+                    margin: 2px 0 8px 0 !important;
+                    font-size: 16px !important;
+                    letter-spacing: 0.4px;
                   }
             - type: grid
               columns: 1
@@ -319,6 +401,14 @@ cards:
                   layout: horizontal
                   tap_action:
                     action: toggle
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-template-card
                   entity: input_boolean.brewassistant_smart_heat_allowed
                   primary: Tillåt värmematta
@@ -342,6 +432,14 @@ cards:
                   layout: horizontal
                   tap_action:
                     action: toggle
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-template-card
                   entity: input_select.brewassistant_smart_fermentation_mode
                   primary: Läge
@@ -356,6 +454,14 @@ cards:
                     action: more-info
                   hold_action:
                     action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-template-card
                   entity: input_boolean.brewassistant_smart_debug
                   primary: Debug-notiser
@@ -377,6 +483,26 @@ cards:
                   layout: horizontal
                   tap_action:
                     action: toggle
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+          card_mod:
+            style: |
+              ha-card {
+                margin: 10px 10px 8px 10px;
+                padding: 12px;
+                border-radius: 22px;
+                background:
+                  linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: none;
+                overflow: hidden;
+              }
         - type: custom:vertical-stack-in-card
           cards:
             - type: markdown
@@ -389,6 +515,14 @@ cards:
                     color: white;
                     padding: 0 4px;
                   }
+                  ha-markdown {
+                    padding: 0 !important;
+                  }
+                  h2 {
+                    margin: 2px 0 8px 0 !important;
+                    font-size: 16px !important;
+                    letter-spacing: 0.4px;
+                  }
             - type: grid
               columns: 1
               square: false
@@ -400,6 +534,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_target_temp_fallback
                   name: Target fallback
@@ -407,6 +549,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_deadband_low
                   name: Deadband låg
@@ -414,6 +564,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_heat_stop_margin
                   name: Stoppa före target
@@ -421,6 +579,26 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+          card_mod:
+            style: |
+              ha-card {
+                margin: 10px 10px 8px 10px;
+                padding: 12px;
+                border-radius: 22px;
+                background:
+                  linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: none;
+                overflow: hidden;
+              }
         - type: custom:vertical-stack-in-card
           cards:
             - type: markdown
@@ -433,6 +611,14 @@ cards:
                     color: white;
                     padding: 0 4px;
                   }
+                  ha-markdown {
+                    padding: 0 !important;
+                  }
+                  h2 {
+                    margin: 2px 0 8px 0 !important;
+                    font-size: 16px !important;
+                    letter-spacing: 0.4px;
+                  }
             - type: grid
               columns: 1
               square: false
@@ -444,6 +630,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_max_heat_pulse_min
                   name: Max puls
@@ -451,6 +645,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_heat_cooldown_min
                   name: Paus mellan pulser
@@ -458,6 +660,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_max_rising_rate
                   name: Max stigande trend
@@ -465,6 +675,14 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
                 - type: custom:mushroom-number-card
                   entity: input_number.brewassistant_smart_chamber_heat_safety_offset
                   name: Kammartemp marginal
@@ -472,100 +690,206 @@ cards:
                   display_mode: buttons
                   layout: horizontal
                   fill_container: true
-        - type: grid
-          columns: 2
-          square: false
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+          card_mod:
+            style: |
+              ha-card {
+                margin: 10px 10px 8px 10px;
+                padding: 12px;
+                border-radius: 22px;
+                background:
+                  linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: none;
+                overflow: hidden;
+              }
+        - type: custom:vertical-stack-in-card
           cards:
-            - type: custom:mushroom-template-card
-              primary: Värme behövs
-              secondary: "{{ states('binary_sensor.brewassistant_smart_heat_needed') }}"
-              icon: mdi:heat-wave
-              icon_color: >
-                {% if is_state('binary_sensor.brewassistant_smart_heat_needed',
-                'on') %}
-                  orange
-                {% else %}
-                  green
-                {% endif %}
-              entity: binary_sensor.brewassistant_smart_heat_needed
-            - type: custom:mushroom-template-card
-              primary: Värme tillåten
-              secondary: "{{ states('binary_sensor.brewassistant_smart_heat_permitted') }}"
-              icon: mdi:check-decagram
-              icon_color: >
-                {% if
-                is_state('binary_sensor.brewassistant_smart_heat_permitted',
-                'on') %}
-                  green
-                {% else %}
-                  grey
-                {% endif %}
-              entity: binary_sensor.brewassistant_smart_heat_permitted
-            - type: custom:mushroom-template-card
-              primary: Stoppa värme
-              secondary: >-
-                {{
-                states('binary_sensor.brewassistant_smart_heat_stop_recommended')
-                }}
-              icon: mdi:stop-circle
-              icon_color: >
-                {% if
-                is_state('binary_sensor.brewassistant_smart_heat_stop_recommended',
-                'on') %}
-                  red
-                {% else %}
-                  green
-                {% endif %}
-              entity: binary_sensor.brewassistant_smart_heat_stop_recommended
-            - type: custom:mushroom-template-card
-              primary: Stiger för snabbt
-              secondary: >-
-                {{ states('binary_sensor.brewassistant_smart_rising_too_fast')
-                }}
-              icon: mdi:trending-up
-              icon_color: >
-                {% if
-                is_state('binary_sensor.brewassistant_smart_rising_too_fast',
-                'on') %}
-                  orange
-                {% else %}
-                  green
-                {% endif %}
-              entity: binary_sensor.brewassistant_smart_rising_too_fast
-            - type: custom:mushroom-template-card
-              primary: Kammare varm
-              secondary: >-
-                {{
-                states('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat')
-                }}
-              icon: mdi:shield-alert
-              icon_color: >
-                {% if
-                is_state('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat',
-                'on') %}
-                  red
-                {% else %}
-                  green
-                {% endif %}
-              entity: binary_sensor.brewassistant_smart_chamber_too_warm_for_heat
-            - type: custom:mushroom-template-card
-              primary: Värmematta
-              secondary: >
-                {% set e =
-                states('input_text.brewassistant_smart_heat_switch_entity') %}
-                {{ states(e) if e not in ['unknown','unavailable',''] else
-                'saknas' }}
-              icon: mdi:radiator
-              icon_color: >
-                {% set e =
-                states('input_text.brewassistant_smart_heat_switch_entity') %}
-
-                {% if e not in ['unknown','unavailable',''] and states(e) ==
-                'on' %}
-                  red
-                {% else %}
-                  grey
-                {% endif %}
+            - type: markdown
+              content: "## Beslut & säkerhet"
+              card_mod:
+                style: |
+                  ha-card {
+                    background: transparent;
+                    box-shadow: none;
+                    color: white;
+                    padding: 0 4px;
+                  }
+                  ha-markdown {
+                    padding: 0 !important;
+                  }
+                  h2 {
+                    margin: 2px 0 8px 0 !important;
+                    font-size: 16px !important;
+                    letter-spacing: 0.4px;
+                  }
+            - type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: Värme behövs
+                  secondary: >-
+                    {{ states('binary_sensor.brewassistant_smart_heat_needed')
+                    }}
+                  icon: mdi:heat-wave
+                  icon_color: >
+                    {% if
+                    is_state('binary_sensor.brewassistant_smart_heat_needed',
+                    'on') %}
+                      orange
+                    {% else %}
+                      green
+                    {% endif %}
+                  entity: binary_sensor.brewassistant_smart_heat_needed
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  primary: Värme tillåten
+                  secondary: >-
+                    {{
+                    states('binary_sensor.brewassistant_smart_heat_permitted')
+                    }}
+                  icon: mdi:check-decagram
+                  icon_color: >
+                    {% if
+                    is_state('binary_sensor.brewassistant_smart_heat_permitted',
+                    'on') %}
+                      green
+                    {% else %}
+                      grey
+                    {% endif %}
+                  entity: binary_sensor.brewassistant_smart_heat_permitted
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  primary: Stoppa värme
+                  secondary: >-
+                    {{
+                    states('binary_sensor.brewassistant_smart_heat_stop_recommended')
+                    }}
+                  icon: mdi:stop-circle
+                  icon_color: >
+                    {% if
+                    is_state('binary_sensor.brewassistant_smart_heat_stop_recommended',
+                    'on') %}
+                      red
+                    {% else %}
+                      green
+                    {% endif %}
+                  entity: binary_sensor.brewassistant_smart_heat_stop_recommended
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  primary: Stiger för snabbt
+                  secondary: >-
+                    {{
+                    states('binary_sensor.brewassistant_smart_rising_too_fast')
+                    }}
+                  icon: mdi:trending-up
+                  icon_color: >
+                    {% if
+                    is_state('binary_sensor.brewassistant_smart_rising_too_fast',
+                    'on') %}
+                      orange
+                    {% else %}
+                      green
+                    {% endif %}
+                  entity: binary_sensor.brewassistant_smart_rising_too_fast
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  primary: Kammare varm
+                  secondary: >-
+                    {{
+                    states('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat')
+                    }}
+                  icon: mdi:shield-alert
+                  icon_color: >
+                    {% if
+                    is_state('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat',
+                    'on') %}
+                      red
+                    {% else %}
+                      green
+                    {% endif %}
+                  entity: binary_sensor.brewassistant_smart_chamber_too_warm_for_heat
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  primary: Värmematta
+                  secondary: >
+                    {% set e =
+                    states('input_text.brewassistant_smart_heat_switch_entity')
+                    %} {{ states(e) if e not in ['unknown','unavailable','']
+                    else 'saknas' }}
+                  icon: mdi:radiator
+                  icon_color: >
+                    {% set e =
+                    states('input_text.brewassistant_smart_heat_switch_entity')
+                    %} {% if e not in ['unknown','unavailable',''] and states(e)
+                    == 'on' %}
+                      red
+                    {% else %}
+                      grey
+                    {% endif %}
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+          card_mod:
+            style: |
+              ha-card {
+                margin: 10px 10px 8px 10px;
+                padding: 12px;
+                border-radius: 22px;
+                background:
+                  linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: none;
+                overflow: hidden;
+              }
         - type: conditional
           conditions:
             - entity: input_boolean.brewassistant_smart_debug
@@ -583,6 +907,14 @@ cards:
                       color: white;
                       padding: 0 4px;
                     }
+                    ha-markdown {
+                      padding: 0 !important;
+                    }
+                    h2 {
+                      margin: 2px 0 8px 0 !important;
+                      font-size: 16px !important;
+                      letter-spacing: 0.4px;
+                    }
               - type: grid
                 columns: 1
                 square: false
@@ -598,6 +930,14 @@ cards:
                     layout: horizontal
                     tap_action:
                       action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
                   - type: custom:mushroom-template-card
                     entity: input_text.brewassistant_smart_liquid_temp_entity
                     primary: Vätsketemp entity
@@ -610,6 +950,14 @@ cards:
                     layout: horizontal
                     tap_action:
                       action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
                   - type: custom:mushroom-template-card
                     entity: input_text.brewassistant_smart_chamber_temp_entity
                     primary: Kammartemp entity
@@ -622,6 +970,14 @@ cards:
                     layout: horizontal
                     tap_action:
                       action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
                   - type: custom:mushroom-template-card
                     entity: input_text.brewassistant_smart_recipe_target_entity
                     primary: Target entity
@@ -634,6 +990,14 @@ cards:
                     layout: horizontal
                     tap_action:
                       action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
                   - type: custom:mushroom-template-card
                     entity: input_text.brewassistant_smart_heat_switch_entity
                     primary: Värmematta switch
@@ -646,3 +1010,46 @@ cards:
                     layout: horizontal
                     tap_action:
                       action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+            card_mod:
+              style: |
+                ha-card {
+                  margin: 10px 10px 8px 10px;
+                  padding: 12px;
+                  border-radius: 22px;
+                  background:
+                    linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                  border: 1px solid rgba(255,255,255,0.08);
+                  box-shadow: none;
+                  overflow: hidden;
+                }
+      card_mod:
+        style: |
+          ha-card {
+            margin-top: 8px;
+            border-radius: 24px;
+            background:
+              radial-gradient(circle at top left, rgba(120,255,215,0.08), transparent 34%),
+              linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018));
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: none;
+            overflow: hidden;
+          }
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 26px;
+      background:
+        radial-gradient(circle at top left, rgba(120,255,215,0.10), transparent 32%),
+        linear-gradient(180deg, rgba(20,20,24,0.96), rgba(8,8,10,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 34px rgba(0,0,0,0.36);
+      overflow: hidden;
+    }
