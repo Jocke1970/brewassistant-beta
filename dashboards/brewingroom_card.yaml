@@ -1,0 +1,105 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewingspace_temperature
+    name: Bryggrum / Ambient
+    icon: mdi:home-thermometer-outline
+    show_state: false
+    show_label: true
+    label: |
+      [[[
+        const temp = states['sensor.brewingspace_temperature']?.state ?? '—';
+        const hum = states['sensor.brewingspace_humidity']?.state ?? '—';
+
+        let status = 'OK';
+        const t = parseFloat(temp);
+        const h = parseFloat(hum);
+
+        if (!isNaN(h) && h > 70) status = 'Hög luftfuktighet';
+        else if (!isNaN(t) && t > 26) status = 'Varmt rum';
+        else if (!isNaN(t) && t < 10) status = 'Kallt rum';
+
+        return `
+          <div style="line-height:1.45;">
+            <div>Temp: ${temp} °C</div>
+            <div>Fukt: ${hum} %</div>
+            <div>Status: ${status}</div>
+          </div>
+        `;
+      ]]]
+    tap_action:
+      action: more-info
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 18px
+        - background: linear-gradient(135deg, rgba(45,55,65,0.96), rgba(18,22,28,0.98))
+        - border: 1px solid rgba(255,255,255,0.08)
+        - box-shadow: 0 12px 34px rgba(0,0,0,0.30)
+      grid:
+        - grid-template-areas: "\"i n\" \"i l\""
+        - grid-template-columns: 54px 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 52px
+        - height: 52px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.12)
+      icon:
+        - width: 32px
+        - color: "#9fd7ff"
+      name:
+        - justify-self: start
+        - font-size: 18px
+        - font-weight: 900
+        - color: white
+      label:
+        - justify-self: start
+        - text-align: left
+        - font-size: 13px
+        - line-height: 1.45
+        - color: rgba(255,255,255,0.86)
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: sensor.brewingspace_temperature
+        primary: Temperatur
+        secondary: "{{ states('sensor.brewingspace_temperature') }} °C"
+        icon: mdi:thermometer
+        icon_color: blue
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+      - type: custom:mushroom-template-card
+        entity: sensor.brewingspace_humidity
+        primary: Luftfuktighet
+        secondary: "{{ states('sensor.brewingspace_humidity') }} %"
+        icon: mdi:water-percent
+        icon_color: cyan
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+            }
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 26px;
+      background:
+        radial-gradient(circle at top left, rgba(100,180,255,0.12), transparent 32%),
+        linear-gradient(180deg, rgba(20,22,26,0.96), rgba(8,8,10,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
