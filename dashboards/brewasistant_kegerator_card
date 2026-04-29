@@ -7,9 +7,17 @@ cards:
     show_state: false
     show_label: true
     tap_action:
-      action: more-info
+      action: none
     hold_action:
       action: none
+    triggers_update:
+      - climate.kegerator_kylskap
+      - sensor.kyl_temperatur_4
+      - switch.kegerator_fan
+      - binary_sensor.kegerator_compressor_active
+      - sensor.brewassistant_kegerator_power_w
+      - input_select.kegerator_card_section
+      - input_select.kegerator_fan_mode
     custom_fields:
       power:
         card:
@@ -24,11 +32,18 @@ cards:
             service: |
               [[[
                 return entity?.state === 'off'
-                  ? 'climate.turn_on'
+                  ? 'climate.set_hvac_mode'
                   : 'climate.turn_off';
               ]]]
             target:
               entity_id: climate.kegerator_kylskap
+            data: |
+              [[[
+                if (entity?.state === 'off') {
+                  return { hvac_mode: 'cool' };
+                }
+                return {};
+              ]]]
           styles:
             card:
               - width: 42px
@@ -37,6 +52,8 @@ cards:
               - padding: 0
               - background: rgba(255,255,255,0.15)
               - box-shadow: none
+              - cursor: pointer
+              - pointer-events: auto
             icon:
               - width: 22px
               - color: |
@@ -50,11 +67,33 @@ cards:
         const climateCurrentRaw = entity?.attributes?.current_temperature;
         const externalRaw = states['sensor.kyl_temperatur_4']?.state;
         const fan = states['switch.kegerator_fan']?.state;
-        const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+        const fanMode = states['input_select.kegerator_fan_mode']?.state ?? '-';
+        const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
+        const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
 
         const hvac = entity?.state ?? 'unknown';
         const hvacAction = entity?.attributes?.hvac_action ?? 'unknown';
         const targetRaw = entity?.attributes?.temperature;
+
+        const power =
+          powerRaw &&
+          powerRaw !== 'unknown' &&
+          powerRaw !== 'unavailable'
+            ? parseFloat(powerRaw)
+            : null;
+
+        const compressorActive =
+          compressorRaw === 'on' ||
+          (
+            (compressorRaw === 'unknown' || compressorRaw === 'unavailable' || compressorRaw === undefined) &&
+            power !== null &&
+            power > 20
+          );
+
+        const compressorKnown =
+          compressorRaw === 'on' ||
+          compressorRaw === 'off' ||
+          power !== null;
 
         const current =
           climateCurrentRaw !== undefined &&
@@ -95,14 +134,16 @@ cards:
           hvacAction;
 
         const compressorTxt =
-          compressor === 'on' ? 'Running' :
-          compressor === 'off' ? 'Idle' :
-          'unavailable';
+          !compressorKnown ? 'unavailable' :
+          compressorActive ? 'Running' :
+          'Idle';
 
         const fanTxt =
           fan === 'on' ? 'On' :
           fan === 'off' ? 'Off' :
           '-';
+
+        const powerTxt = power !== null ? `${power.toFixed(0)} W` : '-';
 
         return `
           <div style="line-height: 1.45;">
@@ -110,9 +151,8 @@ cards:
             <div>Now: ${currentTxt}</div>
             <div>Target: ${targetTxt} · Delta: ${deltaTxt}</div>
             <div>Mode: ${modeTxt} · Action: ${actionTxt}</div>
-            <div>Status: ${entity?.state ?? 'unavailable'}</div>
             <div>Cooling: ${hvac === 'cool' ? 'On' : 'Off'} · Compressor: ${compressorTxt}</div>
-            <div>Fan: ${fanTxt}</div>
+            <div>Power: ${powerTxt} · Fan: ${fanTxt} · Fan mode: ${fanMode}</div>
           </div>
         `;
       ]]]
@@ -127,6 +167,12 @@ cards:
               const hvac = entity?.state;
               const current = entity?.attributes?.current_temperature;
               const target = entity?.attributes?.temperature;
+              const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
+              const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
+              const power = powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
+                ? parseFloat(powerRaw)
+                : null;
+              const compressorActive = compressorRaw === 'on' || (power !== null && power > 20);
 
               let delta = null;
               if (current !== undefined && current !== null && target !== undefined && target !== null) {
@@ -137,7 +183,7 @@ cards:
                 return 'linear-gradient(135deg, #34343a, #242428)';
               }
 
-              if (action === 'cooling') {
+              if (compressorActive || action === 'cooling') {
                 return 'linear-gradient(135deg, #0d47a1, #1e3a5f)';
               }
 
@@ -187,6 +233,8 @@ cards:
         power:
           - justify-self: end
           - align-self: start
+          - pointer-events: auto
+          - z-index: 10
   - type: horizontal-stack
     cards:
       - type: custom:button-card
@@ -266,10 +314,7 @@ cards:
             const climateCurrent = entity?.attributes?.current_temperature;
             const external = states['sensor.kyl_temperatur_4']?.state;
             const targetRaw = entity?.attributes?.temperature;
-
-            const currentRaw = climateCurrent !== undefined && climateCurrent !== null
-              ? climateCurrent
-              : external;
+            const currentRaw = climateCurrent !== undefined && climateCurrent !== null ? climateCurrent : external;
 
             if (
               currentRaw === undefined ||
@@ -334,9 +379,15 @@ cards:
         label: |
           [[[
             const action = entity?.attributes?.hvac_action;
-            const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+            const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
+            const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
+            const power = powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
+              ? parseFloat(powerRaw)
+              : null;
 
-            if (compressor === 'on') return 'Active';
+            const compressorActive = compressorRaw === 'on' || (power !== null && power > 20);
+
+            if (compressorActive) return 'Active';
             if (action === 'cooling') return 'Cooling';
             if (action === 'idle') return 'Idle';
             return action ?? '-';
@@ -348,9 +399,15 @@ cards:
             - background: |
                 [[[
                   const action = entity?.attributes?.hvac_action;
-                  const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+                  const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
+                  const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
+                  const power = powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
+                    ? parseFloat(powerRaw)
+                    : null;
 
-                  if (compressor === 'on' || action === 'cooling') {
+                  const compressorActive = compressorRaw === 'on' || (power !== null && power > 20);
+
+                  if (compressorActive || action === 'cooling') {
                     return 'rgba(70,140,255,0.22)';
                   }
 
@@ -361,9 +418,15 @@ cards:
             - color: |
                 [[[
                   const action = entity?.attributes?.hvac_action;
-                  const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+                  const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
+                  const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
+                  const power = powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
+                    ? parseFloat(powerRaw)
+                    : null;
 
-                  return compressor === 'on' || action === 'cooling'
+                  const compressorActive = compressorRaw === 'on' || (power !== null && power > 20);
+
+                  return compressorActive || action === 'cooling'
                     ? '#90caf9'
                     : 'rgba(255,255,255,0.55)';
                 ]]]
@@ -375,12 +438,16 @@ cards:
             - font-size: 13px
             - font-weight: 700
             - color: rgba(255,255,255,0.92)
-  - type: horizontal-stack
+  - type: grid
+    columns: 4
+    square: false
     cards:
       - type: custom:button-card
         entity: input_select.kegerator_card_section
         name: Temps
         icon: mdi:thermometer-lines
+        show_icon: true
+        show_name: true
         tap_action:
           action: call-service
           service: input_select.select_option
@@ -389,39 +456,51 @@ cards:
           data:
             option: |
               [[[
-                return entity.state === 'temps' ? 'none' : 'temps';
+                return entity?.state === 'temps' ? 'none' : 'temps';
               ]]]
         styles:
           card:
-            - height: 44px
+            - height: 64px
             - border-radius: 16px
-            - font-size: 12px
-            - font-weight: 700
+            - padding: 6px 4px
             - background: |
                 [[[
-                  return entity.state === 'temps'
+                  return entity?.state === 'temps'
                     ? 'rgba(33,150,243,0.24)'
                     : 'rgba(255,255,255,0.08)';
                 ]]]
             - box-shadow: |
                 [[[
-                  return entity.state === 'temps'
+                  return entity?.state === 'temps'
                     ? '0 0 18px rgba(33,150,243,0.35)'
                     : '0 4px 14px rgba(0,0,0,0.12)';
                 ]]]
+            - border: 1px solid rgba(255,255,255,0.08)
+          grid:
+            - grid-template-areas: "\"i\" \"n\""
+            - grid-template-columns: 1fr
+            - grid-template-rows: 32px 18px
+          img_cell:
+            - height: 30px
+            - align-self: center
           icon:
+            - width: 22px
             - color: |
                 [[[
-                  return entity.state === 'temps' ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                  return entity?.state === 'temps'
+                    ? '#90caf9'
+                    : 'rgba(255,255,255,0.65)';
                 ]]]
-            - width: 18px
           name:
             - color: white
+            - font-size: 11px
             - font-weight: 800
       - type: custom:button-card
         entity: input_select.kegerator_card_section
         name: System
         icon: mdi:information-outline
+        show_icon: true
+        show_name: true
         tap_action:
           action: call-service
           service: input_select.select_option
@@ -430,34 +509,150 @@ cards:
           data:
             option: |
               [[[
-                return entity.state === 'status' ? 'none' : 'status';
+                return entity?.state === 'status' ? 'none' : 'status';
               ]]]
         styles:
           card:
-            - height: 44px
+            - height: 64px
             - border-radius: 16px
-            - font-size: 12px
-            - font-weight: 700
+            - padding: 6px 4px
             - background: |
                 [[[
-                  return entity.state === 'status'
+                  return entity?.state === 'status'
                     ? 'rgba(33,150,243,0.24)'
                     : 'rgba(255,255,255,0.08)';
                 ]]]
             - box-shadow: |
                 [[[
-                  return entity.state === 'status'
+                  return entity?.state === 'status'
                     ? '0 0 18px rgba(33,150,243,0.35)'
                     : '0 4px 14px rgba(0,0,0,0.12)';
                 ]]]
+            - border: 1px solid rgba(255,255,255,0.08)
+          grid:
+            - grid-template-areas: "\"i\" \"n\""
+            - grid-template-columns: 1fr
+            - grid-template-rows: 32px 18px
+          img_cell:
+            - height: 30px
+            - align-self: center
           icon:
+            - width: 22px
             - color: |
                 [[[
-                  return entity.state === 'status' ? '#90caf9' : 'rgba(255,255,255,0.55)';
+                  return entity?.state === 'status'
+                    ? '#90caf9'
+                    : 'rgba(255,255,255,0.65)';
                 ]]]
-            - width: 18px
           name:
             - color: white
+            - font-size: 11px
+            - font-weight: 800
+      - type: custom:button-card
+        entity: input_select.kegerator_card_section
+        name: Fan
+        icon: mdi:fan
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          target:
+            entity_id: input_select.kegerator_card_section
+          data:
+            option: |
+              [[[
+                return entity?.state === 'fan' ? 'none' : 'fan';
+              ]]]
+        styles:
+          card:
+            - height: 64px
+            - border-radius: 16px
+            - padding: 6px 4px
+            - background: |
+                [[[
+                  return entity?.state === 'fan'
+                    ? 'rgba(33,150,243,0.24)'
+                    : 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: |
+                [[[
+                  return entity?.state === 'fan'
+                    ? '0 0 18px rgba(33,150,243,0.35)'
+                    : '0 4px 14px rgba(0,0,0,0.12)';
+                ]]]
+            - border: 1px solid rgba(255,255,255,0.08)
+          grid:
+            - grid-template-areas: "\"i\" \"n\""
+            - grid-template-columns: 1fr
+            - grid-template-rows: 32px 18px
+          img_cell:
+            - height: 30px
+            - align-self: center
+          icon:
+            - width: 22px
+            - color: |
+                [[[
+                  return entity?.state === 'fan'
+                    ? '#90caf9'
+                    : 'rgba(255,255,255,0.65)';
+                ]]]
+          name:
+            - color: white
+            - font-size: 11px
+            - font-weight: 800
+      - type: custom:button-card
+        entity: input_select.kegerator_card_section
+        name: Settings
+        icon: mdi:cog-outline
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          target:
+            entity_id: input_select.kegerator_card_section
+          data:
+            option: |
+              [[[
+                return entity?.state === 'settings' ? 'none' : 'settings';
+              ]]]
+        styles:
+          card:
+            - height: 64px
+            - border-radius: 16px
+            - padding: 6px 4px
+            - background: |
+                [[[
+                  return entity?.state === 'settings'
+                    ? 'rgba(33,150,243,0.24)'
+                    : 'rgba(255,255,255,0.08)';
+                ]]]
+            - box-shadow: |
+                [[[
+                  return entity?.state === 'settings'
+                    ? '0 0 18px rgba(33,150,243,0.35)'
+                    : '0 4px 14px rgba(0,0,0,0.12)';
+                ]]]
+            - border: 1px solid rgba(255,255,255,0.08)
+          grid:
+            - grid-template-areas: "\"i\" \"n\""
+            - grid-template-columns: 1fr
+            - grid-template-rows: 32px 18px
+          img_cell:
+            - height: 30px
+            - align-self: center
+          icon:
+            - width: 22px
+            - color: |
+                [[[
+                  return entity?.state === 'settings'
+                    ? '#90caf9'
+                    : 'rgba(255,255,255,0.65)';
+                ]]]
+          name:
+            - color: white
+            - font-size: 11px
             - font-weight: 800
   - type: conditional
     conditions:
@@ -567,15 +762,20 @@ cards:
           label: |
             [[[
               const fan = states['switch.kegerator_fan']?.state;
-              const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
+              const compressorRaw = states['binary_sensor.kegerator_compressor_active']?.state;
               const powerRaw = states['sensor.brewassistant_kegerator_power_w']?.state;
               const hvac = entity?.state ?? 'unknown';
               const action = entity?.attributes?.hvac_action ?? 'unknown';
 
-              const powerTxt =
+              const power =
                 powerRaw && powerRaw !== 'unknown' && powerRaw !== 'unavailable'
-                  ? `${parseFloat(powerRaw).toFixed(1)} W`
-                  : '-';
+                  ? parseFloat(powerRaw)
+                  : null;
+
+              const powerTxt = power !== null ? `${power.toFixed(1)} W` : '-';
+
+              const compressorActive = compressorRaw === 'on' || (power !== null && power > 20);
+              const compressorKnown = compressorRaw === 'on' || compressorRaw === 'off' || power !== null;
 
               const fanTxt =
                 fan === 'on' ? 'Fan running' :
@@ -583,9 +783,9 @@ cards:
                 'Fan unavailable';
 
               const compressorTxt =
-                compressor === 'on' ? 'Compressor running' :
-                compressor === 'off' ? 'Compressor idle' :
-                'Compressor unavailable';
+                !compressorKnown ? 'Compressor unavailable' :
+                compressorActive ? 'Compressor running' :
+                'Compressor idle';
 
               return `${compressorTxt} · ${powerTxt} · ${fanTxt} · HVAC ${hvac} · ${action}`;
             ]]]
@@ -606,3 +806,207 @@ cards:
               - font-size: 13px
               - color: rgba(255,255,255,0.92)
               - white-space: normal
+  - type: conditional
+    conditions:
+      - entity: input_select.kegerator_card_section
+        state: fan
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:mushroom-title-card
+          title: Fan Control
+          subtitle: Fläktläge, status och kompressorlogik
+        - type: custom:mushroom-select-card
+          entity: input_select.kegerator_fan_mode
+          name: Fläktläge
+          icon: mdi:fan-auto
+          layout: horizontal
+          fill_container: true
+          card_mod:
+            style: |
+              ha-card {
+                border-radius: 18px;
+                background: rgba(255,255,255,0.075);
+                border: 1px solid rgba(255,255,255,0.08);
+              }
+              ha-card * {
+                color: rgba(255,255,255,0.92) !important;
+              }
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: switch.kegerator_fan
+              primary: Fläkt
+              secondary: |
+                {% if is_state('switch.kegerator_fan', 'on') %}
+                  På
+                {% elif is_state('switch.kegerator_fan', 'off') %}
+                  Av
+                {% else %}
+                  Otillgänglig
+                {% endif %}
+              icon: |
+                {% if is_state('switch.kegerator_fan', 'on') %}
+                  mdi:fan
+                {% else %}
+                  mdi:fan-off
+                {% endif %}
+              icon_color: |
+                {% if is_state('switch.kegerator_fan', 'on') %}
+                  blue
+                {% else %}
+                  disabled
+                {% endif %}
+              tap_action:
+                action: toggle
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+            - type: custom:mushroom-template-card
+              entity: binary_sensor.kegerator_compressor_active
+              primary: Kompressor
+              secondary: >
+                {% if is_state('binary_sensor.kegerator_compressor_active',
+                'on') %}
+                  Aktiv
+                {% elif is_state('binary_sensor.kegerator_compressor_active',
+                'off') %}
+                  Inaktiv
+                {% else %}
+                  Otillgänglig
+                {% endif %}
+              icon: mdi:snowflake
+              icon_color: >
+                {% if is_state('binary_sensor.kegerator_compressor_active',
+                'on') %}
+                  blue
+                {% else %}
+                  disabled
+                {% endif %}
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_kegerator_power_w
+              primary: Effekt
+              secondary: "{{ states('sensor.brewassistant_kegerator_power_w') }} W"
+              icon: mdi:lightning-bolt
+              icon_color: amber
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+            - type: custom:mushroom-template-card
+              entity: input_select.kegerator_fan_mode
+              primary: Automatik
+              secondary: "{{ states('input_select.kegerator_fan_mode') }}"
+              icon: mdi:cog-sync
+              icon_color: blue
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+  - type: conditional
+    conditions:
+      - entity: input_select.kegerator_card_section
+        state: settings
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:mushroom-title-card
+          title: Kegerator Settings
+          subtitle: Fläkttrösklar och cykeltider
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-number-card
+              entity: input_number.kegerator_temp_delta_fan_threshold
+              name: Delta threshold
+              icon: mdi:delta
+              display_mode: buttons
+              layout: vertical
+              fill_container: true
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+                  ha-card * {
+                    color: rgba(255,255,255,0.92) !important;
+                  }
+            - type: custom:mushroom-number-card
+              entity: input_number.kegerator_fan_after_compressor_minutes
+              name: Afterrun
+              icon: mdi:fan-clock
+              display_mode: buttons
+              layout: vertical
+              fill_container: true
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+                  ha-card * {
+                    color: rgba(255,255,255,0.92) !important;
+                  }
+            - type: custom:mushroom-number-card
+              entity: input_number.kegerator_fan_cycle_on_minutes
+              name: Cycle on
+              icon: mdi:fan-plus
+              display_mode: buttons
+              layout: vertical
+              fill_container: true
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+                  ha-card * {
+                    color: rgba(255,255,255,0.92) !important;
+                  }
+            - type: custom:mushroom-number-card
+              entity: input_number.kegerator_fan_cycle_off_minutes
+              name: Cycle off
+              icon: mdi:fan-minus
+              display_mode: buttons
+              layout: vertical
+              fill_container: true
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.055);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+                  ha-card * {
+                    color: rgba(255,255,255,0.92) !important;
+                  }
