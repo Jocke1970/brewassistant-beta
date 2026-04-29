@@ -3,10 +3,25 @@ mode: vertical
 cards:
   - type: custom:button-card
     entity: sensor.fwk_process_status
-    name: |
+    name: >
       [[[
-        return states['sensor.recipe_runtime_name']?.state ?? 'BrewAssistant';
-      ]]]
+       const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
+
+       if (!enabled) return 'Off';
+
+      const batchActive = states['input_boolean.fwk_batch_active']?.state ===
+      'on';
+       const transferred = states['input_boolean.fwk_transferred_to_keg']?.state === 'on';
+
+       if (!batchActive && !transferred) return 'Idle';
+
+       const n = states['sensor.recipe_runtime_name']?.state;
+       if (!n || ['unknown','unavailable','none',''].includes(n)) {
+       return 'BrewAssistant';
+       }
+
+       return n;
+       ]]]
     show_state: true
     show_label: true
     show_name: true
@@ -77,7 +92,11 @@ cards:
         const temp = states['sensor.fwk_live_temp']?.state;
         const days = states['sensor.fwk_batch_age_days']?.state;
         const att = states['sensor.fwk_attenuation']?.state;
-        const bfStatus = states['sensor.recipe_runtime_status']?.state ?? 'unknown';
+        const processStatus = states['sensor.fwk_process_status']?.state ?? 'Idle';
+        const bfStatus = states['sensor.recipe_runtime_status']?.state;
+        const statusText = (bfStatus && !['unknown','unavailable','none',''].includes(bfStatus))
+          ? bfStatus
+          : processStatus;
         const daysLeft = states['sensor.recipe_runtime_fermenting_days_left']?.state;
         const summary = states['sensor.fwk_planned_summary']?.state ?? '';
         const sgUpdated = states['sensor.fwk_sg_last_updated']?.state;
@@ -109,7 +128,7 @@ cards:
         const summaryText = summary.replaceAll(' | ', '<br>');
 
         return `
-          Status: ${bfStatus} • ${leftText}<br>
+          Status: ${statusText} • ${leftText}<br>
           Next: ${next}<br>
           SG: ${sgText} (${sgUpdatedText}) • Temp: ${tempText}<br>
           Age: ${dayText} • Att: ${attText}<br>
