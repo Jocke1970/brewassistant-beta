@@ -172,6 +172,8 @@ cards:
           action: more-info
         label: |
           [[[
+            const chamber = states['climate.fermentation_chamber']?.state;
+            if (chamber === 'off') return 'Off';
             return entity?.state === 'on' ? 'OK' : 'Problem';
           ]]]
         styles:
@@ -180,6 +182,8 @@ cards:
             - border-radius: 18px
             - background: |
                 [[[
+                  const chamber = states['climate.fermentation_chamber']?.state;
+                  if (chamber === 'off') return 'rgba(120,170,255,0.12)';
                   return entity?.state === 'on'
                     ? 'rgba(70,200,120,0.18)'
                     : 'rgba(255,80,80,0.20)';
@@ -188,6 +192,8 @@ cards:
           icon:
             - color: |
                 [[[
+                  const chamber = states['climate.fermentation_chamber']?.state;
+                  if (chamber === 'off') return 'rgba(255,255,255,0.60)';
                   return entity?.state === 'on' ? '#7ee787' : '#ff8a80';
                 ]]]
             - width: 32px
@@ -275,7 +281,7 @@ cards:
             - font-size: 13px
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low
-        name: Battery
+        name: Keg Battery
         icon: mdi:battery-heart
         show_state: false
         show_label: true
@@ -284,27 +290,14 @@ cards:
         label: |
           [[[
             const kegBatt = states['sensor.kyl_batteri_4']?.state;
-            const pillBatt = states['sensor.yellow_pill_battery']?.state;
-            const pillLow = states['binary_sensor.brewassistant_rapt_pill_battery_low']?.state;
-            const pillOk = states['binary_sensor.brewassistant_rapt_pill_battery_sensor_ok']?.state;
-
-            const kegLow = entity?.state === 'on';
-
-            if (kegLow) return 'Keg low';
-            if (pillLow === 'on') return 'Pill low';
-            if (pillOk === 'off') return 'Problem';
+            if (entity?.state === 'on') return 'Keg low';
 
             const kegTxt =
               kegBatt && kegBatt !== 'unknown' && kegBatt !== 'unavailable'
                 ? `${parseFloat(kegBatt).toFixed(0)}%`
                 : '-';
 
-            const pillTxt =
-              pillBatt && pillBatt !== 'unknown' && pillBatt !== 'unavailable'
-                ? `${parseFloat(pillBatt).toFixed(0)}%`
-                : '-';
-
-            return `Keg ${kegTxt} · Pill ${pillTxt}`;
+            return `Keg ${kegTxt}`;
           ]]]
         styles:
           card:
@@ -312,26 +305,15 @@ cards:
             - border-radius: 18px
             - background: |
                 [[[
-                  const kegLow = entity?.state === 'on';
-                  const pillLow = states['binary_sensor.brewassistant_rapt_pill_battery_low']?.state === 'on';
-                  const pillOk = states['binary_sensor.brewassistant_rapt_pill_battery_sensor_ok']?.state === 'on';
-
-                  if (kegLow || pillLow || !pillOk) {
-                    return 'rgba(255,80,80,0.20)';
-                  }
-
-                  return 'rgba(120,170,255,0.16)';
+                  return entity?.state === 'on'
+                    ? 'rgba(255,80,80,0.20)'
+                    : 'rgba(120,170,255,0.16)';
                 ]]]
             - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
           icon:
             - color: |
                 [[[
-                  const kegLow = entity?.state === 'on';
-                  const pillLow = states['binary_sensor.brewassistant_rapt_pill_battery_low']?.state === 'on';
-                  const pillOk = states['binary_sensor.brewassistant_rapt_pill_battery_sensor_ok']?.state === 'on';
-
-                  if (kegLow || pillLow || !pillOk) return '#ff8a80';
-                  return '#90caf9';
+                  return entity?.state === 'on' ? '#ff8a80' : '#90caf9';
                 ]]]
             - width: 32px
           name:
@@ -426,14 +408,12 @@ cards:
         addIfOff('binary_sensor.brewassistant_rapt_pill_temperature_ok', 'RAPT Pill temperature unavailable');
         addIfOff('binary_sensor.brewassistant_rapt_pill_gravity_ok', 'RAPT Pill gravity unavailable');
         addIfOff('binary_sensor.brewassistant_brewfather_batch_ok', 'Brewfather batch unavailable');
-        addIfOff('binary_sensor.brewassistant_rapt_pill_battery_sensor_ok', 'RAPT Pill battery sensor unavailable');
 
         addIf('binary_sensor.brewassistant_kegerator_too_warm', 'Kegerator too warm');
         addIf('binary_sensor.brewassistant_kegerator_too_cold', 'Kegerator too cold');
         addIf('binary_sensor.brewassistant_fermentation_chamber_too_warm', 'Fermentation chamber too warm');
         addIf('binary_sensor.brewassistant_fermentation_chamber_too_cold', 'Fermentation chamber too cold');
         addIf('binary_sensor.brewassistant_compressor_running_long', 'Compressor running too long');
-        addIf('binary_sensor.brewassistant_rapt_pill_battery_low', 'RAPT Pill battery low');
         addIf('binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low', 'Kegerator temperature sensor battery low');
 
         if (problems.length === 0) {
