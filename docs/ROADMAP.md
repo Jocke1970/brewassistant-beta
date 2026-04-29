@@ -1,73 +1,89 @@
-# Roadmap
+# BrewAssistant Roadmap
 
-## Next focus: Hot Side action and timer layer
+## Hardware Evolution
 
-Goal:
+BrewAssistant is designed to grow step by step with the brewing setup.
 
-```text
-Start → activate workflow
-Next → move to next brew step
-Previous → move back one brew step
-Pause → pause workflow/timer
-Timer → start/pause/resume timer for current step
-Reset → return to Idle
-```
+### Phase 1 — Fermentation / Kegerator Chamber
 
-Recommended Hot Side steps:
+Current focus.
 
-```text
-Preparation
-Strike Water
-Mash
-Mash-out
-Boil
-Whirlpool
-Cooling
-Done
-```
+Goals:
 
-Timer rules:
+- Control kegerator cooling through Home Assistant
+- Protect the fridge compressor with safe cycle timing
+- Add circulation fan support
+- Add Shelly-based power monitoring
+- Support fermentation and serving/storage use cases
+- Provide a premium dashboard for chamber status, targets and workflow state
 
-```text
-Preparation → no timer
-Mash → mash minutes
-Mash-out → mash-out minutes
-Boil → boil minutes
-Whirlpool → whirlpool minutes
-Cooling → manual/no timer
-```
+Main modules:
 
-## Later polish
+- Fermentation chamber control
+- Kegerator control
+- Compressor activity detection
+- Fan circulation logic
+- Brewfather fermentation target alignment
+- Cold crash workflow support
 
-```text
-1. Remove remaining unavailable/unknown text from UI
-2. Add better fallback text: Waiting for data, No active batch, Off, Idle
-3. Add Brewfather step sync
-4. Add RAPT gravity trend / FG ETA
-5. Add dashboard module toggles
-6. Add GitHub-ready package structure
-7. Add screenshots and badges
-8. Add release notes per module
-```
+---
 
-## Long-term design
+### Phase 2 — DigiBoil 35L BIAB Support
 
-Adapters should feed modules, but modules should never require adapters.
+Planned next step.
 
-Possible future adapters:
+The DigiBoil will not be controlled by Home Assistant. It will use its built-in thermostat for heating and temperature holding.
 
-```text
-brewassistant_brewfather_adapter.yaml
-brewassistant_rapt_adapter.yaml
-brewassistant_brewzilla_adapter.yaml
-```
+Home Assistant / BrewAssistant will only provide:
 
-Possible future UI packs:
+- Power monitoring
+- Guided BIAB workflow
+- Mash timers
+- Mash-out timers
+- Sparge / lautering checklist
+- Manual step tracking
+- Notifications and reminders
 
-```text
-ui/fermentation.yaml
-ui/chamber.yaml
-ui/kegerator.yaml
-ui/hot_side.yaml
-ui/health.yaml
-```
+Design principle:
+
+> DigiBoil remains manually controlled. BrewAssistant acts as a guide, checklist and logging layer.
+
+---
+
+### Phase 3 — Dedicated Fercubator
+
+Planned future expansion.
+
+A separate Fercubator will become the dedicated fermentation chamber.
+
+Goals:
+
+- Separate fermentation control from the kegerator
+- Improve fermentation temperature stability
+- Add dedicated chamber workflow logic
+- Support recipe-driven fermentation profiles
+- Allow the kegerator to focus on serving, cold crash, carbonation and storage
+
+---
+
+### Phase 4 — BrewZilla 35L Gen 4.1 RAPT
+
+Long-term target.
+
+The BrewZilla RAPT system is considered the full hot-side automation target.
+
+Expected integration goals:
+
+- Read RAPT temperature
+- Read target temperature
+- Read heater status
+- Read pump status
+- Read heater utilisation
+- Read pump utilisation
+- Track RAPT profile state
+- Support guided or semi-automated mash and boil workflows
+- Reuse the DigiBoil BIAB workflow as the foundation for advanced hot-side control
+
+Design principle:
+
+> DigiBoil support builds the manual hot-side workflow. BrewZilla RAPT later upgrades that workflow with real device telemetry and automation.
