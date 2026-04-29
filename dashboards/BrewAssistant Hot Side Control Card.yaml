@@ -1,8 +1,5 @@
 type: custom:vertical-stack-in-card
 cards:
-  # ============================================================
-  # HOT SIDE HEADER / STATUS
-  # ============================================================
   - type: custom:button-card
     entity: sensor.brewassistant_hot_side_status
     name: HOT SIDE / BREW DAY
@@ -10,13 +7,64 @@ cards:
     show_state: true
     show_label: true
     tap_action:
-      action: more-info
+      action: none
+    triggers_update:
+      - input_boolean.brewassistant_hot_side_active
+      - input_select.brewassistant_hot_side_phase
+      - sensor.brewassistant_hot_side_status
+      - sensor.brewassistant_hot_side_progress
+      - sensor.brewassistant_hot_side_recipe_name
+      - sensor.brewassistant_hot_side_timer_display
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: input_boolean.brewassistant_hot_side_active
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:power
+          tap_action:
+            action: call-service
+            service: input_boolean.toggle
+            target:
+              entity_id: input_boolean.brewassistant_hot_side_active
+          styles:
+            card:
+              - width: 42px
+              - height: 42px
+              - border-radius: 50%
+              - padding: 0
+              - background: |
+                  [[[
+                    return entity?.state === 'on'
+                      ? 'rgba(255,255,255,0.22)'
+                      : 'rgba(255,255,255,0.12)';
+                  ]]]
+              - box-shadow: none
+              - cursor: pointer
+              - pointer-events: auto
+            icon:
+              - width: 22px
+              - color: |
+                  [[[
+                    return entity?.state === 'on'
+                      ? '#ffcc80'
+                      : 'rgba(255,255,255,0.60)';
+                  ]]]
     label: |
       [[[
+        const enabled = states['input_boolean.brewassistant_hot_side_active']?.state === 'on';
+
+        if (!enabled) {
+          return `Hot Side module inactive\nTap power to activate brew day workflow`;
+        }
+
         const phase = states['input_select.brewassistant_hot_side_phase']?.state || 'Unknown';
         const progress = states['sensor.brewassistant_hot_side_progress']?.state || '0';
         const recipe = states['sensor.brewassistant_hot_side_recipe_name']?.state || 'Unknown recipe';
-        const timer = states['sensor.brewassistant_hot_side_timer_display']?.state || 'No timer';
+        const timer = states['sensor.brewassistant_hot_side_timer_display']?.state || 'No active timer';
+
         return `${phase} · ${progress}%\n${recipe}\n${timer}`;
       ]]]
     styles:
@@ -25,8 +73,13 @@ cards:
         - border-radius: 22px
         - background: |
             [[[
+              const enabled = states['input_boolean.brewassistant_hot_side_active']?.state === 'on';
               const status = entity?.state;
               const phase = states['input_select.brewassistant_hot_side_phase']?.state;
+
+              if (!enabled) {
+                return 'linear-gradient(135deg, rgba(45,45,55,0.96), rgba(20,20,30,0.96))';
+              }
 
               if (status === 'Paused') {
                 return 'linear-gradient(135deg, rgba(120,120,120,0.35), rgba(40,40,40,0.92))';
@@ -53,14 +106,17 @@ cards:
         - box-shadow: 0 0 24px rgba(255, 140, 50, 0.18)
         - border: 1px solid rgba(255,255,255,0.08)
       grid:
-        - grid-template-areas: '"i n" "i s" "i l"'
-        - grid-template-columns: 58px 1fr
+        - grid-template-areas: "\"i n power\" \"i s power\" \"i l power\""
+        - grid-template-columns: 58px 1fr 48px
         - grid-template-rows: min-content min-content min-content
       icon:
         - width: 42px
         - color: |
             [[[
+              const enabled = states['input_boolean.brewassistant_hot_side_active']?.state === 'on';
               const phase = states['input_select.brewassistant_hot_side_phase']?.state;
+
+              if (!enabled) return 'rgba(255,255,255,0.65)';
               if (phase === 'Chill') return '#6ec6ff';
               if (phase === 'Done') return '#5cff9a';
               return '#ffb45c';
@@ -85,578 +141,531 @@ cards:
         - line-height: 1.45
         - color: rgba(255,255,255,0.78)
         - padding-top: 6px
-
-  # ============================================================
-  # PROGRESS BAR - SAFE VERSION
-  # ============================================================
-  - type: custom:button-card
-    entity: sensor.brewassistant_hot_side_progress
-    show_icon: false
-    show_name: false
-    show_state: false
-    styles:
-      card:
-        - height: 34px
-        - padding: 8px 46px 10px 46px
-        - margin: 0
-        - border-radius: 0
-        - background: transparent
-        - box-shadow: none
-        - overflow: visible
-        - box-sizing: border-box
       custom_fields:
-        bar:
-          - width: 100%
-          - height: 16px
-          - display: block
-    custom_fields:
-      bar: |
-        [[[
-          const p = Math.max(2, Math.min(100, parseFloat(entity?.state || 0)));
-          const phase = states['input_select.brewassistant_hot_side_phase']?.state;
-
-          let fill = 'linear-gradient(90deg, #ff8a3d, #ffd36b)';
-          let glow = '0 0 14px rgba(255,170,70,0.30)';
-
-          if (phase === 'Idle') {
-            fill = 'rgba(255,255,255,0.20)';
-            glow = 'none';
-          }
-
-          if (phase === 'Chill') {
-            fill = 'linear-gradient(90deg, #3aa7ff, #9ee7ff)';
-            glow = '0 0 14px rgba(90,190,255,0.32)';
-          }
-
-          if (phase === 'Done') {
-            fill = 'linear-gradient(90deg, #2ee881, #b7ffd4)';
-            glow = '0 0 14px rgba(80,255,160,0.32)';
-          }
-
-          return `
-            <div style="
-              height:16px;
-              width:100%;
-              border-radius:999px;
-              background:rgba(255,255,255,0.10);
-              overflow:hidden;
-              box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);
-            ">
-              <div style="
-                height:16px;
-                width:${p}%;
-                max-width:100%;
-                border-radius:999px;
-                background:${fill};
-                box-shadow:${glow};
-              "></div>
-            </div>
-          `;
-        ]]]
-
-  # ============================================================
-  # RECIPE / BATCH INFO
-  # ============================================================
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        primary: Recept
-        secondary: "{{ states('sensor.brewassistant_hot_side_recipe_name') }}"
-        icon: mdi:beer
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-        entity: sensor.brewassistant_hot_side_recipe_name
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-      - type: custom:mushroom-template-card
-        primary: Batch
-        secondary: "{{ states('sensor.brewassistant_hot_side_batch_name') }}"
-        icon: mdi:clipboard-text
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-        entity: sensor.brewassistant_hot_side_batch_name
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-  # ============================================================
-  # CURRENT PHASE / INSTRUCTION
-  # ============================================================
-  - type: custom:mushroom-template-card
-    entity: input_select.brewassistant_hot_side_phase
-    primary: "{{ states('input_select.brewassistant_hot_side_phase') }}"
-    secondary: "{{ states('sensor.brewassistant_hot_side_instruction') }}"
-    icon: |
-      {% set phase = states('input_select.brewassistant_hot_side_phase') %}
-      {% if phase == 'Idle' %}
-        mdi:sleep
-      {% elif phase == 'Preparation' %}
-        mdi:clipboard-check
-      {% elif phase == 'Heat Strike Water' %}
-        mdi:kettle-steam
-      {% elif phase == 'Mash In' %}
-        mdi:sack
-      {% elif phase == 'Mash Rest' %}
-        mdi:pot-steam
-      {% elif phase == 'Mash Out' %}
-        mdi:thermometer-chevron-up
-      {% elif phase == 'Sparge / Drain' %}
-        mdi:water-sync
-      {% elif phase == 'Heat To Boil' %}
-        mdi:fire
-      {% elif phase == 'Boil' %}
-        mdi:pot-mix
-      {% elif phase == 'Whirlpool' %}
-        mdi:weather-tornado
-      {% elif phase == 'Chill' %}
-        mdi:snowflake-thermometer
-      {% elif phase == 'Transfer To Fermenter' %}
-        mdi:transfer
-      {% elif phase == 'Done' %}
-        mdi:check-circle
-      {% else %}
-        mdi:help-circle
-      {% endif %}
-    multiline_secondary: true
-    tap_action:
-      action: more-info
-    card_mod:
-      style: |
-        ha-card {
-          margin: 4px 12px 8px 12px;
-          border-radius: 20px;
-          background: rgba(255,255,255,0.055);
-          border: 1px solid rgba(255,255,255,0.08);
-        }
-
-  # ============================================================
-  # NEXT ACTION
-  # ============================================================
-  - type: custom:mushroom-template-card
-    entity: sensor.brewassistant_hot_side_next_action
-    primary: Nästa åtgärd
-    secondary: "{{ states('sensor.brewassistant_hot_side_next_action') }}"
-    icon: mdi:arrow-decision
-    multiline_secondary: true
-    tap_action:
-      action: more-info
-    card_mod:
-      style: |
-        ha-card {
-          margin: 4px 12px 8px 12px;
-          border-radius: 20px;
-          background:
-            linear-gradient(135deg, rgba(255,150,60,0.12), rgba(255,255,255,0.035));
-          border: 1px solid rgba(255,180,90,0.16);
-        }
-
-  # ============================================================
-  # TIMER / TARGETS
-  # ============================================================
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        entity: timer.brewassistant_hot_side_timer
-        primary: Timer
-        secondary: "{{ states('sensor.brewassistant_hot_side_timer_display') }}"
-        icon: mdi:timer-outline
-        tap_action:
-          action: more-info
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_hot_side_next_phase
-        primary: Nästa steg
-        secondary: "{{ states('sensor.brewassistant_hot_side_next_phase') }}"
-        icon: mdi:skip-next-circle
-        tap_action:
-          action: more-info
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-      - type: custom:mushroom-template-card
-        entity: input_number.brewassistant_hot_side_mash_target_temp
-        primary: Mäskmål
-        secondary: "{{ states('input_number.brewassistant_hot_side_mash_target_temp') }} °C"
-        icon: mdi:thermometer-water
-        tap_action:
-          action: more-info
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-      - type: custom:mushroom-template-card
-        entity: input_number.brewassistant_hot_side_chill_target_temp
-        primary: Kylmål
-        secondary: "{{ states('input_number.brewassistant_hot_side_chill_target_temp') }} °C"
-        icon: mdi:snowflake-thermometer
-        tap_action:
-          action: more-info
-        card_mod:
-          style: |
-            ha-card {
-              border-radius: 18px;
-              background: rgba(255,255,255,0.045);
-              border: 1px solid rgba(255,255,255,0.07);
-            }
-
-  # ============================================================
-  # MAIN CONTROL BUTTONS
-  # ============================================================
-  - type: grid
-    columns: 3
-    square: false
-    cards:
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_start
-        name: Start
-        icon: mdi:play-circle
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_start
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 14px 8px
-            - background: linear-gradient(135deg, rgba(40,210,120,0.28), rgba(20,50,30,0.8))
-            - border: 1px solid rgba(120,255,180,0.20)
-          icon:
-            - color: "#6dff9f"
-          name:
-            - color: white
-            - font-weight: 800
-
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_previous
-        name: Föregående
-        icon: mdi:skip-previous-circle
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_previous
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 14px 8px
-            - background: rgba(255,255,255,0.055)
-            - border: 1px solid rgba(255,255,255,0.08)
-          icon:
-            - color: "#dddddd"
-          name:
-            - color: white
-            - font-weight: 700
-
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_next
-        name: Nästa
-        icon: mdi:skip-next-circle
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_next
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 14px 8px
-            - background: linear-gradient(135deg, rgba(255,150,60,0.32), rgba(70,35,10,0.82))
-            - border: 1px solid rgba(255,190,100,0.22)
-          icon:
-            - color: "#ffbd68"
-          name:
-            - color: white
-            - font-weight: 800
-
-  # ============================================================
-  # SECONDARY CONTROL BUTTONS
-  # ============================================================
-  - type: grid
-    columns: 3
-    square: false
-    cards:
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_pause_resume
-        name: Paus
-        icon: mdi:pause-circle
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_pause_resume
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px 8px
-            - background: rgba(255,255,255,0.045)
-            - border: 1px solid rgba(255,255,255,0.07)
-          icon:
-            - color: "#ffd36b"
-          name:
-            - color: white
-            - font-weight: 700
-
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_start_timer
-        name: Timer
-        icon: mdi:timer-play
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_start_timer
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px 8px
-            - background: rgba(255,255,255,0.045)
-            - border: 1px solid rgba(255,255,255,0.07)
-          icon:
-            - color: "#7ec8ff"
-          name:
-            - color: white
-            - font-weight: 700
-
-      - type: custom:button-card
-        entity: input_button.brewassistant_hot_side_reset
-        name: Reset
-        icon: mdi:restart
-        tap_action:
-          action: call-service
-          service: input_button.press
-          target:
-            entity_id: input_button.brewassistant_hot_side_reset
-        confirmation:
-          text: Vill du verkligen återställa Hot Side workflow?
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px 8px
-            - background: rgba(255,80,80,0.11)
-            - border: 1px solid rgba(255,120,120,0.16)
-          icon:
-            - color: "#ff8a8a"
-          name:
-            - color: white
-            - font-weight: 700
-
-  # ============================================================
-  # SETTINGS TOGGLE
-  # ============================================================
-  - type: custom:mushroom-entity-card
-    entity: input_boolean.brewassistant_hot_side_show_settings
-    name: Hot Side Inställningar
-    icon: mdi:tune-variant
-    tap_action:
-      action: toggle
-    card_mod:
-      style: |
-        ha-card {
-          margin: 4px 12px 8px 12px;
-          border-radius: 20px;
-          background: rgba(255,255,255,0.045);
-          border: 1px solid rgba(255,255,255,0.07);
-        }
-
-  # ============================================================
-  # SETTINGS / HOT SIDE TUNING - COLLAPSIBLE
-  # ============================================================
+        power:
+          - justify-self: end
+          - align-self: start
+          - pointer-events: auto
+          - z-index: 10
   - type: conditional
     conditions:
-      - entity: input_boolean.brewassistant_hot_side_show_settings
+      - entity: input_boolean.brewassistant_hot_side_active
         state: "on"
     card:
-      type: grid
-      columns: 2
-      square: false
+      type: vertical-stack
       cards:
+        - type: custom:button-card
+          entity: sensor.brewassistant_hot_side_progress
+          show_icon: false
+          show_name: false
+          show_state: false
+          styles:
+            card:
+              - height: 34px
+              - padding: 8px 46px 10px 46px
+              - margin: 0
+              - border-radius: 0
+              - background: transparent
+              - box-shadow: none
+              - overflow: visible
+              - box-sizing: border-box
+            custom_fields:
+              bar:
+                - width: 100%
+                - height: 16px
+                - display: block
+          custom_fields:
+            bar: |
+              [[[
+                const p = Math.max(2, Math.min(100, parseFloat(entity?.state || 0)));
+                const phase = states['input_select.brewassistant_hot_side_phase']?.state;
+
+                let fill = 'linear-gradient(90deg, #ff8a3d, #ffd36b)';
+                let glow = '0 0 14px rgba(255,170,70,0.30)';
+
+                if (phase === 'Idle') {
+                  fill = 'rgba(255,255,255,0.20)';
+                  glow = 'none';
+                }
+
+                if (phase === 'Chill') {
+                  fill = 'linear-gradient(90deg, #3aa7ff, #9ee7ff)';
+                  glow = '0 0 14px rgba(90,190,255,0.32)';
+                }
+
+                if (phase === 'Done') {
+                  fill = 'linear-gradient(90deg, #2ee881, #b7ffd4)';
+                  glow = '0 0 14px rgba(80,255,160,0.32)';
+                }
+
+                return `
+                  <div style="
+                    height:16px;
+                    width:100%;
+                    border-radius:999px;
+                    background:rgba(255,255,255,0.10);
+                    overflow:hidden;
+                    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);
+                  ">
+                    <div style="
+                      height:16px;
+                      width:${p}%;
+                      max-width:100%;
+                      border-radius:999px;
+                      background:${fill};
+                      box-shadow:${glow};
+                    "></div>
+                  </div>
+                `;
+              ]]]
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              primary: Recept
+              secondary: "{{ states('sensor.brewassistant_hot_side_recipe_name') }}"
+              icon: mdi:beer
+              multiline_secondary: true
+              tap_action:
+                action: more-info
+              entity: sensor.brewassistant_hot_side_recipe_name
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+            - type: custom:mushroom-template-card
+              primary: Batch
+              secondary: "{{ states('sensor.brewassistant_hot_side_batch_name') }}"
+              icon: mdi:clipboard-text
+              multiline_secondary: true
+              tap_action:
+                action: more-info
+              entity: sensor.brewassistant_hot_side_batch_name
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+        - type: custom:mushroom-template-card
+          entity: input_select.brewassistant_hot_side_phase
+          primary: "{{ states('input_select.brewassistant_hot_side_phase') }}"
+          secondary: "{{ states('sensor.brewassistant_hot_side_instruction') }}"
+          icon: >
+            {% set phase = states('input_select.brewassistant_hot_side_phase')
+            %}
+
+            {% if phase == 'Idle' %}
+              mdi:sleep
+            {% elif phase == 'Preparation' %}
+              mdi:clipboard-check
+            {% elif phase == 'Heat Strike Water' %}
+              mdi:kettle-steam
+            {% elif phase == 'Mash In' %}
+              mdi:sack
+            {% elif phase == 'Mash Rest' %}
+              mdi:pot-steam
+            {% elif phase == 'Mash Out' %}
+              mdi:thermometer-chevron-up
+            {% elif phase == 'Sparge / Drain' %}
+              mdi:water-sync
+            {% elif phase == 'Heat To Boil' %}
+              mdi:fire
+            {% elif phase == 'Boil' %}
+              mdi:pot-mix
+            {% elif phase == 'Whirlpool' %}
+              mdi:weather-tornado
+            {% elif phase == 'Chill' %}
+              mdi:snowflake-thermometer
+            {% elif phase == 'Transfer To Fermenter' %}
+              mdi:transfer
+            {% elif phase == 'Done' %}
+              mdi:check-circle
+            {% else %}
+              mdi:help-circle
+            {% endif %}
+          multiline_secondary: true
+          tap_action:
+            action: more-info
+          card_mod:
+            style: |
+              ha-card {
+                margin: 4px 12px 8px 12px;
+                border-radius: 20px;
+                background: rgba(255,255,255,0.055);
+                border: 1px solid rgba(255,255,255,0.08);
+              }
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_hot_side_next_action
+          primary: Nästa åtgärd
+          secondary: "{{ states('sensor.brewassistant_hot_side_next_action') }}"
+          icon: mdi:arrow-decision
+          multiline_secondary: true
+          tap_action:
+            action: more-info
+          card_mod:
+            style: |
+              ha-card {
+                margin: 4px 12px 8px 12px;
+                border-radius: 20px;
+                background:
+                  linear-gradient(135deg, rgba(255,150,60,0.12), rgba(255,255,255,0.035));
+                border: 1px solid rgba(255,180,90,0.16);
+              }
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: timer.brewassistant_hot_side_timer
+              primary: Timer
+              secondary: "{{ states('sensor.brewassistant_hot_side_timer_display') }}"
+              icon: mdi:timer-outline
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_hot_side_next_phase
+              primary: Nästa steg
+              secondary: "{{ states('sensor.brewassistant_hot_side_next_phase') }}"
+              icon: mdi:skip-next-circle
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+            - type: custom:mushroom-template-card
+              entity: input_number.brewassistant_hot_side_mash_target_temp
+              primary: Mäskmål
+              secondary: >-
+                {{
+                states('input_number.brewassistant_hot_side_mash_target_temp')
+                }} °C
+              icon: mdi:thermometer-water
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+            - type: custom:mushroom-template-card
+              entity: input_number.brewassistant_hot_side_chill_target_temp
+              primary: Kylmål
+              secondary: >-
+                {{
+                states('input_number.brewassistant_hot_side_chill_target_temp')
+                }} °C
+              icon: mdi:snowflake-thermometer
+              tap_action:
+                action: more-info
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                  }
+        - type: grid
+          columns: 3
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_start
+              name: Start
+              icon: mdi:play-circle
+              tap_action:
+                action: call-service
+                service: input_button.press
+                target:
+                  entity_id: input_button.brewassistant_hot_side_start
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(0,115,68,0.88),
+                      rgba(0,70,42,0.96))
+                  - border: 1px solid rgba(90,255,170,0.16)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: "#57ff9c"
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_previous
+              name: Föregående
+              icon: mdi:skip-previous-circle
+              tap_action:
+                action: call-service
+                service: script.brewassistant_hot_side_previous
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(28,30,36,0.96),
+                      rgba(14,16,20,0.98))
+                  - border: 1px solid rgba(255,255,255,0.08)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: rgba(255,255,255,0.88)
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_next
+              name: Nästa
+              icon: mdi:skip-next-circle
+              tap_action:
+                action: call-service
+                service: script.brewassistant_hot_side_next
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(146,78,8,0.92),
+                      rgba(94,48,6,0.98))
+                  - border: 1px solid rgba(255,195,120,0.16)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: "#ffc166"
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
+        - type: grid
+          columns: 3
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_pause_resume
+              name: Paus
+              icon: mdi:pause-circle
+              tap_action:
+                action: call-service
+                service: script.brewassistant_hot_side_pause_resume
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(42,32,10,0.96),
+                      rgba(24,18,8,0.98))
+                  - border: 1px solid rgba(255,220,120,0.12)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: "#ffd86e"
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_start_timer
+              name: Timer
+              icon: mdi:timer-play
+              tap_action:
+                action: call-service
+                service: script.brewassistant_hot_side_start_timer
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(18,46,78,0.96),
+                      rgba(10,26,44,0.98))
+                  - border: 1px solid rgba(120,210,255,0.12)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: "#6ec9ff"
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: input_button.brewassistant_hot_side_reset
+              name: Reset
+              icon: mdi:restart
+              tap_action:
+                action: call-service
+                service: input_button.press
+                target:
+                  entity_id: input_button.brewassistant_hot_side_reset
+              confirmation:
+                text: Vill du verkligen återställa Hot Side workflow?
+              styles:
+                card:
+                  - min-height: 92px
+                  - border-radius: 20px
+                  - padding: 12px 8px
+                  - background: >-
+                      linear-gradient(135deg, rgba(74,16,18,0.96),
+                      rgba(42,10,12,0.98))
+                  - border: 1px solid rgba(255,120,120,0.14)
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: "\"i\" \"n\""
+                  - grid-template-columns: 1fr
+                  - grid-template-rows: min-content min-content
+                icon:
+                  - width: 30px
+                  - color: "#ff8f96"
+                  - margin-bottom: 8px
+                name:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 800
+                  - white-space: normal
         - type: custom:mushroom-entity-card
-          entity: input_boolean.brewassistant_hot_side_auto_start_timers
-          name: Autostarta timers
-          icon: mdi:timer-play
+          entity: input_boolean.brewassistant_hot_side_show_settings
+          name: Hot Side Inställningar
+          icon: mdi:tune-variant
           tap_action:
             action: toggle
           card_mod:
             style: |
               ha-card {
-                border-radius: 18px;
+                margin: 4px 12px 8px 12px;
+                border-radius: 20px;
                 background: rgba(255,255,255,0.045);
                 border: 1px solid rgba(255,255,255,0.07);
               }
-
-        - type: custom:mushroom-entity-card
-          entity: input_boolean.brewassistant_hot_side_notifications
-          name: Notiser
-          icon: mdi:bell-ring
-          tap_action:
-            action: toggle
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_strike_water_temp
-          name: Strike temp
-          icon: mdi:thermometer-chevron-up
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_mash_target_temp
-          name: Mäsktemperatur
-          icon: mdi:thermometer-water
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_mash_minutes
-          name: Mäsk minuter
-          icon: mdi:timer-sand
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_mashout_minutes
-          name: Mash-out minuter
-          icon: mdi:timer-sand-complete
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_boil_minutes
-          name: Kok minuter
-          icon: mdi:pot-steam
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_whirlpool_minutes
-          name: Whirlpool minuter
-          icon: mdi:weather-tornado
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_number.brewassistant_hot_side_chill_target_temp
-          name: Kylmål
-          icon: mdi:snowflake-thermometer
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_text.brewassistant_hot_side_manual_recipe_name
-          name: Manuellt recept
-          icon: mdi:beer
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
-        - type: custom:mushroom-entity-card
-          entity: input_text.brewassistant_hot_side_manual_batch_name
-          name: Manuell batch
-          icon: mdi:clipboard-text
-          tap_action:
-            action: more-info
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 18px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-              }
-
+        - type: conditional
+          conditions:
+            - entity: input_boolean.brewassistant_hot_side_show_settings
+              state: "on"
+          card:
+            type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: input_boolean.brewassistant_hot_side_auto_start_timers
+                name: Autostarta timers
+                icon: mdi:timer-play
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: input_boolean.brewassistant_hot_side_notifications
+                name: Notiser
+                icon: mdi:bell-ring
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_strike_water_temp
+                name: Strike temp
+                icon: mdi:thermometer-chevron-up
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_mash_target_temp
+                name: Mäsktemperatur
+                icon: mdi:thermometer-water
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_mash_minutes
+                name: Mäsk minuter
+                icon: mdi:timer-sand
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_mashout_minutes
+                name: Mash-out minuter
+                icon: mdi:timer-sand-complete
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_boil_minutes
+                name: Kok minuter
+                icon: mdi:pot-steam
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_whirlpool_minutes
+                name: Whirlpool minuter
+                icon: mdi:weather-tornado
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_number.brewassistant_hot_side_chill_target_temp
+                name: Kylmål
+                icon: mdi:snowflake-thermometer
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_text.brewassistant_hot_side_manual_recipe_name
+                name: Manuellt recept
+                icon: mdi:beer
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: input_text.brewassistant_hot_side_manual_batch_name
+                name: Manuell batch
+                icon: mdi:clipboard-text
+                tap_action:
+                  action: more-info
 card_mod:
   style: |
     ha-card {
