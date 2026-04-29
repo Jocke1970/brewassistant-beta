@@ -56,3 +56,24 @@ input_boolean.brewassistant_hot_side_enabled
 
 Legacy UI toggles, such as `input_boolean.fwk_process_card_enabled`, may still control only the dashboard/card state.
 
+
+---
+
+## Project Direction
+
+BrewAssistant is built as a modular Home Assistant brewing assistant.
+
+The first focus is fermentation and kegerator control, including cooling, compressor protection, fan circulation and Brewfather-based workflow support.
+
+Future planned modules include:
+
+- DigiBoil 35L BIAB guide  
+  Manual brewing workflow with power monitoring, timers and checklists.
+
+- Dedicated Fercubator support  
+  Separate fermentation chamber control and recipe-driven fermentation profiles.
+
+- BrewZilla 35L Gen 4.1 RAPT support  
+  Advanced hot-side telemetry, mash profile tracking and RAPT-based brewing workflow integration.
+
+BrewAssistant is not intended to blindly automate every device. The goal is to combine safe control, useful telemetry, guided workflows and premium Home Assistant dashboards.
