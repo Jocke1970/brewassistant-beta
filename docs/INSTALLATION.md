@@ -1,111 +1,92 @@
-# Installation
+# Installation Guide
 
-## 1. Requirements
+## Path
 
-BrewAssistant v4 assumes Home Assistant with YAML packages enabled.
+Place package files here:
 
-Example `configuration.yaml`:
+```text
+/config/packages/brewassistant/
+```
+
+Make sure packages are enabled in `configuration.yaml`:
 
 ```yaml
 homeassistant:
   packages: !include_dir_named packages
 ```
 
-Suggested location:
-
-```text
-/config/packages/brewassistant_helpers.yaml
-```
-
-## 2. Required custom cards
-
-Install these through HACS:
-
-- Button Card
-- Stack In Card
-- Vertical Stack In Card
-- Mushroom Cards
-- Card Mod
-
-Typical Lovelace resources are handled automatically by HACS. If installing manually, ensure the resources are loaded under:
-
-```text
-Settings → Dashboards → Resources
-```
-
-## 3. Add helper package
-
-Create or update:
-
-```text
-/config/packages/brewassistant_helpers.yaml
-```
-
-Add the required helpers, template sensors, input booleans, input selects, input numbers and input buttons.
-
-## 4. Reload or restart
-
-After editing package YAML:
-
-```text
-Developer Tools → YAML → Check configuration
-Developer Tools → YAML → Reload template entities
-```
-
-If helpers do not appear, restart Home Assistant.
-
-## 5. Add dashboard cards
-
-Add the Lovelace cards manually to your dashboard using YAML mode or a Manual Card.
-
-Recommended order:
-
-```text
-Problem Center
-FWK / Fermentation Process
-Fermentation Chamber
-Kegerator
-Hot Side
-```
-
-## 6. Verify core entities
-
-Check that these entities exist or are intentionally mapped:
+If using nested folders:
 
 ```yaml
-sensor.brewassistant_health_status
-sensor.brewassistant_problem_count
-binary_sensor.brewassistant_any_problem_active
+homeassistant:
+  packages: !include_dir_named packages/brewassistant
+```
 
-sensor.brewassistant_kegerator_power_w
-binary_sensor.kegerator_compressor_active
+Use the structure that matches your current Home Assistant setup.
 
-input_boolean.fwk_process_card_enabled
-input_boolean.fwk_show_details
+## Safe install order
 
+Recommended install order:
+
+```text
+1. brewassistant_fermentation_module.yaml
+2. brewassistant_chamber_module.yaml
+3. brewassistant_kegerator_module.yaml
+4. brewassistant_brewfather_adapter.yaml
+5. brewassistant_hot_side_module.yaml
+6. brewassistant_health_module.yaml
+7. brewassistant_notifications_module.yaml
+8. brewassistant_cleaning_module.yaml
+```
+
+Restart Home Assistant between modules when testing.
+
+## Legacy files
+
+Do not keep old package files active together with the v4 split. Duplicate entities may occur.
+
+Legacy files replaced by v4 include:
+
+```text
+brewassistant_helpers_total.yaml
+BREWASSISTANT WORKFLOW.yaml
+BREWASSISTANT RUNTIME.yaml
+BREWASSISTANT CHAMBER.yaml
+BREWASSISTANT NOTIFICATIONS.yaml
+BREWASSISTANT SMART AUTOMATION LAYER V2.yaml
+BREWASSISTANT - SMART FERMENTATION CONTROL v1_0,yaml
+BREWASSISTANT BULLETPROOF FERMENTATION CONTROL v1_1.yaml
+brewassistant_kegerator_fan_control.yaml
+BrewAssistant Hot Side Workflow v1_0.yaml
+BrewAssistant Hot Side Workflow v1_1 Patch.yaml
+BrewAssistant Brewfather Mapping Patch v1_0.yaml
+BrewAssistant Brewfather Events Mapping Patch v1_0.yaml
+rewassistant_health_backend_v2.yaml
+```
+
+## First checks after restart
+
+Check Developer Tools → States for:
+
+```text
+input_boolean.brewassistant_fermentation_enabled
+input_boolean.brewassistant_chamber_enabled
+input_boolean.brewassistant_kegerator_enabled
 input_boolean.brewassistant_hot_side_enabled
-input_boolean.brewassistant_hot_side_show_settings
+sensor.fwk_process_status
+sensor.recipe_runtime_name
+binary_sensor.kegerator_compressor_active
 ```
 
-## 7. Troubleshooting
+## Expected startup states
 
-If a template sensor is `unavailable`, check:
+When nothing is active yet:
 
 ```text
-Settings → System → Logs
+Fermentation card disabled → Off / Standby
+Fermentation enabled but no batch → Idle
+Chamber off → Off / Chamber off
+Kegerator → active if fridge entity exists
+Brewfather adapter without active recipe → manual_fallback
+Health → OK if installed modules are healthy
 ```
-
-Search for:
-
-```text
-TemplateSyntaxError
-Invalid config for 'template'
-brewassistant
-```
-
-Common causes:
-
-- duplicate `template:` root blocks
-- `sensor:` templates accidentally placed under `binary_sensor:`
-- incorrect indentation
-- entity names not matching your HA instance
