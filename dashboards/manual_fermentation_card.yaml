@@ -1,0 +1,1062 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: input_boolean.manual_batch_active
+    name: Manual Fermentation
+    icon: mdi:fruit-cherries
+    show_state: true
+    show_label: true
+    state_display: |
+      [[[
+        return entity.state === 'on' ? 'On' : 'Off';
+      ]]]
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: input_boolean.manual_batch_active
+          icon: |
+            [[[
+              return entity.state === 'on'
+                ? 'mdi:power'
+                : 'mdi:power-off';
+            ]]]
+          show_name: false
+          show_state: false
+          tap_action:
+            action: toggle
+          styles:
+            card:
+              - width: 42px
+              - height: 42px
+              - border-radius: 14px
+              - padding: 8px
+              - background: |
+                  [[[
+                    return entity.state === 'on'
+                      ? 'rgba(46,204,113,0.24)'
+                      : 'rgba(255,255,255,0.10)';
+                  ]]]
+              - border: |
+                  [[[
+                    return entity.state === 'on'
+                      ? '1px solid rgba(46,204,113,0.55)'
+                      : '1px solid rgba(255,255,255,0.16)';
+                  ]]]
+              - box-shadow: |
+                  [[[
+                    return entity.state === 'on'
+                      ? '0 0 18px rgba(46,204,113,0.35)'
+                      : 'none';
+                  ]]]
+            icon:
+              - width: 24px
+              - color: |
+                  [[[
+                    return entity.state === 'on'
+                      ? 'rgba(46,204,113,1)'
+                      : 'rgba(255,255,255,0.65)';
+                  ]]]
+    label: |
+      [[[
+        const active = states['input_boolean.manual_batch_active']?.state === 'on';
+        const batch = states['input_text.manual_batch_name']?.state ?? 'No batch selected';
+
+        let status = states['sensor.manual_batch_status']?.state ?? '';
+        if (!status || ['unknown', 'unavailable', ''].includes(status)) {
+          status = active ? 'Monitoring' : 'Standby';
+        }
+
+        let next = states['sensor.manual_batch_next_action']?.state ?? '';
+        if (!next || ['unknown', 'unavailable', ''].includes(next)) {
+          next = active
+            ? 'Följ SG-trenden och logga nästa hydrometermätning.'
+            : 'Aktivera Manual Mode med power-knappen när batchen startas.';
+        }
+
+        const sgRaw = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+        const sg = Number.isFinite(sgRaw) ? sgRaw.toFixed(3) : '—';
+
+        const abvRaw = parseFloat(states['sensor.manual_batch_abv_current']?.state);
+        let abv = '0.0';
+        if (Number.isFinite(abvRaw)) {
+          abv = abvRaw.toFixed(1);
+        } else {
+          const og = parseFloat(states['input_number.manual_batch_og']?.state);
+          const cur = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+          if (Number.isFinite(og) && Number.isFinite(cur) && og >= cur) {
+            abv = ((og - cur) * 131.25).toFixed(1);
+          }
+        }
+
+        const daysRaw = parseFloat(states['sensor.manual_batch_days_active']?.state);
+        let days = Number.isFinite(daysRaw) ? daysRaw.toFixed(1) : '0';
+
+        const start = states['input_datetime.manual_batch_start']?.state;
+        if ((!Number.isFinite(daysRaw) || days === '0.0') && active && start && !['unknown','unavailable',''].includes(start)) {
+          const startTime = new Date(start.replace(' ', 'T')).getTime();
+          const nowTime = new Date().getTime();
+          if (Number.isFinite(startTime)) {
+            days = ((nowTime - startTime) / 86400000).toFixed(1);
+          }
+        }
+
+        return `
+          <div class="manual-wrap">
+            <div class="manual-batch">${batch}</div>
+            <div class="manual-status-row">
+              <span class="manual-pill ${active ? 'on' : 'off'}">${active ? status : 'Standby'}</span>
+              <span class="manual-sub">SG ${sg} · ${abv}% · ${days} dagar</span>
+            </div>
+            <div class="manual-next">${active ? next : 'Aktivera Manual Mode med power-knappen när batchen startas.'}</div>
+          </div>
+        `;
+      ]]]
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 22px
+        - color: white
+        - min-height: 150px
+        - overflow: hidden
+        - background: |
+            [[[
+              const active = states['input_boolean.manual_batch_active']?.state === 'on';
+              let status = states['sensor.manual_batch_status']?.state ?? 'Idle';
+              if (['unknown', 'unavailable', ''].includes(status)) status = 'Monitoring';
+
+              if (!active)
+                return 'linear-gradient(135deg, rgba(80,80,90,0.45), rgba(18,18,24,0.96))';
+
+              if (status === 'Ready for packaging')
+                return 'linear-gradient(135deg, rgba(42,157,143,0.92), rgba(38,70,83,0.96))';
+
+              if (status === 'Possibly stalled')
+                return 'linear-gradient(135deg, rgba(176,58,46,0.92), rgba(73,24,29,0.96))';
+
+              if (status === 'Active fermentation')
+                return 'linear-gradient(135deg, rgba(255,159,67,0.92), rgba(95,39,205,0.92))';
+
+              if (status === 'Slowing down' || status === 'Stable / verifying')
+                return 'linear-gradient(135deg, rgba(255,190,118,0.88), rgba(34,47,62,0.96))';
+
+              if (status === 'Packaged')
+                return 'linear-gradient(135deg, rgba(72,126,176,0.92), rgba(25,42,86,0.96))';
+
+              return 'linear-gradient(135deg, rgba(255,132,89,0.86), rgba(255,193,101,0.18)), rgba(18,18,24,0.96)';
+            ]]]
+        - box-shadow: 0 16px 42px rgba(0,0,0,0.38)
+        - border: 1px solid rgba(255,255,255,0.13)
+      grid:
+        - grid-template-areas: "\"i n s power\" \"i l l l\""
+        - grid-template-columns: 58px 1fr min-content 46px
+        - grid-template-rows: min-content 1fr
+      img_cell:
+        - width: 58px
+        - height: 58px
+        - border-radius: 18px
+        - background: rgba(255,255,255,0.14)
+        - place-self: start
+      icon:
+        - width: 40px
+        - color: rgba(255,255,255,0.95)
+        - filter: drop-shadow(0 4px 12px rgba(0,0,0,0.35))
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 15px
+        - font-weight: 700
+        - color: white
+        - padding-left: 4px
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+      state:
+        - justify-self: start
+        - align-self: center
+        - font-size: 15px
+        - font-weight: 700
+        - color: white
+        - padding-left: 8px
+      label:
+        - justify-self: stretch
+        - align-self: start
+        - text-align: left
+        - padding-left: 4px
+        - margin-top: 10px
+        - white-space: normal
+      custom_fields:
+        power:
+          - justify-self: end
+          - align-self: start
+    extra_styles: |
+      .manual-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .manual-batch {
+        font-size: 14px;
+        font-weight: 700;
+        color: rgba(255,255,255,0.92);
+        line-height: 1.3;
+      }
+
+      .manual-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .manual-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow: 0 6px 14px rgba(0,0,0,0.20);
+      }
+
+      .manual-pill.on {
+        background: rgba(255,255,255,0.22);
+        color: #ffffff;
+      }
+
+      .manual-pill.off {
+        background: rgba(0,0,0,0.20);
+        color: rgba(255,255,255,0.72);
+      }
+
+      .manual-sub {
+        font-size: 13px;
+        font-weight: 700;
+        color: rgba(255,255,255,0.88);
+      }
+
+      .manual-next {
+        font-size: 14px;
+        line-height: 1.4;
+        font-weight: 500;
+        color: rgba(255,255,255,0.94);
+        max-width: 680px;
+      }
+  - type: conditional
+    conditions:
+      - entity: input_boolean.manual_batch_active
+        state: "on"
+    card:
+      type: vertical-stack
+      cards:
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              entity: input_number.manual_batch_sg_current
+              name: SG nu
+              icon: mdi:hydrometer
+              show_state: true
+              state_display: |
+                [[[
+                  const v = parseFloat(entity.state);
+                  return Number.isFinite(v) ? v.toFixed(3) : '—';
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: rgba(255,255,255,0.055)
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.70)
+                  - font-size: 12px
+                  - font-weight: 700
+                state:
+                  - color: white
+                  - font-size: 20px
+                  - font-weight: 850
+                icon:
+                  - color: rgba(255,190,118,0.95)
+            - type: custom:button-card
+              entity: sensor.manual_batch_abv_current
+              name: ABV
+              icon: mdi:percent
+              show_state: true
+              state_display: |
+                [[[
+                  let v = parseFloat(entity.state);
+                  if (Number.isFinite(v)) return `${v.toFixed(1)} %`;
+
+                  const og = parseFloat(states['input_number.manual_batch_og']?.state);
+                  const sg = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+                  if (Number.isFinite(og) && Number.isFinite(sg) && og >= sg) {
+                    return `${((og - sg) * 131.25).toFixed(1)} %`;
+                  }
+                  return '—';
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: rgba(255,255,255,0.055)
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.70)
+                  - font-size: 12px
+                  - font-weight: 700
+                state:
+                  - color: white
+                  - font-size: 20px
+                  - font-weight: 850
+                icon:
+                  - color: rgba(129,236,236,0.95)
+            - type: custom:button-card
+              entity: sensor.manual_batch_attenuation
+              name: Utjäsning
+              icon: mdi:chart-bell-curve
+              show_state: true
+              state_display: |
+                [[[
+                  let v = parseFloat(entity.state);
+                  if (Number.isFinite(v)) return `${v.toFixed(1)} %`;
+
+                  const og = parseFloat(states['input_number.manual_batch_og']?.state);
+                  const sg = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+                  if (Number.isFinite(og) && Number.isFinite(sg) && og > 1 && og > sg) {
+                    return `${(((og - sg) / (og - 1)) * 100).toFixed(1)} %`;
+                  }
+                  return '0.0 %';
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: rgba(255,255,255,0.055)
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.70)
+                  - font-size: 12px
+                  - font-weight: 700
+                state:
+                  - color: white
+                  - font-size: 20px
+                  - font-weight: 850
+                icon:
+                  - color: rgba(116,185,255,0.95)
+            - type: custom:button-card
+              entity: sensor.manual_batch_sg_delta
+              name: SG Δ
+              icon: mdi:delta
+              show_state: true
+              state_display: |
+                [[[
+                  let v = parseFloat(entity.state);
+                  if (Number.isFinite(v)) return v.toFixed(3);
+
+                  const prev = parseFloat(states['input_number.manual_batch_sg_previous']?.state);
+                  const cur = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+                  if (Number.isFinite(prev) && Number.isFinite(cur)) {
+                    return (prev - cur).toFixed(3);
+                  }
+                  return '—';
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: rgba(255,255,255,0.055)
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.70)
+                  - font-size: 12px
+                  - font-weight: 700
+                state:
+                  - color: white
+                  - font-size: 20px
+                  - font-weight: 850
+                icon:
+                  - color: rgba(85,239,196,0.95)
+        - type: custom:button-card
+          name: Cider Progress
+          icon: mdi:chart-timeline-variant-shimmer
+          show_state: false
+          show_label: true
+          label: |
+            [[[
+              const og = parseFloat(states['input_number.manual_batch_og']?.state);
+              const sg = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+              const fg = parseFloat(states['input_number.manual_batch_expected_fg']?.state);
+
+              const fmt = (v) => Number.isFinite(v) ? v.toFixed(3) : '—';
+
+              let progress = 0;
+              if (Number.isFinite(og) && Number.isFinite(sg) && Number.isFinite(fg) && og > fg) {
+                progress = ((og - sg) / (og - fg)) * 100;
+                progress = Math.max(0, Math.min(100, progress));
+              }
+
+              const remaining = Number.isFinite(sg) && Number.isFinite(fg)
+                ? Math.max(0, (sg - fg) * 1000).toFixed(0)
+                : '—';
+
+              return `
+                <div class="progress-wrap">
+                  <div class="progress-top">
+                    <span>OG ${fmt(og)}</span>
+                    <span>SG ${fmt(sg)}</span>
+                    <span>FG ${fmt(fg)}</span>
+                  </div>
+
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width:${progress}%"></div>
+                  </div>
+
+                  <div class="progress-bottom">
+                    <span>${progress.toFixed(0)}% mot förväntad FG</span>
+                    <span>${remaining} SG-punkter kvar</span>
+                  </div>
+                </div>
+              `;
+            ]]]
+          styles:
+            card:
+              - border-radius: 20px
+              - padding: 16px
+              - background: |
+                  [[[
+                    const sg = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+                    const fg = parseFloat(states['input_number.manual_batch_expected_fg']?.state);
+                    const margin = parseFloat(states['input_number.manual_batch_fg_margin']?.state ?? '0.004');
+
+                    if (Number.isFinite(sg) && Number.isFinite(fg) && sg <= fg + margin) {
+                      return 'linear-gradient(135deg, rgba(46,204,113,0.18), rgba(46,204,113,0.06))';
+                    }
+
+                    return 'linear-gradient(135deg, rgba(255,190,118,0.16), rgba(255,118,117,0.06))';
+                  ]]]
+              - border: 1px solid rgba(255,255,255,0.10)
+              - box-shadow: none
+            grid:
+              - grid-template-areas: "\"i n\" \"i l\""
+              - grid-template-columns: 42px 1fr
+              - grid-template-rows: min-content 1fr
+            img_cell:
+              - width: 42px
+              - height: 42px
+              - border-radius: 14px
+              - background: rgba(255,255,255,0.10)
+            icon:
+              - width: 26px
+              - color: rgba(255,190,118,0.95)
+            name:
+              - justify-self: start
+              - color: white
+              - font-size: 15px
+              - font-weight: 800
+              - padding-left: 4px
+            label:
+              - justify-self: stretch
+              - text-align: left
+              - padding-left: 4px
+              - margin-top: 8px
+              - white-space: normal
+          extra_styles: |
+            .progress-wrap {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              width: 100%;
+            }
+
+            .progress-top,
+            .progress-bottom {
+              display: flex;
+              justify-content: space-between;
+              gap: 8px;
+              font-size: 12px;
+              font-weight: 700;
+              color: rgba(255,255,255,0.84);
+            }
+
+            .progress-bottom {
+              color: rgba(255,255,255,0.68);
+            }
+
+            .progress-bar {
+              width: 100%;
+              height: 10px;
+              border-radius: 999px;
+              background: rgba(0,0,0,0.28);
+              overflow: hidden;
+              border: 1px solid rgba(255,255,255,0.08);
+            }
+
+            .progress-fill {
+              height: 100%;
+              border-radius: 999px;
+              background: linear-gradient(90deg, rgba(255,190,118,0.95), rgba(46,204,113,0.95));
+              box-shadow: 0 0 16px rgba(255,190,118,0.30);
+              transition: width 0.4s ease;
+            }
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              name: Mät igen
+              icon: mdi:timer-sand
+              show_state: false
+              show_label: true
+              label: |
+                [[[
+                  const last = states['input_datetime.manual_batch_last_reading']?.state;
+                  let hours = NaN;
+
+                  if (last && !['unknown','unavailable',''].includes(last)) {
+                    const ts = new Date(last.replace(' ', 'T')).getTime();
+                    if (Number.isFinite(ts)) {
+                      hours = (Date.now() - ts) / 3600000;
+                    }
+                  }
+
+                  if (!Number.isFinite(hours)) {
+                    return 'Ingen mätning loggad';
+                  }
+
+                  const left = Math.max(0, 24 - hours);
+
+                  if (hours >= 24) {
+                    return `${hours.toFixed(1)} h sedan · redo att mäta`;
+                  }
+
+                  return `${hours.toFixed(1)} h sedan · vänta ca ${left.toFixed(1)} h`;
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: |
+                      [[[
+                        const last = states['input_datetime.manual_batch_last_reading']?.state;
+                        if (!last || ['unknown','unavailable',''].includes(last)) {
+                          return 'rgba(255,255,255,0.055)';
+                        }
+
+                        const ts = new Date(last.replace(' ', 'T')).getTime();
+                        const hours = Number.isFinite(ts) ? (Date.now() - ts) / 3600000 : 0;
+
+                        return hours >= 24
+                          ? 'rgba(46,204,113,0.16)'
+                          : 'rgba(255,190,118,0.12)';
+                      ]]]
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.72)
+                  - font-size: 12px
+                  - font-weight: 800
+                label:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 750
+                  - white-space: normal
+                icon:
+                  - color: |
+                      [[[
+                        const last = states['input_datetime.manual_batch_last_reading']?.state;
+                        if (!last || ['unknown','unavailable',''].includes(last)) {
+                          return 'rgba(255,255,255,0.60)';
+                        }
+
+                        const ts = new Date(last.replace(' ', 'T')).getTime();
+                        const hours = Number.isFinite(ts) ? (Date.now() - ts) / 3600000 : 0;
+
+                        return hours >= 24
+                          ? 'rgba(46,204,113,1)'
+                          : 'rgba(255,190,118,1)';
+                      ]]]
+            - type: custom:button-card
+              name: Cidersteg
+              icon: mdi:format-list-checks
+              show_state: false
+              show_label: true
+              label: |
+                [[[
+                  const sg = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+                  const fg = parseFloat(states['input_number.manual_batch_expected_fg']?.state);
+                  const margin = parseFloat(states['input_number.manual_batch_fg_margin']?.state ?? '0.004');
+                  const packaged = states['input_boolean.manual_batch_packaged']?.state === 'on';
+
+                  if (packaged) return 'Förpackad / lagring';
+
+                  if (!Number.isFinite(sg) || !Number.isFinite(fg)) {
+                    return 'Primärjäsning';
+                  }
+
+                  if (sg <= fg + margin) {
+                    return 'Stabilitetskontroll / smakpåse snart';
+                  }
+
+                  if (sg <= fg + 0.010) {
+                    return 'SG-kontroll · jäsning avtar';
+                  }
+
+                  return 'Primärjäsning';
+                ]]]
+              styles:
+                card:
+                  - border-radius: 18px
+                  - padding: 14px
+                  - background: rgba(255,255,255,0.055)
+                  - border: 1px solid rgba(255,255,255,0.09)
+                  - box-shadow: none
+                name:
+                  - color: rgba(255,255,255,0.72)
+                  - font-size: 12px
+                  - font-weight: 800
+                label:
+                  - color: white
+                  - font-size: 13px
+                  - font-weight: 750
+                  - white-space: normal
+                icon:
+                  - color: rgba(116,185,255,0.95)
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              entity: script.manual_batch_start
+              name: Starta
+              icon: mdi:play-circle
+              tap_action:
+                action: call-service
+                service: script.manual_batch_start
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(46,204,113,0.18)
+                  - border: 1px solid rgba(46,204,113,0.30)
+                name:
+                  - font-size: 12px
+                  - font-weight: 800
+                  - color: white
+                icon:
+                  - color: rgba(46,204,113,1)
+            - type: custom:button-card
+              entity: script.manual_batch_log_reading
+              name: Logga SG
+              icon: mdi:playlist-edit
+              tap_action:
+                action: call-service
+                service: script.manual_batch_log_reading
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(255,190,118,0.18)
+                  - border: 1px solid rgba(255,190,118,0.30)
+                name:
+                  - font-size: 12px
+                  - font-weight: 800
+                  - color: white
+                icon:
+                  - color: rgba(255,190,118,1)
+            - type: custom:button-card
+              entity: script.manual_batch_mark_packaged
+              name: Packad
+              icon: mdi:package-variant-closed-check
+              tap_action:
+                action: call-service
+                service: script.manual_batch_mark_packaged
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(116,185,255,0.16)
+                  - border: 1px solid rgba(116,185,255,0.28)
+                name:
+                  - font-size: 12px
+                  - font-weight: 800
+                  - color: white
+                icon:
+                  - color: rgba(116,185,255,1)
+            - type: custom:button-card
+              entity: script.manual_batch_reset
+              name: Reset
+              icon: mdi:restart
+              confirmation:
+                text: Vill du nollställa Manual Batch Tracker?
+              tap_action:
+                action: call-service
+                service: script.manual_batch_reset
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(255,118,117,0.14)
+                  - border: 1px solid rgba(255,118,117,0.28)
+                name:
+                  - font-size: 12px
+                  - font-weight: 800
+                  - color: white
+                icon:
+                  - color: rgba(255,118,117,1)
+        - type: custom:expander-card
+          title: Manuella värden & inställningar
+          title-card:
+            type: custom:mushroom-template-card
+            primary: Manuella värden & inställningar
+            secondary: Ändra batchnamn, OG, FG och ny SG-mätning här
+            icon: mdi:tune-variant
+            icon_color: amber
+            tap_action:
+              action: fire-dom-event
+            card_mod:
+              style: |
+                ha-card {
+                  background: rgba(255,255,255,0.045) !important;
+                  border: 1px solid rgba(255,255,255,0.08);
+                  border-radius: 18px !important;
+                  box-shadow: none !important;
+                }
+          cards:
+            - type: custom:mushroom-title-card
+              title: Batch
+              subtitle: Grunddata för den manuella batchen
+            - type: custom:mushroom-entity-card
+              entity: input_text.manual_batch_name
+              name: Batchnamn
+              icon: mdi:beer-outline
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_select.manual_batch_type
+              name: Batchtyp
+              icon: mdi:glass-mug-variant
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_batch_volume_l
+              name: Batchvolym
+              icon: mdi:cup-water
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_packaged_volume_l
+              name: Förväntad färdig volym
+              icon: mdi:keg
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-title-card
+              title: SG / Hydrometer
+              subtitle: Sätt nytt SG-värde och tryck sedan på Logga SG
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_og
+              primary: OG
+              secondary: >
+                {{ '%0.3f' | format(states('input_number.manual_batch_og') |
+                float(0)) }}
+              icon: mdi:hydrometer
+              icon_color: amber
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_expected_fg
+              primary: Förväntad FG
+              secondary: >
+                {{ '%0.3f' |
+                format(states('input_number.manual_batch_expected_fg') |
+                float(0)) }}
+              icon: mdi:target
+              icon_color: green
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_sg_new
+              primary: Ny SG-mätning
+              secondary: >
+                {{ '%0.3f' | format(states('input_number.manual_batch_sg_new') |
+                float(0)) }}
+              icon: mdi:eyedropper
+              icon_color: orange
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_sg_current
+              primary: Nuvarande SG
+              secondary: >
+                {{ '%0.3f' |
+                format(states('input_number.manual_batch_sg_current') |
+                float(0)) }}
+              icon: mdi:chart-line-variant
+              icon_color: blue
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_sg_previous
+              primary: Föregående SG
+              secondary: >
+                {{ '%0.3f' |
+                format(states('input_number.manual_batch_sg_previous') |
+                float(0)) }}
+              icon: mdi:chart-line
+              icon_color: grey
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_temperature
+              name: Temperatur vid mätning
+              icon: mdi:thermometer
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-title-card
+              title: Logik
+              subtitle: Trösklar för stabilitet och FG-bedömning
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_stable_threshold
+              primary: Stabil SG-tröskel
+              secondary: >
+                {{ '%0.3f' |
+                format(states('input_number.manual_batch_stable_threshold') |
+                float(0)) }}
+              icon: mdi:approximately-equal
+              icon_color: amber
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-template-card
+              entity: input_number.manual_batch_fg_margin
+              primary: FG-marginal
+              secondary: >
+                {{ '%0.3f' |
+                format(states('input_number.manual_batch_fg_margin') | float(0))
+                }}
+              icon: mdi:target-variant
+              icon_color: green
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-title-card
+              title: Tider
+              subtitle: Start och senaste SG-mätning
+            - type: custom:mushroom-entity-card
+              entity: input_datetime.manual_batch_start
+              name: Batch startad
+              icon: mdi:calendar-start
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_datetime.manual_batch_last_reading
+              name: Senaste mätning
+              icon: mdi:calendar-clock
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-title-card
+              title: Uträknat
+              subtitle: Beräknas direkt från manuella värden
+            - type: custom:mushroom-template-card
+              primary: Status
+              secondary: >
+                {% set active = is_state('input_boolean.manual_batch_active',
+                'on') %}
+
+                {% set packaged =
+                is_state('input_boolean.manual_batch_packaged', 'on') %}
+
+                {% set og = states('input_number.manual_batch_og') | float(0) %}
+
+                {% set current = states('input_number.manual_batch_sg_current')
+                | float(0) %}
+
+                {% set previous =
+                states('input_number.manual_batch_sg_previous') | float(0) %}
+
+                {% set fg = states('input_number.manual_batch_expected_fg') |
+                float(0) %}
+
+                {% set stable =
+                states('input_number.manual_batch_stable_threshold') |
+                float(0.002) %}
+
+                {% set margin = states('input_number.manual_batch_fg_margin') |
+                float(0.004) %}
+
+                {% set delta = previous - current %}
+
+                {% set fg_distance = current - fg %}
+
+
+                {% if packaged %}
+                  Packaged
+                {% elif not active %}
+                  Idle
+                {% elif og <= 1.000 %}
+                  Missing OG
+                {% elif current <= 1.000 or current >= og %}
+                  Started
+                {% elif delta > stable %}
+                  Active fermentation
+                {% elif delta > 0 and delta <= stable %}
+                  Slowing down
+                {% elif (delta | abs) <= stable and fg_distance <= margin %}
+                  Ready / verifying
+                {% elif (delta | abs) <= stable and fg_distance > margin %}
+                  Possibly stalled
+                {% else %}
+                  Monitoring
+                {% endif %}
+              icon: mdi:information-outline
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              primary: Nästa åtgärd
+              secondary: >
+                {% set active = is_state('input_boolean.manual_batch_active',
+                'on') %}
+
+                {% set packaged =
+                is_state('input_boolean.manual_batch_packaged', 'on') %}
+
+                {% set og = states('input_number.manual_batch_og') | float(0) %}
+
+                {% set current = states('input_number.manual_batch_sg_current')
+                | float(0) %}
+
+                {% set previous =
+                states('input_number.manual_batch_sg_previous') | float(0) %}
+
+                {% set fg = states('input_number.manual_batch_expected_fg') |
+                float(0) %}
+
+                {% set stable =
+                states('input_number.manual_batch_stable_threshold') |
+                float(0.002) %}
+
+                {% set margin = states('input_number.manual_batch_fg_margin') |
+                float(0.004) %}
+
+                {% set delta = previous - current %}
+
+                {% set fg_distance = current - fg %}
+
+
+                {% if packaged %}
+                  Batch markerad som förpackad.
+                {% elif not active %}
+                  Aktivera Manual Mode när batchen startas.
+                {% elif og <= 1.000 %}
+                  Ange ett korrekt OG-värde.
+                {% elif current <= 1.000 or current >= og %}
+                  Låt jäsa ostört och mät SG efter några dagar.
+                {% elif delta > stable %}
+                  Jäsningen är aktiv. Vänta och mät igen senare.
+                {% elif delta > 0 and delta <= stable %}
+                  Jäsningen avtar. Mät igen om 24 timmar.
+                {% elif (delta | abs) <= stable and fg_distance <= margin %}
+                  SG verkar stabilt nära FG. Bekräfta eller förpacka.
+                {% elif (delta | abs) <= stable and fg_distance > margin %}
+                  SG är stabilt men ligger högt. Vänta, kontrollera temperatur och mät igen.
+                {% else %}
+                  Fortsätt följa SG-trenden.
+                {% endif %}
+              icon: mdi:clipboard-text-clock
+              icon_color: amber
+            - type: custom:mushroom-template-card
+              primary: Förväntad ABV
+              secondary: >
+                {% set og = states('input_number.manual_batch_og') | float(0) %}
+
+                {% set fg = states('input_number.manual_batch_expected_fg') |
+                float(0) %}
+
+                {% if og > 0 and fg > 0 and og >= fg %}
+                  {{ ((og - fg) * 131.25) | round(1) }} %
+                {% else %}
+                  —
+                {% endif %}
+              icon: mdi:percent-outline
+              icon_color: purple
+            - type: custom:mushroom-template-card
+              primary: Avstånd till FG
+              secondary: >
+                {% set sg = states('input_number.manual_batch_sg_current') |
+                float(0) %}
+
+                {% set fg = states('input_number.manual_batch_expected_fg') |
+                float(0) %}
+
+                {% if sg > 0 and fg > 0 %}
+                  {{ '%0.3f' | format(sg - fg) }}
+                {% else %}
+                  —
+                {% endif %}
+              icon: mdi:target-arrow
+              icon_color: green
+            - type: custom:mushroom-template-card
+              primary: Timmar sedan mätning
+              secondary: >
+                {% set last = states('input_datetime.manual_batch_last_reading')
+                %}
+
+                {% if last not in ['unknown', 'unavailable', ''] %}
+                  {{ ((as_timestamp(now()) - as_timestamp(last)) / 3600) | round(1) }} h
+                {% else %}
+                  —
+                {% endif %}
+              icon: mdi:timer-outline
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              primary: SG-punkter tappade
+              secondary: >
+                {% set og = states('input_number.manual_batch_og') | float(0) %}
+
+                {% set sg = states('input_number.manual_batch_sg_current') |
+                float(0) %}
+
+                {% if og > 0 and sg > 0 and og >= sg %}
+                  {{ ((og - sg) * 1000) | round(0) }} points
+                {% else %}
+                  0 points
+                {% endif %}
+              icon: mdi:arrow-down-bold
+              icon_color: orange
+card_mod:
+  style: |
+    ha-card {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
