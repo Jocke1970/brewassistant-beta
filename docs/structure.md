@@ -1,184 +1,195 @@
-# BrewAssistant – Structure
+# Project Structure
 
-## Purpose
+BrewAssistant v4 is structured as a modular Home Assistant package set.
 
-BrewAssistant is structured as a layered Home Assistant system.
+The main goal is to keep business logic in backend packages and keep dashboard YAML focused on presentation.
 
-The goal is to avoid one large fragile automation and instead keep recipe data, live data, workflow logic, chamber logic, and UI separate.
+---
 
-## Architecture Layers
-
-## 1. Helper Layer
-
-File:
-
-- `brewassistant_helpers.yaml`
-
-Contains:
-
-- batch active helper
-- step completion helpers
-- detail visibility helper
-- fallback recipe values
-- SG snapshot helpers
-
-Examples:
-
-- `input_boolean.fwk_batch_active`
-- `input_boolean.fwk_spunding_installed`
-- `input_boolean.fwk_dry_hop_added`
-- `input_boolean.fwk_cold_crash_active`
-- `input_boolean.fwk_transferred_to_keg`
-- `input_number.recipe_fallback_og`
-- `input_number.recipe_fallback_fg`
-
-## 2. Runtime Layer
-
-File:
-
-- `brewassistant_runtime.yaml`
-
-Normalizes source data into stable runtime sensors.
-
-Sources:
-
-- Brewfather
-- Yellow Pill / RAPT
-- fallback helpers
-
-Examples:
-
-- `sensor.recipe_runtime_name`
-- `sensor.recipe_runtime_status`
-- `sensor.recipe_runtime_primary_temp`
-- `sensor.recipe_runtime_cold_crash_temp`
-- `sensor.fwk_live_sg`
-- `sensor.fwk_live_temp`
-- `sensor.fwk_attenuation`
-
-## 3. Workflow Layer
-
-File:
-
-- `brewassistant_workflow.yaml`
-
-Handles process state and action logic.
-
-Examples:
-
-- `sensor.fwk_process_status`
-- `sensor.fwk_next_step`
-- `sensor.fwk_current_action_stage`
-- `sensor.fwk_next_action_stage`
-- `binary_sensor.fwk_spunding_active`
-- `binary_sensor.fwk_dry_hop_active`
-- `binary_sensor.fwk_ready_for_cold_crash`
-- `binary_sensor.fwk_ready_for_transfer`
-
-## 4. Notification Layer
-
-File:
-
-- `brewassistant_notifications.yaml`
-
-Handles process and chamber notifications.
-
-Current notification groups:
-
-- spunding
-- dry hop
-- cold crash ready
-- transfer ready
-- chamber mismatch
-- temp drift
-
-## 5. Chamber Intelligence Layer
-
-File:
-
-- `brewassistant_chamber.yaml`
-
-Compares Brewfather/runtime target with chamber target and live fermentation temperature.
-
-Examples:
-
-- `sensor.fwk_chamber_target_midpoint`
-- `sensor.fwk_recipe_active_target_temp`
-- `sensor.fwk_recipe_vs_chamber_delta`
-- `sensor.fwk_live_vs_recipe_delta`
-- `sensor.fwk_chamber_alignment_status`
-
-## 6. Smart Automation Layer
-
-File:
-
-- `brewassistant_smart_automation_v2.yaml`
-
-Provides safe semiauto control.
-
-Features:
-
-- suggested chamber range
-- apply Brewfather target button
-- guarded semiauto script
-- optional auto-apply toggle
-- cold crash suggestion
-- safety disable when chamber is turned off
-
-## 7. UI Layer
-
-Dashboard/card files:
-
-- `brewassistant_main_card_dark_v1.yaml`
-- `brewassistant_chamber_card_v1_2_semiauto.yaml`
-- `brewassistant_kegerator_card_v1_1_premium.yaml`
-
-UI principles:
-
-- current state first
-- only relevant actions visible
-- dark premium style
-- expandable detail sections
-- no full auto without safeguards
-
-
-## Planned Module Structure
-
-BrewAssistant is intended to be modular. Each hardware stage should add functionality without breaking the previous setup.
+## Recommended repository structure
 
 ```text
-BrewAssistant
-├── Core Workflow
-│   ├── Batch state
-│   ├── Current phase
-│   ├── Next step
-│   ├── Progress
-│   └── Notifications
-│
-├── Fermentation / Kegerator Chamber
-│   ├── Cooling control
-│   ├── Compressor protection
-│   ├── Fan circulation
-│   ├── Cold crash support
-│   └── Serving / storage support
-│
-├── DigiBoil BIAB Guide
-│   ├── Power monitoring only
-│   ├── Manual mash workflow
-│   ├── Manual sparge workflow
-│   ├── Timers
-│   └── Checklists
-│
-├── Fercubator Module
-│   ├── Dedicated fermentation chamber
-│   ├── Recipe temperature targets
-│   ├── Fermentation profiles
-│   └── Chamber-specific automation
-│
-└── BrewZilla RAPT Module
-    ├── RAPT telemetry
-    ├── Heating status
-    ├── Pump status
-    ├── Target temperature
-    ├── Mash profile support
-    └── Advanced hot-side workflow
+brewassistant/
+├── README.md
+├── packages/
+│   ├── brewassistant_helpers.yaml
+│   ├── brewassistant_runtime.yaml
+│   ├── brewassistant_workflow.yaml
+│   ├── brewassistant_chamber.yaml
+│   ├── brewassistant_notifications.yaml
+│   ├── brewassistant_manual_mode.yaml
+│   └── brewassistant_hot_side_workflow.yaml
+├── dashboards/
+│   ├── fermentation.yaml
+│   ├── manual-mode.yaml
+│   ├── chamber.yaml
+│   ├── kegerator.yaml
+│   └── brewzilla.yaml
+└── docs/
+    ├── setup.md
+    ├── structure.md
+    ├── entities.md
+    ├── state-machine.md
+    ├── manual-mode.md
+    ├── dashboard.md
+    ├── brewfather.md
+    ├── legacy-migration.md
+    └── roadmap.md
+```
+
+---
+
+## Package responsibilities
+
+### `brewassistant_helpers.yaml`
+
+Contains reusable helpers.
+
+Examples:
+
+- `input_boolean`
+- `input_select`
+- `input_text`
+- `input_number`
+- `input_datetime`
+
+This file should not contain complex decision logic.
+
+---
+
+### `brewassistant_runtime.yaml`
+
+Normalizes external brewing data into internal recipe/runtime sensors.
+
+Sources may include:
+
+- Brewfather.
+- RAPT Cloud.
+- Manual input.
+- Static fallback helpers.
+
+The runtime layer should answer questions like:
+
+- What batch is active?
+- What recipe is active?
+- What is the target fermentation temperature?
+- What is the target final gravity?
+- What source is currently providing the data?
+
+---
+
+### `brewassistant_workflow.yaml`
+
+Contains the process state machine.
+
+The workflow layer should answer questions like:
+
+- Is a batch active?
+- Is fermentation complete?
+- Is cold crash ready?
+- Is the batch ready for transfer?
+- What is the next recommended action?
+
+---
+
+### `brewassistant_chamber.yaml`
+
+Controls and monitors fermentation chamber behaviour.
+
+Responsibilities:
+
+- Compare liquid temperature to target.
+- Read chamber climate state.
+- Show cooling/heating/idle status.
+- Apply recipe target temperature when requested.
+- Keep chamber automation separated from generic process state.
+
+---
+
+### `brewassistant_notifications.yaml`
+
+Contains user-facing notifications and alert toggles.
+
+Responsibilities:
+
+- Warning notifications.
+- Persistent notifications.
+- Manual-mode reminders.
+- Cold crash and transfer readiness alerts.
+
+---
+
+### `brewassistant_manual_mode.yaml`
+
+Standalone manual fermentation tracker.
+
+Responsibilities:
+
+- Manual batch state.
+- Manual gravity readings.
+- Manual target FG.
+- Manual packaging state.
+- Simple derived manual status.
+
+This module should be able to run without Brewfather, RAPT or BrewZilla.
+
+---
+
+### `brewassistant_hot_side_workflow.yaml`
+
+Optional/future module for brew-day and hot-side logic.
+
+Potential responsibilities:
+
+- Mash step state.
+- Boil state.
+- Hop addition reminders.
+- BrewZilla/RAPT control status.
+- Brewfather BrewTracker data.
+
+---
+
+## Dashboard responsibilities
+
+Dashboard cards should:
+
+- Display current state.
+- Provide buttons for user actions.
+- Show status, warnings and next steps.
+- Avoid duplicating backend workflow logic.
+
+A card can contain display calculations for formatting, but the real state should come from backend sensors.
+
+---
+
+## Naming conventions
+
+Recommended v4 naming direction:
+
+```text
+brew_process_*         workflow/process state
+brew_batch_*           batch state
+brew_recipe_*          recipe/runtime state
+brew_chamber_*         chamber state
+brew_manual_*          manual mode
+brew_notification_*    notifications
+brew_hot_side_*        hot-side workflow
+brewzilla_*            BrewZilla/RAPT device data
+```
+
+Legacy names:
+
+```text
+fwk_*                  old Fresh Wort Kit specific namespace
+```
+
+New development should avoid adding new `fwk_*` entities.
+
+---
+
+## Design rule
+
+If a piece of logic affects brewing decisions, place it in a package.
+
+If it only affects how something looks, place it in the dashboard card.
+
