@@ -1,0 +1,1290 @@
+###############################################################################
+# BrewAssistant v4 - Fermentation
+# Self-contained module package.
+# Entity names are intentionally preserved from the uploaded v3 files.
+# UI/dashboard YAML should live separately from packages.
+###############################################################################
+
+input_boolean:
+  fwk_show_details:
+    name: FWK Show Details
+    icon: mdi:tune-variant
+  fwk_process_card_enabled:
+    name: FWK Process Card Enabled
+    icon: mdi:power
+  brewassistant_fermentation_active:
+    name: BrewAssistant Fermentation Active
+    icon: mdi:fermentation
+  brewassistant_packaging_active:
+    name: BrewAssistant Packaging Active
+    icon: mdi:bottle-soda-classic-outline
+  fwk_recipe_loaded:
+    name: FWK Recipe Loaded
+    icon: mdi:file-document-check-outline
+  fwk_batch_confirmed:
+    name: FWK Batch Confirmed
+    icon: mdi:clipboard-check-outline
+  fwk_yeast_pitched:
+    name: FWK Yeast Pitched
+    icon: mdi:yeast
+  fwk_primary_fermentation_started:
+    name: FWK Primary Fermentation Started
+    icon: mdi:play-circle-outline
+  fwk_primary_fermentation_done:
+    name: FWK Primary Fermentation Done
+    icon: mdi:check-circle-outline
+  fwk_gravity_check_day_1_done:
+    name: FWK Gravity Check Day 1 Done
+    icon: mdi:hydrometer
+  fwk_gravity_check_day_2_done:
+    name: FWK Gravity Check Day 2 Done
+    icon: mdi:hydrometer
+  fwk_gravity_stable_confirmed:
+    name: FWK Gravity Stable Confirmed
+    icon: mdi:check-decagram-outline
+  fwk_positive_pressure_confirmed:
+    name: FWK Positive Pressure Confirmed
+    icon: mdi:gauge
+  fwk_ready_for_cold_crash:
+    name: FWK Ready For Cold Crash
+    icon: mdi:snowflake-alert
+  fwk_ready_for_packaging:
+    name: FWK Ready For Packaging
+    icon: mdi:keg
+  fwk_batch_archived:
+    name: FWK Batch Archived
+    icon: mdi:archive-check-outline
+  cold_crash:
+    name: Cold Crash
+    icon: mdi:snowflake
+  cold_crash_started:
+    name: Cold Crash Started
+    icon: mdi:snowflake-thermometer
+  cold_crash_done:
+    name: Cold Crash Done
+    icon: mdi:snowflake-check
+  cold_crash_pressure_guard:
+    name: Cold Crash Pressure Guard
+    icon: mdi:shield-check-outline
+  spunding_enabled:
+    name: Spunding Enabled
+    icon: mdi:gauge
+  spunding_valve_installed:
+    name: Spunding Valve Installed
+    icon: mdi:valve
+  spunding_pressure_ok:
+    name: Spunding Pressure OK
+    icon: mdi:gauge-full
+  spunding_manual_check_done:
+    name: Spunding Manual Check Done
+    icon: mdi:clipboard-check-outline
+  closed_transfer_mode:
+    name: Closed Transfer Mode
+    icon: mdi:pipe-valve
+  fermzilla_loaded:
+    name: FermZilla Loaded
+    icon: mdi:bucket-outline
+  fermzilla_sanitized:
+    name: FermZilla Sanitized
+    icon: mdi:spray-bottle
+  fermzilla_pressure_test_done:
+    name: FermZilla Pressure Test Done
+    icon: mdi:shield-check
+  fermzilla_airlock_installed:
+    name: FermZilla Airlock Installed
+    icon: mdi:pipe
+  fermzilla_dry_hop_done:
+    name: FermZilla Dry Hop Done
+    icon: mdi:leaf
+  fermzilla_ready_for_transfer:
+    name: FermZilla Ready For Transfer
+    icon: mdi:transfer-right
+  rapt_pill_in_fermenter:
+    name: RAPT Pill In Fermenter
+    icon: mdi:hydrometer
+  rapt_pill_calibration_mode:
+    name: RAPT Pill Calibration Mode
+    icon: mdi:tune-variant
+  rapt_pill_manual_sg_verified:
+    name: RAPT Pill Manual SG Verified
+    icon: mdi:check-circle-outline
+  fwk_batch_active:
+    name: FWK Batch Active
+    icon: mdi:beer
+  fwk_cold_crash_active:
+    name: FWK Cold Crash Active
+    icon: mdi:snowflake
+  fwk_dry_hop_added:
+    name: FWK Dry Hop Added
+    icon: mdi:leaf
+  fwk_spunding_installed:
+    name: FWK Spunding Installed
+    icon: mdi:gauge
+  fwk_transferred_to_keg:
+    name: FWK Transferred To Keg
+    icon: mdi:keg
+  brewassistant_fermentation_enabled:
+    name: BrewAssistant Fermentation Enabled
+    icon: mdi:fermentation
+    initial: true
+  brewassistant_smart_fermentation_enabled:
+    name: BrewAssistant Smart Fermentation Enabled
+    icon: mdi:brain
+  brewassistant_smart_heat_allowed:
+    name: BrewAssistant Smart Heat Allowed
+    icon: mdi:radiator
+  brewassistant_smart_debug:
+    name: BrewAssistant Smart Fermentation Debug
+    icon: mdi:bug
+  brewassistant_smart_show_details:
+    name: BrewAssistant Smart Show Details
+    icon: mdi:chevron-down
+input_number:
+  fwk_recipe_og:
+    name: FWK Recipe OG
+    icon: mdi:hydrometer
+    min: 1.0
+    max: 1.12
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+  fwk_recipe_fg:
+    name: FWK Recipe FG
+    icon: mdi:hydrometer
+    min: 0.99
+    max: 1.05
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+  fwk_manual_sg:
+    name: FWK Manual SG
+    icon: mdi:hydrometer
+    min: 0.99
+    max: 1.12
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+  fwk_manual_sg_previous:
+    name: FWK Manual SG Previous
+    icon: mdi:hydrometer
+    min: 0.99
+    max: 1.12
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+  fwk_gravity_stable_delta_limit:
+    name: FWK Gravity Stable Delta Limit
+    icon: mdi:delta
+    min: 0.0
+    max: 0.01
+    step: 0.001
+    mode: box
+    unit_of_measurement: SG
+  fwk_target_abv:
+    name: FWK Target ABV
+    icon: mdi:percent-outline
+    min: 0
+    max: 15
+    step: 0.1
+    mode: box
+    unit_of_measurement: '%'
+  fwk_primary_temp_target:
+    name: FWK Primary Temp Target
+    icon: mdi:thermometer
+    min: 0
+    max: 30
+    step: 0.1
+    mode: box
+    unit_of_measurement: °C
+  fwk_primary_temp_low:
+    name: FWK Primary Temp Low
+    icon: mdi:thermometer-low
+    min: 0
+    max: 30
+    step: 0.1
+    mode: box
+    unit_of_measurement: °C
+  fwk_primary_temp_high:
+    name: FWK Primary Temp High
+    icon: mdi:thermometer-high
+    min: 0
+    max: 30
+    step: 0.1
+    mode: box
+    unit_of_measurement: °C
+  fwk_diacetyl_rest_temp:
+    name: FWK Diacetyl Rest Temp
+    icon: mdi:thermometer-chevron-up
+    min: 0
+    max: 30
+    step: 0.1
+    mode: box
+    unit_of_measurement: °C
+  cold_crash_temp_target:
+    name: Cold Crash Temp Target
+    icon: mdi:snowflake-thermometer
+    min: -2
+    max: 10
+    step: 0.1
+    mode: box
+    unit_of_measurement: °C
+  cold_crash_days_target:
+    name: Cold Crash Days Target
+    icon: mdi:calendar-clock
+    min: 0
+    max: 7
+    step: 0.5
+    mode: box
+    unit_of_measurement: d
+  spunding_target_pressure_bar:
+    name: Spunding Target Pressure
+    icon: mdi:gauge
+    min: 0.0
+    max: 2.5
+    step: 0.05
+    mode: box
+    unit_of_measurement: bar
+  spunding_pressure_low_bar:
+    name: Spunding Pressure Low
+    icon: mdi:gauge-low
+    min: 0.0
+    max: 2.5
+    step: 0.05
+    mode: box
+    unit_of_measurement: bar
+  spunding_pressure_high_bar:
+    name: Spunding Pressure High
+    icon: mdi:gauge-full
+    min: 0.0
+    max: 2.5
+    step: 0.05
+    mode: box
+    unit_of_measurement: bar
+  fermzilla_target_pressure_bar:
+    name: FermZilla Target Pressure
+    icon: mdi:gauge
+    min: 0.0
+    max: 2.5
+    step: 0.05
+    mode: box
+    unit_of_measurement: bar
+  fermzilla_mal_co2:
+    name: FermZilla Mål CO2
+    icon: mdi:molecule-co2
+    min: 1.0
+    max: 4.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: vol
+  fwk_sg_today:
+    name: FWK SG Today
+    min: 0.99
+    max: 1.2
+    step: 0.001
+    mode: box
+  fwk_sg_yesterday:
+    name: FWK SG Yesterday
+    min: 0.99
+    max: 1.2
+    step: 0.001
+    mode: box
+  fwk_sg_two_days_ago:
+    name: FWK SG Two Days Ago
+    min: 0.99
+    max: 1.2
+    step: 0.001
+    mode: box
+  brewassistant_smart_batch_volume_l:
+    name: BrewAssistant Batch Volume
+    icon: mdi:cup-water
+    min: 1
+    max: 35
+    step: 0.5
+    unit_of_measurement: L
+    mode: box
+    initial: 23
+  brewassistant_smart_target_temp_fallback:
+    name: BrewAssistant Target Temp Fallback
+    icon: mdi:target
+    min: 0
+    max: 30
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
+    initial: 15.0
+  brewassistant_smart_deadband_low:
+    name: BrewAssistant Smart Deadband Low
+    icon: mdi:arrow-collapse-down
+    min: 0.05
+    max: 2
+    step: 0.05
+    unit_of_measurement: °C
+    mode: box
+    initial: 0.25
+  brewassistant_smart_heat_stop_margin:
+    name: BrewAssistant Smart Heat Stop Margin
+    icon: mdi:stop-circle-outline
+    min: 0
+    max: 1
+    step: 0.05
+    unit_of_measurement: °C
+    mode: box
+    initial: 0.1
+  brewassistant_smart_max_rising_rate:
+    name: BrewAssistant Max Rising Rate
+    icon: mdi:trending-up
+    min: 0.05
+    max: 2
+    step: 0.05
+    unit_of_measurement: °C/h
+    mode: box
+    initial: 0.25
+  brewassistant_smart_chamber_heat_safety_offset:
+    name: BrewAssistant Chamber Heat Safety Offset
+    icon: mdi:shield-thermometer
+    min: 0.5
+    max: 10
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+    initial: 2.0
+  brewassistant_smart_min_heat_pulse_min:
+    name: BrewAssistant Min Heat Pulse
+    icon: mdi:timer-outline
+    min: 1
+    max: 15
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    initial: 3
+  brewassistant_smart_max_heat_pulse_min:
+    name: BrewAssistant Max Heat Pulse
+    icon: mdi:timer
+    min: 2
+    max: 30
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    initial: 10
+  brewassistant_smart_heat_cooldown_min:
+    name: BrewAssistant Heat Cooldown
+    icon: mdi:timer-sand
+    min: 5
+    max: 60
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    initial: 12
+  brewassistant_smart_temp_snapshot_30min:
+    name: BrewAssistant Temp Snapshot 30 Min
+    icon: mdi:camera-timer
+    min: -10
+    max: 40
+    step: 0.01
+    unit_of_measurement: °C
+    mode: box
+    initial: 15
+input_datetime:
+  fwk_batch_started_at:
+    name: FWK Batch Started At
+    icon: mdi:calendar-start
+    has_date: true
+    has_time: true
+  fwk_yeast_pitched_at:
+    name: FWK Yeast Pitched At
+    icon: mdi:calendar-clock
+    has_date: true
+    has_time: true
+  fwk_gravity_check_day_1_at:
+    name: FWK Gravity Check Day 1 At
+    icon: mdi:calendar-check-outline
+    has_date: true
+    has_time: true
+  fwk_gravity_check_day_2_at:
+    name: FWK Gravity Check Day 2 At
+    icon: mdi:calendar-check-outline
+    has_date: true
+    has_time: true
+  fwk_gravity_stable_confirmed_at:
+    name: FWK Gravity Stable Confirmed At
+    icon: mdi:calendar-check
+    has_date: true
+    has_time: true
+  cold_crash_started_at:
+    name: Cold Crash Started At
+    icon: mdi:snowflake
+    has_date: true
+    has_time: true
+  cold_crash_done_at:
+    name: Cold Crash Done At
+    icon: mdi:snowflake-check
+    has_date: true
+    has_time: true
+  packaging_started_at:
+    name: Packaging Started At
+    icon: mdi:keg
+    has_date: true
+    has_time: true
+  packaging_done_at:
+    name: Packaging Done At
+    icon: mdi:check-circle-outline
+    has_date: true
+    has_time: true
+  fwk_batch_start:
+    name: FWK Batch Start
+    has_date: true
+    has_time: true
+  fwk_cold_crash_start:
+    name: FWK Cold Crash Start
+    has_date: true
+    has_time: true
+input_text:
+  fwk_process_stage:
+    name: FWK Process Stage
+    icon: mdi:timeline-clock-outline
+    max: 255
+  fwk_manual_note:
+    name: FWK Manual Note
+    icon: mdi:note-edit-outline
+    max: 255
+  packaging_note:
+    name: Packaging Note
+    icon: mdi:note-text-outline
+    max: 255
+  brewassistant_smart_liquid_temp_entity:
+    name: BrewAssistant Liquid Temp Entity
+    icon: mdi:thermometer-water
+    initial: sensor.yellow_pill_temperature
+  brewassistant_smart_gravity_entity:
+    name: BrewAssistant Gravity Entity
+    icon: mdi:chart-line
+    initial: sensor.yellow_pill_gravity_2
+  brewassistant_smart_chamber_temp_entity:
+    name: BrewAssistant Chamber Temp Entity
+    icon: mdi:thermometer
+    initial: sensor.kyl_temperatur_4
+  brewassistant_smart_heat_switch_entity:
+    name: BrewAssistant Heat Mat Switch Entity
+    icon: mdi:radiator
+    initial: switch.fermentation_heat_mat
+  brewassistant_smart_recipe_target_entity:
+    name: BrewAssistant Recipe Target Temp Entity
+    icon: mdi:target
+    initial: sensor.fwk_recipe_active_target_temp
+
+input_select:
+  fwk_process_step:
+    name: FWK Process Step
+    icon: mdi:debug-step-over
+    options:
+    - Idle
+    - Recipe loaded
+    - Wort prepared
+    - Yeast pitched
+    - Primary fermentation
+    - Gravity check 1
+    - Gravity check 2
+    - Stable gravity confirmed
+    - Ready for cold crash
+    - Cold crash
+    - Ready for packaging
+    - Packaging
+    - Done
+  fermentation_control_mode:
+    name: Fermentation Control Mode
+    icon: mdi:thermostat-cog
+    options:
+    - false
+    - Recipe
+    - Manual
+    - Cold crash
+    - Maintenance
+  carbonation_mode:
+    name: Carbonation Mode
+    icon: mdi:molecule-co2
+    options:
+    - None
+    - Spunding
+    - Force carbonation
+    - Natural carbonation
+    - Bottle conditioning
+  brewing_phase:
+    name: Brewing Phase
+    options:
+    - Bryggning
+    - Fermentering
+    - Cold Crash
+    - Överföring
+    - Karbonering
+    - Lagring
+    icon: mdi:beer
+  brewassistant_phase:
+    name: BrewAssistant Phase
+    options:
+    - Idle
+    - Hot Side
+    - Fermentation
+    - Cold Crash
+    - Packaging
+    - Storage
+    icon: mdi:state-machine
+  brewassistant_smart_fermentation_mode:
+    name: BrewAssistant Smart Fermentation Mode
+    icon: mdi:tune-variant
+    options:
+    - 'Off'
+    - Monitor only
+    - Heat only
+    - Auto heat+cool
+    initial: Heat only
+counter:
+  fwk_gravity_check_counter:
+    name: FWK Gravity Check Counter
+    icon: mdi:counter
+    initial: 0
+    step: 1
+  fermzilla_prep_step_counter:
+    name: FermZilla Prep Step Counter
+    icon: mdi:counter
+    initial: 0
+    step: 1
+timer:
+  cold_crash_minimum_timer:
+    name: Cold Crash Minimum Timer
+    icon: mdi:snowflake
+    duration: '48:00:00'
+  fermzilla_sanitation_contact_timer:
+    name: FermZilla Sanitation Contact Timer
+    icon: mdi:timer-sand
+    duration: 00:10:00
+  brewassistant_smart_heat_cooldown:
+    name: BrewAssistant Smart Heat Cooldown
+    icon: mdi:timer-sand
+input_button:
+  fwk_start_batch:
+    name: FWK Start Batch
+    icon: mdi:play-circle-outline
+  fwk_confirm_gravity_check:
+    name: FWK Confirm Gravity Check
+    icon: mdi:hydrometer
+  fwk_confirm_ready_for_cold_crash:
+    name: FWK Confirm Ready For Cold Crash
+    icon: mdi:snowflake-alert
+  fwk_start_cold_crash:
+    name: FWK Start Cold Crash
+    icon: mdi:snowflake
+  fwk_finish_cold_crash:
+    name: FWK Finish Cold Crash
+    icon: mdi:snowflake-check
+  fwk_start_packaging:
+    name: FWK Start Packaging
+    icon: mdi:keg
+  fwk_finish_packaging:
+    name: FWK Finish Packaging
+    icon: mdi:check-circle-outline
+  fermzilla_prep_next_step:
+    name: FermZilla Prep Next Step
+    icon: mdi:arrow-right-circle-outline
+template:
+- sensor:
+  - name: BrewAssistant Current Gravity
+    unique_id: brewassistant_current_gravity
+    unit_of_measurement: SG
+    state: >
+      {% set e = states('input_text.brewassistant_smart_gravity_entity') %}
+      {% set v = states(e) %}
+      {% if v not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ v | float | round(3) }}
+      {% else %}
+        unknown
+      {% endif %}
+  - name: FWK Process Status
+    unique_id: fwk_process_status
+    icon: |
+      {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+        mdi:check-circle
+      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+        mdi:snowflake
+      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+        mdi:transfer-right
+      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+        mdi:thermometer-chevron-down
+      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        mdi:leaf-circle
+      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        mdi:gauge
+      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+        mdi:beer
+      {% elif states('sensor.recipe_runtime_status') not in ['unknown', 'unavailable', 'none', ''] %}
+        mdi:clipboard-text-clock
+      {% else %}
+        mdi:beer-outline
+      {% endif %}
+    state: |
+      {% set bf_status = states('sensor.recipe_runtime_status') %}
+      {% set batch_active = is_state('input_boolean.fwk_batch_active', 'on') %}
+
+      {% if is_state('input_boolean.fwk_process_card_enabled', 'off') %}
+       Off
+      {% elif is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+        Finished / transferred to keg
+      {% elif not batch_active %}
+        Idle
+      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+        Cold crash
+      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+        Ready for transfer
+      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+        Ready for cold crash
+      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        Dry hop now
+      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        Install spunding
+      {% elif batch_active %}
+        Primary fermentation
+      {% elif bf_status not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ bf_status }}
+      {% else %}
+        Idle
+      {% endif %}
+  - name: FWK Next Step
+    unique_id: fwk_next_step
+    icon: mdi:timeline-text
+    state: |
+      {% set bf_status = states('sensor.recipe_runtime_status') %} {% set bf_days_left = states('sensor.recipe_runtime_fermenting_days_left') | float(0) %} {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+        Batch completed
+      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+        Perform closed transfer to keg
+      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+        Maintain cold crash and positive pressure
+      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+        Start cold crash
+      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        Add dry hop charge
+      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+        Prepare dry hop
+      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        Install spunding valve
+      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+        Prepare spunding setup
+      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+        Monitor fermentation
+      {% elif bf_status == 'Fermenting' and bf_days_left > 0 %}
+        Follow Brewfather fermentation plan
+      {% elif bf_status not in ['unknown', 'unavailable', 'none', ''] %}
+        Check Brewfather batch status
+      {% else %}
+        Start a new batch
+      {% endif %}
+  - name: FWK Next Step
+    unique_id: fwk_next_step_clean
+    icon: mdi:timeline-text
+    state: |
+      {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+        Batch completed
+      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+        Perform closed transfer to keg
+      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+        Maintain cold crash and positive pressure
+      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+        Start cold crash
+      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        Add dry hop charge
+      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+        Prepare dry hop
+      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        Install spunding valve
+      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+        Prepare spunding setup
+      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+        Monitor fermentation
+      {% else %}
+        Start a new batch
+      {% endif %}
+  - name: FWK Current Action Stage
+    unique_id: fwk_current_action_stage
+    state: |
+      {% if is_state('binary_sensor.fwk_transfer_active', 'on') %}
+        transfer
+      {% elif is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+        cold_crash
+      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        dry_hop
+      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        spunding
+      {% else %}
+        none
+      {% endif %}
+  - name: FWK Next Action Stage
+    unique_id: fwk_next_action_stage
+    state: |
+      {% if is_state('binary_sensor.fwk_transfer_preview', 'on')
+            and not is_state('binary_sensor.fwk_transfer_active', 'on') %}
+        transfer
+      {% elif is_state('binary_sensor.fwk_cold_crash_preview', 'on')
+            and not is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+        cold_crash
+      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on')
+            and not is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+        dry_hop
+      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on')
+            and not is_state('binary_sensor.fwk_spunding_active', 'on') %}
+        spunding
+      {% else %}
+        none
+      {% endif %}
+  - name: FWK Planned Summary
+    unique_id: fwk_planned_summary
+    state: |
+      {% set recipe = states('sensor.recipe_runtime_name') %} {% set status = states('sensor.recipe_runtime_status') %} {% set primary = states('sensor.recipe_runtime_primary_temp') %} {% set crash = states('sensor.recipe_runtime_cold_crash_temp') %} {% set left = states('sensor.recipe_runtime_fermenting_days_left') %} {% if recipe not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ recipe }} | {{ status }} | {{ primary }} °C -> {{ crash }} °C | {{ left }} d left
+      {% else %}
+        No Brewfather recipe context
+      {% endif %}
+- binary_sensor:
+  - name: FWK Ready For Cold Crash
+    unique_id: fwk_ready_for_cold_crash
+    state: |
+      {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        and is_state('binary_sensor.fwk_sg_stable_2_days', 'on')
+        and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.002)
+      }}
+  - name: FWK Ready For Transfer
+    unique_id: fwk_ready_for_transfer
+    state: |
+      {{
+        is_state('input_boolean.fwk_cold_crash_active', 'on')
+        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        and (states('sensor.fwk_cold_crash_days') | float(0) >=
+             states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
+      }}
+  - name: FWK Spunding Preview
+    unique_id: fwk_spunding_preview
+    state: |
+      {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_spunding_installed', 'off')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and (states('sensor.fwk_batch_age_hours') | float(0) >=
+             (states('sensor.recipe_runtime_spunding_after_hours') | float(24) - 6))
+        and (states('sensor.fwk_batch_age_hours') | float(0) <
+             states('sensor.recipe_runtime_spunding_after_hours') | float(24))
+      }}
+  - name: FWK Spunding Active
+    unique_id: fwk_spunding_active
+    state: |
+      {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_spunding_installed', 'off')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and (states('sensor.fwk_batch_age_hours') | float(0) >=
+             states('sensor.recipe_runtime_spunding_after_hours') | float(24))
+      }}
+  - name: FWK Dry Hop Preview
+    unique_id: fwk_dry_hop_preview
+    state: |
+      {% set sg = states('sensor.fwk_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_dry_hop_added', 'off')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and sg > high
+        and sg <= (high + 0.002)
+        and sg >= low
+      }}
+  - name: FWK Dry Hop Active
+    unique_id: fwk_dry_hop_active
+    state: |
+      {% set sg = states('sensor.fwk_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_dry_hop_added', 'off')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and sg <= high
+        and sg >= low
+      }}
+  - name: FWK Cold Crash Preview
+    unique_id: fwk_cold_crash_preview
+    state: |
+      {{
+        is_state('input_boolean.fwk_batch_active', 'on')
+        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.004)
+        and is_state('binary_sensor.fwk_ready_for_cold_crash', 'off')
+      }}
+  - name: FWK Cold Crash Active Card
+    unique_id: fwk_cold_crash_active_card
+    state: |
+      {{
+        is_state('binary_sensor.fwk_ready_for_cold_crash', 'on')
+      }}
+  - name: FWK Transfer Preview
+    unique_id: fwk_transfer_preview
+    state: |
+      {{
+        is_state('input_boolean.fwk_cold_crash_active', 'on')
+        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        and (states('sensor.fwk_cold_crash_days') | float(0) > 0)
+        and (states('sensor.fwk_cold_crash_days') | float(0) <
+             states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
+      }}
+  - name: FWK Transfer Active
+    unique_id: fwk_transfer_active
+    state: |
+      {{
+        is_state('binary_sensor.fwk_ready_for_transfer', 'on')
+      }}
+- sensor:
+  - name: BrewAssistant Smart Liquid Temp
+    unique_id: brewassistant_smart_liquid_temp
+    icon: mdi:thermometer-water
+    unit_of_measurement: °C
+    device_class: temperature
+    state: |
+      {% set e = states('input_text.brewassistant_smart_liquid_temp_entity') %} {% set v = states(e) if e not in ['unknown','unavailable',''] else 'unknown' %} {% if is_number(v) %}
+        {{ v | float | round(2) }}
+      {% else %}
+        unavailable
+      {% endif %}
+  - name: BrewAssistant Smart Chamber Temp
+    unique_id: brewassistant_smart_chamber_temp
+    icon: mdi:thermometer
+    unit_of_measurement: °C
+    device_class: temperature
+    state: |
+      {% set e = states('input_text.brewassistant_smart_chamber_temp_entity') %} {% set v = states(e) if e not in ['unknown','unavailable',''] else 'unknown' %} {% if is_number(v) %}
+        {{ v | float | round(2) }}
+      {% else %}
+        unavailable
+      {% endif %}
+  - name: BrewAssistant Smart Target Temp
+    unique_id: brewassistant_smart_target_temp
+    icon: mdi:target
+    unit_of_measurement: °C
+    device_class: temperature
+    state: |
+      {% set target_entity = states('input_text.brewassistant_smart_recipe_target_entity') %} {% set recipe_target = states(target_entity) if target_entity not in ['unknown','unavailable',''] else 'unknown' %} {% set fallback = states('input_number.brewassistant_smart_target_temp_fallback') %} {% if is_number(recipe_target) %}
+        {{ recipe_target | float | round(2) }}
+      {% elif is_number(fallback) %}
+        {{ fallback | float | round(2) }}
+      {% else %}
+        15.0
+      {% endif %}
+  - name: BrewAssistant Smart Temp Delta
+    unique_id: brewassistant_smart_temp_delta
+    icon: mdi:delta
+    unit_of_measurement: °C
+    state: |
+      {% set temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% if is_number(temp) and is_number(target) %}
+        {{ (temp | float - target | float) | round(2) }}
+      {% else %}
+        unavailable
+      {% endif %}
+  - name: BrewAssistant Smart Temp Rate
+    unique_id: brewassistant_smart_temp_rate
+    icon: mdi:chart-line
+    unit_of_measurement: °C/h
+    state: |
+      {% set now_temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set old_temp = states('input_number.brewassistant_smart_temp_snapshot_30min') %} {% if is_number(now_temp) and is_number(old_temp) %}
+        {{ ((now_temp | float - old_temp | float) * 2) | round(2) }}
+      {% else %}
+        0
+      {% endif %}
+  - name: BrewAssistant Smart Heat Pulse Minutes
+    unique_id: brewassistant_smart_heat_pulse_minutes
+    icon: mdi:timer
+    unit_of_measurement: min
+    state: |
+      {% set delta = states('sensor.brewassistant_smart_temp_delta') | float(0) %} {% set below = 0 - delta %} {% set volume = states('input_number.brewassistant_smart_batch_volume_l') | float(23) %} {% set min_pulse = states('input_number.brewassistant_smart_min_heat_pulse_min') | int(3) %} {% set max_pulse = states('input_number.brewassistant_smart_max_heat_pulse_min') | int(10) %}
+      {% if below <= 0 %}
+        0
+      {% else %}
+        {# Base pulse from temp error #}
+        {% if below >= 1.0 %}
+          {% set base = 8 %}
+        {% elif below >= 0.7 %}
+          {% set base = 6 %}
+        {% elif below >= 0.4 %}
+          {% set base = 5 %}
+        {% else %}
+          {% set base = 3 %}
+        {% endif %}
+
+        {# Volume correction #}
+        {% if volume >= 23 %}
+          {% set vol_add = 2 %}
+        {% elif volume >= 18 %}
+          {% set vol_add = 1 %}
+        {% elif volume <= 10 %}
+          {% set vol_add = -1 %}
+        {% else %}
+          {% set vol_add = 0 %}
+        {% endif %}
+
+        {% set pulse = base + vol_add %}
+        {% if pulse < min_pulse %}
+          {{ min_pulse }}
+        {% elif pulse > max_pulse %}
+          {{ max_pulse }}
+        {% else %}
+          {{ pulse }}
+        {% endif %}
+      {% endif %}
+  - name: BrewAssistant Smart Fermentation Status
+    unique_id: brewassistant_smart_fermentation_status
+    icon: mdi:beer
+    state: |
+      {% set enabled = is_state('input_boolean.brewassistant_smart_fermentation_enabled', 'on') %} {% set mode = states('input_select.brewassistant_smart_fermentation_mode') %} {% set temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% set delta = states('sensor.brewassistant_smart_temp_delta') %} {% set rate = states('sensor.brewassistant_smart_temp_rate') | float(0) %} {% set heat_needed = is_state('binary_sensor.brewassistant_smart_heat_needed', 'on') %} {% set heat_allowed = is_state('binary_sensor.brewassistant_smart_heat_permitted', 'on') %} {% set cooldown = states('timer.brewassistant_smart_heat_cooldown') %}
+      {% if not enabled or mode == 'Off' %}
+        Off
+      {% elif mode == 'Monitor only' %}
+        Monitor only · {{ temp }} °C / {{ target }} °C
+      {% elif not is_number(temp) %}
+        Missing liquid temp
+      {% elif heat_needed and heat_allowed %}
+        Heat ready · {{ temp }} °C / {{ target }} °C · {{ rate }} °C/h
+      {% elif heat_needed and cooldown == 'active' %}
+        Waiting cooldown · {{ temp }} °C / {{ target }} °C
+      {% elif heat_needed %}
+        Heat blocked · {{ temp }} °C / {{ target }} °C
+      {% else %}
+        Stable · {{ temp }} °C / {{ target }} °C · Δ {{ delta }} °C
+      {% endif %}
+  - name: BrewAssistant Smart Fermentation Debug
+    unique_id: brewassistant_smart_fermentation_debug
+    icon: mdi:bug
+    state: |
+      {% set temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% set chamber = states('sensor.brewassistant_smart_chamber_temp') %} {% set delta = states('sensor.brewassistant_smart_temp_delta') %} {% set rate = states('sensor.brewassistant_smart_temp_rate') %} {% set pulse = states('sensor.brewassistant_smart_heat_pulse_minutes') %} {% set volume = states('input_number.brewassistant_smart_batch_volume_l') %} T={{ temp }} Target={{ target }} Δ={{ delta }} Rate={{ rate }}/h Chamber={{ chamber }} Volume={{ volume }}L Pulse={{ pulse }}m
+- binary_sensor:
+  - name: BrewAssistant Smart Heat Needed
+    unique_id: brewassistant_smart_heat_needed
+    icon: mdi:heat-wave
+    state: |
+      {% set temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% set deadband = states('input_number.brewassistant_smart_deadband_low') | float(0.25) %} {% if is_number(temp) and is_number(target) %}
+        {{ temp | float < target | float - deadband }}
+      {% else %}
+        false
+      {% endif %}
+  - name: BrewAssistant Smart Heat Stop Recommended
+    unique_id: brewassistant_smart_heat_stop_recommended
+    icon: mdi:stop-circle
+    state: |
+      {% set temp = states('sensor.brewassistant_smart_liquid_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% set stop_margin = states('input_number.brewassistant_smart_heat_stop_margin') | float(0.10) %} {% if is_number(temp) and is_number(target) %}
+        {{ temp | float >= target | float - stop_margin }}
+      {% else %}
+        true
+      {% endif %}
+  - name: BrewAssistant Smart Rising Too Fast
+    unique_id: brewassistant_smart_rising_too_fast
+    icon: mdi:trending-up
+    state: |
+      {% set rate = states('sensor.brewassistant_smart_temp_rate') | float(0) %} {% set max_rate = states('input_number.brewassistant_smart_max_rising_rate') | float(0.25) %} {{ rate >= max_rate }}
+  - name: BrewAssistant Smart Chamber Too Warm For Heat
+    unique_id: brewassistant_smart_chamber_too_warm_for_heat
+    icon: mdi:shield-alert
+    state: |
+      {% set chamber = states('sensor.brewassistant_smart_chamber_temp') %} {% set target = states('sensor.brewassistant_smart_target_temp') %} {% set offset = states('input_number.brewassistant_smart_chamber_heat_safety_offset') | float(2.0) %} {% if is_number(chamber) and is_number(target) %}
+        {{ chamber | float > target | float + offset }}
+      {% else %}
+        false
+      {% endif %}
+  - name: BrewAssistant Smart Heat Permitted
+    unique_id: brewassistant_smart_heat_permitted
+    icon: mdi:check-decagram
+    state: |
+      {% set enabled = is_state('input_boolean.brewassistant_smart_fermentation_enabled', 'on') %} {% set heat_allowed = is_state('input_boolean.brewassistant_smart_heat_allowed', 'on') %} {% set mode = states('input_select.brewassistant_smart_fermentation_mode') %} {% set cooldown_idle = is_state('timer.brewassistant_smart_heat_cooldown', 'idle') %} {% set heat_needed = is_state('binary_sensor.brewassistant_smart_heat_needed', 'on') %} {% set stop = is_state('binary_sensor.brewassistant_smart_heat_stop_recommended', 'on') %} {% set rising_fast = is_state('binary_sensor.brewassistant_smart_rising_too_fast', 'on') %} {% set chamber_warm = is_state('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat', 'on') %} {% set valid_pulse = states('sensor.brewassistant_smart_heat_pulse_minutes') | int(0) > 0 %} {{
+        enabled
+        and heat_allowed
+        and mode in ['Heat only', 'Auto heat+cool']
+        and cooldown_idle
+        and heat_needed
+        and not stop
+        and not rising_fast
+        and not chamber_warm
+        and valid_pulse
+      }}
+script:
+  fwk_start_batch:
+    alias: FWK - Start Batch
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.fwk_batch_active
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+        - input_boolean.fwk_spunding_installed
+        - input_boolean.fwk_dry_hop_added
+        - input_boolean.fwk_cold_crash_active
+        - input_boolean.fwk_transferred_to_keg
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.fwk_batch_start
+      data:
+        datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.fwk_cold_crash_start
+      data:
+        datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    - action: input_number.set_value
+      target:
+        entity_id:
+        - input_number.fwk_sg_today
+        - input_number.fwk_sg_yesterday
+        - input_number.fwk_sg_two_days_ago
+      data:
+        value: |
+          {% set sg = states('sensor.fwk_live_sg') | float(1.045) %} {{ [1.200, [1.000, sg] | max] | min }}
+  fwk_mark_spunding_installed:
+    alias: FWK - Mark Spunding Installed
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.fwk_spunding_installed
+  fwk_mark_dry_hop_added:
+    alias: FWK - Mark Dry Hop Added
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.fwk_dry_hop_added
+  fwk_start_cold_crash:
+    alias: FWK - Start Cold Crash
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.fwk_cold_crash_active
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.fwk_cold_crash_start
+      data:
+        datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  fwk_mark_transferred_to_keg:
+    alias: FWK - Mark Transferred To Keg
+    sequence:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.fwk_transferred_to_keg
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.fwk_batch_active
+  fwk_reset_batch:
+    alias: FWK - Reset Batch
+    sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+        - input_boolean.fwk_batch_active
+        - input_boolean.fwk_spunding_installed
+        - input_boolean.fwk_dry_hop_added
+        - input_boolean.fwk_cold_crash_active
+        - input_boolean.fwk_transferred_to_keg
+        - input_boolean.fwk_notify_lock
+automation:
+- alias: FWK - Save Daily SG Snapshot
+  id: fwk_save_daily_sg_snapshot
+  trigger:
+  - platform: time
+    at: '12:00:00'
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.fwk_batch_active
+    state: 'on'
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.fwk_sg_two_days_ago
+    data:
+      value: '{{ states(''input_number.fwk_sg_yesterday'') | float(1.009) }}'
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.fwk_sg_yesterday
+    data:
+      value: '{{ states(''input_number.fwk_sg_today'') | float(1.009) }}'
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.fwk_sg_today
+    data:
+      value: |
+        {% set sg = states('sensor.fwk_live_sg') | float(1.009) %} {{ [1.200, [1.000, sg] | max] | min }}
+- alias: FWK - Auto Start Batch From Brewfather
+  id: fwk_auto_start_batch_from_brewfather
+  trigger:
+  - platform: state
+    entity_id: sensor.recipe_runtime_status
+    to: Fermenting
+  - platform: state
+    entity_id: sensor.recipe_runtime_source
+    to: brewfather_all_batches_data
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.fwk_batch_active
+    state: 'off'
+  - condition: state
+    entity_id: sensor.recipe_runtime_source
+    state: brewfather_all_batches_data
+  - condition: state
+    entity_id: sensor.recipe_runtime_status
+    state: Fermenting
+  action:
+  - service: script.fwk_start_batch
+- alias: FWK - Auto Reset After Batch Completed
+  id: fwk_auto_reset_after_batch_completed
+  trigger:
+  - platform: state
+    entity_id: input_boolean.fwk_transferred_to_keg
+    to: 'on'
+    for: '12:00:00'
+  action:
+  - service: script.fwk_reset_batch
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+- alias: BrewAssistant Smart Fermentation - Initialize
+  id: brewassistant_smart_fermentation_initialize
+  mode: single
+  trigger:
+  - platform: homeassistant
+    event: start
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id:
+      - input_boolean.brewassistant_smart_heat_allowed
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.brewassistant_smart_fermentation_mode
+    data:
+      option: Heat only
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+- alias: BrewAssistant Smart Fermentation - Store Temp Snapshot 30 Min
+  id: brewassistant_smart_fermentation_store_temp_snapshot_30min
+  mode: single
+  trigger:
+  - platform: time_pattern
+    minutes: /30
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: template
+    value_template: |
+      {{ is_number(states('sensor.brewassistant_smart_liquid_temp')) }}
+  action:
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.brewassistant_smart_temp_snapshot_30min
+    data:
+      value: '{{ states(''sensor.brewassistant_smart_liquid_temp'') | float }}'
+- alias: BrewAssistant Smart Fermentation - Heat Pulse
+  id: brewassistant_smart_fermentation_heat_pulse
+  mode: single
+  trigger:
+  - platform: time_pattern
+    minutes: /10
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.brewassistant_smart_heat_permitted
+    state: 'on'
+  - condition: template
+    value_template: |
+      {% set heat_entity = states('input_text.brewassistant_smart_heat_switch_entity') %} {{ heat_entity not in ['unknown', 'unavailable', '', none] }}
+  action:
+  - variables:
+      heat_entity: '{{ states(''input_text.brewassistant_smart_heat_switch_entity'') }}'
+      heat_minutes: '{{ states(''sensor.brewassistant_smart_heat_pulse_minutes'') | int(3) }}'
+      cooldown_minutes: '{{ states(''input_number.brewassistant_smart_heat_cooldown_min'') | int(12) }}'
+  - service: switch.turn_on
+    data:
+      entity_id: '{{ heat_entity }}'
+  - delay:
+      minutes: '{{ heat_minutes }}'
+  - service: switch.turn_off
+    data:
+      entity_id: '{{ heat_entity }}'
+  - service: timer.start
+    target:
+      entity_id: timer.brewassistant_smart_heat_cooldown
+    data:
+      duration: |
+        00:{{ '%02d' | format(cooldown_minutes) }}:00
+- alias: BrewAssistant Smart Fermentation - Safety Stop Heat At Target
+  id: brewassistant_smart_fermentation_safety_stop_heat_at_target
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.brewassistant_smart_heat_stop_recommended
+    to: 'on'
+  - platform: state
+    entity_id: binary_sensor.brewassistant_smart_rising_too_fast
+    to: 'on'
+  - platform: state
+    entity_id: binary_sensor.brewassistant_smart_chamber_too_warm_for_heat
+    to: 'on'
+  - platform: state
+    entity_id: input_boolean.brewassistant_smart_fermentation_enabled
+    to: 'off'
+  - platform: state
+    entity_id: input_boolean.brewassistant_smart_heat_allowed
+    to: 'off'
+  - platform: state
+    entity_id: input_select.brewassistant_smart_fermentation_mode
+    to: 'Off'
+  - platform: state
+    entity_id: input_select.brewassistant_smart_fermentation_mode
+    to: Monitor only
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: template
+    value_template: |
+      {% set heat_entity = states('input_text.brewassistant_smart_heat_switch_entity') %} {{ heat_entity not in ['unknown', 'unavailable', '', none] }}
+  action:
+  - variables:
+      heat_entity: '{{ states(''input_text.brewassistant_smart_heat_switch_entity'') }}'
+  - service: switch.turn_off
+    data:
+      entity_id: '{{ heat_entity }}'
+- alias: BrewAssistant Smart Fermentation - Debug Heat Blocked
+  id: brewassistant_smart_fermentation_debug_heat_blocked
+  mode: single
+  trigger:
+  - platform: time_pattern
+    minutes: /30
+  condition:
+  - condition: state
+    entity_id: input_boolean.brewassistant_fermentation_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.brewassistant_smart_debug
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.brewassistant_smart_heat_needed
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.brewassistant_smart_heat_permitted
+    state: 'off'
+  action:
+  - service: persistent_notification.create
+    data:
+      title: BrewAssistant Smart Fermentation
+      message: |
+        Heat is needed but currently blocked.
+        Status: {{ states('sensor.brewassistant_smart_fermentation_debug') }}
+        Checks: Enabled: {{ states('input_boolean.brewassistant_smart_fermentation_enabled') }} Heat allowed: {{ states('input_boolean.brewassistant_smart_heat_allowed') }} Mode: {{ states('input_select.brewassistant_smart_fermentation_mode') }} Cooldown: {{ states('timer.brewassistant_smart_heat_cooldown') }} Stop recommended: {{ states('binary_sensor.brewassistant_smart_heat_stop_recommended') }} Rising too fast: {{ states('binary_sensor.brewassistant_smart_rising_too_fast') }} Chamber too warm: {{ states('binary_sensor.brewassistant_smart_chamber_too_warm_for_heat') }}
