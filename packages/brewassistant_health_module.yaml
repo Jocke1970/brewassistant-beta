@@ -1,0 +1,247 @@
+###############################################################################
+# BrewAssistant v4 - Health
+# Self-contained module package.
+# Entity names are intentionally preserved from the uploaded v3 files.
+# UI/dashboard YAML should live separately from packages.
+###############################################################################
+
+input_boolean:
+  brewassistant_maintenance_mode:
+    name: BrewAssistant Maintenance Mode
+    icon: mdi:wrench-clock
+  brewassistant_manual_override:
+    name: BrewAssistant Manual Override
+    icon: mdi:hand-back-right-outline
+  brewassistant_health_enabled:
+    name: BrewAssistant Health Enabled
+    icon: mdi:heart-pulse
+    initial: true
+input_text:
+  brewassistant_last_problem_reason:
+    name: BrewAssistant Last Problem Reason
+    icon: mdi:alert-circle-outline
+    max: 255
+counter:
+  brewassistant_problem_counter:
+    name: BrewAssistant Problem Counter
+    icon: mdi:counter
+    initial: 0
+    step: 1
+input_button:
+  brewassistant_acknowledge_problem:
+    name: BrewAssistant Acknowledge Problem
+    icon: mdi:check-circle-outline
+template:
+- binary_sensor:
+  - name: Kegerator Compressor Active
+    unique_id: kegerator_compressor_active
+    icon: mdi:snowflake
+    state: |
+      {% set p = states('sensor.brewassistant_kegerator_power_w') %} {% if is_number(p) %}
+        {{ p | float > 20 }}
+      {% else %}
+        false
+      {% endif %}
+    attributes:
+      power_w: '{{ states(''sensor.brewassistant_kegerator_power_w'') }}'
+      threshold_w: 20
+- sensor:
+  - name: BrewAssistant Kegerator Power W
+    unique_id: brewassistant_kegerator_power_w
+    icon: mdi:flash
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    state: |
+      {% set candidates = [
+        states('sensor.extra_koksmaskin_switch_0_power'),
+        states('sensor.kegerator_power'),
+        states('sensor.kegerator_power_w'),
+        states('sensor.kegerator_current_power'),
+        states('sensor.kegerator_energy_power')
+      ] %} {% set ns = namespace(value='unavailable') %} {% for v in candidates %}
+        {% if ns.value == 'unavailable' and is_number(v) %}
+          {% set ns.value = v | float | round(1) %}
+        {% endif %}
+      {% endfor %} {{ ns.value }}
+  - name: BrewAssistant Problem Count
+    unique_id: brewassistant_problem_count
+    icon: mdi:alert-circle-outline
+    state: |
+      {% set ns = namespace(count=0) %}
+      {% set ok_entities = [
+        'binary_sensor.brewassistant_kegerator_power_sensor_ok',
+        'binary_sensor.brewassistant_kegerator_temperature_sensor_ok',
+        'binary_sensor.brewassistant_kegerator_climate_ok',
+        'binary_sensor.brewassistant_fermentation_chamber_ok',
+        'binary_sensor.brewassistant_rapt_pill_temperature_ok',
+        'binary_sensor.brewassistant_rapt_pill_gravity_ok',
+        'binary_sensor.brewassistant_brewfather_batch_ok'
+      ] %}
+      {% set warning_entities = [
+        'binary_sensor.brewassistant_kegerator_too_warm',
+        'binary_sensor.brewassistant_kegerator_too_cold',
+        'binary_sensor.brewassistant_fermentation_chamber_too_warm',
+        'binary_sensor.brewassistant_fermentation_chamber_too_cold',
+        'binary_sensor.brewassistant_compressor_running_long',
+        'binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low'
+      ] %}
+      {% for e in ok_entities %}
+        {% if states(e) in ['off', 'unknown', 'unavailable'] %}
+          {% set ns.count = ns.count + 1 %}
+        {% endif %}
+      {% endfor %}
+      {% for e in warning_entities %}
+        {% if states(e) == 'on' %}
+          {% set ns.count = ns.count + 1 %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.count }}
+  - name: BrewAssistant Health Status
+    unique_id: brewassistant_health_status
+    icon: mdi:heart-pulse
+    state: |
+      {% set count = states('sensor.brewassistant_problem_count') | int(0) %} {% if count == 0 %}
+        OK
+      {% elif count <= 2 %}
+        Warning
+      {% else %}
+        Critical
+      {% endif %}
+    attributes:
+      problem_count: '{{ states(''sensor.brewassistant_problem_count'') }}'
+      kegerator_power_sensor_ok: '{{ states(''binary_sensor.brewassistant_kegerator_power_sensor_ok'') }}'
+      kegerator_temperature_sensor_ok: '{{ states(''binary_sensor.brewassistant_kegerator_temperature_sensor_ok'') }}'
+      kegerator_climate_ok: '{{ states(''binary_sensor.brewassistant_kegerator_climate_ok'') }}'
+      fermentation_chamber_ok: '{{ states(''binary_sensor.brewassistant_fermentation_chamber_ok'') }}'
+      rapt_pill_temperature_ok: '{{ states(''binary_sensor.brewassistant_rapt_pill_temperature_ok'') }}'
+      rapt_pill_gravity_ok: '{{ states(''binary_sensor.brewassistant_rapt_pill_gravity_ok'') }}'
+      brewfather_batch_ok: '{{ states(''binary_sensor.brewassistant_brewfather_batch_ok'') }}'
+- binary_sensor:
+  - name: BrewAssistant Kegerator Power Sensor OK
+    unique_id: brewassistant_kegerator_power_sensor_ok
+    icon: mdi:flash-check
+    state: |
+      {% set power = states('sensor.brewassistant_kegerator_power_w') %} {{ is_number(power) }}
+  - name: BrewAssistant Kegerator Temperature Sensor OK
+    unique_id: brewassistant_kegerator_temperature_sensor_ok
+    icon: mdi:thermometer-check
+    state: |
+      {% set v = states('sensor.kyl_temperatur_4') %} {{ is_number(v) }}
+  - name: BrewAssistant Kegerator Climate OK
+    unique_id: brewassistant_kegerator_climate_ok
+    icon: mdi:fridge-industrial
+    state: |
+      {{ states('climate.kegerator_kylskap') not in ['unknown', 'unavailable', 'none', '', none] }}
+  - name: BrewAssistant Kegerator Too Warm
+    unique_id: brewassistant_kegerator_too_warm
+    icon: mdi:thermometer-alert
+    state: |
+      {% set current = state_attr('climate.kegerator_kylskap', 'current_temperature') %} {% set fallback = states('sensor.kyl_temperatur_4') %} {% set target = state_attr('climate.kegerator_kylskap', 'temperature') %} {% set current_value = current if current is number else fallback %} {% if is_number(current_value) and target is number %}
+        {{ current_value | float > target | float + 2.0 }}
+      {% else %}
+        false
+      {% endif %}
+  - name: BrewAssistant Kegerator Too Cold
+    unique_id: brewassistant_kegerator_too_cold
+    icon: mdi:snowflake-alert
+    state: |
+      {% set current = state_attr('climate.kegerator_kylskap', 'current_temperature') %} {% set fallback = states('sensor.kyl_temperatur_4') %} {% set target = state_attr('climate.kegerator_kylskap', 'temperature') %} {% set current_value = current if current is number else fallback %} {% if is_number(current_value) and target is number %}
+        {{ current_value | float < target | float - 2.0 }}
+      {% else %}
+        false
+      {% endif %}
+  - name: BrewAssistant Kegerator Temperature Sensor Battery Low
+    unique_id: brewassistant_kegerator_temperature_sensor_battery_low
+    icon: mdi:battery-alert
+    state: |
+      {% set b = states('sensor.kyl_batteri_4') %} {% if is_number(b) %}
+        {{ b | float < 20 }}
+      {% else %}
+        false
+      {% endif %}
+  - name: BrewAssistant Fermentation Chamber OK
+    unique_id: brewassistant_fermentation_chamber_ok
+    icon: mdi:thermostat
+    state: |
+      {{ states('climate.fermentation_chamber') not in ['unknown', 'unavailable', 'none', '', none] }}
+  - name: BrewAssistant Fermentation Chamber Too Warm
+    unique_id: brewassistant_fermentation_chamber_too_warm
+    icon: mdi:thermometer-alert
+    state: |
+      {% set chamber_state = states('climate.fermentation_chamber') %} {% if chamber_state in ['off', 'unknown', 'unavailable', 'none', '', none] %}
+        false
+      {% else %}
+        {% set current = state_attr('climate.fermentation_chamber', 'current_temperature') %}
+        {% set high = state_attr('climate.fermentation_chamber', 'target_temp_high') %}
+        {% set single = state_attr('climate.fermentation_chamber', 'temperature') %}
+        {% set target_high = high if high is number else single %}
+        {% if current is number and target_high is number %}
+          {{ current | float > target_high | float + 1.5 }}
+        {% else %}
+          false
+        {% endif %}
+      {% endif %}
+  - name: BrewAssistant Fermentation Chamber Too Cold
+    unique_id: brewassistant_fermentation_chamber_too_cold
+    icon: mdi:snowflake-alert
+    state: |
+      {% set chamber_state = states('climate.fermentation_chamber') %} {% if chamber_state in ['off', 'unknown', 'unavailable', 'none', '', none] %}
+        false
+      {% else %}
+        {% set current = state_attr('climate.fermentation_chamber', 'current_temperature') %}
+        {% set low = state_attr('climate.fermentation_chamber', 'target_temp_low') %}
+        {% set single = state_attr('climate.fermentation_chamber', 'temperature') %}
+        {% set target_low = low if low is number else single %}
+        {% if current is number and target_low is number %}
+          {{ current | float < target_low | float - 1.5 }}
+        {% else %}
+          false
+        {% endif %}
+      {% endif %}
+  - name: BrewAssistant RAPT Pill Temperature OK
+    unique_id: brewassistant_rapt_pill_temperature_ok
+    icon: mdi:thermometer-check
+    state: |
+      {% set v = states('sensor.yellow_pill_temperature') %} {{ is_number(v) }}
+  - name: BrewAssistant RAPT Pill Gravity OK
+    unique_id: brewassistant_rapt_pill_gravity_ok
+    icon: mdi:chart-line
+    state: |
+      {% set candidates = [
+        states('sensor.yellow_pill_specific_gravity'),
+        states('sensor.yellow_pill_gravity_2'),
+        states('sensor.yellow_pill_gravity')
+      ] %} {% set ns = namespace(ok=false) %} {% for v in candidates %}
+        {% if is_number(v) %}
+          {% set ns.ok = true %}
+        {% endif %}
+      {% endfor %} {{ ns.ok }}
+  - name: BrewAssistant Brewfather Batch OK
+    unique_id: brewassistant_brewfather_batch_ok
+    icon: mdi:beer
+    state: |
+      {% set recipe = states('sensor.brewfather_recipe_name') %} {% set runtime_recipe = states('sensor.recipe_runtime_name') %} {% set batch_data = state_attr('sensor.brewfather_all_batches_data', 'data') %} {{
+        recipe not in ['unknown', 'unavailable', '', none]
+        or runtime_recipe not in ['unknown', 'unavailable', '', none]
+        or (batch_data is sequence and batch_data | count > 0)
+      }}
+    attributes:
+      recipe_name: '{{ states(''sensor.brewfather_recipe_name'') }}'
+      runtime_recipe_name: '{{ states(''sensor.recipe_runtime_name'') }}'
+      reason: |
+        {% set recipe = states('sensor.brewfather_recipe_name') %} {% set runtime_recipe = states('sensor.recipe_runtime_name') %} {% set batch_data = state_attr('sensor.brewfather_all_batches_data', 'data') %} {% if recipe not in ['unknown', 'unavailable', '', none] %}
+          Brewfather recipe available
+        {% elif runtime_recipe not in ['unknown', 'unavailable', '', none] %}
+          Runtime recipe available
+        {% elif batch_data is sequence and batch_data | count > 0 %}
+          Brewfather batch data available
+        {% else %}
+          No active Brewfather/runtime batch found
+        {% endif %}
+  - name: BrewAssistant Compressor Running Long
+    unique_id: brewassistant_compressor_running_long
+    icon: mdi:alert
+    delay_on: 00:45:00
+    state: |
+      {{ is_state('binary_sensor.kegerator_compressor_active', 'on') }}
