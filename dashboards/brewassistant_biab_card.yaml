@@ -66,310 +66,23 @@ cards:
                 background: rgba(255,255,255,0.05) !important;
                 box-shadow: none !important;
               }
+        - type: custom:mushroom-template-card
+          primary: Current instruction
+          secondary: "{{ states('sensor.brewassistant_biab_step_notification_message') }}"
+          icon: mdi:arrow-right-bold-circle
+          multiline_secondary: true
+          card_mod:
+            style: |
+              ha-card {
+                border-radius: 18px !important;
+                margin: 8px 8px 0 8px !important;
+                background: rgba(255,255,255,0.05) !important;
+                box-shadow: none !important;
+              }
               mushroom-state-info {
                 --card-primary-color: white;
                 --card-secondary-color: rgba(255,255,255,0.72);
-              }
-        - type: custom:vertical-stack-in-card
-          cards:
-            - type: custom:button-card
-              name: BIAB Calculations
-              icon: mdi:calculator-variant
-              show_state: false
-              show_label: true
-              label: |
-                [[[
-                  const model = states['input_select.brewassistant_biab_model']?.state ?? 'Unknown';
-                  const malt = states['input_number.brewassistant_biab_malt_weight_kg']?.state ?? '0';
-                  const pre = states['input_number.brewassistant_biab_pre_boil_volume_l']?.state ?? '0';
-                  const mash = states['sensor.brewassistant_biab_mash_water_l']?.state ?? '0';
-                  const sparge = states['sensor.brewassistant_biab_sparge_water_l']?.state ?? '0';
-
-                  return `${model} · Malt ${malt} kg · Pre-boil ${pre} L\nMash water ${mash} L · Sparge ${sparge} L`;
-                ]]]
-              styles:
-                card:
-                  - border-radius: 20px
-                  - padding: 16px
-                  - color: white
-                  - background: >-
-                      linear-gradient(135deg, rgba(255,126,45,0.22),
-                      rgba(20,24,31,0.96))
-                  - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
-                grid:
-                  - grid-template-areas: "\"i n\" \"i l\""
-                  - grid-template-columns: 44px 1fr
-                icon:
-                  - width: 34px
-                  - color: "#ff9f43"
-                name:
-                  - font-size: 19px
-                  - font-weight: 800
-                  - justify-self: start
-                label:
-                  - white-space: pre-line
-                  - font-size: 13px
-                  - opacity: 0.9
-                  - justify-self: start
-            - type: grid
-              columns: 1
-              square: false
-              cards:
-                - type: custom:mushroom-select-card
-                  entity: input_select.brewassistant_biab_model
-                  name: DigiBoil model
-                  icon: mdi:kettle
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.65);
-                      }
-                      ha-select, mwc-select {
-                        --mdc-theme-primary: #ff9f43 !important;
-                        --mdc-select-fill-color: rgba(255,255,255,0.08) !important;
-                        --mdc-select-ink-color: white !important;
-                        --mdc-select-label-ink-color: rgba(255,255,255,0.65) !important;
-                      }
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_malt_weight_kg
-                  name: Malt weight
-                  icon: mdi:grain
-                  display_mode: buttons
-                  layout: horizontal
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.65);
-                      }
-                      ha-textfield {
-                        --mdc-text-field-fill-color: rgba(255,255,255,0.09) !important;
-                        --mdc-text-field-ink-color: white !important;
-                        --mdc-text-field-label-ink-color: rgba(255,255,255,0.65) !important;
-                        --mdc-theme-primary: #ff9f43 !important;
-                      }
-                      ha-textfield input {
-                        color: white !important;
-                      }
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_pre_boil_volume_l
-                  name: Pre-boil volume
-                  icon: mdi:kettle-steam
-                  display_mode: buttons
-                  layout: horizontal
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.65);
-                      }
-                      ha-textfield {
-                        --mdc-text-field-fill-color: rgba(255,255,255,0.09) !important;
-                        --mdc-text-field-ink-color: white !important;
-                        --mdc-text-field-label-ink-color: rgba(255,255,255,0.65) !important;
-                        --mdc-theme-primary: #ff9f43 !important;
-                      }
-                      ha-textfield input {
-                        color: white !important;
-                      }
-                - type: custom:mushroom-template-card
-                  primary: Mash water
-                  secondary: "{{ states('sensor.brewassistant_biab_mash_water_l') }} L"
-                  icon: mdi:water
-                  icon_color: blue
-                  layout: horizontal
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.75);
-                      }
-                - type: custom:mushroom-template-card
-                  primary: Sparge water
-                  secondary: "{{ states('sensor.brewassistant_biab_sparge_water_l') }} L"
-                  icon: mdi:shower-head
-                  icon_color: cyan
-                  layout: horizontal
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.75);
-                      }
-                - type: custom:mushroom-template-card
-                  primary: Total water
-                  secondary: |
-                    {{ 
-                      (
-                        states('sensor.brewassistant_biab_mash_water_l') | float(0) +
-                        states('sensor.brewassistant_biab_sparge_water_l') | float(0)
-                      ) | round(1)
-                    }} L
-                  icon: mdi:waves-arrow-up
-                  icon_color: amber
-                  layout: horizontal
-                  card_mod:
-                    style: |
-                      ha-card {
-                        border-radius: 18px !important;
-                        background: rgba(255,255,255,0.06) !important;
-                        box-shadow: none !important;
-                      }
-                      mushroom-state-info {
-                        --card-primary-color: white;
-                        --card-secondary-color: rgba(255,255,255,0.75);
-                      }
-            - type: custom:button-card
-              name: Water Formula
-              icon: mdi:flask-outline
-              show_state: false
-              show_label: true
-              label: |
-                [[[
-                  const model = states['input_select.brewassistant_biab_model']?.state ?? 'DigiBoil 35';
-                  if (model === 'DigiBoil 65') {
-                    return 'Mash water = malt kg × 2.3 + 5\nSparge = pre-boil + malt kg − mash water';
-                  }
-                  return 'Mash water = malt kg × 2 + 5\nSparge = pre-boil + malt kg − mash water';
-                ]]]
-              styles:
-                card:
-                  - margin-top: 4px
-                  - border-radius: 18px
-                  - padding: 14px
-                  - color: white
-                  - background: rgba(255,255,255,0.045)
-                  - box-shadow: none
-                grid:
-                  - grid-template-areas: "\"i n\" \"i l\""
-                  - grid-template-columns: 38px 1fr
-                icon:
-                  - width: 28px
-                  - color: "#ff9f43"
-                name:
-                  - font-size: 15px
-                  - font-weight: 700
-                  - justify-self: start
-                label:
-                  - white-space: pre-line
-                  - font-size: 12px
-                  - opacity: 0.8
-                  - justify-self: start
-          card_mod:
-            style: |
-              ha-card {
-                border-radius: 22px !important;
-                margin: 8px !important;
-                padding: 10px !important;
-                background: linear-gradient(180deg, rgba(24,27,34,0.98), rgba(12,14,18,0.98)) !important;
-                box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-              }
-        - type: custom:vertical-stack-in-card
-          cards:
-            - type: custom:button-card
-              name: BIAB Step Timer
-              icon: mdi:timer-outline
-              show_state: false
-              show_label: true
-              label: |
-                [[[
-                  const summary = states['sensor.brewassistant_biab_timer_summary']?.state ?? 'No timer';
-                  const remaining = states['timer.brewassistant_biab_step_timer']?.attributes?.remaining ?? '—';
-                  const finishes = states['timer.brewassistant_biab_step_timer']?.attributes?.finishes_at ?? '';
-                  return `${summary}\nRemaining: ${remaining}`;
-                ]]]
-              styles:
-                card:
-                  - border-radius: 20px
-                  - padding: 16px
-                  - color: white
-                  - background: linear-gradient(135deg, rgba(50,70,95,0.95), rgba(15,18,24,0.98))
-                  - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
-                grid:
-                  - grid-template-areas: '"i n" "i l"'
-                  - grid-template-columns: 44px 1fr
-                icon:
-                  - width: 34px
-                  - color: "#00bcd4"
-                name:
-                  - font-size: 18px
-                  - font-weight: 800
-                  - justify-self: start
-                label:
-                  - white-space: pre-line
-                  - font-size: 13px
-                  - opacity: 0.9
-                  - justify-self: start
-
-            - type: grid
-              columns: 1
-              square: false
-              cards:
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_mash_minutes
-                  name: Mash timer
-                  icon: mdi:barley
-                  display_mode: buttons
-                  layout: horizontal
-
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_mashout_minutes
-                  name: Mash-out timer
-                  icon: mdi:thermometer-chevron-up
-                  display_mode: buttons
-                  layout: horizontal
-
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_boil_minutes
-                  name: Boil timer
-                  icon: mdi:fire
-                  display_mode: buttons
-                  layout: horizontal
-
-                - type: custom:mushroom-number-card
-                  entity: input_number.brewassistant_biab_cooling_minutes
-                  name: Cooling estimate
-                  icon: mdi:snowflake
-                  display_mode: buttons
-                  layout: horizontal
-          card_mod:
-            style: |
-              ha-card {
-                margin: 8px !important;
-                padding: 10px !important;
-                border-radius: 22px !important;
-                background: linear-gradient(180deg, rgba(24,27,34,0.98), rgba(12,14,18,0.98)) !important;
-                box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-              }
-        - type: conditional
+              }        - type: conditional
           conditions:
             - entity: sensor.brewassistant_biab_warning_level
               state_not: ok
@@ -422,6 +135,258 @@ cards:
                 - font-size: 13px
                 - justify-self: start
         - type: custom:expander-card
+          title: BIAB Calculations
+          clear: false
+          cards:
+            - type: custom:vertical-stack-in-card
+              cards:
+                - type: custom:button-card
+                  name: BIAB Calculations
+                  icon: mdi:calculator-variant
+                  show_state: false
+                  show_label: true
+                  label: |
+                    [[[
+                      const model = states['input_select.brewassistant_biab_model']?.state ?? 'Unknown';
+                      const malt = states['input_number.brewassistant_biab_malt_weight_kg']?.state ?? '0';
+                      const pre = states['input_number.brewassistant_biab_pre_boil_volume_l']?.state ?? '0';
+                      const mash = states['sensor.brewassistant_biab_mash_water_l']?.state ?? '0';
+                      const sparge = states['sensor.brewassistant_biab_sparge_water_l']?.state ?? '0';
+                      return `${model} · Malt ${malt} kg · Pre-boil ${pre} L\nMash water ${mash} L · Sparge ${sparge} L`;
+                    ]]]
+                  styles:
+                    card:
+                      - border-radius: 20px
+                      - padding: 16px
+                      - color: white
+                      - background: >-
+                          linear-gradient(135deg, rgba(255,126,45,0.22),
+                          rgba(20,24,31,0.96))
+                      - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 44px 1fr
+                    icon:
+                      - width: 34px
+                      - color: "#ff9f43"
+                    name:
+                      - font-size: 19px
+                      - font-weight: 800
+                      - justify-self: start
+                    label:
+                      - white-space: pre-line
+                      - font-size: 13px
+                      - opacity: 0.9
+                      - justify-self: start
+                - type: grid
+                  columns: 1
+                  square: false
+                  cards:
+                    - type: custom:mushroom-select-card
+                      entity: input_select.brewassistant_biab_model
+                      name: DigiBoil model
+                      icon: mdi:kettle
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_malt_weight_kg
+                      name: Malt weight
+                      icon: mdi:grain
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_pre_boil_volume_l
+                      name: Pre-boil volume
+                      icon: mdi:kettle-steam
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-template-card
+                      primary: Mash water
+                      secondary: "{{ states('sensor.brewassistant_biab_mash_water_l') }} L"
+                      icon: mdi:water
+                      icon_color: blue
+                      layout: horizontal
+                    - type: custom:mushroom-template-card
+                      primary: Sparge water
+                      secondary: >-
+                        {{ states('sensor.brewassistant_biab_sparge_water_l') }}
+                        L
+                      icon: mdi:shower-head
+                      icon_color: cyan
+                      layout: horizontal
+                    - type: custom:mushroom-template-card
+                      primary: Total water
+                      secondary: |
+                        {{ 
+                          (
+                            states('sensor.brewassistant_biab_mash_water_l') | float(0) +
+                            states('sensor.brewassistant_biab_sparge_water_l') | float(0)
+                          ) | round(1)
+                        }} L
+                      icon: mdi:waves-arrow-up
+                      icon_color: amber
+                      layout: horizontal
+                - type: custom:button-card
+                  name: Water Formula
+                  icon: mdi:flask-outline
+                  show_state: false
+                  show_label: true
+                  label: |
+                    [[[
+                      const model = states['input_select.brewassistant_biab_model']?.state ?? 'DigiBoil 35';
+                      if (model === 'DigiBoil 65') {
+                        return 'Mash water = malt kg × 2.3 + 5\nSparge = pre-boil + malt kg − mash water';
+                      }
+                      return 'Mash water = malt kg × 2 + 5\nSparge = pre-boil + malt kg − mash water';
+                    ]]]
+                  styles:
+                    card:
+                      - margin-top: 4px
+                      - border-radius: 18px
+                      - padding: 14px
+                      - color: white
+                      - background: rgba(255,255,255,0.045)
+                      - box-shadow: none
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 38px 1fr
+                    icon:
+                      - width: 28px
+                      - color: "#ff9f43"
+                    name:
+                      - font-size: 15px
+                      - font-weight: 700
+                      - justify-self: start
+                    label:
+                      - white-space: pre-line
+                      - font-size: 12px
+                      - opacity: 0.8
+                      - justify-self: start
+              card_mod:
+                style: |
+                  ha-card {
+                    border-radius: 22px !important;
+                    margin: 8px !important;
+                    padding: 10px !important;
+                    background: linear-gradient(180deg, rgba(24,27,34,0.98), rgba(12,14,18,0.98)) !important;
+                    box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
+                    border: 1px solid rgba(255,255,255,0.08) !important;
+                  }
+        - type: custom:expander-card
+          title: BIAB Timers & Temperatures
+          clear: false
+          cards:
+            - type: custom:vertical-stack-in-card
+              cards:
+                - type: custom:button-card
+                  name: BIAB Timers & Temperatures
+                  icon: mdi:thermometer-lines
+                  show_state: false
+                  show_label: true
+                  label: |
+                    [[[
+                      const summary = states['sensor.brewassistant_biab_timer_summary']?.state ?? 'No timer';
+                      const remaining = states['timer.brewassistant_biab_step_timer']?.attributes?.remaining ?? '—';
+
+                      const strike = states['input_number.brewassistant_biab_strike_temp_c']?.state ?? '—';
+                      const mash = states['input_number.brewassistant_biab_mash_temp_c']?.state ?? '—';
+                      const mashout = states['input_number.brewassistant_biab_mashout_temp_c']?.state ?? '—';
+                      const sparge = states['input_number.brewassistant_biab_sparge_temp_c']?.state ?? '—';
+                      const chill = states['input_number.brewassistant_biab_cooling_target_temp_c']?.state ?? '—';
+
+                      return `${summary}\nRemaining: ${remaining}\nStrike ${strike}°C · Mash ${mash}°C · Mash-out ${mashout}°C\nSparge ${sparge}°C · Chill target ${chill}°C`;
+                    ]]]
+                  styles:
+                    card:
+                      - border-radius: 20px
+                      - padding: 16px
+                      - color: white
+                      - background: >-
+                          linear-gradient(135deg, rgba(50,70,95,0.95),
+                          rgba(15,18,24,0.98))
+                      - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 44px 1fr
+                    icon:
+                      - width: 34px
+                      - color: "#00bcd4"
+                    name:
+                      - font-size: 18px
+                      - font-weight: 800
+                      - justify-self: start
+                    label:
+                      - white-space: pre-line
+                      - font-size: 13px
+                      - opacity: 0.9
+                      - justify-self: start
+                - type: grid
+                  columns: 1
+                  square: false
+                  cards:
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_mash_minutes
+                      name: Mash timer
+                      icon: mdi:barley
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_mashout_minutes
+                      name: Mash-out timer
+                      icon: mdi:timer-sand
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_boil_minutes
+                      name: Boil timer
+                      icon: mdi:fire
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_cooling_minutes
+                      name: Cooling estimate
+                      icon: mdi:snowflake
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_strike_temp_c
+                      name: Strike temperature
+                      icon: mdi:thermometer-chevron-up
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_mash_temp_c
+                      name: Mash temperature
+                      icon: mdi:thermometer
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_mashout_temp_c
+                      name: Mash-out temperature
+                      icon: mdi:thermometer-high
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_sparge_temp_c
+                      name: Sparge water temperature
+                      icon: mdi:shower-head
+                      display_mode: buttons
+                      layout: horizontal
+                    - type: custom:mushroom-number-card
+                      entity: input_number.brewassistant_biab_cooling_target_temp_c
+                      name: Cooling target temperature
+                      icon: mdi:snowflake-thermometer
+                      display_mode: buttons
+                      layout: horizontal
+              card_mod:
+                style: |
+                  ha-card {
+                    margin: 8px !important;
+                    padding: 10px !important;
+                    border-radius: 22px !important;
+                    background: linear-gradient(180deg, rgba(24,27,34,0.98), rgba(12,14,18,0.98)) !important;
+                    box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
+                    border: 1px solid rgba(255,255,255,0.08) !important;
+                  }
+        - type: custom:expander-card
           title: BIAB Checklist
           clear: false
           cards:
@@ -441,12 +406,3 @@ cards:
                   name: ❄️ Cooling
                 - entity: input_boolean.brewassistant_biab_step_transfer
                   name: 🧪 Transfer to fermenter
-          card_mod:
-            style: |
-              ha-card {
-                margin: 8px !important;
-                border-radius: 18px !important;
-                background: rgba(255,255,255,0.04) !important;
-                box-shadow: none !important;
-                border: 1px solid rgba(255,255,255,0.06) !important;
-              }
