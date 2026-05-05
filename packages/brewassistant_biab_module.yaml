@@ -35,6 +35,7 @@ input_boolean:
   brewassistant_biab_step_transfer:
     name: BIAB - Transfer to fermenter
     icon: mdi:bucket-outline
+###############################################################################
 
 input_number:
   brewassistant_biab_step:
@@ -72,6 +73,107 @@ input_number:
     unit_of_measurement: L
     icon: mdi:kettle-steam
 
+  brewassistant_biab_strike_temp_c:
+    name: BIAB Strike Temperature
+    min: 30
+    max: 85
+    step: 0.5
+    mode: box
+    initial: 72
+    unit_of_measurement: °C
+    icon: mdi:thermometer-chevron-up
+
+  brewassistant_biab_mash_temp_c:
+    name: BIAB Mash Temperature
+    min: 50
+    max: 75
+    step: 0.5
+    mode: box
+    initial: 66
+    unit_of_measurement: °C
+    icon: mdi:thermometer
+
+  brewassistant_biab_mashout_temp_c:
+    name: BIAB Mash-out Temperature
+    min: 70
+    max: 82
+    step: 0.5
+    mode: box
+    initial: 78
+    unit_of_measurement: °C
+    icon: mdi:thermometer-high
+
+  brewassistant_biab_sparge_temp_c:
+    name: BIAB Sparge Water Temperature
+    min: 70
+    max: 85
+    step: 0.5
+    mode: box
+    initial: 78
+    unit_of_measurement: °C
+    icon: mdi:shower-head
+
+  brewassistant_biab_cooling_target_temp_c:
+    name: BIAB Cooling Target Temperature
+    min: 5
+    max: 35
+    step: 0.5
+    mode: box
+    initial: 20
+    unit_of_measurement: °C
+    icon: mdi:snowflake-thermometer
+
+###############################################################################
+# BIAB Step Timers
+###############################################################################
+
+  brewassistant_biab_mash_minutes:
+    name: BIAB Mash Minutes
+    min: 1
+    max: 180
+    step: 1
+    mode: box
+    initial: 60
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+
+  brewassistant_biab_mashout_minutes:
+    name: BIAB Mash-out Minutes
+    min: 1
+    max: 60
+    step: 1
+    mode: box
+    initial: 15
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+
+  brewassistant_biab_boil_minutes:
+    name: BIAB Boil Minutes
+    min: 1
+    max: 180
+    step: 1
+    mode: box
+    initial: 60
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+
+  brewassistant_biab_cooling_minutes:
+    name: BIAB Cooling Target Minutes
+    min: 1
+    max: 90
+    step: 1
+    mode: box
+    initial: 30
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+###############################################################################
+
+timer:
+  brewassistant_biab_step_timer:
+    name: BIAB Step Timer
+    restore: true
+###############################################################################
+
 input_select:
   brewassistant_biab_model:
     name: BIAB DigiBoil Model
@@ -79,6 +181,7 @@ input_select:
     options:
       - DigiBoil 35
       - DigiBoil 65
+###############################################################################
 
 template:
   - sensor:
@@ -170,6 +273,141 @@ template:
           {% else %}
             Välj första steg när bryggdagen startar.
           {% endif %}
+      - name: brewassistant_biab_warning_level
+        unique_id: brewassistant_biab_warning_level
+        icon: mdi:alert-circle
+        state: >
+          {% set active = is_state('input_boolean.brewassistant_biab_active', 'on') %}
+          {% set malt = states('input_number.brewassistant_biab_malt_weight_kg') | float(0) %}
+          {% set preboil = states('input_number.brewassistant_biab_pre_boil_volume_l') | float(0) %}
+          {% set mash = states('sensor.brewassistant_biab_mash_water_l') | float(0) %}
+          {% set sparge = states('sensor.brewassistant_biab_sparge_water_l') | float(0) %}
+
+          {% if not active %}
+            ok
+          {% elif malt <= 0 %}
+            warning
+          {% elif preboil <= 0 %}
+            warning
+          {% elif preboil < (mash - malt) %}
+            critical
+          {% elif sparge == 0 %}
+            warning
+          {% elif mash < 8 %}
+            warning
+          {% elif preboil < 15 %}
+            warning
+          {% else %}
+            ok
+          {% endif %}
+
+      - name: brewassistant_biab_warning_message
+        unique_id: brewassistant_biab_warning_message
+        icon: mdi:message-alert
+        state: >
+          {% set active = is_state('input_boolean.brewassistant_biab_active', 'on') %}
+          {% set malt = states('input_number.brewassistant_biab_malt_weight_kg') | float(0) %}
+          {% set preboil = states('input_number.brewassistant_biab_pre_boil_volume_l') | float(0) %}
+          {% set mash = states('sensor.brewassistant_biab_mash_water_l') | float(0) %}
+          {% set sparge = states('sensor.brewassistant_biab_sparge_water_l') | float(0) %}
+
+          {% if not active %}
+            BIAB-modulen är avstängd.
+          {% elif malt <= 0 %}
+            Ange maltvikt innan bryggdagen startar.
+          {% elif preboil <= 0 %}
+            Ange volym före kok.
+          {% elif preboil < (mash - malt) %}
+            Volym före kok är för låg. Lakvatten kan inte beräknas rimligt.
+          {% elif sparge == 0 %}
+            Lakvatten blir 0 L. Kontrollera att volym före kok är rimlig.
+          {% elif mash < 8 %}
+            Meskvatten verkar lågt. Kontrollera maltvikt och modell.
+          {% elif preboil < 15 %}
+            Volym före kok verkar låg för en normal BIAB-batch.
+          {% else %}
+            Alla grundvärden ser rimliga ut.
+          {% endif %}
+
+      - name: brewassistant_biab_suggested_pre_boil_volume_l
+        unique_id: brewassistant_biab_suggested_pre_boil_volume_l
+        unit_of_measurement: L
+        icon: mdi:kettle-steam
+        state: >
+          {% set target = states('input_number.brewassistant_biab_target_fermenter_volume_l') | float(25) %}
+          {{ (target * 1.2) | round(1) }}
+
+      - name: brewassistant_biab_suggested_sparge_water_l
+        unique_id: brewassistant_biab_suggested_sparge_water_l
+        unit_of_measurement: L
+        icon: mdi:shower-head
+        state: >
+          {% set suggested_preboil = states('sensor.brewassistant_biab_suggested_pre_boil_volume_l') | float(0) %}
+          {% set malt = states('input_number.brewassistant_biab_malt_weight_kg') | float(0) %}
+          {% set mash = states('sensor.brewassistant_biab_mash_water_l') | float(0) %}
+          {{ [suggested_preboil + malt - mash, 0] | max | round(1) }}
+
+      - name: brewassistant_biab_timer_summary
+        unique_id: brewassistant_biab_timer_summary
+        icon: mdi:timer-outline
+        state: >
+         {% set step = states('input_number.brewassistant_biab_step') | int(0) %}
+          {% set timer = states('timer.brewassistant_biab_step_timer') %}
+
+          {% if step == 2 %}
+            Mash · {{ timer }}
+          {% elif step == 3 %}
+            Mash-out · {{ timer }}
+          {% elif step == 5 %}
+            Boil · {{ timer }}
+          {% elif step == 6 %}
+            Cooling · {{ timer }}
+          {% else %}
+            Idle
+          {% endif %}
+        attributes:
+          finishes_at: "{{ state_attr('timer.brewassistant_biab_step_timer', 'finishes_at') }}"
+          remaining: "{{ state_attr('timer.brewassistant_biab_step_timer', 'remaining') }}"
+
+      - name: brewassistant_biab_step_notification_title
+        state: >
+          {% set step = states('input_number.brewassistant_biab_step') | int(0) %}
+          {% if step == 1 %}💧 BIAB: Vatten
+          {% elif step == 2 %}🌾 BIAB: Meskning
+          {% elif step == 3 %}🔁 BIAB: Mash-out
+          {% elif step == 4 %}🚿 BIAB: Lakning
+          {% elif step == 5 %}🔥 BIAB: Kokning
+          {% elif step == 6 %}❄️ BIAB: Kylning
+          {% elif step == 7 %}🧪 BIAB: Överföring
+          {% else %}BIAB
+          {% endif %}
+
+      - name: brewassistant_biab_step_notification_message
+        state: >
+          {% set step = states('input_number.brewassistant_biab_step') | int(0) %}
+          {% set mash_temp = states('input_number.brewassistant_biab_mash_temp_c') %}
+          {% set mashout_temp = states('input_number.brewassistant_biab_mashout_temp_c') %}
+          {% set sparge_temp = states('input_number.brewassistant_biab_sparge_temp_c') %}
+          {% set chill_temp = states('input_number.brewassistant_biab_cooling_target_temp_c') %}
+
+          {% if step == 1 %}
+            Beräkna vattenmängder och fyll bryggverket.
+          {% elif step == 2 %}
+            Starta mäskning vid {{ mash_temp }}°C. Sätt timer.
+          {% elif step == 3 %}
+            Höj till {{ mashout_temp }}°C och cirkulera.
+          {% elif step == 4 %}
+            Laka med vatten runt {{ sparge_temp }}°C.
+          {% elif step == 5 %}
+            Koka vörten. Tillsätt bitterhumle enligt recept.
+          {% elif step == 6 %}
+            Starta kylning. Sikta på {{ chill_temp }}°C.
+          {% elif step == 7 %}
+            Tappa till jäskärl och pitcha jäst.
+          {% else %}
+            Redo att starta bryggdag.
+          {% endif %}
+###############################################################################
 
 automation:
   - alias: BrewAssistant BIAB - Step Engine
@@ -226,3 +464,154 @@ automation:
             - input_boolean.brewassistant_biab_step_boil
             - input_boolean.brewassistant_biab_step_cooling
             - input_boolean.brewassistant_biab_step_transfer
+
+  - alias: BrewAssistant BIAB - Start Step Timer
+    id: brewassistant_biab_start_step_timer
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_number.brewassistant_biab_step
+    condition:
+      - condition: state
+        entity_id: input_boolean.brewassistant_biab_active
+        state: "on"
+    action:
+      - service: timer.cancel
+        target:
+          entity_id: timer.brewassistant_biab_step_timer
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.brewassistant_biab_step') | int(0) == 2 }}"
+            sequence:
+              - service: timer.start
+                target:
+                  entity_id: timer.brewassistant_biab_step_timer
+                data:
+                  duration: >
+                    00:{{ '%02d' | format(states('input_number.brewassistant_biab_mash_minutes') | int(60)) }}:00
+
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.brewassistant_biab_step') | int(0) == 3 }}"
+            sequence:
+              - service: timer.start
+                target:
+                  entity_id: timer.brewassistant_biab_step_timer
+                data:
+                  duration: >
+                    00:{{ '%02d' | format(states('input_number.brewassistant_biab_mashout_minutes') | int(15)) }}:00
+
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.brewassistant_biab_step') | int(0) == 5 }}"
+            sequence:
+              - service: timer.start
+                target:
+                  entity_id: timer.brewassistant_biab_step_timer
+                data:
+                  duration: >
+                    00:{{ '%02d' | format(states('input_number.brewassistant_biab_boil_minutes') | int(60)) }}:00
+
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.brewassistant_biab_step') | int(0) == 6 }}"
+            sequence:
+              - service: timer.start
+                target:
+                  entity_id: timer.brewassistant_biab_step_timer
+                data:
+                  duration: >
+                    00:{{ '%02d' | format(states('input_number.brewassistant_biab_cooling_minutes') | int(30)) }}:00
+
+  - alias: BrewAssistant BIAB - Notify Step Timer Finished
+    id: brewassistant_biab_notify_step_timer_finished
+    mode: single
+    trigger:
+      - platform: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.brewassistant_biab_step_timer
+    condition:
+      - condition: state
+        entity_id: input_boolean.brewassistant_biab_active
+        state: "on"
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.brewassistant_notifications_enabled') in ['on', 'unknown', 'unavailable'] }}
+    action:
+      - variables:
+          step: "{{ states('input_number.brewassistant_biab_step') | int(0) }}"
+          title: >
+            {% if step == 2 %}BIAB: Mash klar
+            {% elif step == 3 %}BIAB: Mash-out klar
+            {% elif step == 5 %}BIAB: Koktid klar
+            {% elif step == 6 %}BIAB: Kylningstid klar
+            {% else %}BIAB: Timer klar
+            {% endif %}
+          message: >
+            {% if step == 2 %}
+              Mäsken är klar. Dags för mash-out eller nästa steg.
+            {% elif step == 3 %}
+              Mash-out är klar. Dags att börja laka/skölja.
+            {% elif step == 5 %}
+              Koket är klart. Dags att börja kyla vörten.
+            {% elif step == 6 %}
+              Kylningstimern är klar. Kontrollera vörttemperaturen.
+            {% else %}
+              BIAB-timern är klar.
+            {% endif %}
+      - service: notify.mobile_app_dn2103
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+      - service: persistent_notification.create
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          notification_id: "brewassistant_biab_timer_finished"
+
+  - alias: BrewAssistant BIAB - Cancel Timer When Disabled
+    id: brewassistant_biab_cancel_timer_when_disabled
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_boolean.brewassistant_biab_active
+        to: "off"
+    action:
+      - service: timer.cancel
+        target:
+          entity_id: timer.brewassistant_biab_step_timer
+
+  - alias: BrewAssistant BIAB - Step Notifications
+    id: brewassistant_biab_step_notifications
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_number.brewassistant_biab_step
+
+    condition:
+      - condition: state
+        entity_id: input_boolean.brewassistant_biab_active
+        state: "on"
+
+      - condition: state
+        entity_id: input_boolean.brewassistant_notifications_enabled
+        state: "on"
+
+    action:
+      - variables:
+          title: "{{ states('sensor.brewassistant_biab_step_notification_title') }}"
+          message: "{{ states('sensor.brewassistant_biab_step_notification_message') }}"
+
+      - service: notify.mobile_app_dn2103
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+
+      - service: persistent_notification.create
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          notification_id: "brewassistant_biab_step"
