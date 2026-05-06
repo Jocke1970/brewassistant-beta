@@ -1,0 +1,1295 @@
+type: custom:stack-in-card
+mode: vertical
+cards:
+  - type: custom:button-card
+    entity: sensor.fwk_process_status
+    name: Fermentation Process
+    show_state: true
+    show_label: true
+    show_name: true
+    show_icon: true
+    icon: |
+      [[[
+        const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
+        if (!enabled) return 'mdi:beer-outline';
+
+        const s = states['sensor.fwk_process_status']?.state ?? 'Idle';
+        if (s === 'Cold crash') return 'mdi:snowflake';
+        if (s === 'Ready for cold crash') return 'mdi:thermometer-chevron-down';
+        if (s === 'Ready for transfer') return 'mdi:transfer-right';
+        if (s === 'Dry hop now') return 'mdi:leaf-circle';
+        if (s === 'Install spunding') return 'mdi:gauge';
+        if (s === 'Finished / transferred to keg') return 'mdi:check-circle';
+        if (s === 'Primary fermentation') return 'mdi:beer';
+        return 'mdi:beer-outline';
+      ]]]
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: input_boolean.fwk_process_card_enabled
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:power
+          tap_action:
+            action: toggle
+          styles:
+            card:
+              - width: 42px
+              - height: 42px
+              - border-radius: 50%
+              - padding: 0
+              - background: |
+                  [[[
+                    return entity?.state === 'on'
+                      ? 'rgba(255,255,255,0.22)'
+                      : 'rgba(255,255,255,0.12)';
+                  ]]]
+              - box-shadow: none
+            icon:
+              - width: 22px
+              - color: |
+                  [[[
+                    return entity?.state === 'on'
+                      ? '#90caf9'
+                      : 'rgba(255,255,255,0.65)';
+                  ]]]
+    label: |
+      [[[
+        const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
+
+        if (!enabled) {
+          return `
+            <div style="line-height: 1.45;">
+              <div>Status: Standby</div>
+              <div>Fermentation process card disabled</div>
+              <div>Tap power to show workflow, actions and details</div>
+            </div>
+          `;
+        }
+
+        const next = states['sensor.fwk_next_step']?.state ?? 'No data';
+        const sg = states['sensor.fwk_live_sg']?.state;
+        const temp = states['sensor.fwk_live_temp']?.state;
+        const days = states['sensor.fwk_batch_age_days']?.state;
+        const att = states['sensor.fwk_attenuation']?.state;
+        const processStatus = states['sensor.fwk_process_status']?.state ?? 'Idle';
+        const bfStatus = states['sensor.recipe_runtime_status']?.state;
+
+        const statusText = (bfStatus && !['unknown','unavailable','none',''].includes(bfStatus))
+          ? bfStatus
+          : processStatus;
+
+        const daysLeft = states['sensor.recipe_runtime_fermenting_days_left']?.state;
+        const summary = states['sensor.fwk_planned_summary']?.state ?? '';
+        const sgUpdated = states['sensor.fwk_sg_last_updated']?.state;
+
+        const sgText = (sg && sg !== 'unknown' && sg !== 'unavailable')
+          ? Number(sg).toFixed(3)
+          : 'unknown';
+
+        const sgUpdatedText = (sgUpdated && sgUpdated !== 'unknown' && sgUpdated !== 'unavailable')
+          ? new Date(sgUpdated).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+          : 'unknown';
+
+        const tempText = (temp && temp !== 'unknown' && temp !== 'unavailable')
+          ? `${Number(temp).toFixed(1)} °C`
+          : 'unknown';
+
+        const dayText = (days && days !== 'unknown' && days !== 'unavailable')
+          ? `${Number(days).toFixed(1)} d`
+          : '0.0 d';
+
+        const attText = (att && att !== 'unknown' && att !== 'unavailable')
+          ? `${Number(att).toFixed(0)} %`
+          : '0 %';
+
+        const leftText = (daysLeft && daysLeft !== 'unknown' && daysLeft !== 'unavailable')
+          ? `${Number(daysLeft).toFixed(1)} d left`
+          : 'days left unknown';
+
+        const summaryText = summary.replaceAll(' | ', '<br>');
+
+        return `
+          <div style="line-height: 1.45;">
+            <div>Status: ${statusText} • ${leftText}</div>
+            <div>Next: ${next}</div>
+            <div>SG: ${sgText} (${sgUpdatedText}) • Temp: ${tempText}</div>
+            <div>Age: ${dayText} • Att: ${attText}</div>
+            <div>${summaryText}</div>
+          </div>
+        `;
+      ]]]
+    tap_action:
+      action: more-info
+      entity: climate.fermentation_chamber
+    hold_action:
+      action: none
+    styles:
+      grid:
+        - grid-template-areas: "\"i n power\" \"i s power\" \"i l power\""
+        - grid-template-columns: 72px 1fr 48px
+        - grid-template-rows: min-content min-content 1fr
+      card:
+        - padding: 18px
+        - border-radius: 24px
+        - box-shadow: 0 12px 32px rgba(0,0,0,0.38)
+        - background: |
+            [[[
+              const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
+
+              if (!enabled) {
+                return 'linear-gradient(135deg, rgba(45,45,55,0.96), rgba(20,20,30,0.96))';
+              }
+
+              const state = entity?.state ?? '';
+
+              if (state === 'Cold crash')
+                return 'linear-gradient(135deg, rgba(30,55,85,0.96), rgba(10,20,40,0.96))';
+
+              if (state === 'Ready for cold crash')
+                return 'linear-gradient(135deg, rgba(40,65,95,0.96), rgba(15,25,50,0.96))';
+
+              if (state === 'Dry hop now')
+                return 'linear-gradient(135deg, rgba(25,70,40,0.96), rgba(10,30,20,0.96))';
+
+              if (state === 'Install spunding')
+                return 'linear-gradient(135deg, rgba(95,70,25,0.96), rgba(40,25,10,0.96))';
+
+              if (state === 'Ready for transfer')
+                return 'linear-gradient(135deg, rgba(80,80,35,0.96), rgba(30,30,10,0.96))';
+
+              if (state === 'Finished / transferred to keg')
+                return 'linear-gradient(135deg, rgba(25,70,50,0.96), rgba(10,30,20,0.96))';
+
+              if (state === 'Primary fermentation')
+                return 'linear-gradient(135deg, rgba(80,55,35,0.96), rgba(30,20,10,0.96))';
+
+              return 'linear-gradient(135deg, rgba(45,45,55,0.96), rgba(20,20,30,0.96))';
+            ]]]
+      img_cell:
+        - justify-self: center
+        - align-self: start
+        - width: 52px
+        - height: 52px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.12)
+        - backdrop-filter: blur(6px)
+      icon:
+        - color: |
+            [[[
+              return states['input_boolean.fwk_process_card_enabled']?.state === 'on'
+                ? 'white'
+                : 'rgba(255,255,255,0.65)';
+            ]]]
+        - width: 34px
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 18px
+        - font-weight: 700
+        - color: white
+        - white-space: normal
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      state:
+        - justify-self: start
+        - align-self: start
+        - font-size: 14px
+        - font-weight: 600
+        - color: rgba(255,255,255,0.88)
+        - white-space: normal
+        - text-shadow: 0 1px 2px rgba(0,0,0,0.6)
+      label:
+        - justify-self: start
+        - align-self: start
+        - text-align: left
+        - padding-top: 6px
+        - font-size: 13px
+        - line-height: 1.45
+        - color: rgba(255,255,255,0.96)
+        - white-space: normal
+        - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+      custom_fields:
+        power:
+          - justify-self: end
+          - align-self: start
+  - type: conditional
+    conditions:
+      - entity: input_boolean.fwk_process_card_enabled
+        state: "on"
+    card:
+      type: vertical-stack
+      cards:
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: sensor.fwk_live_temp
+              name: Ferment Temp
+              icon: mdi:thermometer
+              show_state: true
+              tap_action:
+                action: more-info
+              styles:
+                card:
+                  - border-radius: 20px
+                  - padding: 14px
+                  - min-height: 104px
+                  - background: |
+                      [[[
+                        const temp = parseFloat(entity?.state);
+                        const target = parseFloat(states['sensor.fwk_recipe_active_target_temp']?.state);
+                        if (isNaN(temp) || isNaN(target)) return 'rgba(80,80,80,0.18)';
+                        const delta = temp - target;
+                        if (delta < -0.5) return 'rgba(70,140,255,0.18)';
+                        if (delta > 0.5) return 'rgba(255,170,70,0.18)';
+                        return 'rgba(70,200,120,0.18)';
+                      ]]]
+                icon:
+                  - width: 30px
+                name:
+                  - font-size: 0.9rem
+                  - font-weight: 700
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+                state:
+                  - font-size: 1.08rem
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: sensor.fwk_live_sg
+              name: Gravity
+              icon: mdi:chart-line
+              show_state: true
+              state_display: |
+                [[[
+                  const v = entity?.state;
+                  if (!v || v === 'unknown' || v === 'unavailable') return 'unknown';
+                  return Number(v).toFixed(3);
+                ]]]
+              label: |
+                [[[
+                  const sgUpdated = states['sensor.fwk_sg_last_updated']?.state;
+                  if (!sgUpdated || sgUpdated === 'unknown' || sgUpdated === 'unavailable') return '';
+                  return new Date(sgUpdated).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+                ]]]
+              show_label: true
+              tap_action:
+                action: more-info
+              styles:
+                card:
+                  - border-radius: 20px
+                  - padding: 14px
+                  - min-height: 104px
+                  - background: rgba(120,170,255,0.16)
+                icon:
+                  - width: 30px
+                name:
+                  - font-size: 0.9rem
+                  - font-weight: 700
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+                state:
+                  - font-size: 1.08rem
+                  - font-weight: 800
+                  - white-space: normal
+                label:
+                  - font-size: 0.78rem
+                  - opacity: 0.75
+            - type: custom:button-card
+              entity: sensor.recipe_runtime_primary_temp
+              name: Planned Temp
+              icon: mdi:target
+              show_state: true
+              state_display: |
+                [[[
+                  const v = entity?.state;
+                  if (!v || v === 'unknown' || v === 'unavailable') return 'unknown';
+                  return `${Number(v).toFixed(1)} °C`;
+                ]]]
+              tap_action:
+                action: more-info
+              styles:
+                card:
+                  - border-radius: 20px
+                  - padding: 14px
+                  - min-height: 104px
+                  - background: rgba(255,255,255,0.08)
+                icon:
+                  - width: 30px
+                name:
+                  - font-size: 0.9rem
+                  - font-weight: 700
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+                state:
+                  - font-size: 1.08rem
+                  - font-weight: 800
+                  - white-space: normal
+            - type: custom:button-card
+              entity: sensor.recipe_runtime_fermenting_days_left
+              name: Days Left
+              icon: mdi:calendar-clock
+              show_state: true
+              state_display: |
+                [[[
+                  const v = entity?.state;
+                  if (!v || v === 'unknown' || v === 'unavailable') return 'unknown';
+                  return `${Number(v).toFixed(1)} d`;
+                ]]]
+              tap_action:
+                action: more-info
+              styles:
+                card:
+                  - border-radius: 20px
+                  - padding: 14px
+                  - min-height: 104px
+                  - background: rgba(255,255,255,0.08)
+                icon:
+                  - width: 30px
+                name:
+                  - font-size: 0.9rem
+                  - font-weight: 700
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+                state:
+                  - font-size: 1.08rem
+                  - font-weight: 800
+                  - white-space: normal
+        - type: custom:vertical-stack-in-card
+          cards:
+            - type: markdown
+              content: "## Brewfather events"
+              card_mod:
+                style: |
+                  ha-card {
+                    background: transparent;
+                    box-shadow: none;
+                    color: white;
+                    padding: 0 4px;
+                  }
+                  ha-markdown {
+                    padding: 0 !important;
+                  }
+                  h2 {
+                    margin: 2px 0 8px 0 !important;
+                    font-size: 16px !important;
+                    letter-spacing: 0.4px;
+                  }
+            - type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: custom:mushroom-template-card
+                  entity: sensor.brewfather_next_fermentation_step
+                  primary: Nästa jästeg
+                  secondary: >
+                    {% set event_time =
+                    state_attr('sensor.brewfather_next_fermentation_step',
+                    'time') %} {% set label =
+                    states('sensor.brewfather_next_fermentation_step') %} {% if
+                    event_time %}
+                      {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }} · {{ label }}
+                    {% else %}
+                      {{ label }}
+                    {% endif %}
+                  icon: mdi:timeline-clock
+                  icon_color: blue
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  entity: sensor.brewfather_next_dry_hop
+                  primary: Nästa torrhumling
+                  secondary: >
+                    {% set event_time =
+                    state_attr('sensor.brewfather_next_dry_hop', 'time') %} {%
+                    set label = states('sensor.brewfather_next_dry_hop') %} {%
+                    if event_time %}
+                      {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }} · {{ label }}
+                    {% else %}
+                      {{ label }}
+                    {% endif %}
+                  icon: mdi:leaf
+                  icon_color: green
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  entity: sensor.brewfather_next_bottling_day
+                  primary: Tappningsdag
+                  secondary: >
+                    {% set event_time =
+                    state_attr('sensor.brewfather_next_bottling_day', 'time') %}
+                    {% set label = states('sensor.brewfather_next_bottling_day')
+                    %} {% if event_time %}
+                      {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }}
+                    {% else %}
+                      {{ label }}
+                    {% endif %}                  
+                  icon: mdi:bottle-wine-outline
+                  icon_color: amber
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  entity: sensor.brewfather_fermentation_event_summary
+                  primary: Sammanfattning
+                  secondary: "{{ states('sensor.brewfather_fermentation_event_summary') }}"
+                  icon: mdi:calendar-star
+                  icon_color: purple
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+          card_mod:
+            style: |
+              ha-card {
+                margin: 10px 0 8px 0;
+                padding: 12px;
+                border-radius: 22px;
+                background:
+                  linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: none;
+                overflow: hidden;
+              }
+        - type: conditional
+          conditions:
+            - entity: sensor.fwk_current_action_stage
+              state_not: none
+          card:
+            type: custom:button-card
+            entity: sensor.fwk_current_action_stage
+            name: Current Action
+            show_state: true
+            show_label: true
+            show_icon: true
+            icon: |
+              [[[
+                const stage = entity?.state ?? 'none';
+                if (stage === 'spunding') return 'mdi:gauge';
+                if (stage === 'dry_hop') return 'mdi:leaf';
+                if (stage === 'cold_crash') return 'mdi:snowflake';
+                if (stage === 'transfer') return 'mdi:transfer-right';
+                return 'mdi:play-circle-outline';
+              ]]]
+            label: |
+              [[[
+                const stage = entity?.state ?? 'none';
+                if (stage === 'spunding') return 'Install spunding valve and confirm when done.';
+                if (stage === 'dry_hop') return 'Add dry hop charge and mark the step completed.';
+                if (stage === 'cold_crash') return 'Start cold crash when ready.';
+                if (stage === 'transfer') return 'Perform closed transfer to keg.';
+                return 'No active action.';
+              ]]]
+            styles:
+              card:
+                - border-radius: 22px
+                - padding: 16px
+                - background: |
+                    [[[
+                      const stage = entity?.state ?? 'none';
+                      if (stage === 'spunding') return 'linear-gradient(135deg, rgba(95,70,25,0.96), rgba(40,25,10,0.96))';
+                      if (stage === 'dry_hop') return 'linear-gradient(135deg, rgba(25,70,40,0.96), rgba(10,30,20,0.96))';
+                      if (stage === 'cold_crash') return 'linear-gradient(135deg, rgba(30,55,85,0.96), rgba(10,20,40,0.96))';
+                      if (stage === 'transfer') return 'linear-gradient(135deg, rgba(80,80,35,0.96), rgba(30,30,10,0.96))';
+                      return 'linear-gradient(135deg, rgba(45,45,55,0.96), rgba(20,20,30,0.96))';
+                    ]]]
+              name:
+                - font-size: 1rem
+                - font-weight: 700
+                - color: white
+                - white-space: normal
+              state:
+                - font-size: 1.05rem
+                - font-weight: 700
+                - color: rgba(255,255,255,0.92)
+                - white-space: normal
+              label:
+                - margin-top: 8px
+                - font-size: 0.9rem
+                - line-height: 1.4
+                - color: rgba(255,255,255,0.94)
+                - white-space: normal
+        - type: conditional
+          conditions:
+            - entity: sensor.fwk_next_action_stage
+              state_not: none
+          card:
+            type: custom:button-card
+            entity: sensor.fwk_next_action_stage
+            name: Next Up
+            show_state: true
+            show_label: true
+            icon: mdi:progress-clock
+            label: |
+              [[[
+                const stage = entity?.state ?? 'none';
+                if (stage === 'spunding') return 'Spunding is approaching.';
+                if (stage === 'dry_hop') return 'Dry hop window is approaching.';
+                if (stage === 'cold_crash') return 'Cold crash is approaching.';
+                if (stage === 'transfer') return 'Transfer is coming up.';
+                return 'No upcoming action.';
+              ]]]
+            styles:
+              card:
+                - border-radius: 22px
+                - padding: 16px
+                - background: >-
+                    linear-gradient(135deg, rgba(45,45,55,0.96),
+                    rgba(20,20,30,0.96))
+              name:
+                - font-size: 1rem
+                - font-weight: 700
+                - color: white
+                - white-space: normal
+              state:
+                - font-size: 1rem
+                - font-weight: 700
+                - color: rgba(255,255,255,0.9)
+                - white-space: normal
+              label:
+                - margin-top: 8px
+                - font-size: 0.9rem
+                - line-height: 1.4
+                - color: rgba(255,255,255,0.94)
+                - white-space: normal
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              name: Start Batch
+              icon: mdi:play-circle
+              tap_action:
+                action: call-service
+                service: script.fwk_start_batch
+              styles:
+                card:
+                  - min-height: 72px
+                  - border-radius: 18px
+                  - padding: 12px
+                  - background: >-
+                      linear-gradient(135deg, rgba(25,80,50,0.96),
+                      rgba(10,35,22,0.96))
+                icon:
+                  - width: 24px
+                  - color: white
+                name:
+                  - font-size: 0.86rem
+                  - font-weight: 800
+                  - color: white
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+            - type: custom:button-card
+              name: Spunding
+              icon: mdi:gauge
+              tap_action:
+                action: call-service
+                service: script.fwk_mark_spunding_installed
+              styles:
+                card:
+                  - min-height: 72px
+                  - border-radius: 18px
+                  - padding: 12px
+                  - background: >-
+                      linear-gradient(135deg, rgba(95,70,25,0.96),
+                      rgba(40,25,10,0.96))
+                icon:
+                  - width: 24px
+                  - color: white
+                name:
+                  - font-size: 0.86rem
+                  - font-weight: 800
+                  - color: white
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+            - type: custom:button-card
+              name: Dry Hop
+              icon: mdi:leaf
+              tap_action:
+                action: call-service
+                service: script.fwk_mark_dry_hop_added
+              styles:
+                card:
+                  - min-height: 72px
+                  - border-radius: 18px
+                  - padding: 12px
+                  - background: >-
+                      linear-gradient(135deg, rgba(25,70,40,0.96),
+                      rgba(10,30,20,0.96))
+                icon:
+                  - width: 24px
+                  - color: white
+                name:
+                  - font-size: 0.86rem
+                  - font-weight: 800
+                  - color: white
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+            - type: custom:button-card
+              name: Cold Crash
+              icon: mdi:snowflake
+              tap_action:
+                action: call-service
+                service: script.fwk_start_cold_crash
+              styles:
+                card:
+                  - min-height: 72px
+                  - border-radius: 18px
+                  - padding: 12px
+                  - background: >-
+                      linear-gradient(135deg, rgba(30,55,85,0.96),
+                      rgba(10,20,40,0.96))
+                icon:
+                  - width: 24px
+                  - color: white
+                name:
+                  - font-size: 0.86rem
+                  - font-weight: 800
+                  - color: white
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+            - type: custom:button-card
+              name: Transfer to Keg
+              icon: mdi:transfer-right
+              tap_action:
+                action: call-service
+                service: script.fwk_mark_transferred_to_keg
+              styles:
+                card:
+                  - min-height: 72px
+                  - border-radius: 18px
+                  - padding: 12px
+                  - background: >-
+                      linear-gradient(135deg, rgba(80,80,35,0.96),
+                      rgba(30,30,10,0.96))
+                icon:
+                  - width: 24px
+                  - color: white
+                name:
+                  - font-size: 0.86rem
+                  - font-weight: 800
+                  - color: white
+                  - white-space: normal
+                  - overflow: visible
+                  - text-overflow: unset
+                  - line-height: 1.15
+        - type: custom:button-card
+          entity: input_boolean.fwk_show_details
+          name: BrewAssistant Details
+          icon: mdi:tune-variant
+          show_state: true
+          tap_action:
+            action: toggle
+          styles:
+            card:
+              - min-height: 64px
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(255,255,255,0.06)
+              - border: 1px solid rgba(255,255,255,0.08)
+            icon:
+              - width: 24px
+              - color: rgba(255,255,255,0.82)
+            name:
+              - font-size: 0.92rem
+              - font-weight: 800
+              - color: white
+              - white-space: normal
+            state:
+              - font-size: 0.82rem
+              - font-weight: 700
+              - color: rgba(255,255,255,0.72)
+        - type: conditional
+          conditions:
+            - entity: input_boolean.fwk_show_details
+              state: "on"
+          card:
+            type: custom:vertical-stack-in-card
+            cards:
+              - type: markdown
+                content: "## BrewAssistant Details"
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: transparent;
+                      box-shadow: none;
+                      color: white;
+                      padding: 0 4px;
+                    }
+                    ha-markdown {
+                      padding: 0 !important;
+                    }
+                    h2 {
+                      margin: 4px 0 8px 0 !important;
+                      font-size: 18px !important;
+                      letter-spacing: 0.3px;
+                    }
+              - type: grid
+                columns: 1
+                square: false
+                cards:
+                  - type: custom:mushroom-template-card
+                    entity: climate.fermentation_chamber
+                    primary: Fermentation Chamber
+                    secondary: >
+                      {{ states('climate.fermentation_chamber') }} · Nuvarande:
+                      {{ states('sensor.fwk_live_temp') }} °C · Target: {{
+                      states('sensor.fwk_recipe_active_target_temp') }} °C
+                    icon: mdi:gauge
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_process_status
+                    primary: Process Status
+                    secondary: "{{ states('sensor.fwk_process_status') }}"
+                    icon: mdi:list-status
+                    icon_color: green
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_next_step
+                    primary: Next Step
+                    secondary: "{{ states('sensor.fwk_next_step') }}"
+                    icon: mdi:progress-clock
+                    icon_color: amber
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_planned_summary
+                    primary: Planned Summary
+                    secondary: "{{ states('sensor.fwk_planned_summary') }}"
+                    icon: mdi:clipboard-text
+                    icon_color: purple
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+              - type: conditional
+                conditions:
+                  - entity: sensor.fwk_current_action_stage
+                    state_not: none
+                card:
+                  type: custom:mushroom-template-card
+                  entity: sensor.fwk_current_action_stage
+                  primary: Current Action Stage
+                  secondary: "{{ states('sensor.fwk_current_action_stage') }}"
+                  icon: mdi:play-circle-outline
+                  icon_color: orange
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+              - type: conditional
+                conditions:
+                  - entity: sensor.fwk_next_action_stage
+                    state_not: none
+                card:
+                  type: custom:mushroom-template-card
+                  entity: sensor.fwk_next_action_stage
+                  primary: Next Action Stage
+                  secondary: "{{ states('sensor.fwk_next_action_stage') }}"
+                  icon: mdi:skip-next-circle
+                  icon_color: amber
+                  multiline_secondary: true
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+              - type: markdown
+                content: "## Brewfather Events"
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: transparent;
+                      box-shadow: none;
+                      color: white;
+                      padding: 10px 4px 0 4px;
+                    }
+                    ha-markdown {
+                      padding: 0 !important;
+                    }
+                    h2 {
+                      margin: 4px 0 8px 0 !important;
+                      font-size: 16px !important;
+                      letter-spacing: 0.3px;
+                    }
+              - type: grid
+                columns: 1
+                square: false
+                cards:
+                  - type: custom:mushroom-template-card
+                    entity: sensor.brewfather_next_fermentation_step
+                    primary: Nästa jässchema-steg
+                    secondary: >
+                      {% set event_time =
+                      state_attr('sensor.brewfather_next_fermentation_step',
+                      'time') %} {% set label =
+                      states('sensor.brewfather_next_fermentation_step') %} {%
+                      if event_time %}
+                        {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }} · {{ label }}
+                      {% else %}
+                        {{ label }}
+                      {% endif %}
+                    icon: mdi:timeline-clock
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.brewfather_next_dry_hop
+                    primary: Nästa torrhumling
+                    secondary: >
+                      {% set event_time =
+                      state_attr('sensor.brewfather_next_dry_hop', 'time') %} {%
+                      set label = states('sensor.brewfather_next_dry_hop') %} {%
+                      if event_time %}
+                        {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }} · {{ label }}
+                      {% else %}
+                        {{ label }}
+                      {% endif %}
+                    icon: mdi:leaf
+                    icon_color: green
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.brewfather_next_bottling_day
+                    primary: Tappningsdag
+                    secondary: >
+                      {% set event_time =
+                      state_attr('sensor.brewfather_next_bottling_day', 'time')
+                      %} {% set label =
+                      states('sensor.brewfather_next_bottling_day') %} {% if
+                      event_time %}
+                        {{ as_timestamp(event_time) | timestamp_custom('%-d/%-m kl %H:%M', true) }}
+                      {% else %}
+                        {{ label }}
+                      {% endif %}
+                    icon: mdi:bottle-wine-outline
+                    icon_color: amber
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.brewfather_fermentation_event_summary
+                    primary: Brewfather Summary
+                    secondary: >-
+                      {{ states('sensor.brewfather_fermentation_event_summary')
+                      }}
+                    icon: mdi:calendar-star
+                    icon_color: purple
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+              - type: markdown
+                content: "## Runtime Data"
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: transparent;
+                      box-shadow: none;
+                      color: white;
+                      padding: 10px 4px 0 4px;
+                    }
+                    ha-markdown {
+                      padding: 0 !important;
+                    }
+                    h2 {
+                      margin: 4px 0 8px 0 !important;
+                      font-size: 16px !important;
+                      letter-spacing: 0.3px;
+                    }
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_name
+                    primary: Recipe
+                    secondary: "{{ states('sensor.recipe_runtime_name') }}"
+                    icon: mdi:beer
+                    icon_color: amber
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_status
+                    primary: Runtime Status
+                    secondary: "{{ states('sensor.recipe_runtime_status') }}"
+                    icon: mdi:state-machine
+                    icon_color: green
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_source
+                    primary: Runtime Source
+                    secondary: "{{ states('sensor.recipe_runtime_source') }}"
+                    icon: mdi:database
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_primary_temp
+                    primary: Primary Temp
+                    secondary: "{{ states('sensor.recipe_runtime_primary_temp') }} °C"
+                    icon: mdi:thermometer
+                    icon_color: red
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_og
+                    primary: Runtime OG
+                    secondary: "{{ states('sensor.recipe_runtime_og') }}"
+                    icon: mdi:water-percent
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_fg
+                    primary: Runtime FG
+                    secondary: "{{ states('sensor.recipe_runtime_fg') }}"
+                    icon: mdi:water-percent
+                    icon_color: green
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.recipe_runtime_cold_crash_temp
+                    primary: Cold Crash Temp
+                    secondary: "{{ states('sensor.recipe_runtime_cold_crash_temp') }} °C"
+                    icon: mdi:snowflake-thermometer
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_live_sg
+                    primary: Live SG
+                    secondary: "{{ states('sensor.fwk_live_sg') }}"
+                    icon: mdi:chart-line
+                    icon_color: blue
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_sg_last_updated
+                    primary: SG Last Updated
+                    secondary: >
+                      {% set ts = states('sensor.fwk_sg_last_updated') %} {% if
+                      ts not in ['unknown', 'unavailable', 'none', ''] %}
+                        {{ as_timestamp(ts) | timestamp_custom('%Y-%m-%d %H:%M', true) }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    icon: mdi:clock
+                    icon_color: grey
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_live_temp
+                    primary: Live Temperature
+                    secondary: "{{ states('sensor.fwk_live_temp') }} °C"
+                    icon: mdi:thermometer-water
+                    icon_color: cyan
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_batch_age_days
+                    primary: Batch Age
+                    secondary: >
+                      {{ states('sensor.fwk_batch_age_days') }} d · {{
+                      states('sensor.fwk_batch_age_hours') }} h
+                    icon: mdi:clock-outline
+                    icon_color: grey
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_attenuation
+                    primary: Attenuation
+                    secondary: "{{ states('sensor.fwk_attenuation') }} %"
+                    icon: mdi:percent
+                    icon_color: green
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_gravity_points_left
+                    primary: Gravity Points Left
+                    secondary: "{{ states('sensor.fwk_gravity_points_left') }}"
+                    icon: mdi:water-percent
+                    icon_color: amber
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+                  - type: custom:mushroom-template-card
+                    entity: sensor.fwk_fermentation_pace
+                    primary: Fermentation Pace
+                    secondary: "{{ states('sensor.fwk_fermentation_pace') }}"
+                    icon: mdi:speedometer
+                    icon_color: purple
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          background: rgba(255,255,255,0.045);
+                          border: 1px solid rgba(255,255,255,0.07);
+                          box-shadow: none;
+                        }
+            card_mod:
+              style: |
+                ha-card {
+                  margin-top: 8px;
+                  padding: 12px;
+                  border-radius: 22px;
+                  background:
+                    linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+                  border: 1px solid rgba(255,255,255,0.08);
+                  box-shadow: none;
+                  overflow: hidden;
+                }
