@@ -6,8 +6,22 @@ cards:
         entity: climate.fermentation_chamber
         name: Fermentation Chamber
         icon: mdi:cup
-        show_state: false
+        show_state: true
         show_label: true
+        state_display: |
+          [[[
+            const hvac = entity?.state ?? 'unknown';
+            const action = entity?.attributes?.hvac_action ?? 'unknown';
+
+            if (hvac === 'off') return 'Off';
+            if (action === 'cooling') return 'Cooling';
+            if (action === 'heating') return 'Heating';
+            if (action === 'idle') return 'Idle';
+            if (hvac === 'heat_cool') return 'Auto';
+            if (hvac === 'cool') return 'Cooling enabled';
+            if (hvac === 'heat') return 'Heating enabled';
+            return hvac;
+          ]]]
         tap_action:
           action: more-info
         hold_action:
@@ -151,13 +165,6 @@ cards:
                       ? 'Heating'
                       : 'Idle';
 
-            const modeTxt =
-              hvac === 'heat_cool' ? 'Auto' :
-              hvac === 'cool' ? 'Cooling' :
-              hvac === 'heat' ? 'Heating' :
-              hvac === 'off' ? 'Av' :
-              hvac;
-
             const chamberAction =
               chamberActionRaw &&
               chamberActionRaw !== 'unknown' &&
@@ -167,7 +174,6 @@ cards:
 
             return `
               <div style="line-height: 1.45;">
-                <div style="font-size: 12px; opacity: 0.78;">${modeTxt}</div>
                 <div>Now: ${nowTxt}</div>
                 <div>Recipe target: ${recipeTxt}</div>
                 <div>Suggested: ${suggestedTxt}</div>
@@ -218,9 +224,9 @@ cards:
             - box-shadow: 0 10px 26px rgba(0,0,0,0.24)
             - overflow: hidden
           grid:
-            - grid-template-areas: "\"i n apply power\" \"i l apply power\""
-            - grid-template-columns: 52px 1fr 38px 38px
-            - grid-template-rows: min-content 1fr
+            - grid-template-areas: "\"i n apply power\" \"i s apply power\" \"i l apply power\""
+            - grid-template-columns: 72px 1fr 38px 38px
+            - grid-template-rows: min-content min-content 1fr
           img_cell:
             - width: 52px
             - height: 52px
@@ -239,13 +245,25 @@ cards:
             - color: white
             - white-space: normal
             - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+          state:
+            - justify-self: start
+            - align-self: start
+            - text-align: left
+            - font-size: 14px
+            - font-weight: 900
+            - color: white
+            - padding-top: 2px
+            - white-space: normal
+            - text-shadow: 0 1px 2px rgba(0,0,0,0.6)
           label:
             - justify-self: start
             - align-self: start
             - text-align: left
-            - font-size: 13px
+            - font-size: 12px
             - font-weight: 600
+            - line-height: 1.45
             - color: white
+            - padding-top: 6px
             - white-space: normal
             - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
           custom_fields:
@@ -367,6 +385,23 @@ cards:
               const needed = states['binary_sensor.brewassistant_smart_heat_needed']?.state;
               const cooldown = states['timer.brewassistant_smart_heat_cooldown']?.state;
 
+              const matState = states['switch.fermentation_heat_mat']?.state ?? 'unknown';
+              const matPowerRaw = states['sensor.fermentation_heat_mat_power']?.state;
+              const matPower =
+                matPowerRaw !== undefined &&
+                matPowerRaw !== null &&
+                matPowerRaw !== 'unknown' &&
+                matPowerRaw !== 'unavailable'
+                  ? parseFloat(matPowerRaw)
+                  : null;
+
+              const matTxt =
+                matState === 'on'
+                  ? `🔥 Matta på${matPower !== null ? ` · ${matPower.toFixed(1)} W` : ''}`
+                  : matState === 'off'
+                    ? `Matta av${matPower !== null ? ` · ${matPower.toFixed(1)} W` : ''}`
+                    : 'Matta okänd';
+
               let modeTxt = enabled ? mode : 'Off';
               let line1 = `${modeTxt} · ${temp} °C / ${target} °C`;
               let line2 = `${temp} °C → ${target} °C`;
@@ -374,6 +409,7 @@ cards:
 
               let status = '✅ Stabil';
               if (!enabled) status = '⏻ Smart styrning av';
+              else if (matState === 'on') status = '🔥 Värmematta aktiv';
               else if (heat === 'on') status = '🔥 Värme redo';
               else if (needed === 'on' && cooldown === 'active') status = '⏳ Väntar cooldown';
               else if (needed === 'on') status = '🛡️ Värme blockerad';
@@ -383,6 +419,7 @@ cards:
                   <div style="font-size: 12px; opacity: 0.78;">${line1}</div>
                   <div style="margin-top: 8px;">${line2}</div>
                   <div>${status} · ${line3}</div>
+                  <div style="margin-top: 4px; opacity: 0.9;">${matTxt}</div>
                 </div>
               `;
             ]]]
@@ -390,17 +427,22 @@ cards:
             card:
               - border-radius: 24px
               - padding: 18px
-              - min-height: 140px
+              - min-height: 152px
               - color: white
               - background: |
                   [[[
                     const enabled = states['input_boolean.brewassistant_smart_fermentation_enabled']?.state === 'on';
+                    const matOn = states['switch.fermentation_heat_mat']?.state === 'on';
                     const permitted = states['binary_sensor.brewassistant_smart_heat_permitted']?.state === 'on';
                     const needed = states['binary_sensor.brewassistant_smart_heat_needed']?.state === 'on';
                     const blocked = needed && !permitted;
 
                     if (!enabled) {
                       return 'linear-gradient(135deg, #34343a, #242428)';
+                    }
+
+                    if (matOn) {
+                      return 'linear-gradient(135deg, #7a2600, #3b1200)';
                     }
 
                     if (permitted) {
@@ -417,7 +459,7 @@ cards:
               - overflow: hidden
             grid:
               - grid-template-areas: "\"i n expand power\" \"i l expand power\""
-              - grid-template-columns: 52px 1fr 38px 38px
+              - grid-template-columns: 72px 1fr 38px 38px
               - grid-template-rows: min-content 1fr
             img_cell:
               - width: 52px
@@ -429,10 +471,12 @@ cards:
               - width: 32px
               - color: |
                   [[[
+                    const matOn = states['switch.fermentation_heat_mat']?.state === 'on';
                     const permitted = states['binary_sensor.brewassistant_smart_heat_permitted']?.state === 'on';
                     const blocked = states['binary_sensor.brewassistant_smart_heat_needed']?.state === 'on'
                       && states['binary_sensor.brewassistant_smart_heat_permitted']?.state !== 'on';
 
+                    if (matOn) return '#ff8a65';
                     if (permitted) return '#ffcc80';
                     if (blocked) return '#ffd54f';
                     return '#b8ffe8';
@@ -470,10 +514,34 @@ cards:
           square: false
           cards:
             - type: custom:mushroom-template-card
-              primary: Vätska
-              secondary: "{{ states('sensor.brewassistant_smart_liquid_temp') }} °C"
-              icon: mdi:thermometer-water
-              icon_color: blue
+              primary: Styrtemp
+              secondary: >
+                {% set temp = states('sensor.brewassistant_smart_liquid_temp')
+                %} {% set source =
+                states('sensor.brewassistant_smart_liquid_temp_source') %} {{
+                temp }} °C · {{ source }}
+              icon: >
+                {% if is_state('sensor.brewassistant_smart_liquid_temp_source',
+                'RAPT Pill') %}
+                  mdi:thermometer-water
+                {% elif
+                is_state('sensor.brewassistant_smart_liquid_temp_source',
+                'Kegerator fallback') %}
+                  mdi:fridge
+                {% else %}
+                  mdi:alert-circle
+                {% endif %}
+              icon_color: >
+                {% if is_state('sensor.brewassistant_smart_liquid_temp_source',
+                'RAPT Pill') %}
+                  blue
+                {% elif
+                is_state('sensor.brewassistant_smart_liquid_temp_source',
+                'Kegerator fallback') %}
+                  amber
+                {% else %}
+                  red
+                {% endif %}
               layout: vertical
               tap_action:
                 action: more-info
@@ -584,6 +652,46 @@ cards:
               tap_action:
                 action: more-info
               entity: sensor.brewassistant_smart_heat_pulse_minutes
+              card_mod:
+                style: |
+                  ha-card {
+                    min-height: 104px;
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.045);
+                    border: 1px solid rgba(255,255,255,0.07);
+                    box-shadow: none;
+                    --card-primary-font-size: 14px;
+                    --card-primary-font-weight: 800;
+                    --card-secondary-font-size: 12px;
+                    --card-secondary-color: rgba(255,255,255,0.78);
+                  }
+            - type: custom:mushroom-template-card
+              primary: Värmematta
+              secondary: >
+                {% set sw = states('switch.fermentation_heat_mat') %} {% set w =
+                states('sensor.fermentation_heat_mat_power') %} {% if sw == 'on'
+                %}
+                  På · {{ w }} W
+                {% elif sw == 'off' %}
+                  Av · {{ w }} W
+                {% else %}
+                  {{ sw }} · {{ w }} W
+                {% endif %}
+              icon: mdi:radiator
+              icon_color: >
+                {% set sw = states('switch.fermentation_heat_mat') %} {% set w =
+                states('sensor.fermentation_heat_mat_power') | float(0) %} {% if
+                sw == 'on' and w > 2 %}
+                  red
+                {% elif sw == 'on' %}
+                  orange
+                {% else %}
+                  grey
+                {% endif %}
+              layout: vertical
+              tap_action:
+                action: more-info
+              entity: switch.fermentation_heat_mat
               card_mod:
                 style: |
                   ha-card {
@@ -1140,20 +1248,31 @@ cards:
                       - type: custom:mushroom-template-card
                         primary: Värmematta
                         secondary: >
-                          {% set e =
-                          states('input_text.brewassistant_smart_heat_switch_entity')
-                          %} {{ states(e) if e not in
-                          ['unknown','unavailable',''] else 'saknas' }}
+                          {% set sw = states('switch.fermentation_heat_mat') %}
+                          {% set w =
+                          states('sensor.fermentation_heat_mat_power') %} {% if
+                          sw == 'on' %}
+                            På · {{ w }} W
+                          {% elif sw == 'off' %}
+                            Av · {{ w }} W
+                          {% else %}
+                            {{ sw }} · {{ w }} W
+                          {% endif %}
                         icon: mdi:radiator
                         icon_color: >
-                          {% set e =
-                          states('input_text.brewassistant_smart_heat_switch_entity')
-                          %} {% if e not in ['unknown','unavailable',''] and
-                          states(e) == 'on' %}
+                          {% set sw = states('switch.fermentation_heat_mat') %}
+                          {% set w =
+                          states('sensor.fermentation_heat_mat_power') |
+                          float(0) %} {% if sw == 'on' and w > 2 %}
                             red
+                          {% elif sw == 'on' %}
+                            orange
                           {% else %}
                             grey
                           {% endif %}
+                        entity: switch.fermentation_heat_mat
+                        tap_action:
+                          action: more-info
                         card_mod:
                           style: |
                             ha-card {
@@ -1285,13 +1404,40 @@ cards:
                               }
                         - type: custom:mushroom-template-card
                           entity: input_text.brewassistant_smart_heat_switch_entity
-                          primary: Värmematta switch
+                          primary: Värmematta switch mapping
                           secondary: >-
                             {{
                             states('input_text.brewassistant_smart_heat_switch_entity')
                             }}
                           icon: mdi:radiator
                           icon_color: orange
+                          layout: horizontal
+                          tap_action:
+                            action: more-info
+                          card_mod:
+                            style: |
+                              ha-card {
+                                border-radius: 18px;
+                                background: rgba(255,255,255,0.045);
+                                border: 1px solid rgba(255,255,255,0.07);
+                                box-shadow: none;
+                              }
+                        - type: custom:mushroom-template-card
+                          entity: switch.fermentation_heat_mat
+                          primary: Värmematta live
+                          secondary: >
+                            {% set sw = states('switch.fermentation_heat_mat')
+                            %} {% set w =
+                            states('sensor.fermentation_heat_mat_power') %} {{
+                            sw }} · {{ w }} W
+                          icon: mdi:power-socket-eu
+                          icon_color: >
+                            {% if is_state('switch.fermentation_heat_mat', 'on')
+                            %}
+                              red
+                            {% else %}
+                              grey
+                            {% endif %}
                           layout: horizontal
                           tap_action:
                             action: more-info
