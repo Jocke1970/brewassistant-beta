@@ -1,0 +1,1072 @@
+###############################################################################
+# BrewAssistant - Brewfather Multi Batch Slots
+# File: /config/packages/brewassistant_brewfather_batches.yaml
+#
+# Purpose:
+#   Creates up to 3 Brewfather batch "slots" based on Brewfather sensors:
+#
+#   Slot 1 = primary Brewfather sensor state + attributes.batch_id
+#   Slot 2 = attributes.other_batches[0]
+#   Slot 3 = attributes.other_batches[1]
+#
+# Source sensor:
+#   sensor.brewfather_recipe_name
+###############################################################################
+###############################################################################
+# BrewAssistant - Brewfather Multiple Batches Module
+# Helpers
+###############################################################################
+
+input_select:
+  brewassistant_bf_active_batch_slot:
+    name: BrewAssistant BF Active Batch Slot
+    icon: mdi:database-arrow-right
+    options:
+      - Auto
+      - Slot 1
+      - Slot 2
+      - Slot 3
+    initial: Auto
+template:
+  - sensor:
+      #########################################################################
+      # BrewAssistant BF Runtime Compatibility Layer v1
+      #
+      # Purpose:
+      #   Stable runtime sensors based on selected Brewfather batch slot.
+      #
+      #   These are NOT replacing old recipe_runtime_* sensors yet.
+      #   They are a safe compatibility preview layer.
+      #########################################################################
+
+      #########################################################################
+      # Runtime Bridge Status
+      #########################################################################
+
+      - name: BrewAssistant BF Runtime Bridge Status
+        unique_id: brewassistant_bf_runtime_bridge_status
+        icon: mdi:bridge
+        state: >
+          {% if is_state('input_boolean.brewassistant_bf_runtime_bridge_enabled', 'off') %}
+            Disabled
+          {% elif is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            Ready
+          {% elif is_state('binary_sensor.brewassistant_bf_runtime_bridge_blocked', 'on') %}
+            Blocked
+          {% else %}
+            Unknown
+          {% endif %}
+        attributes:
+          bridge_enabled: >
+            {{ states('input_boolean.brewassistant_bf_runtime_bridge_enabled') }}
+          bridge_ready: >
+            {{ states('binary_sensor.brewassistant_bf_runtime_bridge_ready') }}
+          bridge_blocked: >
+            {{ states('binary_sensor.brewassistant_bf_runtime_bridge_blocked') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch: >
+            {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+          runtime_recipe_name: >
+            {{ states('sensor.brewassistant_runtime_recipe_name') }}
+          runtime_primary_temp: >
+            {{ states('sensor.brewassistant_runtime_primary_temp') }}
+          runtime_fermentation_start: >
+            {{ states('sensor.brewassistant_runtime_fermentation_start') }}
+          summary: >
+            {% if is_state('input_boolean.brewassistant_bf_runtime_bridge_enabled', 'off') %}
+              Bridge disabled · legacy runtime remains untouched.
+            {% elif is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+              Bridge ready · selected batch can feed runtime compatibility layer.
+            {% elif is_state('binary_sensor.brewassistant_bf_runtime_bridge_blocked', 'on') %}
+              Bridge blocked · selected batch is not usable.
+            {% else %}
+              Bridge status unknown.
+            {% endif %}
+
+      #########################################################################
+      # BrewAssistant BF Selected Batch Health
+      #
+      # Purpose:
+      #   Human-readable health/status sensor for the selected Brewfather batch.
+      #########################################################################
+
+      - name: BrewAssistant BF Selected Batch Health
+        unique_id: brewassistant_bf_selected_batch_health
+        icon: mdi:heart-pulse
+        state: >
+          {% set mode = states('input_select.brewassistant_bf_active_batch_slot') %}
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% set name = states('sensor.brewassistant_bf_selected_batch_name') %}
+          {% set batch_id = states('sensor.brewassistant_bf_selected_batch_id') %}
+
+          {% set s1_has = state_attr('sensor.brewassistant_bf_batch_1_summary', 'has_batch_data') | string | lower == 'true' %}
+          {% set s2_has = state_attr('sensor.brewassistant_bf_batch_2_summary', 'has_batch_data') | string | lower == 'true' %}
+          {% set s3_has = state_attr('sensor.brewassistant_bf_batch_3_summary', 'has_batch_data') | string | lower == 'true' %}
+
+          {% if mode == 'Auto' and slot in ['Slot 1', 'Slot 2', 'Slot 3'] and batch_id not in ['unknown', 'unavailable', '', 'none', 'None'] %}
+            Auto selected active batch
+          {% elif mode == 'Auto' and slot == 'None' %}
+            No batch data
+          {% elif mode in ['Slot 1', 'Slot 2', 'Slot 3'] and name not in ['Empty', 'unknown', 'unavailable', 'No active Brewfather batch'] and batch_id not in ['unknown', 'unavailable', '', 'none', 'None'] %}
+            Manual slot selected
+          {% elif mode == 'Slot 1' and not s1_has %}
+            Manual slot empty
+          {% elif mode == 'Slot 2' and not s2_has %}
+            Manual slot empty
+          {% elif mode == 'Slot 3' and not s3_has %}
+            Manual slot empty
+          {% else %}
+            Invalid selection
+          {% endif %}
+        attributes:
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+
+          resolved_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+          selected_name: >
+            {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+
+          slot_1_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'has_batch_data') }}
+
+          slot_2_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'has_batch_data') }}
+
+          slot_3_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'has_batch_data') }}
+
+          summary: >
+            {% set mode = states('input_select.brewassistant_bf_active_batch_slot') %}
+            {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+            {% set name = states('sensor.brewassistant_bf_selected_batch_name') %}
+            {% set batch_id = states('sensor.brewassistant_bf_selected_batch_id') %}
+
+            {% if slot in ['Slot 1', 'Slot 2', 'Slot 3'] and batch_id not in ['unknown', 'unavailable', '', 'none', 'None'] %}
+              {{ mode }} → {{ slot }} · {{ name }}
+            {% elif mode == 'Auto' %}
+              Auto could not find any slot with batch data.
+            {% else %}
+              {{ mode }} is selected, but that slot has no usable batch data.
+            {% endif %}
+
+      - name: BrewAssistant Runtime Recipe Name
+        unique_id: brewassistant_runtime_recipe_name
+        icon: mdi:beer
+        state: >
+          {% set name = states('sensor.brewassistant_bf_selected_batch_name') %}
+          {% if name in ['unknown', 'unavailable', 'none', 'None', '', 'Empty'] %}
+            No active Brewfather batch
+          {% else %}
+            {{ name }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+          has_batch_data: >
+            {{ state_attr('sensor.brewassistant_bf_selected_batch_name', 'has_batch_data') }}
+
+      - name: BrewAssistant Runtime Batch ID
+        unique_id: brewassistant_runtime_batch_id
+        icon: mdi:identifier
+        state: >
+          {% set batch_id = states('sensor.brewassistant_bf_selected_batch_id') %}
+          {% if batch_id in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            unknown
+          {% else %}
+            {{ batch_id }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant Runtime Source
+        unique_id: brewassistant_runtime_source
+        icon: mdi:source-branch
+        state: >
+          brewfather_multiple_batches
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch: >
+            {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+
+      - name: BrewAssistant Runtime Primary Temp
+        unique_id: brewassistant_runtime_primary_temp
+        icon: mdi:thermometer
+        unit_of_measurement: "°C"
+        state: >
+          {% set temp = states('sensor.brewassistant_bf_selected_target_temperature') | float(none) %}
+          {% if temp is not none %}
+            {{ temp | round(1) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_sensor: sensor.brewassistant_bf_selected_target_temperature
+
+      - name: BrewAssistant Runtime Upcoming Temp
+        unique_id: brewassistant_runtime_upcoming_temp
+        icon: mdi:thermometer-chevron-up
+        unit_of_measurement: "°C"
+        state: >
+          {% set temp = states('sensor.brewassistant_bf_selected_upcoming_target_temperature') | float(none) %}
+          {% if temp is not none %}
+            {{ temp | round(1) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_sensor: sensor.brewassistant_bf_selected_upcoming_target_temperature
+
+      - name: BrewAssistant Runtime Fermentation Start
+        unique_id: brewassistant_runtime_fermentation_start
+        icon: mdi:calendar-start
+        device_class: timestamp
+        state: >
+          {% set raw = states('sensor.brewassistant_bf_selected_fermentation_start') %}
+          {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ raw }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant Runtime Fermentation Start Date
+        unique_id: brewassistant_runtime_fermentation_start_date
+        icon: mdi:calendar
+        state: >
+          {% set raw = states('sensor.brewassistant_bf_selected_fermentation_start') %}
+          {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ as_datetime(raw).strftime('%y%m%d') if as_datetime(raw, none) else 'unknown' }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant Runtime Fermentation Start Time
+        unique_id: brewassistant_runtime_fermentation_start_time
+        icon: mdi:clock-outline
+        state: >
+          {% set raw = states('sensor.brewassistant_bf_selected_fermentation_start') %}
+          {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ as_datetime(raw).strftime('%H:%M') if as_datetime(raw, none) else 'unknown' }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant Runtime Last Reading
+        unique_id: brewassistant_runtime_last_reading
+        icon: mdi:clock-check-outline
+        state: >
+          {% set reading = states('sensor.brewassistant_bf_selected_last_reading') %}
+          {% if reading in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            unknown
+          {% else %}
+            {{ reading }}
+          {% endif %}
+        attributes:
+          source: brewfather_multiple_batches
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      #########################################################################
+      # BrewAssistant BF Selected Batch Slot - Auto Strategy v2
+      #########################################################################
+
+      - name: BrewAssistant BF Selected Batch Slot
+        unique_id: brewassistant_bf_selected_batch_slot
+        icon: mdi:database-arrow-right
+        state: >
+          {% set selected = states('input_select.brewassistant_bf_active_batch_slot') %}
+
+          {% set s1_has = state_attr('sensor.brewassistant_bf_batch_1_summary', 'has_batch_data') | string | lower == 'true' %}
+          {% set s2_has = state_attr('sensor.brewassistant_bf_batch_2_summary', 'has_batch_data') | string | lower == 'true' %}
+          {% set s3_has = state_attr('sensor.brewassistant_bf_batch_3_summary', 'has_batch_data') | string | lower == 'true' %}
+
+          {% if selected == 'Slot 1' %}
+            Slot 1
+          {% elif selected == 'Slot 2' %}
+            Slot 2
+          {% elif selected == 'Slot 3' %}
+            Slot 3
+          {% elif selected == 'Auto' %}
+            {% if s1_has %}
+              Slot 1
+            {% elif s2_has %}
+              Slot 2
+            {% elif s3_has %}
+              Slot 3
+            {% else %}
+              None
+            {% endif %}
+          {% else %}
+            None
+          {% endif %}
+        attributes:
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+
+          auto_strategy: >
+            First slot with has_batch_data = true. Priority order: Slot 1, Slot 2, Slot 3.
+
+          slot_1_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'has_batch_data') }}
+
+          slot_2_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'has_batch_data') }}
+
+          slot_3_has_data: >
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'has_batch_data') }}
+
+          slot_1_name: >
+            {{ states('sensor.brewassistant_bf_batch_1_summary') }}
+
+          slot_2_name: >
+            {{ states('sensor.brewassistant_bf_batch_2_summary') }}
+
+          slot_3_name: >
+            {{ states('sensor.brewassistant_bf_batch_3_summary') }}
+
+      - name: BrewAssistant BF Selected Batch Name
+        unique_id: brewassistant_bf_selected_batch_name
+        icon: mdi:glass-mug
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {{ states('sensor.brewassistant_bf_batch_1_summary') }}
+          {% elif slot == 'Slot 2' %}
+            {{ states('sensor.brewassistant_bf_batch_2_summary') }}
+          {% elif slot == 'Slot 3' %}
+            {{ states('sensor.brewassistant_bf_batch_3_summary') }}
+          {% elif slot == 'None' %}
+            No active Brewfather batch
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          batch_id: >
+            {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+            {% if slot == 'Slot 1' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'batch_id') }}
+            {% elif slot == 'Slot 2' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'batch_id') }}
+            {% elif slot == 'Slot 3' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'batch_id') }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          has_batch_data: >
+            {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+            {% if slot == 'Slot 1' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'has_batch_data') }}
+            {% elif slot == 'Slot 2' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'has_batch_data') }}
+            {% elif slot == 'Slot 3' %}
+              {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'has_batch_data') }}
+            {% else %}
+              false
+            {% endif %}
+            
+      - name: BrewAssistant BF Selected Batch ID
+        unique_id: brewassistant_bf_selected_batch_id
+        icon: mdi:identifier
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'batch_id') | default('unknown', true) }}
+          {% elif slot == 'Slot 2' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'batch_id') | default('unknown', true) }}
+          {% elif slot == 'Slot 3' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'batch_id') | default('unknown', true) }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant BF Selected Target Temperature
+        unique_id: brewassistant_bf_selected_target_temperature
+        icon: mdi:thermometer
+        unit_of_measurement: "°C"
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'target_temperature') | float(none) }}
+          {% elif slot == 'Slot 2' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'target_temperature') | float(none) }}
+          {% elif slot == 'Slot 3' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'target_temperature') | float(none) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_attribute: target_temperature
+
+      - name: BrewAssistant BF Selected Upcoming Target Temperature
+        unique_id: brewassistant_bf_selected_upcoming_target_temperature
+        icon: mdi:thermometer-chevron-up
+        unit_of_measurement: "°C"
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'upcoming_target_temperature') | float(none) }}
+          {% elif slot == 'Slot 2' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'upcoming_target_temperature') | float(none) }}
+          {% elif slot == 'Slot 3' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'upcoming_target_temperature') | float(none) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_attribute: upcoming_target_temperature
+
+      - name: BrewAssistant BF Selected Fermentation Start
+        unique_id: brewassistant_bf_selected_fermentation_start
+        icon: mdi:calendar-start
+        device_class: timestamp
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {% set raw = state_attr('sensor.brewassistant_bf_batch_1_summary', 'fermentation_start') %}
+          {% elif slot == 'Slot 2' %}
+            {% set raw = state_attr('sensor.brewassistant_bf_batch_2_summary', 'fermentation_start') %}
+          {% elif slot == 'Slot 3' %}
+            {% set raw = state_attr('sensor.brewassistant_bf_batch_3_summary', 'fermentation_start') %}
+          {% else %}
+            {% set raw = none %}
+          {% endif %}
+
+          {% if raw not in [none, '', 'unknown', 'unavailable'] %}
+            {{ as_datetime(raw).isoformat() if as_datetime(raw, none) else none }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+
+      - name: BrewAssistant BF Selected Last Reading
+        unique_id: brewassistant_bf_selected_last_reading
+        icon: mdi:clock-check-outline
+        state: >
+          {% set slot = states('sensor.brewassistant_bf_selected_batch_slot') %}
+          {% if slot == 'Slot 1' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_1_summary', 'last_reading') | default('unknown', true) }}
+          {% elif slot == 'Slot 2' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_2_summary', 'last_reading') | default('unknown', true) }}
+          {% elif slot == 'Slot 3' %}
+            {{ state_attr('sensor.brewassistant_bf_batch_3_summary', 'last_reading') | default('unknown', true) }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+      #########################################################################
+      # Batch Count
+      #########################################################################
+
+      - name: BrewAssistant BF Batch Count
+        unique_id: brewassistant_bf_batch_count
+        icon: mdi:counter
+        state: >
+          {% set primary = states('sensor.brewfather_recipe_name') %}
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if primary in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            0
+          {% else %}
+            {{ [1 + (others | count), 3] | min }}
+          {% endif %}
+        attributes:
+          source_sensor: sensor.brewfather_recipe_name
+          max_slots: 3
+          primary_batch_id: >
+            {{ state_attr('sensor.brewfather_recipe_name', 'batch_id') | default('', true) }}
+
+      #########################################################################
+      # Slot 1 - Primary Brewfather Batch
+      #########################################################################
+
+      - name: BrewAssistant BF Batch 1 Name
+        unique_id: brewassistant_bf_batch_1_name
+        icon: mdi:glass-mug
+        state: >
+          {% set name = states('sensor.brewfather_recipe_name') %}
+          {% if name in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            Empty
+          {% else %}
+            {{ name }}
+          {% endif %}
+        attributes:
+          slot: 1
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: primary
+          batch_id: >
+            {{ state_attr('sensor.brewfather_recipe_name', 'batch_id') | default('', true) }}
+          is_empty: >
+            {% set name = states('sensor.brewfather_recipe_name') %}
+            {{ name in ['unknown', 'unavailable', 'none', 'None', ''] }}
+
+      - name: BrewAssistant BF Batch 1 Batch ID
+        unique_id: brewassistant_bf_batch_1_batch_id
+        icon: mdi:identifier
+        state: >
+          {% set batch_id = state_attr('sensor.brewfather_recipe_name', 'batch_id') %}
+          {% if batch_id in [none, '', 'unknown', 'unavailable'] %}
+            unknown
+          {% else %}
+            {{ batch_id }}
+          {% endif %}
+        attributes:
+          slot: 1
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: primary
+          batch_name: >
+            {{ states('sensor.brewfather_recipe_name') }}
+
+      #########################################################################
+      # Slot 2 - First Other Batch
+      #########################################################################
+
+      - name: BrewAssistant BF Batch 2 Name
+        unique_id: brewassistant_bf_batch_2_name
+        icon: mdi:glass-mug-variant
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 0 %}
+            {{ others[0].state | default('Unknown', true) }}
+          {% else %}
+            Empty
+          {% endif %}
+        attributes:
+          slot: 2
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: other_batches[0]
+          batch_id: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].batch_id | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          is_empty: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {{ (others | count) == 0 }}
+
+      - name: BrewAssistant BF Batch 2 Batch ID
+        unique_id: brewassistant_bf_batch_2_batch_id
+        icon: mdi:identifier
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 0 %}
+            {{ others[0].batch_id | default('unknown', true) }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          slot: 2
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: other_batches[0]
+          batch_name: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('Unknown', true) }}
+            {% else %}
+              Empty
+            {% endif %}
+
+      #########################################################################
+      # Slot 3 - Second Other Batch
+      #########################################################################
+
+      - name: BrewAssistant BF Batch 3 Name
+        unique_id: brewassistant_bf_batch_3_name
+        icon: mdi:glass-mug-variant
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 1 %}
+            {{ others[1].state | default('Unknown', true) }}
+          {% else %}
+            Empty
+          {% endif %}
+        attributes:
+          slot: 3
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: other_batches[1]
+          batch_id: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].batch_id | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          is_empty: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {{ (others | count) <= 1 }}
+
+      - name: BrewAssistant BF Batch 3 Batch ID
+        unique_id: brewassistant_bf_batch_3_batch_id
+        icon: mdi:identifier
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 1 %}
+            {{ others[1].batch_id | default('unknown', true) }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          slot: 3
+          source_sensor: sensor.brewfather_recipe_name
+          source_type: other_batches[1]
+          batch_name: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('Unknown', true) }}
+            {% else %}
+              Empty
+            {% endif %}
+
+###############################################################################
+# BrewAssistant - Brewfather Source Inventory v1.1
+#
+# Purpose:
+#   Debug/helper sensors that list Brewfather sensors and show which of them
+#   expose batch_id and other_batches.
+###############################################################################
+      - name: BrewAssistant BF Source Inventory
+        unique_id: brewassistant_bf_source_inventory
+        icon: mdi:database-eye
+        state: >
+          {% set ns = namespace(count=0) %}
+          {% for s in states.sensor %}
+            {% if 'brewfather' in s.entity_id %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+        attributes:
+          source: all sensors containing "brewfather"
+          entity_ids: >
+            {% set ns = namespace(items=[]) %}
+            {% for s in states.sensor %}
+              {% if 'brewfather' in s.entity_id %}
+                {% set ns.items = ns.items + [s.entity_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+
+          sensors_with_batch_id: >
+            {% set ns = namespace(items=[]) %}
+            {% for s in states.sensor %}
+              {% set batch_id = state_attr(s.entity_id, 'batch_id') %}
+              {% if 'brewfather' in s.entity_id and batch_id not in [none, '', 'unknown', 'unavailable'] %}
+                {% set ns.items = ns.items + [s.entity_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+
+          sensors_with_other_batches: >
+            {% set ns = namespace(items=[]) %}
+            {% for s in states.sensor %}
+              {% set others = state_attr(s.entity_id, 'other_batches') or [] %}
+              {% if 'brewfather' in s.entity_id and (others | count) > 0 %}
+                {% set ns.items = ns.items + [s.entity_id ~ ' (' ~ (others | count) ~ ')'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+
+      - name: BrewAssistant BF Batch ID Source Count
+        unique_id: brewassistant_bf_batch_id_source_count
+        icon: mdi:identifier
+        state: >
+          {% set ns = namespace(count=0) %}
+          {% for s in states.sensor %}
+            {% set batch_id = state_attr(s.entity_id, 'batch_id') %}
+            {% if 'brewfather' in s.entity_id and batch_id not in [none, '', 'unknown', 'unavailable'] %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+
+      - name: BrewAssistant BF Other Batches Source Count
+        unique_id: brewassistant_bf_other_batches_source_count
+        icon: mdi:source-branch
+        state: >
+          {% set ns = namespace(count=0) %}
+          {% for s in states.sensor %}
+            {% set others = state_attr(s.entity_id, 'other_batches') or [] %}
+            {% if 'brewfather' in s.entity_id and (others | count) > 0 %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+
+      #########################################################################
+      # BrewAssistant BF Batch Slot Summaries v1.1
+      #########################################################################
+
+      - name: BrewAssistant BF Batch 1 Summary
+        unique_id: brewassistant_bf_batch_1_summary
+        icon: mdi:beer
+        state: >
+          {% set name = states('sensor.brewfather_recipe_name') %}
+          {% if name in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            Empty
+          {% else %}
+            {{ name }}
+          {% endif %}
+        attributes:
+          slot: 1
+          source_type: primary
+          batch_id: >
+            {{ state_attr('sensor.brewfather_recipe_name', 'batch_id') | default('', true) }}
+
+          target_temperature: >
+            {{ states('sensor.brewfather_target_temperature') }}
+
+          upcoming_target_temperature: >
+            {{ states('sensor.brewfather_upcoming_target_temperature') }}
+
+          upcoming_target_temperature_change: >
+            {{ states('sensor.brewfather_upcoming_target_temperature_change') }}
+
+          last_reading: >
+            {{ states('sensor.brewfather_last_reading') }}
+
+          fermentation_start: >
+            {{ states('sensor.brewfather_fermentation_start') }}
+
+          batch_notes: >
+            {{ states('sensor.brewfather_batch_notes') }}
+
+          events: >
+            {{ states('sensor.brewfather_events') }}
+
+          has_batch_data: >
+            {% set batch_id = state_attr('sensor.brewfather_recipe_name', 'batch_id') %}
+            {{ batch_id not in [none, '', 'unknown', 'unavailable'] }}
+
+      - name: BrewAssistant BF Batch 2 Summary
+        unique_id: brewassistant_bf_batch_2_summary
+        icon: mdi:beer-outline
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 0 %}
+            {{ others[0].state | default('Unknown', true) }}
+          {% else %}
+            Empty
+          {% endif %}
+        attributes:
+          slot: 2
+          source_type: other_batches[0]
+          batch_id: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].batch_id | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+
+          target_temperature: >
+            {% set others = state_attr('sensor.brewfather_target_temperature', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          upcoming_target_temperature: >
+            {% set others = state_attr('sensor.brewfather_upcoming_target_temperature', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          upcoming_target_temperature_change: >
+            {% set others = state_attr('sensor.brewfather_upcoming_target_temperature_change', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          last_reading: >
+            {% set others = state_attr('sensor.brewfather_last_reading', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          fermentation_start: >
+            {% set others = state_attr('sensor.brewfather_fermentation_start', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          batch_notes: >
+            {% set others = state_attr('sensor.brewfather_batch_notes', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          events: >
+            {% set others = state_attr('sensor.brewfather_events', 'other_batches') or [] %}
+            {% if others | count > 0 %}
+              {{ others[0].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          has_batch_data: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {{ (others | count) > 0 }}
+
+      - name: BrewAssistant BF Batch 3 Summary
+        unique_id: brewassistant_bf_batch_3_summary
+        icon: mdi:beer-outline
+        state: >
+          {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+          {% if others | count > 1 %}
+            {{ others[1].state | default('Unknown', true) }}
+          {% else %}
+            Empty
+          {% endif %}
+        attributes:
+          slot: 3
+          source_type: other_batches[1]
+          batch_id: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].batch_id | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+
+          target_temperature: >
+            {% set others = state_attr('sensor.brewfather_target_temperature', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          upcoming_target_temperature: >
+            {% set others = state_attr('sensor.brewfather_upcoming_target_temperature', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          upcoming_target_temperature_change: >
+            {% set others = state_attr('sensor.brewfather_upcoming_target_temperature_change', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          last_reading: >
+            {% set others = state_attr('sensor.brewfather_last_reading', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          fermentation_start: >
+            {% set others = state_attr('sensor.brewfather_fermentation_start', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          batch_notes: >
+            {% set others = state_attr('sensor.brewfather_batch_notes', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          events: >
+            {% set others = state_attr('sensor.brewfather_events', 'other_batches') or [] %}
+            {% if others | count > 1 %}
+              {{ others[1].state | default('unknown', true) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          has_batch_data: >
+            {% set others = state_attr('sensor.brewfather_recipe_name', 'other_batches') or [] %}
+            {{ (others | count) > 1 }}
+
+###############################################################################
+# BrewAssistant - Brewfather Multiple Batches Binary Health Sensors
+###############################################################################
+  - binary_sensor:
+
+      - name: BrewAssistant BF Selected Batch Ready
+        unique_id: brewassistant_bf_selected_batch_ready
+        icon: mdi:check-circle-outline
+        state: >
+          {{ states('sensor.brewassistant_bf_selected_batch_health')
+             in ['Auto selected active batch', 'Manual slot selected'] }}
+        attributes:
+          health: >
+            {{ states('sensor.brewassistant_bf_selected_batch_health') }}
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+          resolved_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch: >
+            {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+
+      - name: BrewAssistant BF Selected Batch Manual Slot Empty
+        unique_id: brewassistant_bf_selected_batch_manual_slot_empty
+        icon: mdi:database-alert-outline
+        state: >
+          {{ states('sensor.brewassistant_bf_selected_batch_health') == 'Manual slot empty' }}
+        attributes:
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+          resolved_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          summary: >
+            {{ state_attr('sensor.brewassistant_bf_selected_batch_health', 'summary') }}
+
+      - name: BrewAssistant BF Selected Batch Auto No Data
+        unique_id: brewassistant_bf_selected_batch_auto_no_data
+        icon: mdi:database-off-outline
+        state: >
+          {{ states('sensor.brewassistant_bf_selected_batch_health') == 'No batch data' }}
+        attributes:
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+          resolved_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          summary: >
+            {{ state_attr('sensor.brewassistant_bf_selected_batch_health', 'summary') }}
+
+      - name: BrewAssistant BF Selected Batch Invalid
+        unique_id: brewassistant_bf_selected_batch_invalid
+        icon: mdi:alert-circle-outline
+        state: >
+          {{ states('sensor.brewassistant_bf_selected_batch_health') == 'Invalid selection' }}
+        attributes:
+          mode: >
+            {{ states('input_select.brewassistant_bf_active_batch_slot') }}
+          resolved_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          summary: >
+            {{ state_attr('sensor.brewassistant_bf_selected_batch_health', 'summary') }}
+
+
+      #########################################################################
+      # Runtime Bridge Ready
+      #########################################################################
+
+      - name: BrewAssistant BF Runtime Bridge Ready
+        unique_id: brewassistant_bf_runtime_bridge_ready
+        icon: mdi:bridge
+        state: >
+          {{
+            is_state('input_boolean.brewassistant_bf_runtime_bridge_enabled', 'on')
+            and is_state('binary_sensor.brewassistant_bf_selected_batch_ready', 'on')
+          }}
+        attributes:
+          bridge_enabled: >
+            {{ states('input_boolean.brewassistant_bf_runtime_bridge_enabled') }}
+          selected_batch_ready: >
+            {{ states('binary_sensor.brewassistant_bf_selected_batch_ready') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch: >
+            {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_bf_selected_batch_id') }}
+          health: >
+            {{ states('sensor.brewassistant_bf_selected_batch_health') }}
+          summary: >
+            {% if is_state('input_boolean.brewassistant_bf_runtime_bridge_enabled', 'off') %}
+              Runtime bridge is disabled. Existing recipe_runtime sensors should remain in control.
+            {% elif is_state('binary_sensor.brewassistant_bf_selected_batch_ready', 'on') %}
+              Runtime bridge is enabled and selected Brewfather batch is ready.
+            {% else %}
+              Runtime bridge is enabled, but selected batch is not ready.
+            {% endif %}
+
+      - name: BrewAssistant BF Runtime Bridge Blocked
+        unique_id: brewassistant_bf_runtime_bridge_blocked
+        icon: mdi:bridge-off
+        state: >
+          {{
+            is_state('input_boolean.brewassistant_bf_runtime_bridge_enabled', 'on')
+            and is_state('binary_sensor.brewassistant_bf_selected_batch_ready', 'off')
+          }}
+        attributes:
+          bridge_enabled: >
+            {{ states('input_boolean.brewassistant_bf_runtime_bridge_enabled') }}
+          selected_batch_ready: >
+            {{ states('binary_sensor.brewassistant_bf_selected_batch_ready') }}
+          health: >
+            {{ states('sensor.brewassistant_bf_selected_batch_health') }}
+          summary: >
+            {{ state_attr('sensor.brewassistant_bf_selected_batch_health', 'summary') }}
+
+###############################################################################
+# BrewAssistant - Brewfather Runtime Bridge Control
+###############################################################################
+
+input_boolean:
+  brewassistant_bf_runtime_bridge_enabled:
+    name: BrewAssistant BF Runtime Bridge Enabled
+    icon: mdi:bridge
+    initial: false
+
