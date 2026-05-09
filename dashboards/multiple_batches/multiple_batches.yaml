@@ -1,0 +1,152 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_bf_batch_count
+    primary: Brewfather Multiple Batches
+    secondary: >
+      {% set s1 = states('sensor.brewassistant_bf_batch_1_summary') %} {% set s2
+      = states('sensor.brewassistant_bf_batch_2_summary') %} {% set s3 =
+      states('sensor.brewassistant_bf_batch_3_summary') %} {% set batches = [s1,
+      s2, s3] %} {% set active = batches
+        | reject('in', ['Empty', 'unknown', 'unavailable'])
+        | list
+        | count %}
+      {{ active }} batch(es) detected · max 3 slots Multi-batch core online
+    icon: mdi:beer
+    icon_color: amber
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          margin: 8px;
+          border-radius: 22px;
+          background: linear-gradient(135deg, rgba(255,183,77,0.20), rgba(65,39,18,0.42));
+          border: 1px solid rgba(255,183,77,0.24);
+          box-shadow: none;
+          box-sizing: border-box;
+        }
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_bf_batch_1_summary
+    primary: |
+      Slot 1 {{ states('sensor.brewassistant_bf_batch_1_summary') }}
+    secondary: >
+      {% set e = 'sensor.brewassistant_bf_batch_1_summary' %} {% set has_data =
+      state_attr(e, 'has_batch_data') | string == 'True' or state_attr(e,
+      'has_batch_data') | string == 'true' %} {% if not has_data or states(e) ==
+      'Empty' %} No Brewfather batch in this slot {% else %} Batch ID: {{
+      state_attr(e, 'batch_id') }} Target temp: {{ state_attr(e,
+      'target_temperature') }} Upcoming: {{ state_attr(e,
+      'upcoming_target_temperature') }} {% set raw = state_attr(e,
+      'fermentation_start') %} {% if raw not in [none, '', 'unknown',
+      'unavailable'] %} Start date: {{ as_datetime(raw).strftime('%y%m%d') if
+      as_datetime(raw, none) else raw }} Start time: {{
+      as_datetime(raw).strftime('%H:%M') if as_datetime(raw, none) else '' }} {%
+      else %} Start date: unknown Start time: unknown {% endif %} {% endif %}
+    icon: mdi:glass-mug
+    icon_color: green
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, rgba(76,175,80,0.13), rgba(255,255,255,0.035));
+          border: 1px solid rgba(129,199,132,0.22);
+          box-shadow: none;
+          box-sizing: border-box;
+        }
+        ha-card .primary {
+          font-weight: 700;
+          line-height: 1.25;
+          white-space: pre-line;
+        }
+        ha-card .secondary {
+          line-height: 1.55;
+          white-space: pre-line;
+        }
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_bf_batch_2_summary
+    primary: |
+      Slot 2 {{ states('sensor.brewassistant_bf_batch_2_summary') }}
+    secondary: >
+      {% set e = 'sensor.brewassistant_bf_batch_2_summary' %} {% set has_data =
+      state_attr(e, 'has_batch_data') | string == 'True' or state_attr(e,
+      'has_batch_data') | string == 'true' %} {% if not has_data or states(e) ==
+      'Empty' %} No Brewfather batch in this slot {% else %} Batch ID: {{
+      state_attr(e, 'batch_id') }} Target temp: {{ state_attr(e,
+      'target_temperature') }} Upcoming: {{ state_attr(e,
+      'upcoming_target_temperature') }} {% set raw = state_attr(e,
+      'fermentation_start') %} {% if raw not in [none, '', 'unknown',
+      'unavailable'] %} Start date: {{ as_datetime(raw).strftime('%y%m%d') if
+      as_datetime(raw, none) else raw }} Start time: {{
+      as_datetime(raw).strftime('%H:%M') if as_datetime(raw, none) else '' }} {%
+      else %} Start date: unknown Start time: unknown {% endif %} {% endif %}
+    icon: mdi:glass-mug-variant
+    icon_color: grey
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 18px;
+          background: rgba(255,255,255,0.035);
+          border: 1px solid rgba(255,255,255,0.07);
+          box-shadow: none;
+          box-sizing: border-box;
+        }
+        ha-card .primary {
+          font-weight: 700;
+          line-height: 1.25;
+          white-space: pre-line;
+        }
+        ha-card .secondary {
+          line-height: 1.55;
+          white-space: pre-line;
+        }
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_bf_batch_3_summary
+    primary: |
+      Slot 3 {{ states('sensor.brewassistant_bf_batch_3_summary') }}
+    secondary: >
+      {% set e = 'sensor.brewassistant_bf_batch_3_summary' %} {% set has_data =
+      state_attr(e, 'has_batch_data') | string == 'True' or state_attr(e,
+      'has_batch_data') | string == 'true' %} {% if not has_data or states(e) ==
+      'Empty' %} No Brewfather batch in this slot {% else %} Batch ID: {{
+      state_attr(e, 'batch_id') }} Target temp: {{ state_attr(e,
+      'target_temperature') }} Upcoming: {{ state_attr(e,
+      'upcoming_target_temperature') }} {% set raw = state_attr(e,
+      'fermentation_start') %} {% if raw not in [none, '', 'unknown',
+      'unavailable'] %} Start date: {{ as_datetime(raw).strftime('%y%m%d') if
+      as_datetime(raw, none) else raw }} Start time: {{
+      as_datetime(raw).strftime('%H:%M') if as_datetime(raw, none) else '' }} {%
+      else %} Start date: unknown Start time: unknown {% endif %} {% endif %}
+    icon: mdi:glass-mug-variant
+    icon_color: grey
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 18px;
+          background: rgba(255,255,255,0.035);
+          border: 1px solid rgba(255,255,255,0.07);
+          box-shadow: none;
+          box-sizing: border-box;
+        }
+        ha-card .primary {
+          font-weight: 700;
+          line-height: 1.25;
+          white-space: pre-line;
+        }
+        ha-card .secondary {
+          line-height: 1.55;
+          white-space: pre-line;
+        }
