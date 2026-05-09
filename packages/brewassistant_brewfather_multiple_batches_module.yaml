@@ -27,6 +27,16 @@ input_select:
       - Slot 2
       - Slot 3
     initial: Auto
+
+  brewassistant_runtime_fermentation_start_strategy:
+    name: BrewAssistant Runtime Fermentation Start Strategy
+    icon: mdi:calendar-sync
+    options:
+      - Legacy first
+      - Brewfather exact
+      - Brewfather date only
+    initial: Legacy first
+
 template:
   - sensor:
       #########################################################################
@@ -38,6 +48,312 @@ template:
       #   These are NOT replacing old recipe_runtime_* sensors yet.
       #   They are a safe compatibility preview layer.
       #########################################################################
+
+      #########################################################################
+      # BrewAssistant Runtime Fermentation Start Strategy
+      #
+      # Purpose:
+      #   Determines which fermentation_start timestamp should be used by the
+      #   runtime compatibility layer.
+      #
+      # Strategies:
+      #   Legacy first      = use existing recipe_runtime_fermentation_start if available
+      #                       otherwise use Brewfather exact start
+      #   Brewfather exact  = use selected Brewfather fermentation_start as-is
+      #   Brewfather date only = use Brewfather date at local midnight
+      #########################################################################
+
+      - name: BrewAssistant Runtime Fermentation Start Strategy Result
+        unique_id: brewassistant_runtime_fermentation_start_strategy_result
+        icon: mdi:calendar-sync
+        device_class: timestamp
+        state: >
+          {% set strategy = states('input_select.brewassistant_runtime_fermentation_start_strategy') %}
+
+          {% set legacy_raw = states('sensor.recipe_runtime_fermentation_start') %}
+          {% set bf_raw = states('sensor.brewassistant_runtime_fermentation_start') %}
+
+          {% set legacy_ok = legacy_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(legacy_raw, none) %}
+          {% set bf_ok = bf_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(bf_raw, none) %}
+
+          {% if strategy == 'Legacy first' %}
+            {% if legacy_ok %}
+              {{ as_datetime(legacy_raw).isoformat() }}
+            {% elif bf_ok %}
+              {{ as_datetime(bf_raw).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+          {% elif strategy == 'Brewfather exact' %}
+            {% if bf_ok %}
+              {{ as_datetime(bf_raw).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+          {% elif strategy == 'Brewfather date only' %}
+            {% if bf_ok %}
+              {% set local = as_local(as_datetime(bf_raw)) %}
+              {{ today_at('00:00').replace(year=local.year, month=local.month, day=local.day).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          strategy: >
+            {{ states('input_select.brewassistant_runtime_fermentation_start_strategy') }}
+
+          selected_source: >
+            {% set strategy = states('input_select.brewassistant_runtime_fermentation_start_strategy') %}
+            {% set legacy_raw = states('sensor.recipe_runtime_fermentation_start') %}
+            {% set bf_raw = states('sensor.brewassistant_runtime_fermentation_start') %}
+            {% set legacy_ok = legacy_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(legacy_raw, none) %}
+            {% set bf_ok = bf_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(bf_raw, none) %}
+
+            {% if strategy == 'Legacy first' and legacy_ok %}
+              legacy
+            {% elif strategy == 'Legacy first' and bf_ok %}
+              brewfather_exact_fallback
+            {% elif strategy == 'Brewfather exact' and bf_ok %}
+              brewfather_exact
+            {% elif strategy == 'Brewfather date only' and bf_ok %}
+              brewfather_date_only
+            {% else %}
+              none
+            {% endif %}
+
+          legacy_raw: >
+            {{ states('sensor.recipe_runtime_fermentation_start') }}
+
+          brewfather_raw: >
+            {{ states('sensor.brewassistant_runtime_fermentation_start') }}
+
+          selected_local: >
+            {% set raw = states('sensor.brewassistant_runtime_fermentation_start_strategy_result') %}
+            {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(raw, none) %}
+              {{ as_local(as_datetime(raw)).strftime('%y%m%d %H:%M') }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          legacy_local: >
+            {% set raw = states('sensor.recipe_runtime_fermentation_start') %}
+            {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(raw, none) %}
+              {{ as_local(as_datetime(raw)).strftime('%y%m%d %H:%M') }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          brewfather_local: >
+            {% set raw = states('sensor.brewassistant_runtime_fermentation_start') %}
+            {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(raw, none) %}
+              {{ as_local(as_datetime(raw)).strftime('%y%m%d %H:%M') }}
+            {% else %}
+              unknown
+            {% endif %}
+
+          difference_hours_legacy_vs_brewfather: >
+            {% set legacy_raw = states('sensor.recipe_runtime_fermentation_start') %}
+            {% set bf_raw = states('sensor.brewassistant_runtime_fermentation_start') %}
+            {% if legacy_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and bf_raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(legacy_raw, none) and as_datetime(bf_raw, none) %}
+              {{ ((as_datetime(bf_raw).timestamp() - as_datetime(legacy_raw).timestamp()) / 3600) | round(1) }}
+            {% else %}
+              unknown
+            {% endif %}
+
+      #########################################################################
+      # BrewAssistant - Legacy Runtime Mirror v1
+      #
+      # Purpose:
+      #   Safe preview of what recipe_runtime_* replacement sensors would expose.
+      #
+      #   These do NOT overwrite existing recipe_runtime_* sensors.
+      #   They only mirror the selected multi-batch runtime when bridge is ready.
+      #########################################################################
+
+      - name: BrewAssistant Legacy Recipe Runtime Name
+        unique_id: brewassistant_legacy_recipe_runtime_name
+        icon: mdi:beer
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {{ states('sensor.brewassistant_runtime_recipe_name') }}
+          {% else %}
+            Runtime bridge disabled
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          bridge_ready: >
+            {{ states('binary_sensor.brewassistant_bf_runtime_bridge_ready') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_runtime_batch_id') }}
+          source: >
+            {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+              brewfather_multiple_batches
+            {% else %}
+              disabled
+            {% endif %}
+          legacy_target: sensor.recipe_runtime_name
+
+      - name: BrewAssistant Legacy Recipe Runtime Source
+        unique_id: brewassistant_legacy_recipe_runtime_source
+        icon: mdi:source-branch
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            brewfather_multiple_batches
+          {% else %}
+            legacy_runtime_bridge_disabled
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          selected_batch: >
+            {{ states('sensor.brewassistant_runtime_recipe_name') }}
+          selected_batch_id: >
+            {{ states('sensor.brewassistant_runtime_batch_id') }}
+          legacy_target: sensor.recipe_runtime_source
+
+      - name: BrewAssistant Legacy Recipe Runtime Batch ID
+        unique_id: brewassistant_legacy_recipe_runtime_batch_id
+        icon: mdi:identifier
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {{ states('sensor.brewassistant_runtime_batch_id') }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          legacy_target: sensor.recipe_runtime_batch_id
+
+      - name: BrewAssistant Legacy Recipe Runtime Primary Temp
+        unique_id: brewassistant_legacy_recipe_runtime_primary_temp
+        icon: mdi:thermometer
+        unit_of_measurement: "°C"
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {% set temp = states('sensor.brewassistant_runtime_primary_temp') | float(none) %}
+            {% if temp is not none %}
+              {{ temp | round(1) }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_sensor: sensor.brewassistant_runtime_primary_temp
+          legacy_target: sensor.recipe_runtime_primary_temp
+
+      - name: BrewAssistant Legacy Recipe Runtime Upcoming Temp
+        unique_id: brewassistant_legacy_recipe_runtime_upcoming_temp
+        icon: mdi:thermometer-chevron-up
+        unit_of_measurement: "°C"
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {% set temp = states('sensor.brewassistant_runtime_upcoming_temp') | float(none) %}
+            {% if temp is not none %}
+              {{ temp | round(1) }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          source_sensor: sensor.brewassistant_runtime_upcoming_temp
+          legacy_target: sensor.recipe_runtime_upcoming_temp
+
+      - name: BrewAssistant Legacy Recipe Runtime Fermentation Start
+        unique_id: brewassistant_legacy_recipe_runtime_fermentation_start
+        icon: mdi:calendar-start
+        device_class: timestamp
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {% set raw = states('sensor.brewassistant_runtime_fermentation_start_strategy_result') %}
+            {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+              {{ raw }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          strategy: >
+            {{ states('input_select.brewassistant_runtime_fermentation_start_strategy') }}
+          selected_source: >
+            {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'selected_source') }}
+          selected_local: >
+            {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'selected_local') }}
+          legacy_local: >
+            {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'legacy_local') }}
+          brewfather_local: >
+            {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'brewfather_local') }}
+          difference_hours_legacy_vs_brewfather: >
+            {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'difference_hours_legacy_vs_brewfather') }}
+          start_date: >
+            {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+              {% set raw = states('sensor.brewassistant_runtime_fermentation_start_strategy_result') %}
+              {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(raw, none) %}
+                {{ as_local(as_datetime(raw)).strftime('%y%m%d') }}
+              {% else %}
+                unknown
+              {% endif %}
+            {% else %}
+              unknown
+            {% endif %}
+          start_time: >
+            {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+              {% set raw = states('sensor.brewassistant_runtime_fermentation_start_strategy_result') %}
+              {% if raw not in ['unknown', 'unavailable', 'none', 'None', ''] and as_datetime(raw, none) %}
+                {{ as_local(as_datetime(raw)).strftime('%H:%M') }}
+              {% else %}
+                unknown
+              {% endif %}
+            {% else %}
+              unknown
+            {% endif %}
+          legacy_target: sensor.recipe_runtime_fermentation_start
+
+      - name: BrewAssistant Legacy Recipe Runtime Last Reading
+        unique_id: brewassistant_legacy_recipe_runtime_last_reading
+        icon: mdi:clock-check-outline
+        state: >
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
+            {{ states('sensor.brewassistant_runtime_last_reading') }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          bridge_status: >
+            {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
+          selected_slot: >
+            {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+          legacy_target: sensor.recipe_runtime_last_reading
 
       #########################################################################
       # Runtime Bridge Status
