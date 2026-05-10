@@ -3,12 +3,11 @@ cards:
   - type: custom:mushroom-template-card
     entity: sensor.brewassistant_bf_runtime_bridge_status
     primary: Brewfather Core Admin
-    secondary: >
+    secondary: |
       Bridge: {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
       Slot: {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
-      Strategy: {{
-      states('input_select.brewassistant_runtime_fermentation_start_strategy')
-      }} Health: {{ states('sensor.brewassistant_bf_selected_batch_health') }}
+      Strategy: {{ states('input_select.brewassistant_runtime_fermentation_start_strategy') }}
+      Health: {{ states('sensor.brewassistant_bf_selected_batch_health') }}
     icon: mdi:database-cog
     icon_color: >
       {% set status = states('sensor.brewassistant_bf_runtime_bridge_status') %}
@@ -40,6 +39,7 @@ cards:
           line-height: 1.5;
           white-space: pre-line;
         }
+
   - type: grid
     columns: 2
     square: false
@@ -59,6 +59,7 @@ cards:
               border: 1px solid rgba(255,255,255,0.08);
               box-shadow: none;
             }
+
       - type: custom:mushroom-template-card
         entity: binary_sensor.brewassistant_bf_runtime_bridge_ready
         primary: Bridge Ready
@@ -66,8 +67,7 @@ cards:
           {{ states('binary_sensor.brewassistant_bf_runtime_bridge_ready') }}
         icon: mdi:check-network-outline
         icon_color: >
-          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready',
-          'on') %}
+          {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
             green
           {% else %}
             grey
@@ -83,6 +83,7 @@ cards:
               border: 1px solid rgba(255,255,255,0.08);
               box-shadow: none;
             }
+
   - type: custom:mushroom-select-card
     entity: input_select.brewassistant_bf_active_batch_slot
     name: Active Brewfather Batch Slot
@@ -97,6 +98,7 @@ cards:
           border: 1px solid rgba(255,255,255,0.08);
           box-shadow: none;
         }
+
   - type: custom:mushroom-select-card
     entity: input_select.brewassistant_runtime_fermentation_start_strategy
     name: Fermentation Start Strategy
@@ -111,17 +113,17 @@ cards:
           border: 1px solid rgba(255,255,255,0.08);
           box-shadow: none;
         }
+
   - type: custom:mushroom-template-card
     entity: sensor.brewassistant_bf_selected_batch_name
     primary: Selected Batch
-    secondary: >
-      Slot: {{ states('sensor.brewassistant_bf_selected_batch_slot') }} Name: {{
-      states('sensor.brewassistant_bf_selected_batch_name') }} Batch ID: {{
-      states('sensor.brewassistant_bf_selected_batch_id') }}
+    secondary: |
+      Slot: {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
+      Name: {{ states('sensor.brewassistant_bf_selected_batch_name') }}
+      Batch ID: {{ states('sensor.brewassistant_bf_selected_batch_id') }}
     icon: mdi:glass-mug
     icon_color: >
-      {% if is_state('binary_sensor.brewassistant_bf_selected_batch_ready',
-      'on') %}
+      {% if is_state('binary_sensor.brewassistant_bf_selected_batch_ready', 'on') %}
         green
       {% else %}
         red
@@ -145,29 +147,22 @@ cards:
           line-height: 1.5;
           white-space: pre-line;
         }
+
   - type: custom:mushroom-template-card
     entity: sensor.brewassistant_runtime_fermentation_start_strategy_result
     primary: Runtime Start Strategy
-    secondary: >
-      Selected: {{
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'selected_local') }} Source: {{
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'selected_source') }} Legacy: {{
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'legacy_local') }} Brewfather: {{
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'brewfather_local') }} Diff: {{
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'difference_hours_legacy_vs_brewfather') }} h
+    secondary: |
+      Selected: {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'selected_local') }}
+      Source: {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'selected_source') }}
+      Legacy: {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'legacy_local') }}
+      Brewfather: {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'brewfather_local') }}
+      Diff: {{ state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'difference_hours_legacy_vs_brewfather') }} h
     icon: mdi:timeline-clock
     icon_color: >
-      {% set source =
-      state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result',
-      'selected_source') %} {% if source == 'legacy' %}
+      {% set source = state_attr('sensor.brewassistant_runtime_fermentation_start_strategy_result', 'selected_source') %}
+      {% if source == 'legacy' %}
         green
-      {% elif source in ['brewfather_exact', 'brewfather_date_only',
-      'brewfather_exact_fallback'] %}
+      {% elif source in ['brewfather_exact', 'brewfather_date_only', 'brewfather_exact_fallback'] %}
         amber
       {% else %}
         red
@@ -191,20 +186,18 @@ cards:
           line-height: 1.5;
           white-space: pre-line;
         }
+
   - type: custom:mushroom-template-card
     entity: sensor.brewassistant_legacy_recipe_runtime_name
     primary: Runtime Mirror
-    secondary: >
+    secondary: |
       Name: {{ states('sensor.brewassistant_legacy_recipe_runtime_name') }}
       Source: {{ states('sensor.brewassistant_legacy_recipe_runtime_source') }}
-      Temp: {{ states('sensor.brewassistant_legacy_recipe_runtime_primary_temp')
-      }} °C Start: {{
-      state_attr('sensor.brewassistant_legacy_recipe_runtime_fermentation_start',
-      'selected_local') }}
+      Temp: {{ states('sensor.brewassistant_legacy_recipe_runtime_primary_temp') }} °C
+      Start: {{ state_attr('sensor.brewassistant_legacy_recipe_runtime_fermentation_start', 'selected_local') }}
     icon: mdi:mirror
     icon_color: >
-      {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready',
-      'on') %}
+      {% if is_state('binary_sensor.brewassistant_bf_runtime_bridge_ready', 'on') %}
         green
       {% else %}
         grey
@@ -228,6 +221,7 @@ cards:
           line-height: 1.5;
           white-space: pre-line;
         }
+
   - type: custom:expander-card
     title: Debug
     padding: 0
