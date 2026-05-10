@@ -6,7 +6,8 @@ cards:
     secondary: |
       Bridge: {{ states('sensor.brewassistant_bf_runtime_bridge_status') }}
       Slot: {{ states('sensor.brewassistant_bf_selected_batch_slot') }}
-      Strategy: {{ states('input_select.brewassistant_runtime_fermentation_start_strategy') }}
+      Start strategy: {{ states('input_select.brewassistant_runtime_fermentation_start_strategy') }}
+      Temp strategy: {{ states('input_select.brewassistant_runtime_primary_temp_strategy') }}
       Health: {{ states('sensor.brewassistant_bf_selected_batch_health') }}
     icon: mdi:database-cog
     icon_color: >
@@ -114,6 +115,21 @@ cards:
           box-shadow: none;
         }
 
+  - type: custom:mushroom-select-card
+    entity: input_select.brewassistant_runtime_primary_temp_strategy
+    name: Primary Temp Strategy
+    icon: mdi:thermometer-sync
+    icon_color: amber
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 18px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: none;
+        }
+
   - type: custom:mushroom-template-card
     entity: sensor.brewassistant_bf_selected_batch_name
     primary: Selected Batch
@@ -188,6 +204,45 @@ cards:
         }
 
   - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_runtime_primary_temp_strategy_result
+    primary: Primary Temp Strategy
+    secondary: |
+      Selected: {{ state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'selected_temp') }} °C
+      Source: {{ state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'selected_source') }}
+      Legacy: {{ state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'legacy_temp') }} °C
+      Brewfather: {{ state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'brewfather_temp') }} °C
+      Diff: {{ state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'difference_legacy_vs_brewfather') }} °C
+    icon: mdi:thermometer-sync
+    icon_color: >
+      {% set source = state_attr('sensor.brewassistant_runtime_primary_temp_strategy_result', 'selected_source') %}
+      {% if source == 'legacy' %}
+        green
+      {% elif source in ['brewfather_target', 'brewfather_target_fallback'] %}
+        amber
+      {% else %}
+        red
+      {% endif %}
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, rgba(156,39,176,0.10), rgba(255,255,255,0.035));
+          border: 1px solid rgba(206,147,216,0.18);
+          box-shadow: none;
+        }
+        ha-card .primary {
+          font-weight: 700;
+        }
+        ha-card .secondary {
+          line-height: 1.5;
+          white-space: pre-line;
+        }
+
+  - type: custom:mushroom-template-card
     entity: sensor.brewassistant_legacy_recipe_runtime_name
     primary: Runtime Mirror
     secondary: |
@@ -248,16 +303,29 @@ cards:
             name: Selected batch health
           - entity: binary_sensor.brewassistant_bf_selected_batch_ready
             name: Selected batch ready
+
           - type: section
             label: Fermentation start
           - entity: sensor.brewassistant_runtime_fermentation_start_strategy_result
-            name: Strategy result
+            name: Start strategy result
           - entity: sensor.recipe_runtime_fermentation_start
             name: Legacy start
           - entity: sensor.brewassistant_runtime_fermentation_start
             name: Brewfather exact start
           - entity: sensor.brewassistant_legacy_recipe_runtime_fermentation_start
             name: Mirror start
+
+          - type: section
+            label: Primary temperature
+          - entity: sensor.brewassistant_runtime_primary_temp_strategy_result
+            name: Temp strategy result
+          - entity: sensor.recipe_runtime_primary_temp
+            name: Legacy primary temp
+          - entity: sensor.brewassistant_runtime_primary_temp
+            name: Brewfather target temp
+          - entity: sensor.brewassistant_legacy_recipe_runtime_primary_temp
+            name: Mirror primary temp
+
           - type: section
             label: Runtime mirror
           - entity: sensor.brewassistant_legacy_recipe_runtime_name
