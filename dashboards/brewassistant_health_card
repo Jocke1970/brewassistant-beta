@@ -1,11 +1,4 @@
 type: custom:vertical-stack-in-card
-card_mod:
-  style: |
-    ha-card {
-      background: transparent !important;
-      box-shadow: none !important;
-      border: none !important;
-    }
 cards:
   - type: custom:button-card
     entity: sensor.brewassistant_health_status
@@ -94,7 +87,7 @@ cards:
         - overflow: hidden
       grid:
         - grid-template-areas: "\"i n\" \"i l\""
-        - grid-template-columns: 52px 1fr
+        - grid-template-columns: 72px 1fr
         - grid-template-rows: min-content 1fr
       icon:
         - width: 34px
@@ -121,9 +114,23 @@ cards:
         - white-space: normal
         - color: white
         - text-shadow: 0 1px 3px rgba(0,0,0,0.6)
+  - type: custom:button-card
+    styles:
+      card:
+        - height: 8px
+        - padding: 0
+        - margin: 0
+        - background: transparent
+        - box-shadow: none
+        - border: none
   - type: grid
     columns: 3
     square: false
+    card_mod:
+      style: |
+        #root {
+          gap: 8px !important;
+        }
     cards:
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_climate_ok
@@ -139,8 +146,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   return entity?.state === 'on'
@@ -153,15 +161,19 @@ cards:
                 [[[
                   return entity?.state === 'on' ? '#7ee787' : '#ff8a80';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
       - type: custom:button-card
         entity: binary_sensor.brewassistant_fermentation_chamber_ok
         name: Chamber
@@ -178,8 +190,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   const chamber = states['climate.fermentation_chamber']?.state;
@@ -196,15 +209,19 @@ cards:
                   if (chamber === 'off') return 'rgba(255,255,255,0.60)';
                   return entity?.state === 'on' ? '#7ee787' : '#ff8a80';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
       - type: custom:button-card
         entity: binary_sensor.brewassistant_rapt_pill_gravity_ok
         name: RAPT SG
@@ -219,8 +236,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   return entity?.state === 'on'
@@ -233,15 +251,19 @@ cards:
                 [[[
                   return entity?.state === 'on' ? '#7ee787' : '#ff8a80';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
       - type: custom:button-card
         entity: binary_sensor.brewassistant_brewfather_batch_ok
         name: Brewfather
@@ -256,8 +278,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   return entity?.state === 'on'
@@ -270,15 +293,19 @@ cards:
                 [[[
                   return entity?.state === 'on' ? '#7ee787' : '#ff8a80';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_temperature_sensor_battery_low
         name: Keg Battery
@@ -301,8 +328,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   return entity?.state === 'on'
@@ -315,15 +343,18 @@ cards:
                 [[[
                   return entity?.state === 'on' ? '#ff8a80' : '#90caf9';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
             - white-space: normal
       - type: custom:button-card
         entity: binary_sensor.brewassistant_kegerator_power_sensor_ok
@@ -351,8 +382,9 @@ cards:
           ]]]
         styles:
           card:
-            - height: 92px
-            - border-radius: 18px
+            - height: 104px
+            - padding: 10px
+            - border-radius: 20px
             - background: |
                 [[[
                   const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
@@ -368,15 +400,19 @@ cards:
                   const compressor = states['binary_sensor.kegerator_compressor_active']?.state;
                   return compressor === 'on' ? '#90caf9' : 'rgba(255,255,255,0.72)';
                 ]]]
-            - width: 32px
+            - width: 36px
           name:
             - color: white
             - font-weight: 900
-            - font-size: 12px
+            - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
           label:
             - color: rgba(255,255,255,0.92)
             - font-weight: 800
             - font-size: 13px
+            - line-height: 1.15
+            - white-space: normal
   - type: custom:button-card
     entity: sensor.brewassistant_problem_count
     name: Active Problems
@@ -424,9 +460,10 @@ cards:
       ]]]
     styles:
       card:
-        - border-radius: 18px
-        - padding: 14px
-        - min-height: 110px
+        - border-radius: 20px
+        - padding: 16px
+        - min-height: 118px
+        - margin-top: 8px
         - background: |
             [[[
               const count = parseInt(entity?.state ?? '0');
@@ -441,15 +478,15 @@ cards:
         - box-shadow: 0 4px 14px rgba(0,0,0,0.18)
       grid:
         - grid-template-areas: "\"i n\" \"i l\""
-        - grid-template-columns: 48px 1fr
+        - grid-template-columns: 72px 1fr
         - grid-template-rows: min-content 1fr
       img_cell:
-        - width: 48px
-        - height: 48px
+        - width: 52px
+        - height: 52px
         - border-radius: 50%
         - background: rgba(255,255,255,0.10)
       icon:
-        - width: 30px
+        - width: 32px
         - color: |
             [[[
               const count = parseInt(entity?.state ?? '0');
@@ -469,3 +506,10 @@ cards:
         - white-space: normal
         - text-align: left
         - justify-self: start
+card_mod:
+  style: |
+    ha-card {
+      background: transparent !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
