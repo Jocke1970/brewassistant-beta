@@ -95,6 +95,43 @@ cards:
               - white-space: nowrap
               - overflow: hidden
               - text-overflow: ellipsis
+      progress: |
+        [[[ 
+          const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
+          if (!enabled) return '';
+
+          const raw = Number(states['sensor.fwk_attenuation']?.state ?? 0);
+          const att = isNaN(raw) ? 0 : raw;
+          const pct = Math.max(0, Math.min(att, 100));
+          const shown = Math.round(att);
+
+          let bar = 'linear-gradient(90deg, rgba(66,165,245,0.95), rgba(38,198,218,0.95))';
+          let glow = 'rgba(66,165,245,0.28)';
+          let status = 'tidig / aktiv jäsning';
+
+          if (att >= 75 && att <= 100) {
+            bar = 'linear-gradient(90deg, rgba(102,187,106,0.95), rgba(139,195,74,0.95))';
+            glow = 'rgba(102,187,106,0.28)';
+            status = 'nära mål';
+          }
+          if (att > 100) {
+            bar = 'linear-gradient(90deg, rgba(255,193,7,0.95), rgba(255,152,0,0.95))';
+            glow = 'rgba(255,193,7,0.30)';
+            status = 'över beräknad FG';
+          }
+
+          return `
+            <div style="margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);">
+                <span>Fermentation progress</span>
+                <span>${shown}% · ${status}</span>
+              </div>
+              <div style="height:9px;border-radius:999px;background:rgba(255,255,255,0.13);overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.35);">
+                <div style="width:${pct}%;height:100%;border-radius:999px;background:${bar};box-shadow:0 0 14px ${glow};transition:width 0.6s ease;"></div>
+              </div>
+            </div>
+          `;
+        ]]]
     label: |
       [[[ 
         const enabled = states['input_boolean.fwk_process_card_enabled']?.state === 'on';
@@ -143,9 +180,11 @@ cards:
       action: none
     styles:
       grid:
-        - grid-template-areas: "\"i n power\" \"i s power\" \"i l power\" \"chip chip chip\""
+        - grid-template-areas: >-
+            "i n power" "i s power" "i l power" "chip chip chip" "progress
+            progress progress"
         - grid-template-columns: 72px 1fr 48px
-        - grid-template-rows: min-content min-content 1fr min-content
+        - grid-template-rows: min-content min-content 1fr min-content min-content
       card:
         - padding: 18px
         - border-radius: 24px
@@ -205,6 +244,8 @@ cards:
           - align-self: start
         chip:
           - margin-top: 12px
+          - width: 100%
+        progress:
           - width: 100%
   - type: conditional
     conditions:
@@ -374,12 +415,20 @@ cards:
                   tap_action:
                     action: more-info
                   card_mod:
-                    style: |
+                    style: >
+                      {% set t =
+                      state_attr('sensor.brewfather_next_fermentation_step',
+                      'time') %}
+
+                      {% set due = t and ((as_timestamp(t) -
+                      as_timestamp(now())) <= 86400) and ((as_timestamp(t) -
+                      as_timestamp(now())) > -7200) %}
+
                       ha-card {
                         border-radius: 18px;
-                        background: rgba(255,255,255,0.045);
-                        border: 1px solid rgba(255,255,255,0.07);
-                        box-shadow: none;
+                        background: {% if due %}linear-gradient(135deg, rgba(3,169,244,0.22), rgba(255,255,255,0.055)){% else %}rgba(255,255,255,0.045){% endif %};
+                        border: 1px solid {% if due %}rgba(3,169,244,0.55){% else %}rgba(255,255,255,0.07){% endif %};
+                        box-shadow: {% if due %}0 0 18px rgba(3,169,244,0.22){% else %}none{% endif %};
                       }
                 - type: custom:mushroom-template-card
                   entity: sensor.brewfather_next_dry_hop
@@ -399,12 +448,25 @@ cards:
                   tap_action:
                     action: more-info
                   card_mod:
-                    style: |
+                    style: >
+                      {% set t = state_attr('sensor.brewfather_next_dry_hop',
+                      'time') %}
+
+                      {% set label = states('sensor.brewfather_next_dry_hop') %}
+
+                      {% set has_event = label not in
+                      ['unknown','unavailable','none','','Ingen kommande
+                      torrhumling'] %}
+
+                      {% set due = has_event and t and ((as_timestamp(t) -
+                      as_timestamp(now())) <= 86400) and ((as_timestamp(t) -
+                      as_timestamp(now())) > -7200) %}
+
                       ha-card {
                         border-radius: 18px;
-                        background: rgba(255,255,255,0.045);
-                        border: 1px solid rgba(255,255,255,0.07);
-                        box-shadow: none;
+                        background: {% if due %}linear-gradient(135deg, rgba(76,175,80,0.24), rgba(255,255,255,0.055)){% else %}rgba(255,255,255,0.045){% endif %};
+                        border: 1px solid {% if due %}rgba(76,175,80,0.60){% else %}rgba(255,255,255,0.07){% endif %};
+                        box-shadow: {% if due %}0 0 18px rgba(76,175,80,0.24){% else %}none{% endif %};
                       }
                 - type: custom:mushroom-template-card
                   entity: sensor.brewfather_next_bottling_day
@@ -424,12 +486,20 @@ cards:
                   tap_action:
                     action: more-info
                   card_mod:
-                    style: |
+                    style: >
+                      {% set t =
+                      state_attr('sensor.brewfather_next_bottling_day', 'time')
+                      %}
+
+                      {% set due = t and ((as_timestamp(t) -
+                      as_timestamp(now())) <= 86400) and ((as_timestamp(t) -
+                      as_timestamp(now())) > -7200) %}
+
                       ha-card {
                         border-radius: 18px;
-                        background: rgba(255,255,255,0.045);
-                        border: 1px solid rgba(255,255,255,0.07);
-                        box-shadow: none;
+                        background: {% if due %}linear-gradient(135deg, rgba(255,193,7,0.22), rgba(255,255,255,0.055)){% else %}rgba(255,255,255,0.045){% endif %};
+                        border: 1px solid {% if due %}rgba(255,193,7,0.58){% else %}rgba(255,255,255,0.07){% endif %};
+                        box-shadow: {% if due %}0 0 18px rgba(255,193,7,0.23){% else %}none{% endif %};
                       }
                 - type: custom:mushroom-template-card
                   entity: sensor.brewfather_fermentation_event_summary
@@ -441,12 +511,18 @@ cards:
                   tap_action:
                     action: more-info
                   card_mod:
-                    style: |
+                    style: >
+                      {% set current = states('sensor.fwk_current_action_stage')
+                      %}
+
+                      {% set active = current not in
+                      ['none','unknown','unavailable',''] %}
+
                       ha-card {
                         border-radius: 18px;
-                        background: rgba(255,255,255,0.045);
-                        border: 1px solid rgba(255,255,255,0.07);
-                        box-shadow: none;
+                        background: {% if active %}linear-gradient(135deg, rgba(156,39,176,0.20), rgba(255,255,255,0.055)){% else %}rgba(255,255,255,0.045){% endif %};
+                        border: 1px solid {% if active %}rgba(156,39,176,0.48){% else %}rgba(255,255,255,0.07){% endif %};
+                        box-shadow: {% if active %}0 0 16px rgba(156,39,176,0.18){% else %}none{% endif %};
                       }
           card_mod:
             style: |
@@ -459,6 +535,66 @@ cards:
                 box-shadow: none;
                 overflow: hidden;
               }
+        - type: conditional
+          conditions:
+            - entity: sensor.fwk_current_action_stage
+              state_not: none
+          card:
+            type: custom:button-card
+            entity: sensor.fwk_current_action_stage
+            name: Action due
+            icon: |
+              [[[ 
+                const stage = entity?.state ?? 'none';
+                if (stage === 'spunding') return 'mdi:gauge';
+                if (stage === 'dry_hop') return 'mdi:leaf';
+                if (stage === 'cold_crash') return 'mdi:snowflake';
+                if (stage === 'transfer') return 'mdi:transfer-right';
+                return 'mdi:alert-circle-outline';
+              ]]]
+            show_state: true
+            show_label: true
+            label: |
+              [[[ 
+                const stage = entity?.state ?? 'none';
+                if (stage === 'spunding') return 'Spunding är aktivt steg · öppna Process Actions vid behov';
+                if (stage === 'dry_hop') return 'Torrhumling är aktivt steg · öppna Process Actions när du är redo';
+                if (stage === 'cold_crash') return 'Cold crash är aktivt steg · öppna Process Actions när du är redo';
+                if (stage === 'transfer') return 'Transfer är aktivt steg · öppna Process Actions när du är redo';
+                return 'Aktivt steg finns · öppna Process Actions vid behov';
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 12px 14px
+                - background: >-
+                    linear-gradient(135deg, rgba(255,193,7,0.20),
+                    rgba(255,255,255,0.045))
+                - border: 1px solid rgba(255,193,7,0.45)
+                - box-shadow: 0 0 18px rgba(255,193,7,0.16)
+              grid:
+                - grid-template-areas: "\"i n\" \"i s\" \"i l\""
+                - grid-template-columns: 42px 1fr
+              icon:
+                - width: 24px
+                - color: "#ffca28"
+              name:
+                - justify-self: start
+                - font-size: 13px
+                - font-weight: 900
+                - color: white
+              state:
+                - justify-self: start
+                - font-size: 12px
+                - font-weight: 800
+                - color: rgba(255,255,255,0.88)
+              label:
+                - justify-self: start
+                - font-size: 12px
+                - color: rgba(255,255,255,0.82)
+                - white-space: normal
         - type: custom:expander-card
           title: Process Actions
           padding: 0
@@ -802,6 +938,40 @@ cards:
                       -
                     {% endif %}
                   icon: mdi:clock
+                  icon_color: grey
+                  multiline_secondary: false
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  entity: sensor.fwk_batch_age_days
+                  primary: Batch Age Days
+                  secondary: "{{ states('sensor.fwk_batch_age_days') }} d"
+                  icon: mdi:calendar-clock
+                  icon_color: amber
+                  multiline_secondary: false
+                  tap_action:
+                    action: more-info
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        background: rgba(255,255,255,0.045);
+                        border: 1px solid rgba(255,255,255,0.07);
+                        box-shadow: none;
+                      }
+                - type: custom:mushroom-template-card
+                  entity: sensor.fwk_batch_age_hours
+                  primary: Batch Age Hours
+                  secondary: "{{ states('sensor.fwk_batch_age_hours') }} h"
+                  icon: mdi:clock-outline
                   icon_color: grey
                   multiline_secondary: false
                   tap_action:
