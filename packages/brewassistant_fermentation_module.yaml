@@ -746,18 +746,18 @@ template:
     unique_id: fwk_ready_for_cold_crash
     state: |
       {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
-        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
+        and is_state('input_boolean.brew_transferred_to_keg', 'off')
         and is_state('binary_sensor.fwk_sg_stable_2_days', 'on')
-        and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.002)
+        and (states('sensor.brew_fermentation_gravity_points_left') | float(99) <= 0.002)
       }}
   - name: FWK Ready For Transfer
     unique_id: fwk_ready_for_transfer
     state: |
       {{
-        is_state('input_boolean.fwk_cold_crash_active', 'on')
-        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        is_state('input_boolean.brew_cold_crash_active', 'on')
+        and is_state('input_boolean.brew_transferred_to_keg', 'off')
         and (states('sensor.fwk_cold_crash_days') | float(0) >=
              states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
       }}
@@ -765,31 +765,31 @@ template:
     unique_id: fwk_spunding_preview
     state: |
       {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_spunding_installed', 'off')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
-        and (states('sensor.fwk_batch_age_hours') | float(0) >=
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_spunding_installed', 'off')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
+        and (states('sensor.brew_batch_age_hours') | float(0) >=
              (states('sensor.recipe_runtime_spunding_after_hours') | float(24) - 6))
-        and (states('sensor.fwk_batch_age_hours') | float(0) <
+        and (states('sensor.brew_batch_age_hours') | float(0) <
              states('sensor.recipe_runtime_spunding_after_hours') | float(24))
       }}
   - name: FWK Spunding Active
     unique_id: fwk_spunding_active
     state: |
       {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_spunding_installed', 'off')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
-        and (states('sensor.fwk_batch_age_hours') | float(0) >=
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_spunding_installed', 'off')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
+        and (states('sensor.brew_batch_age_hours') | float(0) >=
              states('sensor.recipe_runtime_spunding_after_hours') | float(24))
       }}
   - name: FWK Dry Hop Preview
     unique_id: fwk_dry_hop_preview
     state: |
-      {% set sg = states('sensor.fwk_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_dry_hop_added', 'off')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+      {% set sg = states('sensor.brew_fermentation_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_dry_hop_added', 'off')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
         and sg > high
         and sg <= (high + 0.002)
         and sg >= low
@@ -797,10 +797,10 @@ template:
   - name: FWK Dry Hop Active
     unique_id: fwk_dry_hop_active
     state: |
-      {% set sg = states('sensor.fwk_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_dry_hop_added', 'off')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
+      {% set sg = states('sensor.brew_fermentation_live_sg') | float(0) %} {% set high = states('sensor.recipe_runtime_dry_hop_sg_high') | float(1.014) %} {% set low = states('sensor.recipe_runtime_dry_hop_sg_low') | float(1.012) %} {{
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_dry_hop_added', 'off')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
         and sg <= high
         and sg >= low
       }}
@@ -808,24 +808,24 @@ template:
     unique_id: fwk_cold_crash_preview
     state: |
       {{
-        is_state('input_boolean.fwk_batch_active', 'on')
-        and is_state('input_boolean.fwk_cold_crash_active', 'off')
-        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
-        and (states('sensor.fwk_gravity_points_left') | float(99) <= 0.004)
-        and is_state('binary_sensor.fwk_ready_for_cold_crash', 'off')
+        is_state('input_boolean.brew_batch_active', 'on')
+        and is_state('input_boolean.brew_cold_crash_active', 'off')
+        and is_state('input_boolean.brew_transferred_to_keg', 'off')
+        and (states('sensor.brew_fermentation_gravity_points_left') | float(99) <= 0.004)
+        and is_state('binary_sensor.brew_process_ready_for_cold_crash', 'off')
       }}
   - name: FWK Cold Crash Active Card
     unique_id: fwk_cold_crash_active_card
     state: |
       {{
-        is_state('binary_sensor.fwk_ready_for_cold_crash', 'on')
+        is_state('binary_sensor.brew_process_ready_for_cold_crash', 'on')
       }}
   - name: FWK Transfer Preview
     unique_id: fwk_transfer_preview
     state: |
       {{
-        is_state('input_boolean.fwk_cold_crash_active', 'on')
-        and is_state('input_boolean.fwk_transferred_to_keg', 'off')
+        is_state('input_boolean.brew_cold_crash_active', 'on')
+        and is_state('input_boolean.brew_transferred_to_keg', 'off')
         and (states('sensor.fwk_cold_crash_days') | float(0) > 0)
         and (states('sensor.fwk_cold_crash_days') | float(0) <
              states('sensor.recipe_runtime_cold_crash_days_min') | float(2))
@@ -834,7 +834,7 @@ template:
     unique_id: fwk_transfer_active
     state: |
       {{
-        is_state('binary_sensor.fwk_ready_for_transfer', 'on')
+        is_state('binary_sensor.brew_process_ready_for_transfer', 'on')
       }}
 - sensor:
   - name: BrewAssistant Smart Liquid Temp
