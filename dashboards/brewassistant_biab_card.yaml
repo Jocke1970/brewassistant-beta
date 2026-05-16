@@ -8,43 +8,103 @@ cards:
     show_state: false
     show_label: true
     tap_action:
-      action: toggle
+      action: none
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: input_boolean.brewassistant_biab_active
+          icon: mdi:power
+          show_name: false
+          show_state: false
+          tap_action:
+            action: toggle
+          styles:
+            card:
+              - width: 38px
+              - height: 38px
+              - border-radius: 50%
+              - padding: 0
+              - background: rgba(255,255,255,0.08)
+              - box-shadow: none
+              - border: 1px solid rgba(255,255,255,0.10)
+            icon:
+              - width: 20px
+              - color: |
+                  [[[
+                    return states['input_boolean.brewassistant_biab_active']?.state === 'on'
+                      ? '#ffffff'
+                      : 'rgba(255,255,255,0.62)';
+                  ]]]
     label: |
       [[[
         const active = states['input_boolean.brewassistant_biab_active']?.state === 'on';
         const stage = states['sensor.brewassistant_biab_current_stage']?.state ?? 'Idle';
         const progress = states['sensor.brewassistant_biab_progress']?.state ?? '0';
         const instruction = states['sensor.brewassistant_biab_instruction']?.state ?? '';
-        if (!active) return 'Off · Tap to start brewday';
+
+        if (!active) {
+          return 'Avstängd · tryck power för att visa detaljer';
+        }
+
         return `${stage} · ${progress}%\n${instruction}`;
       ]]]
     styles:
       card:
         - border-radius: 22px
-        - padding: 18px
+        - padding: 14px 14px
         - color: white
         - background: |
             [[[
               return entity.state === 'on'
                 ? 'linear-gradient(135deg, rgba(255,126,45,0.95), rgba(160,64,0,0.95))'
-                : 'linear-gradient(135deg, rgba(35,39,47,0.95), rgba(15,17,22,0.95))';
+                : 'linear-gradient(135deg, rgba(30,33,38,0.98), rgba(18,20,24,0.98))';
             ]]]
-        - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
+        - box-shadow: |
+            [[[
+              return entity.state === 'on'
+                ? '0 8px 22px rgba(0,0,0,0.35)'
+                : 'none';
+            ]]]
+        - border: 1px solid rgba(255,255,255,0.08)
       grid:
-        - grid-template-areas: "\"i n\" \"i l\""
-        - grid-template-columns: 48px 1fr
+        - grid-template-areas: "\"i n power\" \"i l power\""
+        - grid-template-columns: 48px 1fr 42px
+        - grid-template-rows: min-content min-content
       icon:
-        - width: 38px
-        - color: white
+        - width: 30px
+        - color: |
+            [[[
+              return entity.state === 'on'
+                ? '#ffffff'
+                : 'rgba(255,255,255,0.46)';
+            ]]]
+      img_cell:
+        - width: 42px
+        - height: 42px
+        - border-radius: 50%
+        - background: |
+            [[[
+              return entity.state === 'on'
+                ? 'rgba(255,255,255,0.14)'
+                : 'rgba(255,255,255,0.07)';
+            ]]]
       name:
-        - font-size: 20px
+        - font-size: 18px
         - font-weight: 800
         - justify-self: start
+        - align-self: end
       label:
         - white-space: pre-line
         - font-size: 13px
-        - opacity: 0.92
+        - font-weight: 700
+        - opacity: 0.78
         - justify-self: start
+        - align-self: start
+      custom_fields:
+        power:
+          - justify-self: end
+          - align-self: center
   - type: conditional
     conditions:
       - entity: input_boolean.brewassistant_biab_active
@@ -134,6 +194,69 @@ cards:
                 - white-space: pre-line
                 - font-size: 13px
                 - justify-self: start
+        - type: custom:mushroom-template-card
+          primary: DigiBoil 35L
+          secondary: >
+            {{ states('sensor.brewassistant_biab_digiboil_power_status') }} · {{
+            states('sensor.brewassistant_biab_digiboil_power_mode') }} · {{
+            states('sensor.digiboil_35l_power') }} W
+          icon: >
+            {% if
+            is_state('binary_sensor.brewassistant_biab_digiboil_heating_detected',
+            'on') %}
+              mdi:fire
+            {% elif is_state('switch.digiboil_35l', 'on') %}
+              mdi:kettle-steam
+            {% else %}
+              mdi:kettle-outline
+            {% endif %}
+          icon_color: >
+            {% if
+            is_state('binary_sensor.brewassistant_biab_digiboil_heating_detected',
+            'on') %}
+              orange
+            {% elif is_state('switch.digiboil_35l', 'on') %}
+              blue
+            {% else %}
+              grey
+            {% endif %}
+          tap_action:
+            action: more-info
+            entity: switch.digiboil_35l
+          card_mod:
+            style: |
+              ha-card {
+                border-radius: 18px !important;
+                margin: 8px 8px 0 8px !important;
+                background: rgba(255,255,255,0.05) !important;
+                box-shadow: none !important;
+              }
+        - type: custom:mushroom-template-card
+          primary: DigiBoil Power Mode
+          secondary: >
+            {{ states('sensor.brewassistant_biab_digiboil_power_mode') }} · {{
+            states('sensor.digiboil_35l_power') }} W
+          icon: mdi:lightning-bolt
+          icon_color: >
+            {% set mode =
+            states('sensor.brewassistant_biab_digiboil_power_mode') %} {% if
+            mode == '2400 W' %}
+              red
+            {% elif mode == '1900 W' %}
+              orange
+            {% elif mode == '500 W' %}
+              amber
+            {% else %}
+              grey
+            {% endif %}
+          card_mod:
+            style: |
+              ha-card {
+                border-radius: 18px !important;
+                margin: 8px 8px 0 8px !important;
+                background: rgba(255,255,255,0.05) !important;
+                box-shadow: none !important;
+              }
         - type: custom:expander-card
           title: BIAB Calculations
           clear: false
@@ -385,6 +508,226 @@ cards:
                     background: linear-gradient(180deg, rgba(24,27,34,0.98), rgba(12,14,18,0.98)) !important;
                     box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
                     border: 1px solid rgba(255,255,255,0.08) !important;
+                  }
+        - type: custom:expander-card
+          title: BIAB Hop Scheduler
+          clear: false
+          cards:
+            - type: custom:vertical-stack-in-card
+              cards:
+                - type: custom:button-card
+                  entity: input_boolean.brewassistant_biab_hop_reminders_enabled
+                  name: BIAB Hop Scheduler
+                  icon: mdi:hop
+                  show_state: false
+                  show_label: true
+                  tap_action:
+                    action: toggle
+                  label: |
+                    [[[
+                      const enabled = entity.state === 'on';
+                      const h1 = states['input_text.brewassistant_biab_hop_1_label']?.state ?? 'Hop 1';
+                      const h2 = states['input_text.brewassistant_biab_hop_2_label']?.state ?? 'Hop 2';
+                      const h3 = states['input_text.brewassistant_biab_hop_3_label']?.state ?? 'Hop 3';
+                      const t1 = states['input_number.brewassistant_biab_hop_1_remaining_min']?.state ?? '—';
+                      const t2 = states['input_number.brewassistant_biab_hop_2_remaining_min']?.state ?? '—';
+                      const t3 = states['input_number.brewassistant_biab_hop_3_remaining_min']?.state ?? '—';
+
+                      if (!enabled) return 'Off · Tap to enable hop reminders';
+                      return `Active\n${h1} @ ${t1} min kvar · ${h2} @ ${t2} min kvar · ${h3} @ ${t3} min kvar`;
+                    ]]]
+                  styles:
+                    card:
+                      - border-radius: 20px
+                      - padding: 16px
+                      - color: white
+                      - background: |
+                          [[[
+                            return entity.state === 'on'
+                              ? 'linear-gradient(135deg, rgba(65,160,90,0.92), rgba(14,55,26,0.98))'
+                              : 'linear-gradient(135deg, rgba(50,55,65,0.92), rgba(18,20,25,0.98))';
+                          ]]]
+                      - box-shadow: 0 8px 22px rgba(0,0,0,0.35)
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 44px 1fr
+                    icon:
+                      - width: 34px
+                      - color: "#7bed9f"
+                    name:
+                      - font-size: 18px
+                      - font-weight: 800
+                      - justify-self: start
+                    label:
+                      - white-space: pre-line
+                      - font-size: 13px
+                      - opacity: 0.92
+                      - justify-self: start
+                - type: conditional
+                  conditions:
+                    - entity: input_boolean.brewassistant_biab_hop_reminders_enabled
+                      state: "on"
+                  card:
+                    type: grid
+                    columns: 1
+                    square: false
+                    cards:
+                      - type: custom:mushroom-template-card
+                        primary: Hop Reminder Status
+                        secondary: >
+                          {{
+                          state_attr('sensor.brewassistant_biab_hop_reminder_summary',
+                          'hop_1') }} {{ '\n' }} {{
+                          state_attr('sensor.brewassistant_biab_hop_reminder_summary',
+                          'hop_2') }} {{ '\n' }} {{
+                          state_attr('sensor.brewassistant_biab_hop_reminder_summary',
+                          'hop_3') }}
+                        icon: mdi:format-list-checks
+                        icon_color: green
+                        multiline_secondary: true
+                      - type: custom:mushroom-template-card
+                        primary: Reminder 1
+                        secondary: >
+                          {{ states('input_text.brewassistant_biab_hop_1_label')
+                          }} · {{
+                          states('input_number.brewassistant_biab_hop_1_remaining_min')
+                          }} min kvar · {{ 'Enabled' if
+                          is_state('input_boolean.brewassistant_biab_hop_1_enabled','on')
+                          else 'Disabled' }}
+                        icon: mdi:numeric-1-circle
+                        icon_color: green
+                        multiline_secondary: true
+                      - type: custom:stack-in-card
+                        mode: vertical
+                        cards:
+                          - type: custom:mushroom-entity-card
+                            entity: input_boolean.brewassistant_biab_hop_1_enabled
+                            name: Enable reminder 1
+                            icon: mdi:toggle-switch
+                            layout: horizontal
+                          - type: custom:mushroom-entity-card
+                            entity: input_text.brewassistant_biab_hop_1_label
+                            name: Label
+                            icon: mdi:form-textbox
+                            layout: horizontal
+                            tap_action:
+                              action: more-info
+                          - type: custom:mushroom-number-card
+                            entity: >-
+                              input_number.brewassistant_biab_hop_1_remaining_min
+                            name: Minutes remaining
+                            icon: mdi:timer-outline
+                            display_mode: buttons
+                            layout: horizontal
+                      - type: custom:mushroom-template-card
+                        primary: Reminder 2
+                        secondary: >
+                          {{ states('input_text.brewassistant_biab_hop_2_label')
+                          }} · {{
+                          states('input_number.brewassistant_biab_hop_2_remaining_min')
+                          }} min kvar · {{ 'Enabled' if
+                          is_state('input_boolean.brewassistant_biab_hop_2_enabled','on')
+                          else 'Disabled' }}
+                        icon: mdi:numeric-2-circle
+                        icon_color: light-green
+                        multiline_secondary: true
+                      - type: custom:stack-in-card
+                        mode: vertical
+                        cards:
+                          - type: custom:mushroom-entity-card
+                            entity: input_boolean.brewassistant_biab_hop_2_enabled
+                            name: Enable reminder 2
+                            icon: mdi:toggle-switch
+                            layout: horizontal
+                          - type: custom:mushroom-entity-card
+                            entity: input_text.brewassistant_biab_hop_2_label
+                            name: Label
+                            icon: mdi:form-textbox
+                            layout: horizontal
+                            tap_action:
+                              action: more-info
+                          - type: custom:mushroom-number-card
+                            entity: >-
+                              input_number.brewassistant_biab_hop_2_remaining_min
+                            name: Minutes remaining
+                            icon: mdi:timer-outline
+                            display_mode: buttons
+                            layout: horizontal
+                      - type: custom:mushroom-template-card
+                        primary: Reminder 3
+                        secondary: >
+                          {{ states('input_text.brewassistant_biab_hop_3_label')
+                          }} · {{
+                          states('input_number.brewassistant_biab_hop_3_remaining_min')
+                          }} min kvar · {{ 'Enabled' if
+                          is_state('input_boolean.brewassistant_biab_hop_3_enabled','on')
+                          else 'Disabled' }}
+                        icon: mdi:numeric-3-circle
+                        icon_color: lime
+                        multiline_secondary: true
+                      - type: custom:stack-in-card
+                        mode: vertical
+                        cards:
+                          - type: custom:mushroom-entity-card
+                            entity: input_boolean.brewassistant_biab_hop_3_enabled
+                            name: Enable reminder 3
+                            icon: mdi:toggle-switch
+                            layout: horizontal
+                          - type: custom:mushroom-entity-card
+                            entity: input_text.brewassistant_biab_hop_3_label
+                            name: Label
+                            icon: mdi:form-textbox
+                            layout: horizontal
+                            tap_action:
+                              action: more-info
+                          - type: custom:mushroom-number-card
+                            entity: >-
+                              input_number.brewassistant_biab_hop_3_remaining_min
+                            name: Minutes remaining
+                            icon: mdi:timer-outline
+                            display_mode: buttons
+                            layout: horizontal
+                - type: custom:button-card
+                  name: How it works
+                  icon: mdi:information-outline
+                  show_state: false
+                  show_label: true
+                  label: |
+                    [[[
+                      return 'Reminders are based on minutes remaining in boil.\nExample: 15 min kvar = reminder fires 45 min into a 60 min boil.\n0 min kvar = flameout / end of boil.';
+                    ]]]
+                  styles:
+                    card:
+                      - margin-top: 4px
+                      - border-radius: 18px
+                      - padding: 14px
+                      - color: white
+                      - background: rgba(255,255,255,0.045)
+                      - box-shadow: none
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 38px 1fr
+                    icon:
+                      - width: 28px
+                      - color: "#7bed9f"
+                    name:
+                      - font-size: 15px
+                      - font-weight: 700
+                      - justify-self: start
+                    label:
+                      - white-space: pre-line
+                      - font-size: 12px
+                      - opacity: 0.82
+                      - justify-self: start
+              card_mod:
+                style: |
+                  ha-card {
+                    margin: 8px !important;
+                    padding: 10px !important;
+                    border-radius: 22px !important;
+                    background: linear-gradient(180deg, rgba(20,30,24,0.98), rgba(10,14,12,0.98)) !important;
+                    box-shadow: 0 10px 28px rgba(0,0,0,0.35) !important;
+                    border: 1px solid rgba(120,255,160,0.12) !important;
                   }
         - type: custom:expander-card
           title: BIAB Checklist
