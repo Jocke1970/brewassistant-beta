@@ -601,19 +601,19 @@ template:
   - name: FWK Process Status
     unique_id: fwk_process_status
     icon: |
-      {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+      {% if is_state('input_boolean.brew_transferred_to_keg', 'on') %}
         mdi:check-circle
-      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+      {% elif is_state('input_boolean.brew_cold_crash_active', 'on') %}
         mdi:snowflake
-      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_transfer', 'on') %}
         mdi:transfer-right
-      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_cold_crash', 'on') %}
         mdi:thermometer-chevron-down
-      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         mdi:leaf-circle
-      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         mdi:gauge
-      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+      {% elif is_state('input_boolean.brew_batch_active', 'on') %}
         mdi:beer
       {% elif states('sensor.recipe_runtime_status') not in ['unknown', 'unavailable', 'none', ''] %}
         mdi:clipboard-text-clock
@@ -622,23 +622,23 @@ template:
       {% endif %}
     state: |
       {% set bf_status = states('sensor.recipe_runtime_status') %}
-      {% set batch_active = is_state('input_boolean.fwk_batch_active', 'on') %}
+      {% set batch_active = is_state('input_boolean.brew_batch_active', 'on') %}
 
-      {% if is_state('input_boolean.fwk_process_card_enabled', 'off') %}
+      {% if is_state('input_boolean.brew_process_card_enabled', 'off') %}
        Off
-      {% elif is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+      {% elif is_state('input_boolean.brew_transferred_to_keg', 'on') %}
         Finished / transferred to keg
       {% elif not batch_active %}
         Idle
-      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+      {% elif is_state('input_boolean.brew_cold_crash_active', 'on') %}
         Cold crash
-      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_transfer', 'on') %}
         Ready for transfer
-      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_cold_crash', 'on') %}
         Ready for cold crash
-      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         Dry hop now
-      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         Install spunding
       {% elif batch_active %}
         Primary fermentation
@@ -651,23 +651,23 @@ template:
     unique_id: fwk_next_step
     icon: mdi:timeline-text
     state: |
-      {% set bf_status = states('sensor.recipe_runtime_status') %} {% set bf_days_left = states('sensor.recipe_runtime_fermenting_days_left') | float(0) %} {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+      {% set bf_status = states('sensor.recipe_runtime_status') %} {% set bf_days_left = states('sensor.recipe_runtime_fermenting_days_left') | float(0) %} {% if is_state('input_boolean.brew_transferred_to_keg', 'on') %}
         Batch completed
-      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_transfer', 'on') %}
         Perform closed transfer to keg
-      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+      {% elif is_state('input_boolean.brew_cold_crash_active', 'on') %}
         Maintain cold crash and positive pressure
-      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_cold_crash', 'on') %}
         Start cold crash
-      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         Add dry hop charge
-      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_preview', 'on') %}
         Prepare dry hop
-      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         Install spunding valve
-      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_preview', 'on') %}
         Prepare spunding setup
-      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+      {% elif is_state('input_boolean.brew_batch_active', 'on') %}
         Monitor fermentation
       {% elif bf_status == 'Fermenting' and bf_days_left > 0 %}
         Follow Brewfather fermentation plan
@@ -680,23 +680,23 @@ template:
     unique_id: fwk_next_step_clean
     icon: mdi:timeline-text
     state: |
-      {% if is_state('input_boolean.fwk_transferred_to_keg', 'on') %}
+      {% if is_state('input_boolean.brew_transferred_to_keg', 'on') %}
         Batch completed
-      {% elif is_state('binary_sensor.fwk_ready_for_transfer', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_transfer', 'on') %}
         Perform closed transfer to keg
-      {% elif is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+      {% elif is_state('input_boolean.brew_cold_crash_active', 'on') %}
         Maintain cold crash and positive pressure
-      {% elif is_state('binary_sensor.fwk_ready_for_cold_crash', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_ready_for_cold_crash', 'on') %}
         Start cold crash
-      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         Add dry hop charge
-      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_preview', 'on') %}
         Prepare dry hop
-      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         Install spunding valve
-      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_preview', 'on') %}
         Prepare spunding setup
-      {% elif is_state('input_boolean.fwk_batch_active', 'on') %}
+      {% elif is_state('input_boolean.brew_batch_active', 'on') %}
         Monitor fermentation
       {% else %}
         Start a new batch
@@ -704,13 +704,13 @@ template:
   - name: FWK Current Action Stage
     unique_id: fwk_current_action_stage
     state: |
-      {% if is_state('binary_sensor.fwk_transfer_active', 'on') %}
+      {% if is_state('binary_sensor.brew_process_transfer_active', 'on') %}
         transfer
-      {% elif is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_cold_crash_active_card', 'on') %}
         cold_crash
-      {% elif is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         dry_hop
-      {% elif is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         spunding
       {% else %}
         none
@@ -718,17 +718,17 @@ template:
   - name: FWK Next Action Stage
     unique_id: fwk_next_action_stage
     state: |
-      {% if is_state('binary_sensor.fwk_transfer_preview', 'on')
-            and not is_state('binary_sensor.fwk_transfer_active', 'on') %}
+      {% if is_state('binary_sensor.brew_process_transfer_preview', 'on')
+            and not is_state('binary_sensor.brew_process_transfer_active', 'on') %}
         transfer
-      {% elif is_state('binary_sensor.fwk_cold_crash_preview', 'on')
-            and not is_state('binary_sensor.fwk_cold_crash_active_card', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_cold_crash_preview', 'on')
+            and not is_state('binary_sensor.brew_process_cold_crash_active_card', 'on') %}
         cold_crash
-      {% elif is_state('binary_sensor.fwk_dry_hop_preview', 'on')
-            and not is_state('binary_sensor.fwk_dry_hop_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_dry_hop_preview', 'on')
+            and not is_state('binary_sensor.brew_process_dry_hop_active', 'on') %}
         dry_hop
-      {% elif is_state('binary_sensor.fwk_spunding_preview', 'on')
-            and not is_state('binary_sensor.fwk_spunding_active', 'on') %}
+      {% elif is_state('binary_sensor.brew_process_spunding_preview', 'on')
+            and not is_state('binary_sensor.brew_process_spunding_active', 'on') %}
         spunding
       {% else %}
         none
