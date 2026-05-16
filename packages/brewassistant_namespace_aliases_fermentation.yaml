@@ -214,6 +214,36 @@ template:
         state: "{{ states('counter.fwk_gravity_check_counter') }}"
 
 script:
+  brew_batch_start:
+    alias: BrewAssistant - Start Batch
+    mode: single
+    sequence:
+      - service: script.fwk_start_batch
+
+  brew_spunding_mark_installed:
+    alias: BrewAssistant - Mark Spunding Installed
+    mode: single
+    sequence:
+      - service: script.fwk_mark_spunding_installed
+
+  brew_dry_hop_mark_added:
+    alias: BrewAssistant - Mark Dry Hop Added
+    mode: single
+    sequence:
+      - service: script.fwk_mark_dry_hop_added
+
+  brew_cold_crash_start:
+    alias: BrewAssistant - Start Cold Crash
+    mode: single
+    sequence:
+      - service: script.fwk_start_cold_crash
+
+  brew_keg_transfer_mark_done:
+    alias: BrewAssistant - Mark Transferred To Keg
+    mode: single
+    sequence:
+      - service: script.fwk_mark_transferred_to_keg
+
   brew_workflow_confirm_gravity_check:
     alias: BrewAssistant - Confirm Gravity Check
     mode: single
