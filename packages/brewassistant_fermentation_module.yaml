@@ -1135,7 +1135,7 @@ automation:
     entity_id: sensor.recipe_runtime_status
     state: Fermenting
   action:
-  - service: script.fwk_start_batch
+  - service: script.brew_batch_start
 - alias: FWK - Auto Reset After Batch Completed
   id: fwk_auto_reset_after_batch_completed
   trigger:
@@ -1144,7 +1144,7 @@ automation:
     to: 'on'
     for: '12:00:00'
   action:
-  - service: script.fwk_reset_batch
+  - service: script.brew_batch_reset
   condition:
   - condition: state
     entity_id: input_boolean.brewassistant_fermentation_enabled
