@@ -27,7 +27,7 @@ cards:
                 icon: mdi:crosshairs-gps
                 tap_action:
                   action: call-service
-                  service: script.fwk_apply_brewfather_target
+                  service: script.brew_chamber_apply_brewfather_target
                 styles:
                   card:
                     - width: 36px
@@ -109,7 +109,7 @@ cards:
           label: |
             [[[
               const batch = states['sensor.recipe_runtime_name']?.state ?? 'BrewAssistant';
-              const process = states['sensor.fwk_process_status']?.state ?? 'Idle';
+              const process = states['sensor.brew_process_status']?.state ?? 'Idle';
               const mode = states['input_select.brewassistant_smart_fermentation_mode']?.state ?? '—';
               const controlMode = states['sensor.brewassistant_smart_control_mode']?.state ?? '—';
 
@@ -904,7 +904,7 @@ cards:
       type: custom:vertical-stack-in-card
       cards:
         - type: custom:button-card
-          entity: sensor.fwk_process_status
+          entity: sensor.brew_process_status
           name: Fermentation Status
           icon: mdi:beer-outline
           show_state: true
@@ -981,16 +981,16 @@ cards:
           label: |
             [[[
               const batch = states['sensor.recipe_runtime_name']?.state ?? 'BrewAssistant';
-              const process = states['sensor.fwk_process_status']?.state ?? 'Idle';
-              const next = states['sensor.fwk_next_step']?.state ?? '—';
+              const process = states['sensor.brew_process_status']?.state ?? 'Idle';
+              const next = states['sensor.brew_process_next_step']?.state ?? '—';
 
-              const sg = states['sensor.fwk_live_sg']?.state ?? states['sensor.brewassistant_current_gravity']?.state ?? '—';
+              const sg = states['sensor.brew_fermentation_live_sg']?.state ?? states['sensor.brewassistant_current_gravity']?.state ?? '—';
               const og = states['sensor.recipe_runtime_og']?.state ?? states['input_number.fwk_recipe_og']?.state ?? '—';
               const fg = states['sensor.recipe_runtime_fg']?.state ?? states['input_number.fwk_recipe_fg']?.state ?? '—';
               const daysLeft = states['sensor.recipe_runtime_fermenting_days_left']?.state ?? '—';
 
               const temp = states['sensor.brewassistant_smart_liquid_temp']?.state ?? '—';
-              const target = states['sensor.brewassistant_smart_target_temp']?.state ?? states['sensor.fwk_recipe_active_target_temp']?.state ?? '—';
+              const target = states['sensor.brewassistant_smart_target_temp']?.state ?? states['sensor.brew_recipe_active_target_temp']?.state ?? '—';
               const delta = states['sensor.brewassistant_smart_temp_delta']?.state ?? '—';
               const source = states['sensor.brewassistant_smart_liquid_temp_source']?.state ?? '—';
 
@@ -1143,7 +1143,7 @@ cards:
               - color: white
               - background: |
                   [[[
-                    const process = states['sensor.fwk_process_status']?.state ?? '';
+                    const process = states['sensor.brew_process_status']?.state ?? '';
                     const pillStale = states['binary_sensor.brewassistant_smart_pill_temp_stale']?.state === 'on';
                     const fallback = states['binary_sensor.brewassistant_smart_temp_fallback_active']?.state === 'on';
                     const compressor = states['binary_sensor.kegerator_compressor_active']?.state === 'on';
@@ -1180,7 +1180,7 @@ cards:
               - border-radius: 50%
               - background: |
                   [[[
-                    const process = states['sensor.fwk_process_status']?.state ?? '';
+                    const process = states['sensor.brew_process_status']?.state ?? '';
                     const pillStale = states['binary_sensor.brewassistant_smart_pill_temp_stale']?.state === 'on';
                     const fallback = states['binary_sensor.brewassistant_smart_temp_fallback_active']?.state === 'on';
 
@@ -1201,7 +1201,7 @@ cards:
               - height: 29px
               - color: |
                   [[[
-                    const process = states['sensor.fwk_process_status']?.state ?? '';
+                    const process = states['sensor.brew_process_status']?.state ?? '';
                     const pillStale = states['binary_sensor.brewassistant_smart_pill_temp_stale']?.state === 'on';
                     const fallback = states['binary_sensor.brewassistant_smart_temp_fallback_active']?.state === 'on';
 
@@ -1259,10 +1259,10 @@ cards:
             cards:
               - type: custom:mushroom-template-card
                 primary: SG
-                secondary: "{{ states('sensor.fwk_live_sg') }}"
+                secondary: "{{ states('sensor.brew_fermentation_live_sg') }}"
                 icon: mdi:hydrometer
                 icon_color: >
-                  {% set sg = states('sensor.fwk_live_sg') | float(0) %} {% if
+                  {% set sg = states('sensor.brew_fermentation_live_sg') | float(0) %} {% if
                   sg <= 1.015 and sg > 0 %}
                     green
                   {% elif sg <= 1.025 and sg > 0 %}
@@ -1271,7 +1271,7 @@ cards:
                     blue
                   {% endif %}
                 layout: vertical
-                entity: sensor.fwk_live_sg
+                entity: sensor.brew_fermentation_live_sg
                 tap_action:
                   action: more-info
                 card_mod:
@@ -1426,11 +1426,11 @@ cards:
                     }
               - type: custom:mushroom-template-card
                 primary: Nästa steg
-                secondary: "{{ states('sensor.fwk_next_step') }}"
+                secondary: "{{ states('sensor.brew_process_next_step') }}"
                 icon: mdi:clipboard-list-outline
                 icon_color: amber
                 layout: vertical
-                entity: sensor.fwk_next_step
+                entity: sensor.brew_process_next_step
                 tap_action:
                   action: more-info
                 card_mod:
