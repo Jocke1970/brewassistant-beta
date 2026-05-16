@@ -27,7 +27,7 @@ cards:
                 icon: mdi:crosshairs-gps
                 tap_action:
                   action: call-service
-                  service: script.fwk_apply_brewfather_target
+                  service: script.brew_chamber_apply_brewfather_target
                 styles:
                   card:
                     - width: 36px
@@ -109,7 +109,7 @@ cards:
           label: |
             [[[
               const batch = states['sensor.recipe_runtime_name']?.state ?? 'BrewAssistant';
-              const process = states['sensor.fwk_process_status']?.state ?? 'Idle';
+              const process = states['sensor.brew_process_status']?.state ?? 'Idle';
               const mode = states['input_select.brewassistant_smart_fermentation_mode']?.state ?? '—';
               const controlMode = states['sensor.brewassistant_smart_control_mode']?.state ?? '—';
 
