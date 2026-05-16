@@ -1,0 +1,159 @@
+###############################################################################
+# BrewAssistant v4 - Notification Aliases
+# Transitional aliases needed before migrating brewassistant_notifications_module
+# away from remaining fwk_* helper/entity references.
+#
+# Keep this file while fwk_* remains backend/source of truth.
+###############################################################################
+
+input_boolean:
+  brew_cold_crash_active:
+    name: Brew Cold Crash Active
+    icon: mdi:snowflake
+
+  brew_dry_hop_added:
+    name: Brew Dry Hop Added
+    icon: mdi:leaf-check
+
+  brew_spunding_installed:
+    name: Brew Spunding Installed
+    icon: mdi:gauge
+
+automation:
+  - alias: BrewAssistant Namespace Alias - Sync Cold Crash Active New To Legacy
+    id: brewassistant_namespace_alias_sync_cold_crash_active_new_to_legacy
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.brew_cold_crash_active
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_cold_crash_active') != states('input_boolean.brew_cold_crash_active') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.brew_cold_crash_active', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.fwk_cold_crash_active
+
+  - alias: BrewAssistant Namespace Alias - Sync Cold Crash Active Legacy To New
+    id: brewassistant_namespace_alias_sync_cold_crash_active_legacy_to_new
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_cold_crash_active
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_cold_crash_active') != states('input_boolean.brew_cold_crash_active') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.fwk_cold_crash_active', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.brew_cold_crash_active
+
+  - alias: BrewAssistant Namespace Alias - Sync Dry Hop Added New To Legacy
+    id: brewassistant_namespace_alias_sync_dry_hop_added_new_to_legacy
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.brew_dry_hop_added
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_dry_hop_added') != states('input_boolean.brew_dry_hop_added') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.brew_dry_hop_added', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.fwk_dry_hop_added
+
+  - alias: BrewAssistant Namespace Alias - Sync Dry Hop Added Legacy To New
+    id: brewassistant_namespace_alias_sync_dry_hop_added_legacy_to_new
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_dry_hop_added
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_dry_hop_added') != states('input_boolean.brew_dry_hop_added') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.fwk_dry_hop_added', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.brew_dry_hop_added
+
+  - alias: BrewAssistant Namespace Alias - Sync Spunding Installed New To Legacy
+    id: brewassistant_namespace_alias_sync_spunding_installed_new_to_legacy
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.brew_spunding_installed
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_spunding_installed') != states('input_boolean.brew_spunding_installed') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.brew_spunding_installed', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.fwk_spunding_installed
+
+  - alias: BrewAssistant Namespace Alias - Sync Spunding Installed Legacy To New
+    id: brewassistant_namespace_alias_sync_spunding_installed_legacy_to_new
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fwk_spunding_installed
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('input_boolean.fwk_spunding_installed') != states('input_boolean.brew_spunding_installed') }}
+    action:
+      - service: >
+          {% if is_state('input_boolean.fwk_spunding_installed', 'on') %}
+            input_boolean.turn_on
+          {% else %}
+            input_boolean.turn_off
+          {% endif %}
+        target:
+          entity_id: input_boolean.brew_spunding_installed
+
+template:
+  - binary_sensor:
+      - name: Brew Fermentation Temperature Too High
+        unique_id: brew_fermentation_temperature_too_high
+        icon: mdi:thermometer-high
+        state: "{{ is_state('binary_sensor.fwk_temperature_too_high', 'on') }}"
+
+      - name: Brew Fermentation Temperature Too Low
+        unique_id: brew_fermentation_temperature_too_low
+        icon: mdi:thermometer-low
+        state: "{{ is_state('binary_sensor.fwk_temperature_too_low', 'on') }}"
