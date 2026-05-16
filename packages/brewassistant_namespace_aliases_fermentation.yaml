@@ -1,0 +1,251 @@
+###############################################################################
+# BrewAssistant v4 - Fermentation Workflow Aliases
+# Transitional read aliases and script wrappers used before migrating
+# brewassistant_fermentation_module.yaml away from remaining fwk_* references.
+#
+# Keep this file while fwk_* remains backend/source of truth.
+###############################################################################
+
+template:
+  - binary_sensor:
+      - name: Brew Workflow Recipe Loaded
+        unique_id: brew_workflow_recipe_loaded
+        icon: mdi:file-check-outline
+        state: "{{ is_state('input_boolean.fwk_recipe_loaded', 'on') }}"
+
+      - name: Brew Workflow Batch Confirmed
+        unique_id: brew_workflow_batch_confirmed
+        icon: mdi:checkbox-marked-circle-outline
+        state: "{{ is_state('input_boolean.fwk_batch_confirmed', 'on') }}"
+
+      - name: Brew Workflow Yeast Pitched
+        unique_id: brew_workflow_yeast_pitched
+        icon: mdi:yeast
+        state: "{{ is_state('input_boolean.fwk_yeast_pitched', 'on') }}"
+
+      - name: Brew Workflow Primary Fermentation Started
+        unique_id: brew_workflow_primary_fermentation_started
+        icon: mdi:play-circle-outline
+        state: "{{ is_state('input_boolean.fwk_primary_fermentation_started', 'on') }}"
+
+      - name: Brew Workflow Primary Fermentation Done
+        unique_id: brew_workflow_primary_fermentation_done
+        icon: mdi:check-circle-outline
+        state: "{{ is_state('input_boolean.fwk_primary_fermentation_done', 'on') }}"
+
+      - name: Brew Workflow Gravity Check Day 1 Done
+        unique_id: brew_workflow_gravity_check_day_1_done
+        icon: mdi:numeric-1-circle-outline
+        state: "{{ is_state('input_boolean.fwk_gravity_check_day_1_done', 'on') }}"
+
+      - name: Brew Workflow Gravity Check Day 2 Done
+        unique_id: brew_workflow_gravity_check_day_2_done
+        icon: mdi:numeric-2-circle-outline
+        state: "{{ is_state('input_boolean.fwk_gravity_check_day_2_done', 'on') }}"
+
+      - name: Brew Workflow Gravity Stable Confirmed
+        unique_id: brew_workflow_gravity_stable_confirmed
+        icon: mdi:chart-line-variant
+        state: "{{ is_state('input_boolean.fwk_gravity_stable_confirmed', 'on') }}"
+
+      - name: Brew Workflow Positive Pressure Confirmed
+        unique_id: brew_workflow_positive_pressure_confirmed
+        icon: mdi:gauge
+        state: "{{ is_state('input_boolean.fwk_positive_pressure_confirmed', 'on') }}"
+
+      - name: Brew Workflow Ready For Cold Crash Confirmed
+        unique_id: brew_workflow_ready_for_cold_crash_confirmed
+        icon: mdi:snowflake-check
+        state: "{{ is_state('input_boolean.fwk_ready_for_cold_crash', 'on') }}"
+
+      - name: Brew Workflow Ready For Packaging
+        unique_id: brew_workflow_ready_for_packaging
+        icon: mdi:package-variant-closed-check
+        state: "{{ is_state('input_boolean.fwk_ready_for_packaging', 'on') }}"
+
+      - name: Brew Workflow Batch Archived
+        unique_id: brew_workflow_batch_archived
+        icon: mdi:archive-check-outline
+        state: "{{ is_state('input_boolean.fwk_batch_archived', 'on') }}"
+
+  - sensor:
+      - name: Brew Recipe Manual OG
+        unique_id: brew_recipe_manual_og
+        icon: mdi:hydrometer
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_recipe_og') }}"
+
+      - name: Brew Recipe Manual FG
+        unique_id: brew_recipe_manual_fg
+        icon: mdi:hydrometer
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_recipe_fg') }}"
+
+      - name: Brew Fermentation Manual SG
+        unique_id: brew_fermentation_manual_sg
+        icon: mdi:hydrometer
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_manual_sg') }}"
+
+      - name: Brew Fermentation Manual SG Previous
+        unique_id: brew_fermentation_manual_sg_previous
+        icon: mdi:hydrometer
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_manual_sg_previous') }}"
+
+      - name: Brew Fermentation Gravity Stable Delta Limit
+        unique_id: brew_fermentation_gravity_stable_delta_limit
+        icon: mdi:delta
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_gravity_stable_delta_limit') }}"
+
+      - name: Brew Fermentation Target ABV
+        unique_id: brew_fermentation_target_abv
+        icon: mdi:percent-outline
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.fwk_target_abv') }}"
+
+      - name: Brew Fermentation Primary Temp Target
+        unique_id: brew_fermentation_primary_temp_target
+        icon: mdi:thermometer
+        unit_of_measurement: °C
+        device_class: temperature
+        state: "{{ states('input_number.fwk_primary_temp_target') }}"
+
+      - name: Brew Fermentation Primary Temp Low
+        unique_id: brew_fermentation_primary_temp_low
+        icon: mdi:thermometer-low
+        unit_of_measurement: °C
+        device_class: temperature
+        state: "{{ states('input_number.fwk_primary_temp_low') }}"
+
+      - name: Brew Fermentation Primary Temp High
+        unique_id: brew_fermentation_primary_temp_high
+        icon: mdi:thermometer-high
+        unit_of_measurement: °C
+        device_class: temperature
+        state: "{{ states('input_number.fwk_primary_temp_high') }}"
+
+      - name: Brew Fermentation Diacetyl Rest Temp
+        unique_id: brew_fermentation_diacetyl_rest_temp
+        icon: mdi:thermometer-plus
+        unit_of_measurement: °C
+        device_class: temperature
+        state: "{{ states('input_number.fwk_diacetyl_rest_temp') }}"
+
+      - name: Brew Fermentation SG Today
+        unique_id: brew_fermentation_sg_today
+        icon: mdi:calendar-today
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_sg_today') }}"
+
+      - name: Brew Fermentation SG Yesterday
+        unique_id: brew_fermentation_sg_yesterday
+        icon: mdi:calendar-minus
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_sg_yesterday') }}"
+
+      - name: Brew Fermentation SG Two Days Ago
+        unique_id: brew_fermentation_sg_two_days_ago
+        icon: mdi:calendar-clock
+        unit_of_measurement: SG
+        state: "{{ states('input_number.fwk_sg_two_days_ago') }}"
+
+      - name: Brew Workflow Batch Start
+        unique_id: brew_workflow_batch_start
+        icon: mdi:clock-start
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_batch_start') }}"
+
+      - name: Brew Workflow Cold Crash Start
+        unique_id: brew_workflow_cold_crash_start
+        icon: mdi:snowflake-clock
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_cold_crash_start') }}"
+
+      - name: Brew Workflow Batch Started At
+        unique_id: brew_workflow_batch_started_at
+        icon: mdi:clock-start
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_batch_started_at') }}"
+
+      - name: Brew Workflow Yeast Pitched At
+        unique_id: brew_workflow_yeast_pitched_at
+        icon: mdi:clock-check-outline
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_yeast_pitched_at') }}"
+
+      - name: Brew Workflow Gravity Check Day 1 At
+        unique_id: brew_workflow_gravity_check_day_1_at
+        icon: mdi:numeric-1-circle-outline
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_gravity_check_day_1_at') }}"
+
+      - name: Brew Workflow Gravity Check Day 2 At
+        unique_id: brew_workflow_gravity_check_day_2_at
+        icon: mdi:numeric-2-circle-outline
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_gravity_check_day_2_at') }}"
+
+      - name: Brew Workflow Gravity Stable Confirmed At
+        unique_id: brew_workflow_gravity_stable_confirmed_at
+        icon: mdi:chart-line-variant
+        device_class: timestamp
+        state: "{{ states('input_datetime.fwk_gravity_stable_confirmed_at') }}"
+
+      - name: Brew Workflow Process Stage
+        unique_id: brew_workflow_process_stage
+        icon: mdi:timeline-text-outline
+        state: "{{ states('input_text.fwk_process_stage') }}"
+
+      - name: Brew Workflow Manual Note
+        unique_id: brew_workflow_manual_note
+        icon: mdi:note-text-outline
+        state: "{{ states('input_text.fwk_manual_note') }}"
+
+      - name: Brew Workflow Process Step
+        unique_id: brew_workflow_process_step
+        icon: mdi:format-list-numbered
+        state: "{{ states('input_select.fwk_process_step') }}"
+
+      - name: Brew Workflow Gravity Check Counter
+        unique_id: brew_workflow_gravity_check_counter
+        icon: mdi:counter
+        state: "{{ states('counter.fwk_gravity_check_counter') }}"
+
+script:
+  brew_workflow_confirm_gravity_check:
+    alias: BrewAssistant - Confirm Gravity Check
+    mode: single
+    sequence:
+      - service: script.fwk_confirm_gravity_check
+
+  brew_workflow_confirm_ready_for_cold_crash:
+    alias: BrewAssistant - Confirm Ready For Cold Crash
+    mode: single
+    sequence:
+      - service: script.fwk_confirm_ready_for_cold_crash
+
+  brew_cold_crash_finish:
+    alias: BrewAssistant - Finish Cold Crash
+    mode: single
+    sequence:
+      - service: script.fwk_finish_cold_crash
+
+  brew_packaging_start:
+    alias: BrewAssistant - Start Packaging
+    mode: single
+    sequence:
+      - service: script.fwk_start_packaging
+
+  brew_packaging_finish:
+    alias: BrewAssistant - Finish Packaging
+    mode: single
+    sequence:
+      - service: script.fwk_finish_packaging
+
+  brew_batch_reset:
+    alias: BrewAssistant - Reset Batch
+    mode: single
+    sequence:
+      - service: script.fwk_reset_batch
