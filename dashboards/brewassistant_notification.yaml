@@ -14,6 +14,10 @@ cards:
       - input_boolean.brewassistant_fermentation_module_active
       - input_boolean.brewassistant_serving_module_active
       - input_boolean.brewassistant_hot_side_module_active
+      - input_boolean.manual_batch_active
+      - input_boolean.manual_batch_warnings_enabled
+      - sensor.manual_batch_warning_level
+      - sensor.manual_batch_warning_summary
     label: |
       [[[
         const master = states['input_boolean.brewassistant_notifications_enabled']?.state === 'on';
@@ -24,24 +28,29 @@ cards:
         const ferm = states['input_boolean.brewassistant_fermentation_module_active']?.state === 'on';
         const serving = states['input_boolean.brewassistant_serving_module_active']?.state === 'on';
         const hot = states['input_boolean.brewassistant_hot_side_module_active']?.state === 'on';
+        const manual = states['input_boolean.manual_batch_active']?.state === 'on';
+
+        const manualWarnLevel = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
 
         const active = [];
         if (ferm) active.push('Fermentation');
+        if (manual) active.push('Manual');
         if (chamber) active.push('Chamber');
         if (serving) active.push('Serving');
         if (hot) active.push('Hot Side');
 
         const activeTxt = active.length ? active.join(' · ') : 'No active modules';
+        const manualTxt = manual ? ` · Manual ${manualWarnLevel}` : '';
 
         if (!master && !warnings) {
-          return `Muted · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}`;
+          return `Muted · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}${manualTxt}`;
         }
 
         if (!master && warnings) {
-          return `Warnings only · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}`;
+          return `Warnings only · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}${manualTxt}`;
         }
 
-        return `Mobile on · Warnings ${warnings ? 'on' : 'off'} · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}`;
+        return `Mobile on · Warnings ${warnings ? 'on' : 'off'} · HA Inbox ${persistent ? 'on' : 'off'} · ${activeTxt}${manualTxt}`;
       ]]]
     tap_action:
       action: toggle
@@ -52,9 +61,12 @@ cards:
         [[[
           const master = states['input_boolean.brewassistant_notifications_enabled']?.state === 'on';
           const warnings = states['input_boolean.brewassistant_warnings_enabled']?.state === 'on';
+          const manualLevel = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+          const manualActive = states['input_boolean.manual_batch_active']?.state === 'on';
 
           let icon = 'mdi:bell-off';
-          if (master) icon = 'mdi:bell-ring';
+          if (manualActive && manualLevel === 'critical') icon = 'mdi:bell-alert';
+          else if (master) icon = 'mdi:bell-ring';
           else if (warnings) icon = 'mdi:bell-alert';
 
           return `<ha-icon icon="${icon}"></ha-icon>`;
@@ -68,6 +80,16 @@ cards:
             [[[
               const master = states['input_boolean.brewassistant_notifications_enabled']?.state === 'on';
               const warnings = states['input_boolean.brewassistant_warnings_enabled']?.state === 'on';
+              const manualActive = states['input_boolean.manual_batch_active']?.state === 'on';
+              const manualLevel = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+
+              if (manualActive && manualLevel === 'critical') {
+                return 'linear-gradient(135deg, rgba(145,35,35,0.98), rgba(42,12,18,0.98))';
+              }
+
+              if (manualActive && manualLevel === 'warning') {
+                return 'linear-gradient(135deg, rgba(130,65,20,0.98), rgba(42,24,12,0.98))';
+              }
 
               if (!master && !warnings) {
                 return 'linear-gradient(135deg, rgba(45,45,52,0.98), rgba(18,18,24,0.98))';
@@ -97,7 +119,11 @@ cards:
             [[[
               const master = states['input_boolean.brewassistant_notifications_enabled']?.state === 'on';
               const warnings = states['input_boolean.brewassistant_warnings_enabled']?.state === 'on';
+              const manualActive = states['input_boolean.manual_batch_active']?.state === 'on';
+              const manualLevel = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
 
+              if (manualActive && manualLevel === 'critical') return '#ff7777';
+              if (manualActive && manualLevel === 'warning') return '#ffbf7a';
               if (master) return '#8fd3ff';
               if (warnings) return '#ffbf7a';
               return 'rgba(255,255,255,0.45)';
@@ -260,7 +286,7 @@ cards:
       icon: mdi:tune-variant
       show_state: false
       show_label: true
-      label: Module status, logic summary and test buttons
+      label: Module status, manual batch warnings, logic summary and test buttons
       styles:
         card:
           - margin: 8px 0 0 0
@@ -319,6 +345,52 @@ cards:
                 - color: |
                     [[[
                       return entity.state === 'on' ? '#ffd28a' : 'rgba(255,255,255,0.38)';
+                    ]]]
+              name:
+                - color: white
+                - font-size: 14px
+                - font-weight: 900
+              state:
+                - color: rgba(255,255,255,0.75)
+                - font-size: 13px
+                - font-weight: 700
+          - type: custom:button-card
+            entity: input_boolean.manual_batch_active
+            name: Manual
+            icon: mdi:hydrometer
+            show_state: true
+            tap_action:
+              action: more-info
+            styles:
+              card:
+                - height: 112px
+                - border-radius: 20px
+                - padding: 14px
+                - background: |
+                    [[[
+                      const active = entity.state === 'on';
+                      const level = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+
+                      if (!active) return 'rgba(255,255,255,0.05)';
+                      if (level === 'critical') return 'linear-gradient(135deg, rgba(145,35,35,0.95), rgba(58,12,18,0.98))';
+                      if (level === 'warning') return 'linear-gradient(135deg, rgba(150,80,25,0.95), rgba(65,30,10,0.98))';
+                      if (level === 'ready') return 'linear-gradient(135deg, rgba(54,130,67,0.95), rgba(22,68,31,0.98))';
+
+                      return 'linear-gradient(135deg, rgba(165,105,35,0.95), rgba(60,35,12,0.98))';
+                    ]]]
+                - border: 1px solid rgba(255,255,255,0.10)
+              icon:
+                - width: 36px
+                - color: |
+                    [[[
+                      const active = entity.state === 'on';
+                      const level = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+
+                      if (!active) return 'rgba(255,255,255,0.38)';
+                      if (level === 'critical') return '#ff7777';
+                      if (level === 'warning') return '#ffbf7a';
+                      if (level === 'ready') return '#a6f0a6';
+                      return '#ffd28a';
                     ]]]
               name:
                 - color: white
@@ -427,6 +499,79 @@ cards:
                 - color: rgba(255,255,255,0.75)
                 - font-size: 13px
                 - font-weight: 700
+      - type: custom:mushroom-title-card
+        title: Manual Batch Warning Status
+        subtitle: Current manual fermentation warning state
+      - type: custom:button-card
+        entity: sensor.manual_batch_warning_level
+        name: Manual Warning Summary
+        icon: |
+          [[[
+            const level = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+            if (level === 'critical') return 'mdi:alert-octagon';
+            if (level === 'warning') return 'mdi:alert';
+            if (level === 'ready') return 'mdi:check-decagram';
+            return 'mdi:shield-check';
+          ]]]
+        show_state: true
+        show_label: true
+        label: |
+          [[[
+            const enabled = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+            const active = states['input_boolean.manual_batch_active']?.state === 'on';
+            const summary = states['sensor.manual_batch_warning_summary']?.state ?? 'Inga varningar';
+
+            if (!active) return 'Manual batch is not active.';
+            if (!enabled) return 'Manual warnings are disabled.';
+            return summary;
+          ]]]
+        styles:
+          card:
+            - margin: 8px 0 8px 0
+            - padding: 16px
+            - border-radius: 20px
+            - background: |
+                [[[
+                  const active = states['input_boolean.manual_batch_active']?.state === 'on';
+                  const enabled = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+                  const level = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+
+                  if (!active || !enabled) return 'rgba(255,255,255,0.06)';
+                  if (level === 'critical') return 'linear-gradient(135deg, rgba(145,35,35,0.95), rgba(58,12,18,0.98))';
+                  if (level === 'warning') return 'linear-gradient(135deg, rgba(150,80,25,0.95), rgba(65,30,10,0.98))';
+                  if (level === 'ready') return 'linear-gradient(135deg, rgba(54,130,67,0.95), rgba(22,68,31,0.98))';
+                  return 'linear-gradient(135deg, rgba(55,120,75,0.82), rgba(18,55,35,0.96))';
+                ]]]
+            - border: 1px solid rgba(255,255,255,0.10)
+          grid:
+            - grid-template-areas: "\"i n\" \"i s\" \"i l\""
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: |
+                [[[
+                  const level = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+                  if (level === 'critical') return '#ff7777';
+                  if (level === 'warning') return '#ffbf7a';
+                  if (level === 'ready') return '#a6f0a6';
+                  return '#a6f0a6';
+                ]]]
+          name:
+            - justify-self: start
+            - color: white
+            - font-size: 15px
+            - font-weight: 900
+          state:
+            - justify-self: start
+            - color: rgba(255,255,255,0.75)
+            - font-size: 12px
+            - font-weight: 800
+            - text-transform: uppercase
+          label:
+            - justify-self: start
+            - color: rgba(255,255,255,0.82)
+            - font-size: 13px
+            - text-align: left
+            - white-space: normal
       - type: custom:button-card
         name: Notification Logic
         icon: mdi:source-branch
@@ -442,9 +587,13 @@ cards:
             const ferm = states['input_boolean.brewassistant_fermentation_module_active']?.state === 'on';
             const serving = states['input_boolean.brewassistant_serving_module_active']?.state === 'on';
             const hot = states['input_boolean.brewassistant_hot_side_module_active']?.state === 'on';
+            const manual = states['input_boolean.manual_batch_active']?.state === 'on';
+            const manualWarnings = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+            const manualLevel = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
 
             const active = [];
             if (ferm) active.push('Fermentation');
+            if (manual) active.push('Manual');
             if (chamber) active.push('Chamber');
             if (serving) active.push('Serving');
             if (hot) active.push('Hot Side');
@@ -456,6 +605,7 @@ cards:
                 <b>Mobile:</b> ${master ? 'Enabled' : 'Muted'}<br>
                 <b>Warnings:</b> ${warnings ? 'Enabled' : 'Muted'}<br>
                 <b>HA Inbox:</b> ${persistent ? 'Enabled' : 'Muted'}<br>
+                <b>Manual warnings:</b> ${manualWarnings ? 'Enabled' : 'Muted'} · ${manualLevel}<br>
                 <b>Active:</b> ${modules}
               </div>
             `;
@@ -585,3 +735,12 @@ cards:
               name:
                 - color: white
                 - font-weight: 900
+card_mod:
+  style: |
+    ha-card {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
