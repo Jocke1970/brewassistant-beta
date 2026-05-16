@@ -1,0 +1,618 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_custom_stream_rapt_pill_status
+    name: Brewfather Custom Stream
+    icon: mdi:cloud-upload
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const master = states['input_boolean.brewassistant_custom_stream_enabled']?.state === 'on';
+        const pillReady = states['binary_sensor.brewassistant_custom_stream_rapt_pill_ready']?.state === 'on';
+        const envReady = states['binary_sensor.brewassistant_custom_stream_environment_ready']?.state === 'on';
+        const pillStatus = states['sensor.brewassistant_custom_stream_rapt_pill_status']?.state || 'Unknown';
+        const envStatus = states['sensor.brewassistant_custom_stream_environment_status']?.state || 'Unknown';
+
+        if (!master) return 'Stream disabled · Brewfather logging paused';
+
+        if (pillReady && envReady)
+          return 'Online · Pill ready · Environment ready · 15 min interval';
+
+        if (pillReady && !envReady)
+          return `Partial · Pill ready · Environment: ${envStatus}`;
+
+        if (!pillReady && envReady)
+          return `Partial · Pill: ${pillStatus} · Environment ready`;
+
+        return `Not ready · Pill: ${pillStatus} · Environment: ${envStatus}`;
+      ]]]
+    custom_fields:
+      power:
+        card:
+          type: custom:button-card
+          entity: input_boolean.brewassistant_custom_stream_enabled
+          show_name: false
+          show_state: false
+          show_icon: true
+          icon: mdi:power
+          tap_action:
+            action: toggle
+          styles:
+            card:
+              - width: 38px
+              - height: 38px
+              - border-radius: 50%
+              - padding: 0
+              - background: |
+                  [[[
+                    return entity.state === 'on'
+                      ? 'rgba(129,199,132,0.30)'
+                      : 'rgba(244,67,54,0.22)';
+                  ]]]
+              - border: |
+                  [[[
+                    return entity.state === 'on'
+                      ? '1px solid rgba(129,199,132,0.55)'
+                      : '1px solid rgba(244,67,54,0.45)';
+                  ]]]
+              - box-shadow: none
+            icon:
+              - width: 20px
+              - color: |
+                  [[[
+                    return entity.state === 'on'
+                      ? 'rgba(200,255,210,1)'
+                      : 'rgba(255,170,170,1)';
+                  ]]]
+      statusdot: |
+        [[[
+          const master = states['input_boolean.brewassistant_custom_stream_enabled']?.state === 'on';
+          const pillReady = states['binary_sensor.brewassistant_custom_stream_rapt_pill_ready']?.state === 'on';
+          const envReady = states['binary_sensor.brewassistant_custom_stream_environment_ready']?.state === 'on';
+
+          let color = 'rgba(244,67,54,0.95)';
+          let text = 'OFF';
+
+          if (master && pillReady && envReady) {
+            color = 'rgba(129,199,132,0.95)';
+            text = 'LIVE';
+          } else if (master && (pillReady || envReady)) {
+            color = 'rgba(255,193,7,0.95)';
+            text = 'PARTIAL';
+          }
+
+          return `
+            <div style="
+              display:flex;
+              align-items:center;
+              gap:7px;
+              justify-content:flex-end;
+              font-size:11px;
+              font-weight:800;
+              letter-spacing:.9px;
+              color:${color};
+            ">
+              <span style="
+                width:9px;
+                height:9px;
+                border-radius:50%;
+                background:${color};
+                box-shadow:0 0 12px ${color};
+                display:inline-block;
+              "></span>
+              ${text}
+            </div>
+          `;
+        ]]]
+    styles:
+      grid:
+        - grid-template-areas: "\"i n power\" \"i l power\" \"i statusdot power\""
+        - grid-template-columns: 48px 1fr 44px
+        - grid-template-rows: min-content min-content min-content
+        - column-gap: 12px
+      card:
+        - border-radius: 24px
+        - padding: 18px
+        - overflow: hidden
+        - background: |
+            [[[
+              const master = states['input_boolean.brewassistant_custom_stream_enabled']?.state === 'on';
+              const pillReady = states['binary_sensor.brewassistant_custom_stream_rapt_pill_ready']?.state === 'on';
+              const envReady = states['binary_sensor.brewassistant_custom_stream_environment_ready']?.state === 'on';
+
+              if (!master)
+                return 'linear-gradient(135deg, rgba(45,45,55,0.95), rgba(20,20,26,0.98))';
+
+              if (pillReady && envReady)
+                return 'linear-gradient(135deg, rgba(24,70,55,0.96), rgba(12,32,45,0.98))';
+
+              if (pillReady || envReady)
+                return 'linear-gradient(135deg, rgba(88,66,22,0.96), rgba(35,31,23,0.98))';
+
+              return 'linear-gradient(135deg, rgba(82,32,38,0.96), rgba(30,18,24,0.98))';
+            ]]]
+        - border: 1px solid rgba(255,255,255,0.10)
+        - box-shadow: 0 14px 38px rgba(0,0,0,0.35)
+      icon:
+        - width: 34px
+        - color: |
+            [[[
+              const master = states['input_boolean.brewassistant_custom_stream_enabled']?.state === 'on';
+              const pillReady = states['binary_sensor.brewassistant_custom_stream_rapt_pill_ready']?.state === 'on';
+              const envReady = states['binary_sensor.brewassistant_custom_stream_environment_ready']?.state === 'on';
+
+              if (!master) return 'rgba(210,210,220,0.65)';
+              if (pillReady && envReady) return 'rgba(170,255,210,1)';
+              if (pillReady || envReady) return 'rgba(255,220,140,1)';
+              return 'rgba(255,160,160,1)';
+            ]]]
+      name:
+        - align-self: end
+        - justify-self: start
+        - font-size: 18px
+        - font-weight: 800
+        - letter-spacing: .2px
+        - color: rgba(255,255,255,0.96)
+      label:
+        - justify-self: start
+        - text-align: left
+        - font-size: 12px
+        - line-height: 1.35
+        - color: rgba(255,255,255,0.72)
+        - white-space: normal
+      custom_fields:
+        power:
+          - align-self: start
+          - justify-self: end
+        statusdot:
+          - align-self: end
+          - justify-self: end
+          - padding-top: 4px
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.brewassistant_custom_stream_rapt_pill_ready
+        primary: RAPT Pill Stream
+        secondary: >-
+          {% set status =
+          states('sensor.brewassistant_custom_stream_rapt_pill_status') %} {%
+          set sg =
+          state_attr('sensor.brewassistant_custom_stream_rapt_pill_status',
+          'pill_sg') %} {% set temp =
+          state_attr('sensor.brewassistant_custom_stream_rapt_pill_status',
+          'pill_temp') %} {{ status }} · SG {{ sg }} · {{ temp }} °C
+        icon: mdi:pill
+        icon_color: >-
+          {% if is_state(entity, 'on') %}
+            green
+          {% elif is_state('input_boolean.brewassistant_custom_stream_enabled',
+          'on') %}
+            amber
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+            }
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.brewassistant_custom_stream_environment_ready
+        primary: Environment Stream
+        secondary: >-
+          {% set status =
+          states('sensor.brewassistant_custom_stream_environment_status') %} {%
+          set keg =
+          state_attr('sensor.brewassistant_custom_stream_environment_status',
+          'kegerator_temp') %} {% set room =
+          state_attr('sensor.brewassistant_custom_stream_environment_status',
+          'brewing_space_temp') %} {{ status }} · Keg {{ keg }} °C · Room {{
+          room }} °C
+        icon: mdi:fridge-outline
+        icon_color: >-
+          {% if is_state(entity, 'on') %}
+            green
+          {% elif is_state('input_boolean.brewassistant_custom_stream_enabled',
+          'on') %}
+            amber
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 18px;
+              background: rgba(255,255,255,0.045);
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+            }
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Live Stream Data
+        icon: mdi:chart-timeline-variant
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            const sg = states['sensor.yellow_pill_gravity_2']?.state ?? 'n/a';
+            const pillTemp = states['sensor.yellow_pill_temperature']?.state ?? 'n/a';
+            const keg = states['sensor.kyl_temperatur_4']?.state ?? 'n/a';
+            const room = states['sensor.brewingspace_temperature']?.state ?? 'n/a';
+
+            return `SG ${sg} · Pill ${pillTemp} °C · Keg ${keg} °C · Room ${room} °C`;
+          ]]]
+        styles:
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 42px 1fr
+            - grid-template-rows: min-content min-content
+            - column-gap: 10px
+          card:
+            - border-radius: 18px 18px 0 0
+            - padding: 14px 16px 8px 16px
+            - background: transparent
+            - box-shadow: none
+          icon:
+            - width: 28px
+            - color: rgba(144,202,249,0.95)
+          name:
+            - justify-self: start
+            - font-size: 15px
+            - font-weight: 800
+            - color: rgba(255,255,255,0.94)
+          label:
+            - justify-self: start
+            - text-align: left
+            - font-size: 12px
+            - line-height: 1.35
+            - color: rgba(255,255,255,0.68)
+            - white-space: normal
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.yellow_pill_gravity_2
+            primary: SG
+            secondary: "{{ states(entity) }}"
+            icon: mdi:gauge
+            icon_color: purple
+            tap_action:
+              action: more-info
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 16px;
+                  background: rgba(255,255,255,0.04);
+                  border: 1px solid rgba(255,255,255,0.06);
+                  box-shadow: none;
+                }
+          - type: custom:mushroom-template-card
+            entity: sensor.yellow_pill_temperature
+            primary: Pill Temp
+            secondary: "{{ states(entity) }} °C"
+            icon: mdi:thermometer-water
+            icon_color: blue
+            tap_action:
+              action: more-info
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 16px;
+                  background: rgba(255,255,255,0.04);
+                  border: 1px solid rgba(255,255,255,0.06);
+                  box-shadow: none;
+                }
+          - type: custom:mushroom-template-card
+            entity: sensor.kyl_temperatur_4
+            primary: Kegerator
+            secondary: "{{ states(entity) }} °C"
+            icon: mdi:fridge-outline
+            icon_color: cyan
+            tap_action:
+              action: more-info
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 16px;
+                  background: rgba(255,255,255,0.04);
+                  border: 1px solid rgba(255,255,255,0.06);
+                  box-shadow: none;
+                }
+          - type: custom:mushroom-template-card
+            entity: sensor.brewingspace_temperature
+            primary: Brew Room
+            secondary: "{{ states(entity) }} °C"
+            icon: mdi:home-thermometer-outline
+            icon_color: amber
+            tap_action:
+              action: more-info
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 16px;
+                  background: rgba(255,255,255,0.04);
+                  border: 1px solid rgba(255,255,255,0.06);
+                  box-shadow: none;
+                }
+    card_mod:
+      style: |
+        ha-card {
+          margin: 0 8px 8px 8px;
+          border-radius: 20px;
+          background: rgba(255,255,255,0.035);
+          border: 1px solid rgba(255,255,255,0.065);
+          box-shadow: none;
+          overflow: hidden;
+        }
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: input_boolean.brewassistant_custom_stream_enabled
+        name: Master
+        icon: mdi:cloud-upload
+        show_state: false
+        tap_action:
+          action: toggle
+        styles:
+          grid:
+            - grid-template-areas: "\"i n\""
+            - grid-template-columns: 28px 1fr
+            - column-gap: 8px
+          card:
+            - height: 54px
+            - border-radius: 18px
+            - padding: 10px 12px
+            - background: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'linear-gradient(135deg, rgba(56,142,60,0.28), rgba(30,80,50,0.20))'
+                    : 'rgba(255,255,255,0.04)';
+                ]]]
+            - border: |
+                [[[
+                  return entity.state === 'on'
+                    ? '1px solid rgba(129,199,132,0.45)'
+                    : '1px solid rgba(255,255,255,0.07)';
+                ]]]
+            - box-shadow: none
+          icon:
+            - width: 24px
+            - color: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'rgba(170,255,190,1)'
+                    : 'rgba(255,255,255,0.45)';
+                ]]]
+          name:
+            - justify-self: start
+            - font-size: 12px
+            - font-weight: 800
+            - color: rgba(255,255,255,0.82)
+      - type: custom:button-card
+        entity: input_boolean.brewassistant_custom_stream_pill_enabled
+        name: Pill
+        icon: mdi:test-tube
+        show_state: false
+        tap_action:
+          action: toggle
+        styles:
+          grid:
+            - grid-template-areas: "\"i n\""
+            - grid-template-columns: 28px 1fr
+            - column-gap: 8px
+          card:
+            - height: 54px
+            - border-radius: 18px
+            - padding: 10px 12px
+            - background: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'linear-gradient(135deg, rgba(56,142,60,0.28), rgba(30,80,50,0.20))'
+                    : 'rgba(255,255,255,0.04)';
+                ]]]
+            - border: |
+                [[[
+                  return entity.state === 'on'
+                    ? '1px solid rgba(129,199,132,0.45)'
+                    : '1px solid rgba(255,255,255,0.07)';
+                ]]]
+            - box-shadow: none
+          icon:
+            - width: 24px
+            - color: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'rgba(170,255,190,1)'
+                    : 'rgba(255,255,255,0.45)';
+                ]]]
+          name:
+            - justify-self: start
+            - font-size: 12px
+            - font-weight: 800
+            - color: rgba(255,255,255,0.82)
+      - type: custom:button-card
+        entity: input_boolean.brewassistant_custom_stream_environment_enabled
+        name: Environment
+        icon: mdi:thermometer-lines
+        show_state: false
+        tap_action:
+          action: toggle
+        styles:
+          grid:
+            - grid-template-areas: "\"i n\""
+            - grid-template-columns: 28px 1fr
+            - column-gap: 8px
+          card:
+            - height: 54px
+            - border-radius: 18px
+            - padding: 10px 12px
+            - background: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'linear-gradient(135deg, rgba(56,142,60,0.28), rgba(30,80,50,0.20))'
+                    : 'rgba(255,255,255,0.04)';
+                ]]]
+            - border: |
+                [[[
+                  return entity.state === 'on'
+                    ? '1px solid rgba(129,199,132,0.45)'
+                    : '1px solid rgba(255,255,255,0.07)';
+                ]]]
+            - box-shadow: none
+          icon:
+            - width: 24px
+            - color: |
+                [[[
+                  return entity.state === 'on'
+                    ? 'rgba(170,255,190,1)'
+                    : 'rgba(255,255,255,0.45)';
+                ]]]
+          name:
+            - justify-self: start
+            - font-size: 12px
+            - font-weight: 800
+            - color: rgba(255,255,255,0.82)
+  - type: custom:expander-card
+    title-card:
+      type: custom:mushroom-template-card
+      primary: Custom Stream Details
+      secondary: Devices, stale limit and payload preview
+      icon: mdi:tune-variant
+      icon_color: blue
+      card_mod:
+        style: |
+          ha-card {
+            border-radius: 18px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.07);
+            box-shadow: none;
+          }
+    padding: 0
+    clear: false
+    cards:
+      - type: custom:mushroom-number-card
+        entity: input_number.brewassistant_custom_stream_pill_stale_minutes
+        name: Pill stale limit
+        icon: mdi:timer-alert-outline
+        display_mode: buttons
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 16px;
+              background: rgba(255,255,255,0.04);
+              border: 1px solid rgba(255,255,255,0.06);
+              box-shadow: none;
+            }
+      - type: custom:mushroom-template-card
+        entity: input_text.brewassistant_custom_stream_pill_name
+        primary: Pill device name
+        secondary: "{{ states(entity) }}"
+        icon: mdi:tag-outline
+        icon_color: purple
+        tap_action:
+          action: more-info
+        multiline_secondary: true
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 16px;
+              background: rgba(255,255,255,0.04);
+              border: 1px solid rgba(255,255,255,0.06);
+              box-shadow: none;
+            }
+      - type: custom:mushroom-template-card
+        entity: input_text.brewassistant_custom_stream_environment_name
+        primary: Environment device name
+        secondary: "{{ states(entity) }}"
+        icon: mdi:tag-outline
+        icon_color: cyan
+        tap_action:
+          action: more-info
+        multiline_secondary: true
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 16px;
+              background: rgba(255,255,255,0.04);
+              border: 1px solid rgba(255,255,255,0.06);
+              box-shadow: none;
+            }
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_custom_stream_rapt_pill_payload
+        primary: RAPT Pill Payload
+        secondary: "{{ state_attr(entity, 'payload') }}"
+        icon: mdi:code-json
+        icon_color: purple
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 16px;
+              background: rgba(90,50,120,0.12);
+              border: 1px solid rgba(190,140,255,0.16);
+              box-shadow: none;
+            }
+            mushroom-state-info$ .secondary {
+              font-family: monospace !important;
+              font-size: 10px !important;
+              line-height: 1.35 !important;
+              white-space: normal !important;
+              color: rgba(255,255,255,0.66) !important;
+            }
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_custom_stream_environment_payload
+        primary: Environment Payload
+        secondary: "{{ state_attr(entity, 'payload') }}"
+        icon: mdi:code-json
+        icon_color: cyan
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card {
+              border-radius: 16px;
+              background: rgba(40,100,120,0.12);
+              border: 1px solid rgba(120,220,255,0.16);
+              box-shadow: none;
+            }
+            mushroom-state-info$ .secondary {
+              font-family: monospace !important;
+              font-size: 10px !important;
+              line-height: 1.35 !important;
+              white-space: normal !important;
+              color: rgba(255,255,255,0.66) !important;
+            }
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 26px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(144,202,249,0.13), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(186,104,200,0.10), transparent 34%),
+        linear-gradient(145deg, rgba(18,22,30,0.98), rgba(10,12,18,0.98));
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.42);
+      padding: 8px;
+    }
