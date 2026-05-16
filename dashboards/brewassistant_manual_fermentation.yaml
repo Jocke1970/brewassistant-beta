@@ -4,248 +4,161 @@ cards:
     entity: input_boolean.manual_batch_active
     name: Manual Fermentation
     icon: mdi:fruit-cherries
-    show_state: true
+    show_state: false
     show_label: true
-    state_display: |
+    tap_action:
+      action: more-info
+    label: |
       [[[
-        return entity.state === 'on' ? 'On' : 'Off';
+        const enabled = entity.state === 'on';
+
+        if (!enabled) {
+          return `
+            <div style="font-size:13px; font-weight:800; opacity:.82; margin-top:2px;">
+              Avstängd · tryck power för att visa detaljer
+            </div>
+          `;
+        }
+
+        const batch = states['input_text.manual_batch_name']?.state ?? 'Manual batch';
+        const status = states['sensor.manual_batch_status']?.state ?? 'Monitoring';
+        const next = states['sensor.manual_batch_next_action']?.state ?? 'Följ SG-trenden och logga nästa hydrometermätning.';
+
+        const sgRaw = parseFloat(states['input_number.manual_batch_sg_current']?.state);
+        const sg = Number.isFinite(sgRaw) ? sgRaw.toFixed(3) : '—';
+
+        const abvRaw = parseFloat(states['sensor.manual_batch_abv_current']?.state);
+        const abv = Number.isFinite(abvRaw) ? abvRaw.toFixed(1) : '0.0';
+
+        const daysRaw = parseFloat(states['sensor.manual_batch_days_active']?.state);
+        const days = Number.isFinite(daysRaw) ? daysRaw.toFixed(1) : '0.0';
+
+        return `
+          <div style="font-size:12px; opacity:.78;">${batch}</div>
+          <div style="font-size:15px; font-weight:900; margin-top:4px;">${status} · SG ${sg} · ${abv}%</div>
+          <div style="font-size:12px; opacity:.78; margin-top:5px;">${days} dagar · ${next}</div>
+        `;
       ]]]
     custom_fields:
       power:
         card:
           type: custom:button-card
           entity: input_boolean.manual_batch_active
-          icon: |
-            [[[
-              return entity.state === 'on'
-                ? 'mdi:power'
-                : 'mdi:power-off';
-            ]]]
           show_name: false
           show_state: false
+          icon: mdi:power
           tap_action:
             action: toggle
           styles:
             card:
-              - width: 42px
-              - height: 42px
-              - border-radius: 14px
-              - padding: 8px
+              - width: 36px
+              - height: 36px
+              - border-radius: 50%
+              - padding: 0
               - background: |
                   [[[
                     return entity.state === 'on'
-                      ? 'rgba(46,204,113,0.24)'
-                      : 'rgba(255,255,255,0.10)';
+                      ? 'rgba(129,199,132,0.25)'
+                      : 'rgba(255,255,255,0.08)';
                   ]]]
               - border: |
                   [[[
                     return entity.state === 'on'
-                      ? '1px solid rgba(46,204,113,0.55)'
-                      : '1px solid rgba(255,255,255,0.16)';
+                      ? '1px solid rgba(129,199,132,0.55)'
+                      : '1px solid rgba(255,255,255,0.12)';
                   ]]]
-              - box-shadow: |
-                  [[[
-                    return entity.state === 'on'
-                      ? '0 0 18px rgba(46,204,113,0.35)'
-                      : 'none';
-                  ]]]
+              - box-shadow: none
             icon:
-              - width: 24px
+              - width: 19px
               - color: |
                   [[[
                     return entity.state === 'on'
-                      ? 'rgba(46,204,113,1)'
-                      : 'rgba(255,255,255,0.65)';
+                      ? '#81c784'
+                      : 'rgba(255,255,255,0.55)';
                   ]]]
-    label: |
-      [[[
-        const active = states['input_boolean.manual_batch_active']?.state === 'on';
-        const batch = states['input_text.manual_batch_name']?.state ?? 'No batch selected';
-
-        let status = states['sensor.manual_batch_status']?.state ?? '';
-        if (!status || ['unknown', 'unavailable', ''].includes(status)) {
-          status = active ? 'Monitoring' : 'Standby';
-        }
-
-        let next = states['sensor.manual_batch_next_action']?.state ?? '';
-        if (!next || ['unknown', 'unavailable', ''].includes(next)) {
-          next = active
-            ? 'Följ SG-trenden och logga nästa hydrometermätning.'
-            : 'Aktivera Manual Mode med power-knappen när batchen startas.';
-        }
-
-        const sgRaw = parseFloat(states['input_number.manual_batch_sg_current']?.state);
-        const sg = Number.isFinite(sgRaw) ? sgRaw.toFixed(3) : '—';
-
-        const abvRaw = parseFloat(states['sensor.manual_batch_abv_current']?.state);
-        let abv = '0.0';
-        if (Number.isFinite(abvRaw)) {
-          abv = abvRaw.toFixed(1);
-        } else {
-          const og = parseFloat(states['input_number.manual_batch_og']?.state);
-          const cur = parseFloat(states['input_number.manual_batch_sg_current']?.state);
-          if (Number.isFinite(og) && Number.isFinite(cur) && og >= cur) {
-            abv = ((og - cur) * 131.25).toFixed(1);
-          }
-        }
-
-        const daysRaw = parseFloat(states['sensor.manual_batch_days_active']?.state);
-        let days = Number.isFinite(daysRaw) ? daysRaw.toFixed(1) : '0';
-
-        const start = states['input_datetime.manual_batch_start']?.state;
-        if ((!Number.isFinite(daysRaw) || days === '0.0') && active && start && !['unknown','unavailable',''].includes(start)) {
-          const startTime = new Date(start.replace(' ', 'T')).getTime();
-          const nowTime = new Date().getTime();
-          if (Number.isFinite(startTime)) {
-            days = ((nowTime - startTime) / 86400000).toFixed(1);
-          }
-        }
-
-        return `
-          <div class="manual-wrap">
-            <div class="manual-batch">${batch}</div>
-            <div class="manual-status-row">
-              <span class="manual-pill ${active ? 'on' : 'off'}">${active ? status : 'Standby'}</span>
-              <span class="manual-sub">SG ${sg} · ${abv}% · ${days} dagar</span>
-            </div>
-            <div class="manual-next">${active ? next : 'Aktivera Manual Mode med power-knappen när batchen startas.'}</div>
-          </div>
-        `;
-      ]]]
     styles:
       card:
-        - border-radius: 24px
-        - padding: 22px
-        - color: white
-        - min-height: 150px
-        - overflow: hidden
+        - border-radius: 22px
+        - padding: 12px 14px
+        - min-height: 72px
         - background: |
             [[[
-              const active = states['input_boolean.manual_batch_active']?.state === 'on';
-              let status = states['sensor.manual_batch_status']?.state ?? 'Idle';
-              if (['unknown', 'unavailable', ''].includes(status)) status = 'Monitoring';
+              const enabled = entity.state === 'on';
+              const status = states['sensor.manual_batch_status']?.state ?? 'Idle';
+              const warning = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
 
-              if (!active)
-                return 'linear-gradient(135deg, rgba(80,80,90,0.45), rgba(18,18,24,0.96))';
+              if (!enabled) {
+                return 'linear-gradient(135deg, rgba(66,66,66,0.42), rgba(25,25,25,0.36))';
+              }
 
-              if (status === 'Ready for packaging')
-                return 'linear-gradient(135deg, rgba(42,157,143,0.92), rgba(38,70,83,0.96))';
+              if (warning === 'critical') {
+                return 'linear-gradient(135deg, rgba(183,28,28,0.38), rgba(38,50,56,0.38))';
+              }
 
-              if (status === 'Possibly stalled')
-                return 'linear-gradient(135deg, rgba(176,58,46,0.92), rgba(73,24,29,0.96))';
+              if (warning === 'warning') {
+                return 'linear-gradient(135deg, rgba(245,124,0,0.34), rgba(38,50,56,0.36))';
+              }
 
-              if (status === 'Active fermentation')
-                return 'linear-gradient(135deg, rgba(255,159,67,0.92), rgba(95,39,205,0.92))';
+              if (warning === 'ready' || status === 'Ready for packaging') {
+                return 'linear-gradient(135deg, rgba(46,125,50,0.34), rgba(13,71,161,0.18))';
+              }
 
-              if (status === 'Slowing down' || status === 'Stable / verifying')
-                return 'linear-gradient(135deg, rgba(255,190,118,0.88), rgba(34,47,62,0.96))';
+              if (status === 'Active fermentation') {
+                return 'linear-gradient(135deg, rgba(255,159,67,0.34), rgba(95,39,205,0.22))';
+              }
 
-              if (status === 'Packaged')
-                return 'linear-gradient(135deg, rgba(72,126,176,0.92), rgba(25,42,86,0.96))';
+              if (status === 'Slowing down' || status === 'Stable / verifying') {
+                return 'linear-gradient(135deg, rgba(245,124,0,0.26), rgba(38,50,56,0.36))';
+              }
 
-              return 'linear-gradient(135deg, rgba(255,132,89,0.86), rgba(255,193,101,0.18)), rgba(18,18,24,0.96)';
+              if (status === 'Packaged') {
+                return 'linear-gradient(135deg, rgba(25,118,210,0.30), rgba(38,50,56,0.42))';
+              }
+
+              return 'linear-gradient(135deg, rgba(255,132,89,0.30), rgba(38,50,56,0.42))';
             ]]]
-        - box-shadow: 0 16px 42px rgba(0,0,0,0.38)
-        - border: 1px solid rgba(255,255,255,0.13)
+        - border: 1px solid rgba(255,255,255,0.10)
+        - box-shadow: 0 8px 26px rgba(0,0,0,0.22)
       grid:
-        - grid-template-areas: "\"i n s power\" \"i l l l\""
-        - grid-template-columns: 58px 1fr min-content 46px
-        - grid-template-rows: min-content 1fr
-      img_cell:
-        - width: 58px
-        - height: 58px
-        - border-radius: 18px
-        - background: rgba(255,255,255,0.14)
-        - place-self: start
+        - grid-template-areas: "\"i n power\" \"i l power\""
+        - grid-template-columns: 42px 1fr 42px
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 2px
       icon:
-        - width: 40px
-        - color: rgba(255,255,255,0.95)
-        - filter: drop-shadow(0 4px 12px rgba(0,0,0,0.35))
+        - width: 28px
+        - color: |
+            [[[
+              const enabled = entity.state === 'on';
+              const warning = states['sensor.manual_batch_warning_level']?.state ?? 'ok';
+              const status = states['sensor.manual_batch_status']?.state ?? 'Idle';
+
+              if (!enabled) return 'rgba(255,255,255,0.45)';
+              if (warning === 'critical') return '#ef9a9a';
+              if (warning === 'warning') return '#ffcc80';
+              if (warning === 'ready' || status === 'Ready for packaging') return '#a5d6a7';
+              return '#ffd28a';
+            ]]]
+      img_cell:
+        - width: 42px
+        - height: 42px
+        - border-radius: 15px
+        - background: rgba(255,255,255,0.08)
       name:
         - justify-self: start
-        - align-self: center
-        - font-size: 15px
-        - font-weight: 700
-        - color: white
-        - padding-left: 4px
-        - white-space: nowrap
-        - overflow: hidden
-        - text-overflow: ellipsis
-      state:
-        - justify-self: start
-        - align-self: center
-        - font-size: 15px
-        - font-weight: 700
-        - color: white
-        - padding-left: 8px
+        - font-size: 16px
+        - font-weight: 900
+        - color: rgba(255,255,255,0.96)
       label:
-        - justify-self: stretch
-        - align-self: start
+        - justify-self: start
         - text-align: left
-        - padding-left: 4px
-        - margin-top: 10px
         - white-space: normal
+        - line-height: 1.35
+        - color: rgba(255,255,255,0.78)
       custom_fields:
         power:
           - justify-self: end
           - align-self: start
-    extra_styles: |
-      .manual-wrap {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .manual-batch {
-        font-size: 14px;
-        font-weight: 700;
-        color: rgba(255,255,255,0.92);
-        line-height: 1.3;
-      }
-
-      .manual-status-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .manual-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 5px 11px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
-        border: 1px solid rgba(255,255,255,0.18);
-        box-shadow: 0 6px 14px rgba(0,0,0,0.20);
-      }
-
-      .manual-pill.on {
-        background: rgba(255,255,255,0.22);
-        color: #ffffff;
-      }
-
-      .manual-pill.off {
-        background: rgba(0,0,0,0.20);
-        color: rgba(255,255,255,0.72);
-      }
-
-      .manual-sub {
-        font-size: 13px;
-        font-weight: 700;
-        color: rgba(255,255,255,0.88);
-      }
-
-      .manual-next {
-        font-size: 14px;
-        line-height: 1.4;
-        font-weight: 500;
-        color: rgba(255,255,255,0.94);
-        max-width: 680px;
-      }
   - type: conditional
     conditions:
       - entity: input_boolean.manual_batch_active
@@ -506,6 +419,151 @@ cards:
               box-shadow: 0 0 16px rgba(255,190,118,0.30);
               transition: width 0.4s ease;
             }
+        - type: conditional
+          conditions:
+            - condition: state
+              entity: sensor.manual_batch_warning_level
+              state_not: ok
+          card:
+            type: custom:button-card
+            entity: sensor.manual_batch_warning_level
+            name: Manual Batch Warnings
+            icon: |
+              [[[
+                const level = entity.state ?? 'ok';
+                if (level === 'critical') return 'mdi:alert-octagon';
+                if (level === 'warning') return 'mdi:alert';
+                if (level === 'ready') return 'mdi:check-decagram';
+                return 'mdi:shield-check';
+              ]]]
+            show_state: false
+            show_label: true
+            label: |
+              [[[
+                const enabled = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+                const level = entity.state ?? 'ok';
+                const summary = states['sensor.manual_batch_warning_summary']?.state ?? 'Inga varningar';
+
+                if (!enabled) return 'Varningar är avstängda';
+
+                const pretty = {
+                  ok: 'OK',
+                  warning: 'Warning',
+                  critical: 'Critical',
+                  ready: 'Ready'
+                }[level] ?? level;
+
+                return `
+                  <div class="warn-wrap">
+                    <span class="warn-pill ${level}">${pretty}</span>
+                    <span class="warn-text">${summary}</span>
+                  </div>
+                `;
+              ]]]
+            styles:
+              card:
+                - border-radius: 20px
+                - padding: 14px
+                - background: |
+                    [[[
+                      const enabled = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+                      const level = entity.state ?? 'ok';
+
+                      if (!enabled) return 'rgba(255,255,255,0.045)';
+                      if (level === 'critical') return 'linear-gradient(135deg, rgba(255,82,82,0.22), rgba(90,20,20,0.18))';
+                      if (level === 'warning') return 'linear-gradient(135deg, rgba(255,190,118,0.20), rgba(255,159,67,0.08))';
+                      if (level === 'ready') return 'linear-gradient(135deg, rgba(46,204,113,0.18), rgba(72,126,176,0.10))';
+                      return 'linear-gradient(135deg, rgba(46,204,113,0.12), rgba(255,255,255,0.035))';
+                    ]]]
+                - border: |
+                    [[[
+                      const enabled = states['input_boolean.manual_batch_warnings_enabled']?.state === 'on';
+                      const level = entity.state ?? 'ok';
+
+                      if (!enabled) return '1px solid rgba(255,255,255,0.08)';
+                      if (level === 'critical') return '1px solid rgba(255,82,82,0.35)';
+                      if (level === 'warning') return '1px solid rgba(255,190,118,0.32)';
+                      if (level === 'ready') return '1px solid rgba(46,204,113,0.30)';
+                      return '1px solid rgba(46,204,113,0.18)';
+                    ]]]
+                - box-shadow: none
+              grid:
+                - grid-template-areas: "\"i n\" \"i l\""
+                - grid-template-columns: 42px 1fr
+                - grid-template-rows: min-content 1fr
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 14px
+                - background: rgba(255,255,255,0.10)
+              icon:
+                - width: 26px
+                - color: |
+                    [[[
+                      const level = entity.state ?? 'ok';
+                      if (level === 'critical') return 'rgba(255,82,82,1)';
+                      if (level === 'warning') return 'rgba(255,190,118,1)';
+                      if (level === 'ready') return 'rgba(46,204,113,1)';
+                      return 'rgba(85,239,196,0.95)';
+                    ]]]
+              name:
+                - justify-self: start
+                - color: rgba(255,255,255,0.90)
+                - font-size: 15px
+                - font-weight: 800
+                - padding-left: 4px
+              label:
+                - justify-self: stretch
+                - text-align: left
+                - padding-left: 4px
+                - margin-top: 8px
+                - white-space: normal
+            extra_styles: |
+              .warn-wrap {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+              }
+
+              .warn-pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 4px 10px;
+                border-radius: 999px;
+                font-size: 11px;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: 0.35px;
+                border: 1px solid rgba(255,255,255,0.16);
+              }
+
+              .warn-pill.ok {
+                background: rgba(46,204,113,0.18);
+                color: rgba(255,255,255,0.94);
+              }
+
+              .warn-pill.warning {
+                background: rgba(255,190,118,0.22);
+                color: rgba(255,255,255,0.96);
+              }
+
+              .warn-pill.critical {
+                background: rgba(255,82,82,0.24);
+                color: rgba(255,255,255,0.98);
+              }
+
+              .warn-pill.ready {
+                background: rgba(46,204,113,0.22);
+                color: rgba(255,255,255,0.98);
+              }
+
+              .warn-text {
+                font-size: 13px;
+                line-height: 1.35;
+                font-weight: 700;
+                color: rgba(255,255,255,0.88);
+              }
         - type: horizontal-stack
           cards:
             - type: custom:button-card
@@ -708,6 +766,42 @@ cards:
                 icon:
                   - color: rgba(255,118,117,1)
         - type: custom:expander-card
+          title: SG & Temperaturgraf
+          title-card:
+            type: custom:mushroom-template-card
+            primary: SG & Temperaturgraf
+            secondary: Historik för manuell SG och temperatur
+            icon: mdi:chart-line
+            icon_color: blue
+            tap_action:
+              action: fire-dom-event
+            card_mod:
+              style: |
+                ha-card {
+                  background: rgba(255,255,255,0.045) !important;
+                  border: 1px solid rgba(255,255,255,0.08);
+                  border-radius: 18px !important;
+                  box-shadow: none !important;
+                }
+          cards:
+            - type: history-graph
+              title: SG & Temperatur
+              hours_to_show: 336
+              entities:
+                - entity: input_number.manual_batch_sg_current
+                  name: SG
+                - entity: input_number.manual_batch_temperature
+                  name: Temperatur
+              card_mod:
+                style: |
+                  ha-card {
+                    background: rgba(255,255,255,0.045) !important;
+                    border: 1px solid rgba(255,255,255,0.08) !important;
+                    border-radius: 20px !important;
+                    box-shadow: none !important;
+                    overflow: hidden;
+                  }
+        - type: custom:expander-card
           title: Manuella värden & inställningar
           title-card:
             type: custom:mushroom-template-card
@@ -831,6 +925,49 @@ cards:
               entity: input_number.manual_batch_temperature
               name: Temperatur vid mätning
               icon: mdi:thermometer
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-title-card
+              title: Varningar
+              subtitle: Temperatur, mätintervall och SG-logik
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_first_sg_check_days
+              name: Första SG-kontroll efter
+              icon: mdi:calendar-search
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_boolean.manual_batch_warnings_enabled
+              name: Manual warnings
+              icon: mdi:alert-circle-outline
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_temp_min
+              name: Min temperatur
+              icon: mdi:thermometer-low
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_temp_max
+              name: Max temperatur
+              icon: mdi:thermometer-high
+              tap_action:
+                action: more-info
+              hold_action:
+                action: more-info
+            - type: custom:mushroom-entity-card
+              entity: input_number.manual_batch_reading_overdue_hours
+              name: Mätning för gammal efter
+              icon: mdi:timer-alert-outline
               tap_action:
                 action: more-info
               hold_action:
