@@ -61,6 +61,14 @@
       "smart_recommendation_mode": {"name": "Smart rekommendationsläge"},
       "smart_pill_status_core": {"name": "Smart Pill-status"},
       "smart_pill_temp_age_minutes_core": {"name": "Smart Pill temperaturålder"},
+      "source_health_summary": {"name": "Källhälsa sammanfattning"},
+      "source_health_level": {"name": "Källhälsa nivå"},
+      "configured_liquid_temp_entity": {"name": "Konfigurerad vätsketemperatur-entity"},
+      "configured_chamber_temp_entity": {"name": "Konfigurerad kammartemperatur-entity"},
+      "configured_recipe_target_entity": {"name": "Konfigurerad receptmål-entity"},
+      "configured_cold_crash_active_entity": {"name": "Konfigurerad cold crash aktiv-entity"},
+      "configured_cold_crash_target_entity": {"name": "Konfigurerad cold crash mål-entity"},
+      "configured_gravity_entity": {"name": "Konfigurerad SG-entity"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
@@ -71,7 +79,13 @@
       "smart_cooling_recommended_core": {"name": "Smart kylning rekommenderas"},
       "smart_fan_recommended_core": {"name": "Smart fläkt rekommenderas"},
       "smart_rising_too_fast_core": {"name": "Smart temp stiger för snabbt"},
-      "smart_pill_stale_core": {"name": "Smart Pill stale"}
+      "smart_pill_stale_core": {"name": "Smart Pill stale"},
+      "source_liquid_temp_available": {"name": "Källa vätsketemperatur tillgänglig"},
+      "source_chamber_temp_available": {"name": "Källa kammartemperatur tillgänglig"},
+      "source_recipe_target_available": {"name": "Källa receptmål tillgänglig"},
+      "source_cold_crash_active_available": {"name": "Källa cold crash aktiv tillgänglig"},
+      "source_cold_crash_target_available": {"name": "Källa cold crash mål tillgänglig"},
+      "source_gravity_available": {"name": "Källa SG tillgänglig"}
     }
   }
 }
