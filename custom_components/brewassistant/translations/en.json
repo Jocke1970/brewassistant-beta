@@ -18,6 +18,22 @@
       "already_configured": "BrewAssistant is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BrewAssistant options",
+        "description": "Update which existing Home Assistant entities BrewAssistant should read and normalize.",
+        "data": {
+          "liquid_temp_entity": "Liquid temperature source",
+          "chamber_temp_entity": "Chamber temperature fallback",
+          "recipe_target_entity": "Recipe/runtime target temperature",
+          "cold_crash_active_entity": "Cold crash active helper",
+          "cold_crash_target_entity": "Cold crash target temperature helper",
+          "gravity_entity": "Gravity source"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "liquid_temperature": {"name": "Liquid temperature"},
@@ -43,6 +59,8 @@
       "smart_heat_block_reason_core": {"name": "Smart heat block reason"},
       "smart_suggested_heat_pulse_minutes": {"name": "Smart suggested heat pulse"},
       "smart_recommendation_mode": {"name": "Smart recommendation mode"},
+      "smart_pill_status_core": {"name": "Smart pill status"},
+      "smart_pill_temp_age_minutes_core": {"name": "Smart pill temperature age"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
@@ -52,7 +70,8 @@
       "smart_heat_permitted_core": {"name": "Smart heat permitted"},
       "smart_cooling_recommended_core": {"name": "Smart cooling recommended"},
       "smart_fan_recommended_core": {"name": "Smart fan recommended"},
-      "smart_rising_too_fast_core": {"name": "Smart rising too fast"}
+      "smart_rising_too_fast_core": {"name": "Smart rising too fast"},
+      "smart_pill_stale_core": {"name": "Smart pill stale"}
     }
   }
 }
