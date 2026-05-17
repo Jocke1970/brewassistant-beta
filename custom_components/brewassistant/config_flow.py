@@ -11,10 +11,14 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
+    CONF_COLD_CRASH_ACTIVE_ENTITY,
+    CONF_COLD_CRASH_TARGET_ENTITY,
     CONF_GRAVITY_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
     CONF_RECIPE_TARGET_ENTITY,
     DEFAULT_CHAMBER_TEMP_ENTITY,
+    DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+    DEFAULT_COLD_CRASH_TARGET_ENTITY,
     DEFAULT_GRAVITY_ENTITY,
     DEFAULT_LIQUID_TEMP_ENTITY,
     DEFAULT_RECIPE_TARGET_ENTITY,
@@ -52,6 +56,14 @@ class BrewAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_RECIPE_TARGET_ENTITY,
                     default=DEFAULT_RECIPE_TARGET_ENTITY,
+                ): str,
+                vol.Optional(
+                    CONF_COLD_CRASH_ACTIVE_ENTITY,
+                    default=DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+                ): str,
+                vol.Optional(
+                    CONF_COLD_CRASH_TARGET_ENTITY,
+                    default=DEFAULT_COLD_CRASH_TARGET_ENTITY,
                 ): str,
                 vol.Optional(
                     CONF_GRAVITY_ENTITY,
