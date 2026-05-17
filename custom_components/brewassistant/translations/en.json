@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BrewAssistant",
+        "description": "Configure the existing Home Assistant entities BrewAssistant should normalize.",
+        "data": {
+          "liquid_temp_entity": "Liquid temperature entity",
+          "chamber_temp_entity": "Chamber temperature entity",
+          "recipe_target_entity": "Recipe target temperature entity",
+          "gravity_entity": "Gravity entity"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "BrewAssistant is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "liquid_temperature": {"name": "Liquid temperature"},
+      "liquid_temperature_source": {"name": "Liquid temperature source"},
+      "chamber_temperature": {"name": "Chamber temperature"},
+      "recipe_target_temperature": {"name": "Recipe target temperature"},
+      "temperature_delta": {"name": "Temperature delta"},
+      "gravity": {"name": "Gravity"}
+    },
+    "binary_sensor": {
+      "temperature_fallback_active": {"name": "Temperature fallback active"},
+      "runtime_ready": {"name": "Runtime ready"}
+    }
+  }
+}
