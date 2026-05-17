@@ -75,12 +75,14 @@ Tasks:
 ```text
 [x] Fermentation Process card reads Python Core live values
 [x] Fermentation Status card reads Python Core live values
+[x] Fermentation Process card reads Python Core v0.3 process mirror
+[x] Fermentation Status / Control card reads Python Core v0.3 process mirror
+[x] Debug/runtime card
 [ ] Fermentation top card cleanup
 [ ] Chamber card
 [ ] Manual mode card
 [ ] Notifications card
 [ ] Kegerator card
-[ ] Debug/runtime card
 [ ] Reduce repeated JavaScript/Jinja status logic in dashboard YAML
 ```
 
@@ -118,8 +120,8 @@ Tasks:
 [x] Mirror existing next step in Python
 [x] Mirror current action stage in Python
 [x] Mirror next action stage in Python
-[ ] Add read-only comparison sensors between YAML and Python process state
-[ ] Switch dashboards to Python process entities after validation
+[x] Add read-only comparison signals between YAML and Python process state
+[x] Switch fermentation dashboards to Python process entities after validation
 [ ] Keep YAML process package as compatibility layer during migration
 ```
 
