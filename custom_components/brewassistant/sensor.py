@@ -26,11 +26,22 @@ from .const import (
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_MODE,
     ATTR_YAML_PROCESS_STATUS,
+    CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+    CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
+    CONF_RUNTIME_RECIPE_NAME_ENTITY,
+    CONF_RUNTIME_STATUS_ENTITY,
+    CONF_RUNTIME_TARGET_FG_ENTITY,
+    DEFAULT_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+    DEFAULT_RUNTIME_PRIMARY_TARGET_ENTITY,
+    DEFAULT_RUNTIME_RECIPE_NAME_ENTITY,
+    DEFAULT_RUNTIME_STATUS_ENTITY,
+    DEFAULT_RUNTIME_TARGET_FG_ENTITY,
     DOMAIN,
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 from .next_action import build_next_action
+from .runtime import build_runtime_snapshot, runtime_attrs
 from .smart_recommendations import SmartRecommendationData, build_smart_recommendations
 from .source_health import (
     SOURCE_SENSOR_KEYS,
@@ -57,6 +68,43 @@ class BrewAssistantSmartSensorDescription(SensorEntityDescription):
 def _display_name_from_key(key: str) -> str:
     """Return a stable human-readable name from an entity key."""
     return f"BrewAssistant {key.replace('_', ' ').title()}"
+
+
+def _entry_entity(coordinator: BrewAssistantCoordinator, key: str, default: str) -> str:
+    """Return a configured entity id from options/data/default."""
+    entry = coordinator.config_entry
+    return str(entry.options.get(key) or entry.data.get(key) or default)
+
+
+def _runtime_entities(coordinator: BrewAssistantCoordinator) -> dict[str, str]:
+    """Return configured runtime source entities."""
+    return {
+        CONF_RUNTIME_RECIPE_NAME_ENTITY: _entry_entity(
+            coordinator,
+            CONF_RUNTIME_RECIPE_NAME_ENTITY,
+            DEFAULT_RUNTIME_RECIPE_NAME_ENTITY,
+        ),
+        CONF_RUNTIME_STATUS_ENTITY: _entry_entity(
+            coordinator,
+            CONF_RUNTIME_STATUS_ENTITY,
+            DEFAULT_RUNTIME_STATUS_ENTITY,
+        ),
+        CONF_RUNTIME_PRIMARY_TARGET_ENTITY: _entry_entity(
+            coordinator,
+            CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
+            DEFAULT_RUNTIME_PRIMARY_TARGET_ENTITY,
+        ),
+        CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY: _entry_entity(
+            coordinator,
+            CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+            DEFAULT_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+        ),
+        CONF_RUNTIME_TARGET_FG_ENTITY: _entry_entity(
+            coordinator,
+            CONF_RUNTIME_TARGET_FG_ENTITY,
+            DEFAULT_RUNTIME_TARGET_FG_ENTITY,
+        ),
+    }
 
 
 def _liquid_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
@@ -133,6 +181,10 @@ def _smart_attrs(smart: SmartRecommendationData | None) -> dict[str, Any]:
 
 def _source_health(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     return build_source_health(coordinator.hass, coordinator.configured_entities)
+
+
+def _runtime_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    return build_runtime_snapshot(coordinator.hass, _runtime_entities(coordinator))
 
 
 def _next_action(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
@@ -320,6 +372,15 @@ SOURCE_SENSORS = {
     },
 }
 
+RUNTIME_SENSORS = {
+    "runtime_recipe_name": lambda coordinator: _runtime_snapshot(coordinator)["recipe_name"],
+    "runtime_status": lambda coordinator: _runtime_snapshot(coordinator)["status"],
+    "runtime_primary_target_temperature": lambda coordinator: _runtime_snapshot(coordinator)["primary_target_temperature"],
+    "runtime_cold_crash_target_temperature": lambda coordinator: _runtime_snapshot(coordinator)["cold_crash_target_temperature"],
+    "runtime_target_fg": lambda coordinator: _runtime_snapshot(coordinator)["target_fg"],
+    "runtime_source_status": lambda coordinator: _runtime_snapshot(coordinator)["source_status"],
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -332,6 +393,7 @@ async def async_setup_entry(
         [BrewAssistantSensor(coordinator, description) for description in SENSORS]
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
+        + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
 
@@ -419,6 +481,38 @@ class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
         if self._key not in {"source_health_summary", "source_health_level"}:
             return None
         return source_health_attrs(_source_health(self.coordinator))
+
+
+class BrewAssistantRuntimeSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only runtime normalization sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        """Initialize the runtime sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        if key in {"runtime_primary_target_temperature", "runtime_cold_crash_target_temperature"}:
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "runtime_target_fg":
+            self._attr_native_unit_of_measurement = "SG"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> Any:
+        """Return runtime sensor value."""
+        return RUNTIME_SENSORS[self._key](self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return runtime attributes."""
+        if self._key not in {"runtime_source_status", "runtime_recipe_name", "runtime_status"}:
+            return None
+        return runtime_attrs(_runtime_snapshot(self.coordinator))
 
 
 class BrewAssistantNextActionSensor(BrewAssistantEntity, SensorEntity):
