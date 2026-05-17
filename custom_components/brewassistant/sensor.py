@@ -12,7 +12,15 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import ATTR_SOURCE, ATTR_SOURCE_ENTITY, ATTR_TARGET_ENTITY, ATTR_TARGET_MODE, DOMAIN
+from .const import (
+    ATTR_COLOR_HINT,
+    ATTR_ICON_HINT,
+    ATTR_SOURCE,
+    ATTR_SOURCE_ENTITY,
+    ATTR_TARGET_ENTITY,
+    ATTR_TARGET_MODE,
+    DOMAIN,
+)
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 
@@ -44,6 +52,15 @@ def _target_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
 def _source_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     data = coordinator.data
     return {ATTR_SOURCE_ENTITY: data.liquid_temperature_entity if data else None}
+
+
+def _status_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    data = coordinator.data
+    return {
+        ATTR_ICON_HINT: data.temperature_icon_hint if data else None,
+        ATTR_COLOR_HINT: data.temperature_color_hint if data else None,
+        ATTR_TARGET_MODE: data.temperature_target_mode if data else None,
+    }
 
 
 SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
@@ -86,6 +103,41 @@ SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: data.temperature_delta,
+    ),
+    BrewAssistantSensorDescription(
+        key="temperature_target_mode",
+        translation_key="temperature_target_mode",
+        value_fn=lambda data: data.temperature_target_mode,
+        extra_attributes_fn=_target_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="temperature_status",
+        translation_key="temperature_status",
+        value_fn=lambda data: data.temperature_status,
+        extra_attributes_fn=_status_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="temperature_severity",
+        translation_key="temperature_severity",
+        value_fn=lambda data: data.temperature_severity,
+        extra_attributes_fn=_status_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="source_summary",
+        translation_key="source_summary",
+        value_fn=lambda data: data.source_summary,
+    ),
+    BrewAssistantSensorDescription(
+        key="status_summary",
+        translation_key="status_summary",
+        value_fn=lambda data: data.status_summary,
+        extra_attributes_fn=_status_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="problem_level",
+        translation_key="problem_level",
+        value_fn=lambda data: data.problem_level,
+        extra_attributes_fn=_status_attrs,
     ),
     BrewAssistantSensorDescription(
         key="gravity",
