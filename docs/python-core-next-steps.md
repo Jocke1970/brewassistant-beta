@@ -1,6 +1,6 @@
 # BrewAssistant Python Core Next Steps
 
-This document prepares the next implementation path after v0.5.
+This document prepares the next implementation path after v0.6.
 
 The guiding rule remains:
 
@@ -10,23 +10,9 @@ Read-only first. Recommendations before control. Control only after validation.
 
 ---
 
-## Immediate after-work flow
+## Completed validation
 
-Recommended order for the next session:
-
-1. Update Home Assistant custom component from the PR branch.
-2. Restart Home Assistant.
-3. Run `docs/python-core-v0.5-test-plan.md`.
-4. Fix any entity registry naming issues before adding new logic.
-5. Only then continue with v0.6.
-
-Status: completed and validated.
-
----
-
-## v0.5 validation target
-
-v0.5 is considered validated when:
+### v0.5 Options Flow / Pill stale
 
 ```text
 [x] Base core sensors still work
@@ -49,42 +35,26 @@ Options flow: OK after OptionsFlowWithConfigEntry compatibility patch
 Options save/reload: OK
 ```
 
----
-
-## v0.6 candidate: Source Health + Entity Diagnostics
-
-Goal: make troubleshooting easier before moving more logic.
-
-Suggested new entities:
+### v0.6 Source Health + Entity Diagnostics
 
 ```text
-sensor.brewassistant_source_health_summary
-sensor.brewassistant_source_health_level
-sensor.brewassistant_configured_liquid_temp_entity
-sensor.brewassistant_configured_chamber_temp_entity
-sensor.brewassistant_configured_recipe_target_entity
-sensor.brewassistant_configured_cold_crash_active_entity
-sensor.brewassistant_configured_cold_crash_target_entity
-sensor.brewassistant_configured_gravity_entity
-binary_sensor.brewassistant_source_liquid_temp_available
-binary_sensor.brewassistant_source_chamber_temp_available
-binary_sensor.brewassistant_source_recipe_target_available
-binary_sensor.brewassistant_source_cold_crash_target_available
-binary_sensor.brewassistant_source_gravity_available
+[x] Source health summary sensor works
+[x] Source health level sensor works
+[x] Configured source entity sensors work
+[x] Source availability binary sensors work
+[x] Current setup reports 6/6 sources available
+[x] Liquid temperature source resolves to sensor.yellow_pill_temperature
+[x] Gravity source resolves to sensor.yellow_pill_gravity
 ```
 
-Purpose:
+Validation notes:
 
-- Show exactly what BrewAssistant is reading.
-- Show whether each configured source exists.
-- Avoid digging through options/config files when something returns `unknown`.
-- Prepare for a better debug card.
-
-Why v0.6 should probably be this:
-
-- It is still read-only.
-- It reduces support/debug time.
-- It helps catch naming errors like `sensor.yellow_pill_gravity_2` vs `sensor.yellow_pill_gravity`.
+```text
+Source health: OK · 6/6 sources available
+Source health level: ok
+Liquid source: sensor.yellow_pill_temperature · OK
+Gravity source: sensor.yellow_pill_gravity · OK
+```
 
 ---
 
@@ -184,13 +154,13 @@ This should remain read-only and only normalize existing HA/Brewfather sensor da
 v1.0 should mean:
 
 ```text
-[ ] Base temperature/target/gravity normalization is stable
-[ ] Process mirror is stable
-[ ] Smart recommendations are stable
-[ ] Source diagnostics are stable
+[x] Base temperature/target/gravity normalization is stable
+[x] Process mirror is stable
+[x] Smart recommendations are stable
+[x] Source diagnostics are stable
 [ ] Debug card is useful
-[ ] Options flow works
-[ ] No hardware control in Python Core yet
+[x] Options flow works
+[x] No hardware control in Python Core yet
 ```
 
 At that point, dashboards can rely primarily on Python Core for display/state decisions.
@@ -216,10 +186,11 @@ Future safe-control steps:
 
 ---
 
-## Notes from v0.4/v0.5 lessons
+## Notes from v0.4/v0.5/v0.6 lessons
 
 - Entity registry can keep old object IDs even after code changes.
 - New entity names may become `brewassistant_2`, `brewassistant_3`, etc. if Home Assistant cannot derive a unique/stable object ID.
 - Always check real entities by iterating `states.sensor` / `states.binary_sensor`, not only by calling `states('entity_id')`.
 - `states('missing.entity')` returns `unknown`, which can be misleading.
 - For new sensors, stable `suggested_object_id` and explicit names matter.
+- Source health diagnostics should be checked before debugging temperature, gravity or target logic.
