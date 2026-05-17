@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
@@ -61,6 +62,7 @@ class BrewAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     @staticmethod
+    @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> BrewAssistantOptionsFlow:
@@ -85,12 +87,12 @@ class BrewAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class BrewAssistantOptionsFlow(config_entries.OptionsFlow):
+class BrewAssistantOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     """Handle BrewAssistant options."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize the options flow."""
-        self.config_entry = config_entry
+        super().__init__(config_entry)
 
     async def async_step_init(
         self,
