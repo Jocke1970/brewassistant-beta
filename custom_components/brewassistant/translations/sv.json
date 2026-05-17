@@ -23,8 +23,14 @@
       "liquid_temperature": {"name": "Vätsketemperatur"},
       "liquid_temperature_source": {"name": "Temperaturkälla"},
       "chamber_temperature": {"name": "Kammartemperatur"},
-      "recipe_target_temperature": {"name": "Receptets måltemperatur"},
+      "recipe_target_temperature": {"name": "Effektiv måltemperatur"},
       "temperature_delta": {"name": "Temperaturdelta"},
+      "temperature_target_mode": {"name": "Temperaturmål-läge"},
+      "temperature_status": {"name": "Temperaturstatus"},
+      "temperature_severity": {"name": "Temperaturseverity"},
+      "source_summary": {"name": "Källsammanfattning"},
+      "status_summary": {"name": "Statussammanfattning"},
+      "problem_level": {"name": "Problemnivå"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
