@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -17,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
+from .runtime import build_runtime_snapshot
 from .smart_recommendations import build_smart_recommendations
 from .source_health import SOURCE_BINARY_KEYS, build_source_health
 
@@ -50,6 +52,54 @@ def _smart_data(coordinator: BrewAssistantCoordinator):
 
 def _source_health(coordinator: BrewAssistantCoordinator) -> dict:
     return build_source_health(coordinator.hass, coordinator.configured_entities)
+
+
+def _runtime_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    return build_runtime_snapshot(coordinator.hass, _runtime_entities(coordinator))
+
+
+def _runtime_entities(coordinator: BrewAssistantCoordinator) -> dict[str, str]:
+    from .const import (
+        CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+        CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
+        CONF_RUNTIME_RECIPE_NAME_ENTITY,
+        CONF_RUNTIME_STATUS_ENTITY,
+        CONF_RUNTIME_TARGET_FG_ENTITY,
+        DEFAULT_RUNTIME_COLD_CRASH_TARGET_ENTITY,
+        DEFAULT_RUNTIME_PRIMARY_TARGET_ENTITY,
+        DEFAULT_RUNTIME_RECIPE_NAME_ENTITY,
+        DEFAULT_RUNTIME_STATUS_ENTITY,
+        DEFAULT_RUNTIME_TARGET_FG_ENTITY,
+    )
+
+    entry = coordinator.config_entry
+    return {
+        CONF_RUNTIME_RECIPE_NAME_ENTITY: str(
+            entry.options.get(CONF_RUNTIME_RECIPE_NAME_ENTITY)
+            or entry.data.get(CONF_RUNTIME_RECIPE_NAME_ENTITY)
+            or DEFAULT_RUNTIME_RECIPE_NAME_ENTITY
+        ),
+        CONF_RUNTIME_STATUS_ENTITY: str(
+            entry.options.get(CONF_RUNTIME_STATUS_ENTITY)
+            or entry.data.get(CONF_RUNTIME_STATUS_ENTITY)
+            or DEFAULT_RUNTIME_STATUS_ENTITY
+        ),
+        CONF_RUNTIME_PRIMARY_TARGET_ENTITY: str(
+            entry.options.get(CONF_RUNTIME_PRIMARY_TARGET_ENTITY)
+            or entry.data.get(CONF_RUNTIME_PRIMARY_TARGET_ENTITY)
+            or DEFAULT_RUNTIME_PRIMARY_TARGET_ENTITY
+        ),
+        CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY: str(
+            entry.options.get(CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY)
+            or entry.data.get(CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY)
+            or DEFAULT_RUNTIME_COLD_CRASH_TARGET_ENTITY
+        ),
+        CONF_RUNTIME_TARGET_FG_ENTITY: str(
+            entry.options.get(CONF_RUNTIME_TARGET_FG_ENTITY)
+            or entry.data.get(CONF_RUNTIME_TARGET_FG_ENTITY)
+            or DEFAULT_RUNTIME_TARGET_FG_ENTITY
+        ),
+    }
 
 
 BINARY_SENSORS: tuple[BrewAssistantBinarySensorDescription, ...] = (
@@ -120,6 +170,7 @@ async def async_setup_entry(
     async_add_entities(
         [BrewAssistantBinarySensor(coordinator, description) for description in BINARY_SENSORS]
         + [BrewAssistantSourceBinarySensor(coordinator, key) for key in SOURCE_BINARY_KEYS]
+        + [BrewAssistantRuntimeAvailableBinarySensor(coordinator)]
     )
 
 
@@ -199,4 +250,32 @@ class BrewAssistantSourceBinarySensor(BrewAssistantEntity, BinarySensorEntity):
             "entity_id": item.get("entity_id"),
             "state": item.get("state"),
             "reason": item.get("reason"),
+        }
+
+
+class BrewAssistantRuntimeAvailableBinarySensor(BrewAssistantEntity, BinarySensorEntity):
+    """Read-only Brewfather runtime availability sensor."""
+
+    _attr_has_entity_name = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        """Initialize the runtime availability binary sensor."""
+        super().__init__(coordinator, "runtime_brewfather_available")
+        self._attr_name = "BrewAssistant Runtime Brewfather Available"
+        self._attr_suggested_object_id = f"{DOMAIN}_runtime_brewfather_available"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether runtime/Brewfather source appears available."""
+        return bool(_runtime_snapshot(self.coordinator).get("brewfather_available"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return runtime source details."""
+        snapshot = _runtime_snapshot(self.coordinator)
+        return {
+            "source_status": snapshot.get("source_status"),
+            "available_count": snapshot.get("available_count"),
+            "total_count": snapshot.get("total_count"),
         }
