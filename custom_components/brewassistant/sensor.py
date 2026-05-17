@@ -6,7 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -25,7 +30,7 @@ from .const import (
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
-from .smart_recommendations import build_smart_recommendations
+from .smart_recommendations import SmartRecommendationData, build_smart_recommendations
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,6 +39,13 @@ class BrewAssistantSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[BrewAssistantData], Any]
     extra_attributes_fn: Callable[[BrewAssistantCoordinator], dict[str, Any]] | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class BrewAssistantSmartSensorDescription(SensorEntityDescription):
+    """Describes a BrewAssistant smart recommendation sensor."""
+
+    value_fn: Callable[[SmartRecommendationData], Any]
 
 
 def _liquid_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
@@ -75,7 +87,7 @@ def _process_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     }
 
 
-def _smart_data(coordinator: BrewAssistantCoordinator):
+def _smart_data(coordinator: BrewAssistantCoordinator) -> SmartRecommendationData | None:
     data = coordinator.data
     if data is None:
         return None
@@ -90,8 +102,7 @@ def _smart_data(coordinator: BrewAssistantCoordinator):
     )
 
 
-def _smart_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    smart = _smart_data(coordinator)
+def _smart_attrs(smart: SmartRecommendationData | None) -> dict[str, Any]:
     if smart is None:
         return {}
     return {
@@ -213,49 +224,6 @@ SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
         extra_attributes_fn=_process_attrs,
     ),
     BrewAssistantSensorDescription(
-        key="smart_recommendation_summary",
-        translation_key="smart_recommendation_summary",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_heat_recommendation",
-        translation_key="smart_heat_recommendation",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_cooling_recommendation",
-        translation_key="smart_cooling_recommendation",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_fan_recommendation",
-        translation_key="smart_fan_recommendation",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_heat_block_reason_core",
-        translation_key="smart_heat_block_reason_core",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_suggested_heat_pulse_minutes",
-        translation_key="smart_suggested_heat_pulse_minutes",
-        native_unit_of_measurement="min",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
-        key="smart_recommendation_mode",
-        translation_key="smart_recommendation_mode",
-        value_fn=lambda data: None,
-        extra_attributes_fn=_smart_attrs,
-    ),
-    BrewAssistantSensorDescription(
         key="gravity",
         translation_key="gravity",
         native_unit_of_measurement="SG",
@@ -265,15 +233,45 @@ SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
 )
 
 
-SMART_SENSOR_KEYS = {
-    "smart_recommendation_summary",
-    "smart_heat_recommendation",
-    "smart_cooling_recommendation",
-    "smart_fan_recommendation",
-    "smart_heat_block_reason_core",
-    "smart_suggested_heat_pulse_minutes",
-    "smart_recommendation_mode",
-}
+SMART_SENSORS: tuple[BrewAssistantSmartSensorDescription, ...] = (
+    BrewAssistantSmartSensorDescription(
+        key="smart_recommendation_summary",
+        translation_key="smart_recommendation_summary",
+        value_fn=lambda smart: smart.summary,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_heat_recommendation",
+        translation_key="smart_heat_recommendation",
+        value_fn=lambda smart: smart.heat,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_cooling_recommendation",
+        translation_key="smart_cooling_recommendation",
+        value_fn=lambda smart: smart.cooling,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_fan_recommendation",
+        translation_key="smart_fan_recommendation",
+        value_fn=lambda smart: smart.fan,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_heat_block_reason_core",
+        translation_key="smart_heat_block_reason_core",
+        value_fn=lambda smart: smart.block_reason,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_suggested_heat_pulse_minutes",
+        translation_key="smart_suggested_heat_pulse_minutes",
+        native_unit_of_measurement="min",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda smart: smart.suggested_pulse_minutes,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_recommendation_mode",
+        translation_key="smart_recommendation_mode",
+        value_fn=lambda smart: smart.mode,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -284,7 +282,8 @@ async def async_setup_entry(
     """Set up BrewAssistant sensors."""
     coordinator: BrewAssistantCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        BrewAssistantSensor(coordinator, description) for description in SENSORS
+        [BrewAssistantSensor(coordinator, description) for description in SENSORS]
+        + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
     )
 
 
@@ -307,24 +306,6 @@ class BrewAssistantSensor(BrewAssistantEntity, SensorEntity):
         """Return the native sensor value."""
         if self.coordinator.data is None:
             return None
-        if self.entity_description.key in SMART_SENSOR_KEYS:
-            smart = _smart_data(self.coordinator)
-            if smart is None:
-                return None
-            if self.entity_description.key == "smart_recommendation_summary":
-                return smart.summary
-            if self.entity_description.key == "smart_heat_recommendation":
-                return smart.heat
-            if self.entity_description.key == "smart_cooling_recommendation":
-                return smart.cooling
-            if self.entity_description.key == "smart_fan_recommendation":
-                return smart.fan
-            if self.entity_description.key == "smart_heat_block_reason_core":
-                return smart.block_reason
-            if self.entity_description.key == "smart_suggested_heat_pulse_minutes":
-                return smart.suggested_pulse_minutes
-            if self.entity_description.key == "smart_recommendation_mode":
-                return smart.mode
         return self.entity_description.value_fn(self.coordinator.data)
 
     @property
@@ -333,3 +314,31 @@ class BrewAssistantSensor(BrewAssistantEntity, SensorEntity):
         if self.entity_description.extra_attributes_fn is None:
             return None
         return self.entity_description.extra_attributes_fn(self.coordinator)
+
+
+class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only smart recommendation sensor entity."""
+
+    entity_description: BrewAssistantSmartSensorDescription
+
+    def __init__(
+        self,
+        coordinator: BrewAssistantCoordinator,
+        description: BrewAssistantSmartSensorDescription,
+    ) -> None:
+        """Initialize the smart recommendation sensor."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def native_value(self) -> Any:
+        """Return the smart recommendation value."""
+        smart = _smart_data(self.coordinator)
+        if smart is None:
+            return None
+        return self.entity_description.value_fn(smart)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return smart recommendation attributes."""
+        return _smart_attrs(_smart_data(self.coordinator))
