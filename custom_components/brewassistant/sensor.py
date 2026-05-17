@@ -30,6 +30,7 @@ from .const import (
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
+from .next_action import build_next_action
 from .smart_recommendations import SmartRecommendationData, build_smart_recommendations
 from .source_health import (
     SOURCE_SENSOR_KEYS,
@@ -132,6 +133,14 @@ def _smart_attrs(smart: SmartRecommendationData | None) -> dict[str, Any]:
 
 def _source_health(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     return build_source_health(coordinator.hass, coordinator.configured_entities)
+
+
+def _next_action(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    return build_next_action(
+        data=coordinator.data,
+        smart=_smart_data(coordinator),
+        source_health=_source_health(coordinator),
+    )
 
 
 SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
@@ -323,6 +332,7 @@ async def async_setup_entry(
         [BrewAssistantSensor(coordinator, description) for description in SENSORS]
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
+        + [BrewAssistantNextActionSensor(coordinator)]
     )
 
 
@@ -409,3 +419,25 @@ class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
         if self._key not in {"source_health_summary", "source_health_level"}:
             return None
         return source_health_attrs(_source_health(self.coordinator))
+
+
+class BrewAssistantNextActionSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only next recommended action sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        """Initialize the next action sensor."""
+        super().__init__(coordinator, "next_recommended_action")
+        self._attr_name = "BrewAssistant Next Recommended Action"
+        self._attr_suggested_object_id = f"{DOMAIN}_next_recommended_action"
+
+    @property
+    def native_value(self) -> Any:
+        """Return next recommended action."""
+        return _next_action(self.coordinator)["action"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return next action attributes."""
+        return _next_action(self.coordinator)
