@@ -1,8 +1,8 @@
 """BrewAssistant custom integration.
 
-v0.1 is intentionally read-only. It exposes normalized brewing state from
-existing Home Assistant entities so dashboards can start moving away from
-heavy YAML/Jinja templates without changing the current package workflow.
+BrewAssistant Python Core exposes normalized brewing state from existing Home
+Assistant entities so dashboards can move away from heavy YAML/Jinja templates
+without changing the current package workflow.
 """
 
 from __future__ import annotations
@@ -20,8 +20,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the config entry when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
