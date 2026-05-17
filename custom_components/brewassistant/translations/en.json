@@ -10,13 +10,16 @@
           "recipe_target_entity": "Recipe/runtime target temperature",
           "cold_crash_active_entity": "Cold crash active helper",
           "cold_crash_target_entity": "Cold crash target temperature helper",
-          "gravity_entity": "Gravity source"
+          "gravity_entity": "Gravity source",
+          "runtime_recipe_name_entity": "Runtime recipe name source",
+          "runtime_status_entity": "Runtime status source",
+          "runtime_primary_target_entity": "Runtime primary target source",
+          "runtime_cold_crash_target_entity": "Runtime cold crash target source",
+          "runtime_target_fg_entity": "Runtime target FG source"
         }
       }
     },
-    "abort": {
-      "already_configured": "BrewAssistant is already configured."
-    }
+    "abort": {"already_configured": "BrewAssistant is already configured."}
   },
   "options": {
     "step": {
@@ -29,7 +32,12 @@
           "recipe_target_entity": "Recipe/runtime target temperature",
           "cold_crash_active_entity": "Cold crash active helper",
           "cold_crash_target_entity": "Cold crash target temperature helper",
-          "gravity_entity": "Gravity source"
+          "gravity_entity": "Gravity source",
+          "runtime_recipe_name_entity": "Runtime recipe name source",
+          "runtime_status_entity": "Runtime status source",
+          "runtime_primary_target_entity": "Runtime primary target source",
+          "runtime_cold_crash_target_entity": "Runtime cold crash target source",
+          "runtime_target_fg_entity": "Runtime target FG source"
         }
       }
     }
@@ -70,11 +78,18 @@
       "configured_cold_crash_target_entity": {"name": "Configured cold crash target entity"},
       "configured_gravity_entity": {"name": "Configured gravity entity"},
       "next_recommended_action": {"name": "Next recommended action"},
+      "runtime_recipe_name": {"name": "Runtime recipe name"},
+      "runtime_status": {"name": "Runtime status"},
+      "runtime_primary_target_temperature": {"name": "Runtime primary target temperature"},
+      "runtime_cold_crash_target_temperature": {"name": "Runtime cold crash target temperature"},
+      "runtime_target_fg": {"name": "Runtime target FG"},
+      "runtime_source_status": {"name": "Runtime source status"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
       "temperature_fallback_active": {"name": "Temperature fallback active"},
       "runtime_ready": {"name": "Runtime ready"},
+      "runtime_brewfather_available": {"name": "Runtime Brewfather available"},
       "smart_heat_needed_core": {"name": "Smart heat needed"},
       "smart_heat_permitted_core": {"name": "Smart heat permitted"},
       "smart_cooling_recommended_core": {"name": "Smart cooling recommended"},
