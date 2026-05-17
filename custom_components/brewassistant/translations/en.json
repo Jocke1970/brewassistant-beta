@@ -69,6 +69,7 @@
       "configured_cold_crash_active_entity": {"name": "Configured cold crash active entity"},
       "configured_cold_crash_target_entity": {"name": "Configured cold crash target entity"},
       "configured_gravity_entity": {"name": "Configured gravity entity"},
+      "next_recommended_action": {"name": "Next recommended action"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
