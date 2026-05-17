@@ -33,8 +33,8 @@
       "problem_level": {"name": "Problemnivå"},
       "process_status": {"name": "Processstatus"},
       "process_next_step": {"name": "Nästa processsteg"},
-      "process_current_action_stage": {"name": "Aktivt process-steg"},
-      "process_next_action_stage": {"name": "Nästa action-steg"},
+      "process_current_action_stage": {"name": "Process current action stage"},
+      "process_next_action_stage": {"name": "Process next action stage"},
       "process_summary": {"name": "Processsammanfattning"},
       "gravity": {"name": "SG"}
     },
