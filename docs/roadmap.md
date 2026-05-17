@@ -11,7 +11,7 @@ Goal: create a clean documentation foundation.
 Tasks:
 
 ```text
-[ ] Replace old docs with v4 README
+[x] Replace old docs with v4 README
 [ ] Add setup guide
 [ ] Add structure guide
 [ ] Add entity guide
@@ -61,6 +61,7 @@ Tasks:
 [x] Add runtime-ready and fallback binary sensors
 [x] Add dashboard support sensors for target mode, status, severity and summary
 [x] Add options flow for changing source entities after setup
+[x] Add core version sensor
 [ ] Add automated tests
 ```
 
@@ -78,6 +79,8 @@ Tasks:
 [x] Fermentation Process card reads Python Core v0.3 process mirror
 [x] Fermentation Status / Control card reads Python Core v0.3 process mirror
 [x] Debug/runtime card
+[x] Branded Python Core v1.1 dashboard card
+[x] Archive legacy debug cards from active dashboard
 [ ] Fermentation top card cleanup
 [ ] Chamber card
 [ ] Manual mode card
@@ -104,7 +107,9 @@ Tasks:
 [x] Color/severity hint attributes for dashboard use
 [x] Process summary sensor
 [x] Smart recommendation summary sensor
-[ ] Next recommended action sensor
+[x] Next recommended action sensor
+[x] Source health summary sensor
+[x] Runtime source status sensor
 [ ] Compact health snapshot sensor
 ```
 
@@ -144,13 +149,64 @@ Tasks:
 [x] Pill stale detection
 [x] Rising-too-fast detection
 [x] Read-only debug summary
+[x] Next recommended action integration
 ```
 
 ---
 
-## v4.7 smart fermentation control
+## v4.7 smart chamber target recommendation
 
-Goal: only after v4.6 has been validated, move safe hardware control into the custom integration.
+Goal: recommend a chamber assist target/range that helps liquid temperature move toward the recipe target systematically.
+
+This should remain read-only before any hardware control is moved.
+
+Concept:
+
+```text
+Recipe target = desired liquid temperature
+Liquid temp = actual liquid temperature
+Chamber assist target = recommended chamber setpoint/range to move liquid toward target
+```
+
+Suggested entities:
+
+```text
+sensor.brewassistant_smart_chamber_assist_target
+sensor.brewassistant_smart_chamber_target_low_recommended
+sensor.brewassistant_smart_chamber_target_high_recommended
+sensor.brewassistant_smart_chamber_strategy
+sensor.brewassistant_smart_chamber_reason
+binary_sensor.brewassistant_smart_chamber_adjustment_recommended
+```
+
+Tasks:
+
+```text
+[ ] Add read-only chamber assist target calculation
+[ ] Add recommended chamber target low/high sensors
+[ ] Add strategy sensor: cool_down / warm_up / maintain / hold / unavailable
+[ ] Add reason sensor for dashboard text
+[ ] Use liquid delta magnitude to choose offset from recipe target
+[ ] Use temperature rate to reduce overshoot risk
+[ ] Clamp recommendations to climate chamber min/max limits where known
+[ ] Add dashboard display before any apply-service exists
+[ ] Validate across cold crash and normal fermentation scenarios
+```
+
+Example behavior:
+
+```text
+Liquid above target -> recommend chamber below recipe target
+Liquid below target -> recommend chamber above recipe target
+Liquid near target -> recommend chamber near recipe target
+Liquid moving too fast -> reduce offset or hold
+```
+
+---
+
+## v4.8 smart fermentation control
+
+Goal: only after v4.6 and v4.7 have been validated, move safe hardware control into the custom integration.
 
 Tasks:
 
@@ -159,27 +215,10 @@ Tasks:
 [ ] Expose mode select
 [ ] Expose tuning numbers
 [ ] Add services/buttons for controlled actions
-[ ] Apply climate target safely
+[ ] Apply climate target safely from recommended chamber range
 [ ] Control heat mat safely
 [ ] Control fan assist safely
 [ ] Preserve manual override and emergency off paths
-```
-
----
-
-## v4.8 manual mode improvements
-
-Goal: make manual cider/bucket fermentation tracking strong enough to use standalone.
-
-Tasks:
-
-```text
-[ ] Manual OG/SG/FG helpers
-[ ] Gravity stability logic
-[ ] Last reading timestamp
-[ ] Manual next-step sensor
-[ ] Manual reminder notifications
-[ ] Manual dashboard card
 ```
 
 ---
@@ -191,18 +230,76 @@ Goal: make Brewfather data more robust and dashboard-safe.
 Tasks:
 
 ```text
-[ ] Normalize active batch data
-[ ] Normalize primary target temp
-[ ] Normalize cold crash temp
-[ ] Normalize target FG
-[ ] Improve fallback handling
-[ ] Add debug sensor for data source
+[x] Normalize runtime recipe name
+[x] Normalize runtime status
+[x] Normalize primary target temp
+[x] Normalize cold crash temp
+[x] Normalize target FG
+[x] Add runtime source status
+[x] Add Brewfather availability binary sensor
 [ ] Add Brewfather docs/examples
 ```
 
 ---
 
-## v4.10 chamber automation polish
+## v4.10 BIAB Python module
+
+Goal: migrate BIAB calculations and brewday status toward Python, starting read-only.
+
+Recommended first target:
+
+```text
+BIAB Python v0.1 read-only calculations
+```
+
+Suggested v0.1 entities:
+
+```text
+sensor.brewassistant_biab_profile_name
+sensor.brewassistant_biab_batch_volume_l
+sensor.brewassistant_biab_grain_weight_kg
+sensor.brewassistant_biab_mash_water_l
+sensor.brewassistant_biab_sparge_water_l
+sensor.brewassistant_biab_pre_boil_volume_l
+sensor.brewassistant_biab_boiling_power_mode
+sensor.brewassistant_biab_calculation_summary
+binary_sensor.brewassistant_biab_ready_for_brewday
+```
+
+Tasks:
+
+```text
+[ ] Identify current BIAB helpers used as inputs
+[ ] Move BIAB calculations into Python read-only sensors
+[ ] Mirror current BIAB profile/settings
+[ ] Add calculation summary sensor
+[ ] Add dashboard card using Python BIAB sensors
+[ ] Keep existing YAML helpers as source of truth initially
+```
+
+---
+
+## v4.11 manual mode improvements
+
+Goal: make manual cider/bucket fermentation tracking strong enough to use standalone.
+
+Manual Fermentation should remain helper/UI-driven for now, then receive Python summary/bridge sensors later.
+
+Tasks:
+
+```text
+[ ] Manual OG/SG/FG helpers
+[ ] Gravity stability logic
+[ ] Last reading timestamp
+[ ] Manual next-step sensor
+[ ] Manual reminder notifications
+[ ] Manual dashboard card
+[ ] Optional Python read-only summary/bridge layer
+```
+
+---
+
+## v4.12 chamber automation polish
 
 Goal: make fermentation chamber control safe, visible and semi-automatic.
 
@@ -219,7 +316,7 @@ Tasks:
 
 ---
 
-## v4.11 notifications polish
+## v4.13 notifications polish
 
 Goal: make alerts useful without being noisy.
 
@@ -266,4 +363,3 @@ Potential tasks:
 [ ] Label/print document generation
 [ ] Multi-batch support
 ```
-
