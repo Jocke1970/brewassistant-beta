@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity, BinarySensorEntityDescription
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+    BinarySensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -21,6 +25,11 @@ class BrewAssistantBinarySensorDescription(BinarySensorEntityDescription):
     """Describes a BrewAssistant binary sensor."""
 
     value_fn: Callable[[BrewAssistantData], bool]
+
+
+def _display_name_from_key(key: str) -> str:
+    """Return a stable human-readable name from an entity key."""
+    return f"BrewAssistant {key.replace('_', ' ').title()}"
 
 
 def _smart_data(coordinator: BrewAssistantCoordinator):
@@ -115,6 +124,10 @@ class BrewAssistantBinarySensor(BrewAssistantEntity, BinarySensorEntity):
         """Initialize the binary sensor."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
+        if description.key in SMART_BINARY_KEYS:
+            self._attr_has_entity_name = False
+            self._attr_name = _display_name_from_key(description.key)
+            self._attr_suggested_object_id = f"{DOMAIN}_{description.key}"
 
     @property
     def is_on(self) -> bool | None:
