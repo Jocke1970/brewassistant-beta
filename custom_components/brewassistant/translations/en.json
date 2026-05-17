@@ -3,12 +3,14 @@
     "step": {
       "user": {
         "title": "BrewAssistant",
-        "description": "Configure the existing Home Assistant entities BrewAssistant should normalize.",
+        "description": "Configure which existing Home Assistant entities BrewAssistant should read and normalize.",
         "data": {
-          "liquid_temp_entity": "Liquid temperature entity",
-          "chamber_temp_entity": "Chamber temperature entity",
-          "recipe_target_entity": "Recipe target temperature entity",
-          "gravity_entity": "Gravity entity"
+          "liquid_temp_entity": "Liquid temperature source",
+          "chamber_temp_entity": "Chamber temperature fallback",
+          "recipe_target_entity": "Recipe/runtime target temperature",
+          "cold_crash_active_entity": "Cold crash active helper",
+          "cold_crash_target_entity": "Cold crash target temperature helper",
+          "gravity_entity": "Gravity source"
         }
       }
     },
