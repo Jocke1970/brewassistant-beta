@@ -1,7 +1,6 @@
 {
   "domain": "brewassistant",
   "name": "BrewAssistant",
-  "after_dependencies": ["sensor", "input_boolean", "input_number", "input_text"],
   "codeowners": ["@Jocke1970"],
   "config_flow": true,
   "documentation": "https://github.com/Jocke1970/BrewAssistant",
