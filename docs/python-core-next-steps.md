@@ -1,6 +1,6 @@
 # BrewAssistant Python Core Next Steps
 
-This document prepares the next implementation path after v0.6.
+This document prepares the next implementation path after v0.8.
 
 The guiding rule remains:
 
@@ -56,76 +56,43 @@ Liquid source: sensor.yellow_pill_temperature · OK
 Gravity source: sensor.yellow_pill_gravity · OK
 ```
 
----
-
-## v0.7 candidate: Debug Card v2
-
-Goal: upgrade the debug card to show all Python Core layers.
-
-Sections:
+### v0.7 Debug Card v2
 
 ```text
-Core
-- version/manual label
-- liquid/source/target/delta/gravity
-
-Process
-- Python process
-- YAML process
-- mismatch warning
-
-Smart recommendations
-- heat/cooling/fan
-- block reason
-- pulse minutes
-- mode
-
-Pill health
-- pill status
-- age
-- stale flag
-
-Source health
-- configured source entities
-- availability flags
+[x] Core section added
+[x] Process section added
+[x] Smart recommendation section added
+[x] Pill health section added
+[x] Source health section added
+[x] Configured entity diagnostics added
 ```
 
-This should use existing Python Core sensors and avoid duplicating complex JS/Jinja.
-
----
-
-## v0.8 candidate: Next Recommended Action
-
-Goal: expose one compact action sensor for dashboards and notifications.
-
-Suggested entity:
+Validation notes:
 
 ```text
-sensor.brewassistant_next_recommended_action
+Dashboard card upgraded and accepted for continued use.
 ```
 
-Possible values:
+### v0.8 Next Recommended Action
 
 ```text
-Maintain cold crash
-Monitor fermentation
-Check Pill signal
-Check source configuration
-Cooling recommended
-Fan assist recommended
-Heat blocked
-Ready for transfer
+[x] Next recommended action sensor works
+[x] Category attribute works
+[x] Priority attribute works
+[x] Reason attribute works
+[x] Icon attribute works
+[x] Current cold crash scenario resolves to Cooling + fan recommended
 ```
 
-Inputs:
+Validation notes:
 
-- `sensor.brewassistant_process_status`
-- `sensor.brewassistant_process_next_step`
-- smart recommendation sensors
-- pill stale signal
-- source health signals
-
-This becomes useful for top cards and morning/status notifications.
+```text
+Action: Cooling + fan recommended
+Category: smart_fermentation
+Priority: info
+Reason: Cooling would help · Fan assist recommended for cooling
+Icon: mdi:fan-chevron-up
+```
 
 ---
 
@@ -158,8 +125,9 @@ v1.0 should mean:
 [x] Process mirror is stable
 [x] Smart recommendations are stable
 [x] Source diagnostics are stable
-[ ] Debug card is useful
+[x] Debug card is useful
 [x] Options flow works
+[x] Next recommended action works
 [x] No hardware control in Python Core yet
 ```
 
@@ -186,7 +154,7 @@ Future safe-control steps:
 
 ---
 
-## Notes from v0.4/v0.5/v0.6 lessons
+## Notes from v0.4-v0.8 lessons
 
 - Entity registry can keep old object IDs even after code changes.
 - New entity names may become `brewassistant_2`, `brewassistant_3`, etc. if Home Assistant cannot derive a unique/stable object ID.
@@ -194,3 +162,4 @@ Future safe-control steps:
 - `states('missing.entity')` returns `unknown`, which can be misleading.
 - For new sensors, stable `suggested_object_id` and explicit names matter.
 - Source health diagnostics should be checked before debugging temperature, gravity or target logic.
+- Next recommended action should prioritize source health and Pill health before normal process suggestions.
