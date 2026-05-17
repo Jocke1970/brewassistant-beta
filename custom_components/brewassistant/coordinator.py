@@ -12,10 +12,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
+    CONF_COLD_CRASH_ACTIVE_ENTITY,
+    CONF_COLD_CRASH_TARGET_ENTITY,
     CONF_GRAVITY_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
     CONF_RECIPE_TARGET_ENTITY,
     DEFAULT_CHAMBER_TEMP_ENTITY,
+    DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+    DEFAULT_COLD_CRASH_TARGET_ENTITY,
     DEFAULT_GRAVITY_ENTITY,
     DEFAULT_LIQUID_TEMP_ENTITY,
     DEFAULT_RECIPE_TARGET_ENTITY,
@@ -25,6 +29,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
+_ON_STATES = {"on", "true", "yes", "active"}
 
 
 @dataclass(slots=True)
@@ -36,6 +41,8 @@ class BrewAssistantData:
     liquid_temperature_entity: str | None
     chamber_temperature: float | None
     recipe_target_temperature: float | None
+    recipe_target_temperature_entity: str | None
+    temperature_target_mode: str
     temperature_delta: float | None
     gravity: float | None
     fallback_active: bool
@@ -60,6 +67,18 @@ def _state_float(hass: HomeAssistant, entity_id: str | None) -> float | None:
         return float(state.state)
     except (TypeError, ValueError):
         return None
+
+
+def _state_is_on(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return whether an entity state should be treated as active/on."""
+    if not entity_id:
+        return False
+
+    state = hass.states.get(entity_id)
+    if state is None:
+        return False
+
+    return state.state.lower() in _ON_STATES
 
 
 class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
@@ -94,6 +113,16 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             CONF_RECIPE_TARGET_ENTITY,
             DEFAULT_RECIPE_TARGET_ENTITY,
         )
+        cold_crash_active_entity = _entity_from_entry(
+            self.config_entry,
+            CONF_COLD_CRASH_ACTIVE_ENTITY,
+            DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+        )
+        cold_crash_target_entity = _entity_from_entry(
+            self.config_entry,
+            CONF_COLD_CRASH_TARGET_ENTITY,
+            DEFAULT_COLD_CRASH_TARGET_ENTITY,
+        )
         gravity_entity = _entity_from_entry(
             self.config_entry,
             CONF_GRAVITY_ENTITY,
@@ -102,8 +131,19 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
 
         pill_temp = _state_float(self.hass, liquid_entity)
         chamber_temp = _state_float(self.hass, chamber_entity)
-        target_temp = _state_float(self.hass, target_entity)
+        recipe_target_temp = _state_float(self.hass, target_entity)
+        cold_crash_target_temp = _state_float(self.hass, cold_crash_target_entity)
         gravity = _state_float(self.hass, gravity_entity)
+
+        cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
+        if cold_crash_active and cold_crash_target_temp is not None:
+            target_temp = cold_crash_target_temp
+            effective_target_entity = cold_crash_target_entity
+            target_mode = "Cold crash"
+        else:
+            target_temp = recipe_target_temp
+            effective_target_entity = target_entity
+            target_mode = "Recipe"
 
         if pill_temp is not None:
             liquid_temp = pill_temp
@@ -126,6 +166,8 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             liquid_temperature_entity=source_entity,
             chamber_temperature=round(chamber_temp, 2) if chamber_temp is not None else None,
             recipe_target_temperature=round(target_temp, 2) if target_temp is not None else None,
+            recipe_target_temperature_entity=effective_target_entity,
+            temperature_target_mode=target_mode,
             temperature_delta=delta,
             gravity=round(gravity, 3) if gravity is not None else None,
             fallback_active=fallback_active,
@@ -150,6 +192,16 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
                 self.config_entry,
                 CONF_RECIPE_TARGET_ENTITY,
                 DEFAULT_RECIPE_TARGET_ENTITY,
+            ),
+            CONF_COLD_CRASH_ACTIVE_ENTITY: _entity_from_entry(
+                self.config_entry,
+                CONF_COLD_CRASH_ACTIVE_ENTITY,
+                DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+            ),
+            CONF_COLD_CRASH_TARGET_ENTITY: _entity_from_entry(
+                self.config_entry,
+                CONF_COLD_CRASH_TARGET_ENTITY,
+                DEFAULT_COLD_CRASH_TARGET_ENTITY,
             ),
             CONF_GRAVITY_ENTITY: _entity_from_entry(
                 self.config_entry,
