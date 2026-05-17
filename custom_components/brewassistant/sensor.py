@@ -48,6 +48,11 @@ class BrewAssistantSmartSensorDescription(SensorEntityDescription):
     value_fn: Callable[[SmartRecommendationData], Any]
 
 
+def _display_name_from_key(key: str) -> str:
+    """Return a stable human-readable name from an entity key."""
+    return f"BrewAssistant {key.replace('_', ' ').title()}"
+
+
 def _liquid_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     data = coordinator.data
     return {
@@ -320,6 +325,7 @@ class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
     """Read-only smart recommendation sensor entity."""
 
     entity_description: BrewAssistantSmartSensorDescription
+    _attr_has_entity_name = False
 
     def __init__(
         self,
@@ -329,6 +335,8 @@ class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
         """Initialize the smart recommendation sensor."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
+        self._attr_name = _display_name_from_key(description.key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{description.key}"
 
     @property
     def native_value(self) -> Any:
