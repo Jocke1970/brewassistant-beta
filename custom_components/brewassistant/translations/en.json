@@ -36,11 +36,23 @@
       "process_current_action_stage": {"name": "Process current action stage"},
       "process_next_action_stage": {"name": "Process next action stage"},
       "process_summary": {"name": "Process summary"},
+      "smart_recommendation_summary": {"name": "Smart recommendation summary"},
+      "smart_heat_recommendation": {"name": "Smart heat recommendation"},
+      "smart_cooling_recommendation": {"name": "Smart cooling recommendation"},
+      "smart_fan_recommendation": {"name": "Smart fan recommendation"},
+      "smart_heat_block_reason_core": {"name": "Smart heat block reason"},
+      "smart_suggested_heat_pulse_minutes": {"name": "Smart suggested heat pulse"},
+      "smart_recommendation_mode": {"name": "Smart recommendation mode"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
       "temperature_fallback_active": {"name": "Temperature fallback active"},
-      "runtime_ready": {"name": "Runtime ready"}
+      "runtime_ready": {"name": "Runtime ready"},
+      "smart_heat_needed_core": {"name": "Smart heat needed"},
+      "smart_heat_permitted_core": {"name": "Smart heat permitted"},
+      "smart_cooling_recommended_core": {"name": "Smart cooling recommended"},
+      "smart_fan_recommended_core": {"name": "Smart fan recommended"},
+      "smart_rising_too_fast_core": {"name": "Smart rising too fast"}
     }
   }
 }
