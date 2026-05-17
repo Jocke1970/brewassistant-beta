@@ -15,10 +15,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     ATTR_COLOR_HINT,
     ATTR_ICON_HINT,
+    ATTR_PROCESS_REASON,
     ATTR_SOURCE,
     ATTR_SOURCE_ENTITY,
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_MODE,
+    ATTR_YAML_PROCESS_STATUS,
     DOMAIN,
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
@@ -59,6 +61,15 @@ def _status_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     return {
         ATTR_ICON_HINT: data.temperature_icon_hint if data else None,
         ATTR_COLOR_HINT: data.temperature_color_hint if data else None,
+        ATTR_TARGET_MODE: data.temperature_target_mode if data else None,
+    }
+
+
+def _process_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    data = coordinator.data
+    return {
+        ATTR_PROCESS_REASON: data.process_reason if data else None,
+        ATTR_YAML_PROCESS_STATUS: data.yaml_process_status if data else None,
         ATTR_TARGET_MODE: data.temperature_target_mode if data else None,
     }
 
@@ -138,6 +149,36 @@ SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
         translation_key="problem_level",
         value_fn=lambda data: data.problem_level,
         extra_attributes_fn=_status_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="process_status",
+        translation_key="process_status",
+        value_fn=lambda data: data.process_status,
+        extra_attributes_fn=_process_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="process_next_step",
+        translation_key="process_next_step",
+        value_fn=lambda data: data.process_next_step,
+        extra_attributes_fn=_process_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="process_current_action_stage",
+        translation_key="process_current_action_stage",
+        value_fn=lambda data: data.process_current_action_stage,
+        extra_attributes_fn=_process_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="process_next_action_stage",
+        translation_key="process_next_action_stage",
+        value_fn=lambda data: data.process_next_action_stage,
+        extra_attributes_fn=_process_attrs,
+    ),
+    BrewAssistantSensorDescription(
+        key="process_summary",
+        translation_key="process_summary",
+        value_fn=lambda data: data.process_summary,
+        extra_attributes_fn=_process_attrs,
     ),
     BrewAssistantSensorDescription(
         key="gravity",
