@@ -18,6 +18,7 @@ from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 from .smart_recommendations import build_smart_recommendations
+from .source_health import SOURCE_BINARY_KEYS, build_source_health
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,6 +46,10 @@ def _smart_data(coordinator: BrewAssistantCoordinator):
         fallback_active=data.fallback_active,
         source=data.liquid_temperature_source,
     )
+
+
+def _source_health(coordinator: BrewAssistantCoordinator) -> dict:
+    return build_source_health(coordinator.hass, coordinator.configured_entities)
 
 
 BINARY_SENSORS: tuple[BrewAssistantBinarySensorDescription, ...] = (
@@ -113,8 +118,8 @@ async def async_setup_entry(
     """Set up BrewAssistant binary sensors."""
     coordinator: BrewAssistantCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        BrewAssistantBinarySensor(coordinator, description)
-        for description in BINARY_SENSORS
+        [BrewAssistantBinarySensor(coordinator, description) for description in BINARY_SENSORS]
+        + [BrewAssistantSourceBinarySensor(coordinator, key) for key in SOURCE_BINARY_KEYS]
     )
 
 
@@ -158,3 +163,40 @@ class BrewAssistantBinarySensor(BrewAssistantEntity, BinarySensorEntity):
             if self.entity_description.key == "smart_pill_stale_core":
                 return smart.pill_stale
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class BrewAssistantSourceBinarySensor(BrewAssistantEntity, BinarySensorEntity):
+    """Read-only source availability binary sensor."""
+
+    _attr_has_entity_name = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        """Initialize the source availability binary sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the configured source is available."""
+        source_key = SOURCE_BINARY_KEYS[self._key]
+        health = _source_health(self.coordinator)
+        item = health["sources"].get(source_key)
+        if item is None:
+            return None
+        return bool(item["available"])
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return source diagnostic attributes."""
+        source_key = SOURCE_BINARY_KEYS[self._key]
+        health = _source_health(self.coordinator)
+        item = health["sources"].get(source_key, {})
+        return {
+            "source_key": source_key,
+            "entity_id": item.get("entity_id"),
+            "state": item.get("state"),
+            "reason": item.get("reason"),
+        }
