@@ -51,6 +51,13 @@ class BrewAssistantData:
     source_summary: str
     status_summary: str
     problem_level: str
+    process_status: str
+    process_next_step: str
+    process_current_action_stage: str
+    process_next_action_stage: str
+    process_summary: str
+    process_reason: str
+    yaml_process_status: str | None
     gravity: float | None
     fallback_active: bool
     ready: bool
@@ -74,6 +81,18 @@ def _state_float(hass: HomeAssistant, entity_id: str | None) -> float | None:
         return float(state.state)
     except (TypeError, ValueError):
         return None
+
+
+def _state_string(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    """Read a Home Assistant state as string, returning None when invalid."""
+    if not entity_id:
+        return None
+
+    state = hass.states.get(entity_id)
+    if state is None or state.state in _UNAVAILABLE_STATES:
+        return None
+
+    return str(state.state)
 
 
 def _state_is_on(hass: HomeAssistant, entity_id: str | None) -> bool:
@@ -178,6 +197,85 @@ def _temperature_context(
     }
 
 
+def _process_context(
+    *,
+    cold_crash_active: bool,
+    target_mode: str,
+    yaml_process_status: str | None,
+    runtime_status: str | None,
+    liquid_temp: float | None,
+    target_temp: float | None,
+    gravity: float | None,
+) -> dict[str, str]:
+    """Build read-only process mirror state from existing helpers and normalized data."""
+    yaml_status = yaml_process_status or "Idle"
+    normalized_yaml = yaml_status.lower()
+
+    if cold_crash_active or target_mode == "Cold crash" or "cold" in normalized_yaml:
+        status = "Cold crash"
+        next_step = "Maintain cold crash and positive pressure"
+        current_stage = "cold_crash"
+        next_stage = "transfer"
+        reason = "Cold crash helper/target is active"
+    elif "ready for transfer" in normalized_yaml:
+        status = "Ready for transfer"
+        next_step = "Perform closed transfer to keg"
+        current_stage = "transfer"
+        next_stage = "none"
+        reason = "YAML process reports ready for transfer"
+    elif "ready for cold crash" in normalized_yaml:
+        status = "Ready for cold crash"
+        next_step = "Start cold crash"
+        current_stage = "none"
+        next_stage = "cold_crash"
+        reason = "YAML process reports ready for cold crash"
+    elif "dry hop" in normalized_yaml:
+        status = "Dry hop now"
+        next_step = "Add dry hop charge"
+        current_stage = "dry_hop"
+        next_stage = "none"
+        reason = "YAML process reports dry hop"
+    elif "spunding" in normalized_yaml or "spund" in normalized_yaml:
+        status = "Install spunding"
+        next_step = "Install or verify spunding valve"
+        current_stage = "spunding"
+        next_stage = "none"
+        reason = "YAML process reports spunding"
+    elif "finished" in normalized_yaml or "packaged" in normalized_yaml or "transferred" in normalized_yaml:
+        status = "Finished / transferred to keg"
+        next_step = "Batch completed"
+        current_stage = "none"
+        next_stage = "none"
+        reason = "YAML process reports completed batch"
+    elif runtime_status and runtime_status.lower() == "fermenting":
+        status = "Primary fermentation"
+        next_step = "Monitor fermentation"
+        current_stage = "none"
+        next_stage = "cold_crash"
+        reason = "Runtime status is fermenting"
+    else:
+        status = yaml_status
+        next_step = "Start or select an active batch" if status == "Idle" else "Monitor fermentation"
+        current_stage = "none"
+        next_stage = "none"
+        reason = "No active process override detected"
+
+    summary_parts = [status, next_step]
+    if liquid_temp is not None and target_temp is not None:
+        summary_parts.append(f"{_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C")
+    if gravity is not None:
+        summary_parts.append(f"SG {_format_gravity(gravity)}")
+
+    return {
+        "status": status,
+        "next_step": next_step,
+        "current_stage": current_stage,
+        "next_stage": next_stage,
+        "summary": " · ".join(summary_parts),
+        "reason": reason,
+    }
+
+
 class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
     """Collect normalized BrewAssistant state from existing HA entities."""
 
@@ -231,6 +329,8 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         recipe_target_temp = _state_float(self.hass, target_entity)
         cold_crash_target_temp = _state_float(self.hass, cold_crash_target_entity)
         gravity = _state_float(self.hass, gravity_entity)
+        yaml_process_status = _state_string(self.hass, "sensor.brew_process_status")
+        runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")
 
         cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
         if cold_crash_active and cold_crash_target_temp is not None:
@@ -269,6 +369,15 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             fallback_active,
             target_mode,
         )
+        process = _process_context(
+            cold_crash_active=cold_crash_active,
+            target_mode=target_mode,
+            yaml_process_status=yaml_process_status,
+            runtime_status=runtime_status,
+            liquid_temp=rounded_liquid,
+            target_temp=rounded_target,
+            gravity=rounded_gravity,
+        )
 
         if rounded_gravity is not None:
             status_summary = f"{context['status_summary']} · SG {_format_gravity(rounded_gravity)}"
@@ -291,6 +400,13 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             source_summary=context["source_summary"],
             status_summary=status_summary,
             problem_level=context["problem_level"],
+            process_status=process["status"],
+            process_next_step=process["next_step"],
+            process_current_action_stage=process["current_stage"],
+            process_next_action_stage=process["next_stage"],
+            process_summary=process["summary"],
+            process_reason=process["reason"],
+            yaml_process_status=yaml_process_status,
             gravity=rounded_gravity,
             fallback_active=fallback_active,
             ready=liquid_temp is not None and target_temp is not None,
