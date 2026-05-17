@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -22,6 +23,7 @@ from .const import (
     DOMAIN,
 )
 
+_LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 
 
@@ -69,7 +71,7 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         """Initialize the coordinator."""
         super().__init__(
             hass,
-            logger=None,
+            logger=_LOGGER,
             name=DOMAIN,
             update_interval=DEFAULT_SCAN_INTERVAL,
         )
