@@ -23,8 +23,14 @@
       "liquid_temperature": {"name": "Liquid temperature"},
       "liquid_temperature_source": {"name": "Liquid temperature source"},
       "chamber_temperature": {"name": "Chamber temperature"},
-      "recipe_target_temperature": {"name": "Recipe target temperature"},
+      "recipe_target_temperature": {"name": "Effective target temperature"},
       "temperature_delta": {"name": "Temperature delta"},
+      "temperature_target_mode": {"name": "Temperature target mode"},
+      "temperature_status": {"name": "Temperature status"},
+      "temperature_severity": {"name": "Temperature severity"},
+      "source_summary": {"name": "Source summary"},
+      "status_summary": {"name": "Status summary"},
+      "problem_level": {"name": "Problem level"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
