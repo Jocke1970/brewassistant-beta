@@ -1,6 +1,6 @@
 # BrewAssistant Python Core Next Steps
 
-This document prepares the next implementation path after v0.9.
+This document prepares the next implementation path after v1.0.
 
 The guiding rule remains:
 
@@ -120,25 +120,40 @@ Source status: OK · 5/5 runtime sources available
 Brewfather available: on
 ```
 
----
-
-## v1.0 candidate: Read-only Core Stable
-
-v1.0 should mean:
+### v1.0 Read-only Core Stable
 
 ```text
-[x] Base temperature/target/gravity normalization is stable
-[x] Process mirror is stable
-[x] Smart recommendations are stable
-[x] Source diagnostics are stable
-[x] Debug card is useful
-[x] Options flow works
-[x] Next recommended action works
-[x] Runtime normalization works
-[x] No hardware control in Python Core yet
+[x] Core version sensor works
+[x] Core version reports 1.0.0
+[x] Milestone reports Read-only Core Stable
+[x] Hardware control reports False
+[x] Safe mode reports read_only
+[x] Notes confirm no climate/switch/fan/heater control is performed
 ```
 
-At that point, dashboards can rely primarily on Python Core for display/state decisions.
+Validation notes:
+
+```text
+Core version: 1.0.0
+Milestone: Read-only Core Stable
+Hardware control: False
+Safe mode: read_only
+Notes: No climate, switch, fan or heater control is performed by Python Core.
+```
+
+---
+
+## v1.1 candidate: Dashboard / branding polish
+
+Suggested next read-only polish:
+
+```text
+[ ] Add BrewAssistant logo to debug/top cards
+[ ] Update stable debug card after visual check
+[ ] Add optional dashboard logo asset guidance
+[ ] Confirm runtime options save/reload
+[ ] Optionally prepare README section for Python Core install/update
+```
 
 ---
 
@@ -161,7 +176,7 @@ Future safe-control steps:
 
 ---
 
-## Notes from v0.4-v0.9 lessons
+## Notes from v0.4-v1.0 lessons
 
 - Entity registry can keep old object IDs even after code changes.
 - New entity names may become `brewassistant_2`, `brewassistant_3`, etc. if Home Assistant cannot derive a unique/stable object ID.
@@ -171,3 +186,4 @@ Future safe-control steps:
 - Source health diagnostics should be checked before debugging temperature, gravity or target logic.
 - Next recommended action should prioritize source health and Pill health before normal process suggestions.
 - Runtime normalization is read-only and should tolerate missing optional sources.
+- Core version sensor is the fastest way to confirm which Python Core is running in Home Assistant.
