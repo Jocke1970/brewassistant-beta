@@ -31,6 +31,11 @@
       "source_summary": {"name": "Source summary"},
       "status_summary": {"name": "Status summary"},
       "problem_level": {"name": "Problem level"},
+      "process_status": {"name": "Process status"},
+      "process_next_step": {"name": "Process next step"},
+      "process_current_action_stage": {"name": "Current action stage"},
+      "process_next_action_stage": {"name": "Next action stage"},
+      "process_summary": {"name": "Process summary"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
