@@ -79,6 +79,7 @@
       "configured_cold_crash_active_entity": {"name": "Konfigurerad cold crash aktiv-entity"},
       "configured_cold_crash_target_entity": {"name": "Konfigurerad cold crash mål-entity"},
       "configured_gravity_entity": {"name": "Konfigurerad SG-entity"},
+      "core_version": {"name": "Core-version"},
       "next_recommended_action": {"name": "Nästa rekommenderade åtgärd"},
       "runtime_recipe_name": {"name": "Runtime receptnamn"},
       "runtime_status": {"name": "Runtime status"},
