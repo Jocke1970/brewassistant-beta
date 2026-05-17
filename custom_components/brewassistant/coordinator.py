@@ -44,6 +44,13 @@ class BrewAssistantData:
     recipe_target_temperature_entity: str | None
     temperature_target_mode: str
     temperature_delta: float | None
+    temperature_status: str
+    temperature_severity: str
+    temperature_icon_hint: str
+    temperature_color_hint: str
+    source_summary: str
+    status_summary: str
+    problem_level: str
     gravity: float | None
     fallback_active: bool
     ready: bool
@@ -79,6 +86,96 @@ def _state_is_on(hass: HomeAssistant, entity_id: str | None) -> bool:
         return False
 
     return state.state.lower() in _ON_STATES
+
+
+def _format_temp(value: float | None) -> str:
+    """Format a temperature for status summaries."""
+    if value is None:
+        return "—"
+    return f"{value:.1f}"
+
+
+def _format_gravity(value: float | None) -> str:
+    """Format specific gravity for status summaries."""
+    if value is None:
+        return "—"
+    return f"{value:.3f}"
+
+
+def _temperature_context(
+    liquid_temp: float | None,
+    target_temp: float | None,
+    delta: float | None,
+    source: str,
+    fallback_active: bool,
+    target_mode: str,
+) -> dict[str, str]:
+    """Build dashboard-friendly temperature status fields."""
+    if liquid_temp is None:
+        return {
+            "status": "Unavailable",
+            "severity": "problem",
+            "icon_hint": "alert-circle",
+            "color_hint": "red",
+            "source_summary": f"{source} unavailable",
+            "status_summary": "Temperature unavailable · check source entities",
+            "problem_level": "problem",
+        }
+
+    if target_temp is None or delta is None:
+        return {
+            "status": "Monitoring",
+            "severity": "warning",
+            "icon_hint": "thermometer-alert",
+            "color_hint": "amber",
+            "source_summary": f"{source} · no target",
+            "status_summary": f"{_format_temp(liquid_temp)} °C · target unavailable · {source}",
+            "problem_level": "warning",
+        }
+
+    abs_delta = abs(delta)
+    if abs_delta <= 0.25:
+        status = "On target"
+        severity = "ok"
+        icon_hint = "check-circle"
+        color_hint = "green"
+        problem_level = "ok"
+    elif abs_delta <= 0.5:
+        status = "Slight offset"
+        severity = "info"
+        icon_hint = "delta"
+        color_hint = "amber"
+        problem_level = "info"
+    else:
+        status = "Temp offset"
+        severity = "warning"
+        icon_hint = "thermometer-alert"
+        color_hint = "red"
+        problem_level = "warning"
+
+    if fallback_active:
+        status = "Fallback active"
+        severity = "warning" if severity == "ok" else severity
+        icon_hint = "fridge-alert"
+        color_hint = "amber"
+        problem_level = "warning" if problem_level == "ok" else problem_level
+
+    direction = "above" if delta > 0 else "below" if delta < 0 else "on"
+    source_summary = f"{source}{' · fallback' if fallback_active else ''}"
+    status_summary = (
+        f"{target_mode} · {_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C "
+        f"· Δ {delta:+.2f} °C · {direction} target · {source_summary}"
+    )
+
+    return {
+        "status": status,
+        "severity": severity,
+        "icon_hint": icon_hint,
+        "color_hint": color_hint,
+        "source_summary": source_summary,
+        "status_summary": status_summary,
+        "problem_level": problem_level,
+    }
 
 
 class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
@@ -160,16 +257,41 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         if liquid_temp is not None and target_temp is not None:
             delta = round(liquid_temp - target_temp, 2)
 
+        rounded_liquid = round(liquid_temp, 2) if liquid_temp is not None else None
+        rounded_chamber = round(chamber_temp, 2) if chamber_temp is not None else None
+        rounded_target = round(target_temp, 2) if target_temp is not None else None
+        rounded_gravity = round(gravity, 3) if gravity is not None else None
+        context = _temperature_context(
+            rounded_liquid,
+            rounded_target,
+            delta,
+            source,
+            fallback_active,
+            target_mode,
+        )
+
+        if rounded_gravity is not None:
+            status_summary = f"{context['status_summary']} · SG {_format_gravity(rounded_gravity)}"
+        else:
+            status_summary = context["status_summary"]
+
         return BrewAssistantData(
-            liquid_temperature=round(liquid_temp, 2) if liquid_temp is not None else None,
+            liquid_temperature=rounded_liquid,
             liquid_temperature_source=source,
             liquid_temperature_entity=source_entity,
-            chamber_temperature=round(chamber_temp, 2) if chamber_temp is not None else None,
-            recipe_target_temperature=round(target_temp, 2) if target_temp is not None else None,
+            chamber_temperature=rounded_chamber,
+            recipe_target_temperature=rounded_target,
             recipe_target_temperature_entity=effective_target_entity,
             temperature_target_mode=target_mode,
             temperature_delta=delta,
-            gravity=round(gravity, 3) if gravity is not None else None,
+            temperature_status=context["status"],
+            temperature_severity=context["severity"],
+            temperature_icon_hint=context["icon_hint"],
+            temperature_color_hint=context["color_hint"],
+            source_summary=context["source_summary"],
+            status_summary=status_summary,
+            problem_level=context["problem_level"],
+            gravity=rounded_gravity,
             fallback_active=fallback_active,
             ready=liquid_temp is not None and target_temp is not None,
         )
