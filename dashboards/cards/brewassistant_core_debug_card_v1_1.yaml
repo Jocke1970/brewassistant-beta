@@ -1,0 +1,272 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_core_version
+    name: BrewAssistant Core
+    show_icon: false
+    show_entity_picture: true
+    entity_picture: /local/brewassistant/BrewAssistant_color_small.png
+    show_state: true
+    show_label: true
+    tap_action:
+      action: more-info
+      entity: sensor.brewassistant_core_version
+    label: |
+      [[[
+        const get = (id, fallback = 'unknown') => states[id]?.state ?? fallback;
+        const attr = (id, key, fallback = '—') => states[id]?.attributes?.[key] ?? fallback;
+
+        const version = get('sensor.brewassistant_core_version');
+        const recipe = get('sensor.brewassistant_runtime_recipe_name');
+        const runtimeStatus = get('sensor.brewassistant_runtime_status');
+        const sourceHealth = get('sensor.brewassistant_source_health_summary');
+        const sourceLevel = get('sensor.brewassistant_source_health_level');
+        const next = get('sensor.brewassistant_next_recommended_action');
+        const nextReason = attr('sensor.brewassistant_next_recommended_action', 'reason');
+        const process = get('sensor.brewassistant_process_status');
+        const temp = get('sensor.brewassistant_liquid_temperature');
+        const target = get('sensor.brewassistant_recipe_target_temperature');
+        const delta = get('sensor.brewassistant_temperature_delta');
+        const sg = get('sensor.brewassistant_gravity');
+        const bf = get('binary_sensor.brewassistant_runtime_brewfather_available');
+
+        return `
+          <div style="line-height:1.36;">
+            <div style="font-size:12px;opacity:.76;">Core ${version} · read-only · Brewfather ${bf} · ${sourceHealth}</div>
+            <div style="margin-top:5px;font-size:14px;font-weight:900;">${recipe} · ${runtimeStatus}</div>
+            <div style="margin-top:5px;font-size:13px;font-weight:850;">${process} · ${temp} → ${target} °C · Δ ${delta} °C · SG ${sg}</div>
+            <div style="margin-top:5px;font-size:12px;opacity:.88;">Next: ${next}</div>
+            <div style="margin-top:4px;font-size:11px;opacity:.68;">${nextReason} · source health ${sourceLevel}</div>
+          </div>
+        `;
+      ]]]
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 16px
+        - color: white
+        - background: |
+            [[[
+              const level = states['sensor.brewassistant_source_health_level']?.state ?? 'unknown';
+              const priority = states['sensor.brewassistant_next_recommended_action']?.attributes?.priority ?? 'unknown';
+              const readonly = states['sensor.brewassistant_core_version']?.attributes?.hardware_control === false;
+              if (level === 'problem' || priority === 'problem') return 'linear-gradient(135deg, rgba(125,22,22,0.96), rgba(38,6,8,0.98))';
+              if (level === 'warning' || priority === 'warning') return 'linear-gradient(135deg, rgba(105,74,22,0.96), rgba(40,26,8,0.98))';
+              if (readonly) return 'linear-gradient(135deg, rgba(16,85,62,0.96), rgba(7,34,28,0.98))';
+              return 'linear-gradient(135deg, rgba(28,60,92,0.96), rgba(8,20,38,0.98))';
+            ]]]
+        - box-shadow: 0 12px 32px rgba(0,0,0,0.36)
+      grid:
+        - grid-template-areas: '"i n" "i s" "i l"'
+        - grid-template-columns: 64px 1fr
+        - grid-template-rows: min-content min-content 1fr
+      img_cell:
+        - width: 52px
+        - height: 52px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.16)
+        - border: 1px solid rgba(255,255,255,0.14)
+        - box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06)
+      entity_picture:
+        - width: 38px
+        - height: 38px
+        - object-fit: contain
+      name:
+        - justify-self: start
+        - font-size: 17px
+        - font-weight: 950
+        - color: white
+      state:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 850
+        - color: rgba(255,255,255,0.86)
+      label:
+        - justify-self: start
+        - text-align: left
+        - font-size: 12px
+        - color: rgba(255,255,255,0.94)
+        - white-space: normal
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_core_version
+        primary: Core version
+        secondary: >
+          {{ states('sensor.brewassistant_core_version') }} ·
+          {{ state_attr('sensor.brewassistant_core_version', 'milestone') }} ·
+          read-only
+        icon: mdi:shield-check
+        icon_color: green
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_next_recommended_action
+        primary: Next action
+        secondary: >
+          {{ states('sensor.brewassistant_next_recommended_action') }} ·
+          {{ state_attr('sensor.brewassistant_next_recommended_action', 'reason') }}
+        icon: >
+          {{ state_attr('sensor.brewassistant_next_recommended_action', 'icon') or 'mdi:arrow-right-circle' }}
+        icon_color: >
+          {% set p = state_attr('sensor.brewassistant_next_recommended_action', 'priority') %}
+          {% if p == 'problem' %} red
+          {% elif p == 'warning' %} amber
+          {% elif p == 'info' %} blue
+          {% else %} green
+          {% endif %}
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_runtime_recipe_name
+        primary: Runtime
+        secondary: >
+          {{ states('sensor.brewassistant_runtime_recipe_name') }} ·
+          {{ states('sensor.brewassistant_runtime_status') }}
+        icon: mdi:beer
+        icon_color: >
+          {% if is_state('binary_sensor.brewassistant_runtime_brewfather_available', 'on') %} green
+          {% else %} amber
+          {% endif %}
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_runtime_source_status
+        primary: Runtime targets
+        secondary: >
+          Primary {{ states('sensor.brewassistant_runtime_primary_target_temperature') }} °C ·
+          Crash {{ states('sensor.brewassistant_runtime_cold_crash_target_temperature') }} °C ·
+          FG {{ states('sensor.brewassistant_runtime_target_fg') }}
+        icon: mdi:target
+        icon_color: blue
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_source_health_summary
+        primary: Source health
+        secondary: >
+          {{ states('sensor.brewassistant_source_health_summary') }}
+        icon: mdi:database-search
+        icon_color: >
+          {% set h = states('sensor.brewassistant_source_health_level') %}
+          {% if h == 'ok' %} green
+          {% elif h == 'warning' %} amber
+          {% else %} red
+          {% endif %}
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_smart_recommendation_summary
+        primary: Smart recommendations
+        secondary: >
+          {{ states('sensor.brewassistant_smart_heat_recommendation') }} ·
+          {{ states('sensor.brewassistant_smart_cooling_recommendation') }} ·
+          {{ states('sensor.brewassistant_smart_fan_recommendation') }}
+        icon: mdi:brain
+        icon_color: >
+          {% if is_state('binary_sensor.brewassistant_smart_heat_permitted_core', 'on') %} orange
+          {% elif is_state('binary_sensor.brewassistant_smart_cooling_recommended_core', 'on') %} blue
+          {% elif is_state('binary_sensor.brewassistant_smart_pill_stale_core', 'on') %} red
+          {% else %} green
+          {% endif %}
+        tap_action:
+          action: more-info
+
+  - type: custom:expander-card
+    title: Branding setup
+    padding: 0
+    clear: true
+    cards:
+      - type: markdown
+        content: >
+          ## Logo path
+
+          This card expects the logo here:
+
+          `/local/brewassistant/BrewAssistant_color_small.png`
+
+          Install/update with:
+
+          ```bash
+          mkdir -p /config/www/brewassistant
+          wget -O /config/www/brewassistant/BrewAssistant_color_small.png https://raw.githubusercontent.com/Jocke1970/BrewAssistant/main/pictures/BrewAssistant_color_small.png
+          ```
+        card_mod:
+          style: |
+            ha-card {
+              background: rgba(255,255,255,0.035);
+              border-radius: 18px;
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              color: white;
+              padding: 12px;
+            }
+            ha-markdown { padding: 0 !important; }
+            h2 { margin-top: 0 !important; font-size: 16px !important; }
+
+  - type: custom:expander-card
+    title: Core details
+    padding: 0
+    clear: true
+    cards:
+      - type: markdown
+        content: >
+          ## Core
+
+          **Core version**  
+          `{{ states('sensor.brewassistant_core_version') }}`  
+          Milestone: `{{ state_attr('sensor.brewassistant_core_version', 'milestone') }}`  
+          Hardware control: `{{ state_attr('sensor.brewassistant_core_version', 'hardware_control') }}`
+
+          **Runtime / Brewfather**  
+          Recipe: `{{ states('sensor.brewassistant_runtime_recipe_name') }}`  
+          Status: `{{ states('sensor.brewassistant_runtime_status') }}`  
+          Source: `{{ states('sensor.brewassistant_runtime_source_status') }}`  
+          Brewfather available: `{{ states('binary_sensor.brewassistant_runtime_brewfather_available') }}`
+
+          **Status summary**  
+          {{ states('sensor.brewassistant_status_summary') }}
+
+          **Process summary**  
+          {{ states('sensor.brewassistant_process_summary') }}
+
+          **Next action**  
+          {{ states('sensor.brewassistant_next_recommended_action') }}  
+          Reason: `{{ state_attr('sensor.brewassistant_next_recommended_action', 'reason') }}`
+
+          **Pill**  
+          {{ states('sensor.brewassistant_smart_pill_status_core') }} · stale `{{ states('binary_sensor.brewassistant_smart_pill_stale_core') }}`
+
+          **Source health**  
+          {{ states('sensor.brewassistant_source_health_summary') }}
+        card_mod:
+          style: |
+            ha-card {
+              background: rgba(255,255,255,0.035);
+              border-radius: 18px;
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              color: white;
+              padding: 12px;
+            }
+            ha-markdown { padding: 0 !important; }
+            h2 { margin-top: 0 !important; font-size: 16px !important; }
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 26px;
+      background:
+        radial-gradient(circle at top left, rgba(144,202,249,0.08), transparent 32%),
+        linear-gradient(180deg, rgba(20,20,24,0.96), rgba(8,8,10,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 34px rgba(0,0,0,0.36);
+      overflow: hidden;
+    }
