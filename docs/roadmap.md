@@ -103,6 +103,7 @@ Tasks:
 [x] Icon hint attributes for dashboard use
 [x] Color/severity hint attributes for dashboard use
 [x] Process summary sensor
+[x] Smart recommendation summary sensor
 [ ] Next recommended action sensor
 [ ] Compact health snapshot sensor
 ```
@@ -134,15 +135,15 @@ Goal: move smart fermentation logic into Python as read-only recommendations bef
 Tasks:
 
 ```text
-[ ] Heat needed recommendation
-[ ] Heat permitted recommendation
-[ ] Cooling recommended state
-[ ] Fan assist recommended state
-[ ] Heat block reason
-[ ] Suggested heat pulse length
+[x] Heat needed recommendation
+[x] Heat permitted recommendation
+[x] Cooling recommended state
+[x] Fan assist recommended state
+[x] Heat block reason
+[x] Suggested heat pulse length
 [ ] Pill stale detection
-[ ] Rising-too-fast detection
-[ ] Read-only debug summary
+[x] Rising-too-fast detection
+[x] Read-only debug summary
 ```
 
 ---
