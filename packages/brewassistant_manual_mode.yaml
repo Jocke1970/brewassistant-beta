@@ -45,7 +45,7 @@ input_select:
     options:
       - Cider
       - Beer
-      - FWK
+      - Brew
       - Mead
       - Wine
       - Other

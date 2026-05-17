@@ -141,7 +141,7 @@ script:
 automation:
 
   - alias: BrewAssistant - Module State - Fermentation Active
-    id: fwk_notify_module_state_fermentation_active
+    id: brew_notify_module_state_fermentation_active
     mode: restart
     trigger:
       - platform: homeassistant
@@ -231,8 +231,8 @@ automation:
 # Fermentation workflow notifications
 ###############################################################################
 
-  - alias: FWK Notify - Batch Started
-    id: fwk_notify_batch_started
+  - alias: Brew Notify - Batch Started
+    id: brew_notify_batch_started
     mode: single
     trigger:
       - platform: state
@@ -267,8 +267,8 @@ automation:
           notification_id: "brewassistant_batch_started"
 
 
-  - alias: FWK Notify - Dry Hop
-    id: fwk_notify_dry_hop
+  - alias: Brew Notify - Dry Hop
+    id: brew_notify_dry_hop
     mode: single
     trigger:
       - platform: state
@@ -304,8 +304,8 @@ automation:
           notification_id: "brewassistant_dry_hop"
 
 
-  - alias: FWK Notify - Dry Hop Preview
-    id: fwk_notify_dry_hop_preview
+  - alias: Brew Notify - Dry Hop Preview
+    id: brew_notify_dry_hop_preview
     mode: single
     trigger:
       - platform: state
@@ -332,8 +332,8 @@ automation:
           tag: "brewassistant_dry_hop_preview"
 
 
-  - alias: FWK Notify - Spunding
-    id: fwk_notify_spunding
+  - alias: Brew Notify - Spunding
+    id: brew_notify_spunding
     mode: single
     trigger:
       - platform: state
@@ -370,8 +370,8 @@ automation:
           notification_id: "brewassistant_spunding"
 
 
-  - alias: FWK Notify - Spunding Preview
-    id: fwk_notify_spunding_preview
+  - alias: Brew Notify - Spunding Preview
+    id: brew_notify_spunding_preview
     mode: single
     trigger:
       - platform: state
@@ -396,8 +396,8 @@ automation:
           tag: "brewassistant_spunding_preview"
 
 
-  - alias: FWK Notify - Cold Crash Ready
-    id: fwk_notify_cold_crash_ready
+  - alias: Brew Notify - Cold Crash Ready
+    id: brew_notify_cold_crash_ready
     mode: single
     trigger:
       - platform: state
@@ -434,8 +434,8 @@ automation:
           notification_id: "brewassistant_cold_crash_ready"
 
 
-  - alias: FWK Notify - Transfer Ready
-    id: fwk_notify_transfer_ready
+  - alias: Brew Notify - Transfer Ready
+    id: brew_notify_transfer_ready
     mode: single
     trigger:
       - platform: state
@@ -473,8 +473,8 @@ automation:
           notification_id: "brewassistant_transfer_ready"
 
 
-  - alias: FWK Notify - Batch Completed
-    id: fwk_notify_batch_completed
+  - alias: Brew Notify - Batch Completed
+    id: brew_notify_batch_completed
     mode: single
     trigger:
       - platform: state
@@ -505,8 +505,8 @@ automation:
 # Chamber / fermentation warnings
 ###############################################################################
 
-  - alias: FWK Warning - Chamber Too Warm
-    id: fwk_warning_chamber_warm
+  - alias: Brew Warning - Chamber Too Warm
+    id: brew_warning_chamber_warm
     mode: single
     trigger:
       - platform: state
@@ -528,8 +528,8 @@ automation:
           tag: "brewassistant_chamber_warm"
 
 
-  - alias: FWK Warning - Chamber Too Cold
-    id: fwk_warning_chamber_cold
+  - alias: Brew Warning - Chamber Too Cold
+    id: brew_warning_chamber_cold
     mode: single
     trigger:
       - platform: state
@@ -551,8 +551,8 @@ automation:
           tag: "brewassistant_chamber_cold"
 
 
-  - alias: FWK Warning - Temp Drift
-    id: fwk_warning_temp_drift
+  - alias: Brew Warning - Temp Drift
+    id: brew_warning_temp_drift
     mode: single
     trigger:
       - platform: numeric_state
@@ -580,8 +580,8 @@ automation:
           tag: "brewassistant_temp_drift"
 
 
-  - alias: FWK Warning - Temperature High
-    id: fwk_warning_temperature_high
+  - alias: Brew Warning - Temperature High
+    id: brew_warning_temperature_high
     mode: single
     trigger:
       - platform: state
@@ -606,8 +606,8 @@ automation:
           tag: "brewassistant_fermentation_temp_high"
 
 
-  - alias: FWK Warning - Temperature Low
-    id: fwk_warning_temperature_low
+  - alias: Brew Warning - Temperature Low
+    id: brew_warning_temperature_low
     mode: single
     trigger:
       - platform: state
