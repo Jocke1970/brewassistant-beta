@@ -119,6 +119,9 @@ def _smart_attrs(smart: SmartRecommendationData | None) -> dict[str, Any]:
         "fan_recommended": smart.fan_recommended,
         "rising_too_fast": smart.rising_too_fast,
         "block_reason": smart.block_reason,
+        "pill_status": smart.pill_status,
+        "pill_age_minutes": smart.pill_age_minutes,
+        "pill_stale": smart.pill_stale,
     }
 
 
@@ -275,6 +278,18 @@ SMART_SENSORS: tuple[BrewAssistantSmartSensorDescription, ...] = (
         key="smart_recommendation_mode",
         translation_key="smart_recommendation_mode",
         value_fn=lambda smart: smart.mode,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_pill_status_core",
+        translation_key="smart_pill_status_core",
+        value_fn=lambda smart: smart.pill_status,
+    ),
+    BrewAssistantSmartSensorDescription(
+        key="smart_pill_temp_age_minutes_core",
+        translation_key="smart_pill_temp_age_minutes_core",
+        native_unit_of_measurement="min",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda smart: smart.pill_age_minutes,
     ),
 )
 
