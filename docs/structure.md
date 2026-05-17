@@ -185,6 +185,32 @@ fwk_*                  old Fresh Wort Kit specific namespace
 
 New development should avoid adding new `fwk_*` entities.
 
+### Numeric suffixes
+
+Avoid Home Assistant-generated numeric suffixes such as `_2`, `_3`, etc. in BrewAssistant source code, normalized entities and documentation.
+
+Numeric suffixes are only acceptable when the number is part of the actual brewing concept, for example:
+
+```text
+brew_gravity_check_day_2_done
+brew_step_2_status
+brew_mash_step_2_temperature
+```
+
+Do not normalize accidental duplicate entity names such as:
+
+```text
+sensor.yellow_pill_gravity_2
+sensor.some_entity_3
+```
+
+Prefer clean source or adapter names instead:
+
+```text
+sensor.yellow_pill_gravity
+sensor.brewassistant_gravity
+```
+
 ---
 
 ## Design rule
