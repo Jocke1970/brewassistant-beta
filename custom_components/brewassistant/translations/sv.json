@@ -3,12 +3,14 @@
     "step": {
       "user": {
         "title": "BrewAssistant",
-        "description": "Välj vilka befintliga Home Assistant-entities BrewAssistant ska normalisera.",
+        "description": "Välj vilka befintliga Home Assistant-entities BrewAssistant ska läsa och normalisera.",
         "data": {
-          "liquid_temp_entity": "Entity för vätsketemperatur",
-          "chamber_temp_entity": "Entity för kammartemperatur",
-          "recipe_target_entity": "Entity för receptets måltemperatur",
-          "gravity_entity": "Entity för SG/gravity"
+          "liquid_temp_entity": "Vätsketemperaturkälla",
+          "chamber_temp_entity": "Fallback för kammartemperatur",
+          "recipe_target_entity": "Måltemperatur från recept/runtime",
+          "cold_crash_active_entity": "Cold crash aktiv-helper",
+          "cold_crash_target_entity": "Cold crash måltemperatur-helper",
+          "gravity_entity": "SG/gravity-källa"
         }
       }
     },
