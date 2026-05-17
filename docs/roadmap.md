@@ -98,9 +98,9 @@ Tasks:
 [x] Temperature severity sensor
 [x] Status summary sensor
 [x] Problem level sensor
-[ ] Icon hint sensors for dashboard use
-[ ] Color/severity hints for dashboard use
-[ ] Process summary sensor
+[x] Icon hint attributes for dashboard use
+[x] Color/severity hint attributes for dashboard use
+[x] Process summary sensor
 [ ] Next recommended action sensor
 [ ] Compact health snapshot sensor
 ```
@@ -114,10 +114,10 @@ Goal: move fermentation process state machine decisions from YAML templates into
 Tasks:
 
 ```text
-[ ] Mirror existing process status in Python
-[ ] Mirror existing next step in Python
-[ ] Mirror current action stage in Python
-[ ] Mirror next action stage in Python
+[x] Mirror existing process status in Python
+[x] Mirror existing next step in Python
+[x] Mirror current action stage in Python
+[x] Mirror next action stage in Python
 [ ] Add read-only comparison sensors between YAML and Python process state
 [ ] Switch dashboards to Python process entities after validation
 [ ] Keep YAML process package as compatibility layer during migration
