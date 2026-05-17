@@ -19,6 +19,7 @@ Tasks:
 [ ] Add manual-mode guide
 [ ] Add dashboard guide
 [ ] Add Brewfather integration guide
+[ ] Add custom integration guide
 [ ] Add legacy migration guide
 ```
 
@@ -43,25 +44,127 @@ Tasks:
 
 ---
 
-## v4.2 dashboard refresh
+## v4.2 Python Core foundation
 
-Goal: align dashboards with backend v4 naming and state model.
+Goal: introduce a Home Assistant custom integration that can run beside the existing YAML packages.
 
 Tasks:
 
 ```text
-[ ] Fermentation top card
-[ ] Fermentation detail card
+[x] Add custom_components/brewassistant skeleton
+[x] Add config flow
+[x] Add read-only coordinator
+[x] Normalize liquid temperature and chamber fallback
+[x] Normalize effective target temperature
+[x] Use cold crash target when cold crash is active
+[x] Normalize SG/gravity
+[x] Add runtime-ready and fallback binary sensors
+[x] Add dashboard support sensors for target mode, status, severity and summary
+[ ] Add options flow for changing source entities after setup
+[ ] Add automated tests
+```
+
+---
+
+## v4.3 dashboard refresh
+
+Goal: align dashboards with backend v4 naming, Python Core entities and state model.
+
+Tasks:
+
+```text
+[x] Fermentation Process card reads Python Core live values
+[x] Fermentation Status card reads Python Core live values
+[ ] Fermentation top card cleanup
 [ ] Chamber card
 [ ] Manual mode card
 [ ] Notifications card
 [ ] Kegerator card
 [ ] Debug/runtime card
+[ ] Reduce repeated JavaScript/Jinja status logic in dashboard YAML
 ```
 
 ---
 
-## v4.3 manual mode improvements
+## v4.4 dashboard logic migration
+
+Goal: move display decision logic out of Lovelace cards and into Python support sensors.
+
+Tasks:
+
+```text
+[x] Temperature target mode sensor
+[x] Temperature status sensor
+[x] Temperature severity sensor
+[x] Status summary sensor
+[x] Problem level sensor
+[ ] Icon hint sensors for dashboard use
+[ ] Color/severity hints for dashboard use
+[ ] Process summary sensor
+[ ] Next recommended action sensor
+[ ] Compact health snapshot sensor
+```
+
+---
+
+## v4.5 process state migration
+
+Goal: move fermentation process state machine decisions from YAML templates into Python.
+
+Tasks:
+
+```text
+[ ] Mirror existing process status in Python
+[ ] Mirror existing next step in Python
+[ ] Mirror current action stage in Python
+[ ] Mirror next action stage in Python
+[ ] Add read-only comparison sensors between YAML and Python process state
+[ ] Switch dashboards to Python process entities after validation
+[ ] Keep YAML process package as compatibility layer during migration
+```
+
+---
+
+## v4.6 smart fermentation recommendations
+
+Goal: move smart fermentation logic into Python as read-only recommendations before any hardware control is moved.
+
+Tasks:
+
+```text
+[ ] Heat needed recommendation
+[ ] Heat permitted recommendation
+[ ] Cooling recommended state
+[ ] Fan assist recommended state
+[ ] Heat block reason
+[ ] Suggested heat pulse length
+[ ] Pill stale detection
+[ ] Rising-too-fast detection
+[ ] Read-only debug summary
+```
+
+---
+
+## v4.7 smart fermentation control
+
+Goal: only after v4.6 has been validated, move safe hardware control into the custom integration.
+
+Tasks:
+
+```text
+[ ] Expose control switch/entity
+[ ] Expose mode select
+[ ] Expose tuning numbers
+[ ] Add services/buttons for controlled actions
+[ ] Apply climate target safely
+[ ] Control heat mat safely
+[ ] Control fan assist safely
+[ ] Preserve manual override and emergency off paths
+```
+
+---
+
+## v4.8 manual mode improvements
 
 Goal: make manual cider/bucket fermentation tracking strong enough to use standalone.
 
@@ -78,7 +181,7 @@ Tasks:
 
 ---
 
-## v4.4 Brewfather runtime improvements
+## v4.9 Brewfather runtime improvements
 
 Goal: make Brewfather data more robust and dashboard-safe.
 
@@ -96,7 +199,7 @@ Tasks:
 
 ---
 
-## v4.5 chamber automation polish
+## v4.10 chamber automation polish
 
 Goal: make fermentation chamber control safe, visible and semi-automatic.
 
@@ -113,7 +216,7 @@ Tasks:
 
 ---
 
-## v4.6 notifications polish
+## v4.11 notifications polish
 
 Goal: make alerts useful without being noisy.
 
