@@ -61,6 +61,14 @@
       "smart_recommendation_mode": {"name": "Smart recommendation mode"},
       "smart_pill_status_core": {"name": "Smart pill status"},
       "smart_pill_temp_age_minutes_core": {"name": "Smart pill temperature age"},
+      "source_health_summary": {"name": "Source health summary"},
+      "source_health_level": {"name": "Source health level"},
+      "configured_liquid_temp_entity": {"name": "Configured liquid temperature entity"},
+      "configured_chamber_temp_entity": {"name": "Configured chamber temperature entity"},
+      "configured_recipe_target_entity": {"name": "Configured recipe target entity"},
+      "configured_cold_crash_active_entity": {"name": "Configured cold crash active entity"},
+      "configured_cold_crash_target_entity": {"name": "Configured cold crash target entity"},
+      "configured_gravity_entity": {"name": "Configured gravity entity"},
       "gravity": {"name": "Gravity"}
     },
     "binary_sensor": {
@@ -71,7 +79,13 @@
       "smart_cooling_recommended_core": {"name": "Smart cooling recommended"},
       "smart_fan_recommended_core": {"name": "Smart fan recommended"},
       "smart_rising_too_fast_core": {"name": "Smart rising too fast"},
-      "smart_pill_stale_core": {"name": "Smart pill stale"}
+      "smart_pill_stale_core": {"name": "Smart pill stale"},
+      "source_liquid_temp_available": {"name": "Source liquid temperature available"},
+      "source_chamber_temp_available": {"name": "Source chamber temperature available"},
+      "source_recipe_target_available": {"name": "Source recipe target available"},
+      "source_cold_crash_active_available": {"name": "Source cold crash active available"},
+      "source_cold_crash_target_available": {"name": "Source cold crash target available"},
+      "source_gravity_available": {"name": "Source gravity available"}
     }
   }
 }
