@@ -17,6 +17,7 @@ class BrewAssistantEntity(CoordinatorEntity[BrewAssistantCoordinator]):
         """Initialize the entity."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{key}"
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
             "name": NAME,
