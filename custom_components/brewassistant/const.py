@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "brewassistant"
 NAME = "BrewAssistant"
-VERSION = "0.9.0"
+VERSION = "1.0.0"
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
