@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "brewassistant"
 NAME = "BrewAssistant"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
@@ -34,3 +34,5 @@ ATTR_TARGET_ENTITY = "target_entity"
 ATTR_TARGET_MODE = "target_mode"
 ATTR_ICON_HINT = "icon_hint"
 ATTR_COLOR_HINT = "color_hint"
+ATTR_YAML_PROCESS_STATUS = "yaml_process_status"
+ATTR_PROCESS_REASON = "process_reason"
