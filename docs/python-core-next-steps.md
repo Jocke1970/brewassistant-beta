@@ -1,6 +1,6 @@
 # BrewAssistant Python Core Next Steps
 
-This document prepares the next implementation path after v0.8.
+This document prepares the next implementation path after v0.9.
 
 The guiding rule remains:
 
@@ -96,11 +96,11 @@ Icon: mdi:fan-chevron-up
 
 ---
 
-## v0.9 candidate: Brewfather Runtime Normalization
+## v0.9 Brewfather Runtime Normalization
 
 Goal: reduce dependency on YAML/Jinja runtime parsing.
 
-Suggested entities:
+Entities:
 
 ```text
 sensor.brewassistant_runtime_recipe_name
@@ -112,7 +112,19 @@ sensor.brewassistant_runtime_source_status
 binary_sensor.brewassistant_runtime_brewfather_available
 ```
 
-This should remain read-only and only normalize existing HA/Brewfather sensor data.
+Validation checklist:
+
+```text
+[ ] Runtime recipe name sensor works
+[ ] Runtime status sensor works
+[ ] Runtime primary target temperature sensor works
+[ ] Runtime cold crash target temperature sensor works
+[ ] Runtime target FG sensor works or safely reports unknown when source is missing
+[ ] Runtime source status sensor works
+[ ] Runtime Brewfather availability binary sensor works
+[ ] Runtime source options appear under BrewAssistant -> Configure
+[ ] Saving runtime options reloads cleanly
+```
 
 ---
 
@@ -128,6 +140,7 @@ v1.0 should mean:
 [x] Debug card is useful
 [x] Options flow works
 [x] Next recommended action works
+[ ] Runtime normalization works
 [x] No hardware control in Python Core yet
 ```
 
@@ -154,7 +167,7 @@ Future safe-control steps:
 
 ---
 
-## Notes from v0.4-v0.8 lessons
+## Notes from v0.4-v0.9 lessons
 
 - Entity registry can keep old object IDs even after code changes.
 - New entity names may become `brewassistant_2`, `brewassistant_3`, etc. if Home Assistant cannot derive a unique/stable object ID.
@@ -163,3 +176,4 @@ Future safe-control steps:
 - For new sensors, stable `suggested_object_id` and explicit names matter.
 - Source health diagnostics should be checked before debugging temperature, gravity or target logic.
 - Next recommended action should prioritize source health and Pill health before normal process suggestions.
+- Runtime normalization is read-only and should tolerate missing optional sources.
