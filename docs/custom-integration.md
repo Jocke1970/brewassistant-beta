@@ -1,4 +1,4 @@
-# BrewAssistant Python Core v0.3
+# BrewAssistant Python Core v0.4
 
 This is the first cautious step toward moving BrewAssistant business logic from YAML/Jinja packages into a Home Assistant custom integration.
 
@@ -8,7 +8,7 @@ The goal is **not** to replace the existing package modules yet. The goal is to 
 
 ## Current scope
 
-v0.3 is still read-only.
+v0.4 is still read-only.
 
 It reads existing Home Assistant entities and exposes normalized BrewAssistant entities:
 
@@ -31,6 +31,12 @@ It reads existing Home Assistant entities and exposes normalized BrewAssistant e
 - `sensor.brewassistant_gravity`
 - `binary_sensor.brewassistant_temperature_fallback_active`
 - `binary_sensor.brewassistant_runtime_ready`
+
+v0.4 staging also adds the helper module:
+
+- `custom_components/brewassistant/smart_recommendations.py`
+
+This module builds read-only smart fermentation recommendation snapshots. The helper module is committed, but the coordinator/entity wiring is intentionally staged separately so it can be reviewed carefully before Home Assistant loads new entities from it.
 
 ---
 
@@ -80,8 +86,6 @@ Examples:
 
 v0.3 adds read-only process mirror sensors.
 
-The goal is to expose a Python interpretation of the current brewing process before replacing the existing YAML workflow package.
-
 Examples:
 
 - `sensor.brewassistant_process_status`
@@ -96,7 +100,39 @@ The process mirror currently prioritizes obvious high-confidence states such as:
 - YAML process state reporting ready for transfer, ready for cold crash, dry hop, spunding or finished.
 - Brewfather/runtime status reporting fermenting.
 
-This is still a mirror/support layer. It does not change helpers, run scripts, control hardware or replace the YAML workflow package yet.
+---
+
+## v0.4 smart recommendation staging
+
+v0.4 starts moving smart fermentation decision support into Python.
+
+The first staged module can evaluate:
+
+- Smart fermentation enabled/disabled.
+- Selected smart fermentation mode.
+- Current liquid temperature, target and delta.
+- Whether the batch appears below or above target.
+- Whether heating would be useful.
+- Whether cooling/fan assist would be useful.
+- Whether a rising trend, cooldown, fallback source, manual override or warm chamber should block a heat suggestion.
+- Suggested heat pulse length as a recommendation only.
+
+The planned entity layer for this module is:
+
+- `sensor.brewassistant_smart_recommendation_summary`
+- `sensor.brewassistant_smart_heat_recommendation`
+- `sensor.brewassistant_smart_cooling_recommendation`
+- `sensor.brewassistant_smart_fan_recommendation`
+- `sensor.brewassistant_smart_heat_block_reason_core`
+- `sensor.brewassistant_smart_suggested_heat_pulse_minutes`
+- `sensor.brewassistant_smart_recommendation_mode`
+- `binary_sensor.brewassistant_smart_heat_needed_core`
+- `binary_sensor.brewassistant_smart_heat_permitted_core`
+- `binary_sensor.brewassistant_smart_cooling_recommended_core`
+- `binary_sensor.brewassistant_smart_fan_recommended_core`
+- `binary_sensor.brewassistant_smart_rising_too_fast_core`
+
+These will remain read-only recommendation/support entities.
 
 ---
 
