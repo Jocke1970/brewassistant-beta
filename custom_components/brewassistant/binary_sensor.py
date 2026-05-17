@@ -86,6 +86,12 @@ BINARY_SENSORS: tuple[BrewAssistantBinarySensorDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         value_fn=lambda data: False,
     ),
+    BrewAssistantBinarySensorDescription(
+        key="smart_pill_stale_core",
+        translation_key="smart_pill_stale_core",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=lambda data: False,
+    ),
 )
 
 
@@ -95,6 +101,7 @@ SMART_BINARY_KEYS = {
     "smart_cooling_recommended_core",
     "smart_fan_recommended_core",
     "smart_rising_too_fast_core",
+    "smart_pill_stale_core",
 }
 
 
@@ -148,4 +155,6 @@ class BrewAssistantBinarySensor(BrewAssistantEntity, BinarySensorEntity):
                 return smart.fan_recommended
             if self.entity_description.key == "smart_rising_too_fast_core":
                 return smart.rising_too_fast
+            if self.entity_description.key == "smart_pill_stale_core":
+                return smart.pill_stale
         return self.entity_description.value_fn(self.coordinator.data)
