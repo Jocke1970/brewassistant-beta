@@ -47,6 +47,149 @@ YAML packages/dashboard = UI, layout, manual presentation tweaks
 
 ---
 
+## Python Core v1.1
+
+`custom_components/brewassistant/` contains the BrewAssistant Home Assistant custom integration.
+
+Current milestone:
+
+```text
+BrewAssistant Python Core v1.1 · Read-only Core Stable
+```
+
+Current scope:
+
+- Read existing Home Assistant entities.
+- Normalize liquid temperature, chamber fallback temperature, effective target temperature and gravity.
+- Use cold crash target when cold crash is active.
+- Mirror process state and next process step from existing workflow/YAML signals.
+- Expose smart fermentation recommendations without controlling hardware.
+- Detect Pill stale/fresh status.
+- Expose source health diagnostics for configured entities.
+- Normalize Brewfather/runtime recipe name, status, targets and target FG.
+- Expose one compact next recommended action sensor for dashboards and notifications.
+- Run beside the existing YAML packages without controlling hardware.
+
+Safety boundary:
+
+```text
+Python Core v1.1 is read-only.
+No climate, switch, fan, heater, fridge, relay or compressor actions are performed by Python Core.
+```
+
+Primary documentation:
+
+```text
+docs/python-core-install-update.md
+docs/python-core-branding.md
+docs/python-core-v1.1-test-plan.md
+docs/python-core-v1.1-release-notes.md
+```
+
+Recommended active debug/status card:
+
+```text
+dashboards/cards/brewassistant_core_debug_card_v1_1.yaml
+```
+
+---
+
+## Python Core entity groups
+
+### Core
+
+```text
+sensor.brewassistant_core_version
+sensor.brewassistant_liquid_temperature
+sensor.brewassistant_liquid_temperature_source
+sensor.brewassistant_chamber_temperature
+sensor.brewassistant_recipe_target_temperature
+sensor.brewassistant_temperature_delta
+sensor.brewassistant_temperature_target_mode
+sensor.brewassistant_temperature_status
+sensor.brewassistant_temperature_severity
+sensor.brewassistant_source_summary
+sensor.brewassistant_status_summary
+sensor.brewassistant_problem_level
+sensor.brewassistant_gravity
+binary_sensor.brewassistant_temperature_fallback_active
+binary_sensor.brewassistant_runtime_ready
+```
+
+### Process
+
+```text
+sensor.brewassistant_process_status
+sensor.brewassistant_process_next_step
+sensor.brewassistant_process_current_action_stage
+sensor.brewassistant_process_next_action_stage
+sensor.brewassistant_process_summary
+```
+
+### Smart recommendations
+
+```text
+sensor.brewassistant_smart_recommendation_summary
+sensor.brewassistant_smart_heat_recommendation
+sensor.brewassistant_smart_cooling_recommendation
+sensor.brewassistant_smart_fan_recommendation
+sensor.brewassistant_smart_heat_block_reason_core
+sensor.brewassistant_smart_suggested_heat_pulse_minutes
+sensor.brewassistant_smart_recommendation_mode
+binary_sensor.brewassistant_smart_heat_needed_core
+binary_sensor.brewassistant_smart_heat_permitted_core
+binary_sensor.brewassistant_smart_cooling_recommended_core
+binary_sensor.brewassistant_smart_fan_recommended_core
+binary_sensor.brewassistant_smart_rising_too_fast_core
+```
+
+### Pill diagnostics
+
+```text
+sensor.brewassistant_smart_pill_status_core
+sensor.brewassistant_smart_pill_temp_age_minutes_core
+binary_sensor.brewassistant_smart_pill_stale_core
+```
+
+### Source health
+
+```text
+sensor.brewassistant_source_health_summary
+sensor.brewassistant_source_health_level
+sensor.brewassistant_configured_liquid_temp_entity
+sensor.brewassistant_configured_chamber_temp_entity
+sensor.brewassistant_configured_recipe_target_entity
+sensor.brewassistant_configured_cold_crash_active_entity
+sensor.brewassistant_configured_cold_crash_target_entity
+sensor.brewassistant_configured_gravity_entity
+binary_sensor.brewassistant_source_liquid_temp_available
+binary_sensor.brewassistant_source_chamber_temp_available
+binary_sensor.brewassistant_source_recipe_target_available
+binary_sensor.brewassistant_source_cold_crash_active_available
+binary_sensor.brewassistant_source_cold_crash_target_available
+binary_sensor.brewassistant_source_gravity_available
+```
+
+### Runtime / Brewfather
+
+```text
+sensor.brewassistant_runtime_recipe_name
+sensor.brewassistant_runtime_status
+sensor.brewassistant_runtime_primary_target_temperature
+sensor.brewassistant_runtime_cold_crash_target_temperature
+sensor.brewassistant_runtime_target_fg
+sensor.brewassistant_runtime_source_status
+binary_sensor.brewassistant_runtime_brewfather_available
+```
+
+### Next action
+
+```text
+sensor.brewassistant_next_recommended_action
+```
+
+---
+
 ## Recommended repository layout
 
 ```text
@@ -74,6 +217,8 @@ brewassistant/
 │   ├── manual-mode.yaml
 │   ├── chamber.yaml
 │   ├── kegerator.yaml
+│   ├── cards/
+│   │   └── brewassistant_core_debug_card_v1_1.yaml
 │   └── brewzilla.yaml                             # optional / future
 └── docs/
     ├── setup.md
@@ -85,43 +230,10 @@ brewassistant/
     ├── brewfather.md
     ├── custom-integration.md
     ├── legacy-migration.md
+    ├── python-core-install-update.md
+    ├── python-core-branding.md
     └── roadmap.md
 ```
-
----
-
-## Python Core
-
-`custom_components/brewassistant/` contains the BrewAssistant Home Assistant custom integration.
-
-Current scope:
-
-- Read existing Home Assistant entities.
-- Normalize liquid temperature, chamber fallback temperature, effective target temperature and gravity.
-- Use cold crash target when cold crash is active.
-- Expose dashboard-support sensors such as target mode, status summary, severity and problem level.
-- Run beside the existing YAML packages without controlling hardware.
-
-Current Python Core entities include:
-
-```text
-sensor.brewassistant_liquid_temperature
-sensor.brewassistant_liquid_temperature_source
-sensor.brewassistant_chamber_temperature
-sensor.brewassistant_recipe_target_temperature
-sensor.brewassistant_temperature_delta
-sensor.brewassistant_temperature_target_mode
-sensor.brewassistant_temperature_status
-sensor.brewassistant_temperature_severity
-sensor.brewassistant_source_summary
-sensor.brewassistant_status_summary
-sensor.brewassistant_problem_level
-sensor.brewassistant_gravity
-binary_sensor.brewassistant_temperature_fallback_active
-binary_sensor.brewassistant_runtime_ready
-```
-
-The Python Core is intentionally read-only at this stage. Hardware control should only move into Python after the recommendation/status layer has been tested safely.
 
 ---
 
@@ -228,6 +340,12 @@ The migration does not need to happen all at once, but new files should avoid ad
 ## Status
 
 BrewAssistant v4 is actively evolving.
+
+Current Python Core status:
+
+```text
+v1.1 Read-only Core Stable + dashboard branding polish
+```
 
 Recommended next cleanup steps:
 
