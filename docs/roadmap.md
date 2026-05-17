@@ -60,7 +60,7 @@ Tasks:
 [x] Normalize SG/gravity
 [x] Add runtime-ready and fallback binary sensors
 [x] Add dashboard support sensors for target mode, status, severity and summary
-[ ] Add options flow for changing source entities after setup
+[x] Add options flow for changing source entities after setup
 [ ] Add automated tests
 ```
 
@@ -141,7 +141,7 @@ Tasks:
 [x] Fan assist recommended state
 [x] Heat block reason
 [x] Suggested heat pulse length
-[ ] Pill stale detection
+[x] Pill stale detection
 [x] Rising-too-fast detection
 [x] Read-only debug summary
 ```
