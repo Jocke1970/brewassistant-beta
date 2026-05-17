@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BrewAssistant",
+        "description": "Välj vilka befintliga Home Assistant-entities BrewAssistant ska normalisera.",
+        "data": {
+          "liquid_temp_entity": "Entity för vätsketemperatur",
+          "chamber_temp_entity": "Entity för kammartemperatur",
+          "recipe_target_entity": "Entity för receptets måltemperatur",
+          "gravity_entity": "Entity för SG/gravity"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "BrewAssistant är redan konfigurerad."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "liquid_temperature": {"name": "Vätsketemperatur"},
+      "liquid_temperature_source": {"name": "Temperaturkälla"},
+      "chamber_temperature": {"name": "Kammartemperatur"},
+      "recipe_target_temperature": {"name": "Receptets måltemperatur"},
+      "temperature_delta": {"name": "Temperaturdelta"},
+      "gravity": {"name": "SG"}
+    },
+    "binary_sensor": {
+      "temperature_fallback_active": {"name": "Temperaturfallback aktiv"},
+      "runtime_ready": {"name": "Runtime redo"}
+    }
+  }
+}
