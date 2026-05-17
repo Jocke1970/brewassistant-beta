@@ -20,6 +20,8 @@ Recommended order for the next session:
 4. Fix any entity registry naming issues before adding new logic.
 5. Only then continue with v0.6.
 
+Status: completed and validated.
+
 ---
 
 ## v0.5 validation target
@@ -27,13 +29,24 @@ Recommended order for the next session:
 v0.5 is considered validated when:
 
 ```text
-[ ] Base core sensors still work
-[ ] Process mirror still works
-[ ] Smart recommendations still work
-[ ] Pill stale signals work
-[ ] Options flow appears under BrewAssistant -> Configure
-[ ] Saving options reloads the integration cleanly
-[ ] No new numbered entities remain unresolved
+[x] Base core sensors still work
+[x] Process mirror still works
+[x] Smart recommendations still work
+[x] Pill stale signals work
+[x] Options flow appears under BrewAssistant -> Configure
+[x] Saving options reloads the integration cleanly
+[x] No new numbered entities remain unresolved
+```
+
+Validation notes:
+
+```text
+Base core: OK
+Process mirror: OK
+Smart recommendations: OK
+Pill stale: OK
+Options flow: OK after OptionsFlowWithConfigEntry compatibility patch
+Options save/reload: OK
 ```
 
 ---
