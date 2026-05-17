@@ -69,6 +69,7 @@
       "configured_cold_crash_active_entity": {"name": "Konfigurerad cold crash aktiv-entity"},
       "configured_cold_crash_target_entity": {"name": "Konfigurerad cold crash mål-entity"},
       "configured_gravity_entity": {"name": "Konfigurerad SG-entity"},
+      "next_recommended_action": {"name": "Nästa rekommenderade åtgärd"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
