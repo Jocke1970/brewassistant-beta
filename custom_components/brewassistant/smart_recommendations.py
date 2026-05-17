@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from homeassistant.core import HomeAssistant
 
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 _ON_STATES = {"on", "true", "yes", "active"}
+DEFAULT_PILL_TEMP_ENTITY = "sensor.yellow_pill_temperature"
+DEFAULT_PILL_STALE_MINUTES = 120
 
 
 @dataclass(slots=True)
@@ -27,6 +30,9 @@ class SmartRecommendationData:
     cooling_recommended: bool
     fan_recommended: bool
     rising_too_fast: bool
+    pill_status: str
+    pill_age_minutes: int | None
+    pill_stale: bool
 
 
 def _state_float(hass: HomeAssistant, entity_id: str) -> float | None:
@@ -49,6 +55,26 @@ def _state_string(hass: HomeAssistant, entity_id: str) -> str | None:
 def _is_on(hass: HomeAssistant, entity_id: str) -> bool:
     state = hass.states.get(entity_id)
     return state is not None and state.state.lower() in _ON_STATES
+
+
+def _pill_context(hass: HomeAssistant) -> tuple[str, int | None, bool]:
+    """Return pill status, age in minutes and stale flag."""
+    state = hass.states.get(DEFAULT_PILL_TEMP_ENTITY)
+    if state is None or state.state in _UNAVAILABLE_STATES:
+        return "Pill temperature unavailable", None, True
+
+    try:
+        float(state.state)
+    except (TypeError, ValueError):
+        return "Pill temperature invalid", None, True
+
+    age_minutes = int((datetime.now(timezone.utc) - state.last_updated).total_seconds() / 60)
+    stale = age_minutes > DEFAULT_PILL_STALE_MINUTES
+
+    if stale:
+        return f"Pill stale · {age_minutes} min", age_minutes, True
+
+    return f"Pill fresh · {age_minutes} min", age_minutes, False
 
 
 def build_smart_recommendations(
@@ -80,10 +106,11 @@ def build_smart_recommendations(
     temp_rate = _state_float(hass, "sensor.brewassistant_smart_temp_rate")
 
     rising_too_fast = temp_rate is not None and temp_rate > max_rising
+    pill_status, pill_age_minutes, pill_stale = _pill_context(hass)
 
     if liquid_temp is None or target_temp is None or delta is None:
         return SmartRecommendationData(
-            summary="Unavailable · missing temperature or target",
+            summary=f"Unavailable · missing temperature or target · {pill_status}",
             heat="Unavailable",
             cooling="Unavailable",
             fan="Unavailable",
@@ -96,6 +123,9 @@ def build_smart_recommendations(
             cooling_recommended=False,
             fan_recommended=False,
             rising_too_fast=rising_too_fast,
+            pill_status=pill_status,
+            pill_age_minutes=pill_age_minutes,
+            pill_stale=pill_stale,
         )
 
     heat_needed = delta < -deadband
@@ -121,6 +151,8 @@ def build_smart_recommendations(
         block = "Mode does not allow heat"
     elif not heat_needed:
         block = "Heat not needed"
+    elif pill_stale:
+        block = "Pill temperature stale"
     elif rising_too_fast:
         block = "Temperature rising too fast"
     elif cooldown_active:
@@ -160,7 +192,7 @@ def build_smart_recommendations(
     else:
         fan = "No fan assist needed"
 
-    summary = f"{mode} · Δ {delta:+.2f} °C · {heat} · {cooling} · {fan} · source {source}"
+    summary = f"{mode} · Δ {delta:+.2f} °C · {heat} · {cooling} · {fan} · {pill_status} · source {source}"
 
     return SmartRecommendationData(
         summary=summary,
@@ -176,4 +208,7 @@ def build_smart_recommendations(
         cooling_recommended=cooling_recommended,
         fan_recommended=fan_recommended,
         rising_too_fast=rising_too_fast,
+        pill_status=pill_status,
+        pill_age_minutes=pill_age_minutes,
+        pill_stale=pill_stale,
     )
