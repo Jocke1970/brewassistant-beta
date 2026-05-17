@@ -10,7 +10,12 @@
           "recipe_target_entity": "Måltemperatur från recept/runtime",
           "cold_crash_active_entity": "Cold crash aktiv-helper",
           "cold_crash_target_entity": "Cold crash måltemperatur-helper",
-          "gravity_entity": "SG/gravity-källa"
+          "gravity_entity": "SG/gravity-källa",
+          "runtime_recipe_name_entity": "Runtime receptnamn-källa",
+          "runtime_status_entity": "Runtime status-källa",
+          "runtime_primary_target_entity": "Runtime primär måltemperatur-källa",
+          "runtime_cold_crash_target_entity": "Runtime cold crash måltemperatur-källa",
+          "runtime_target_fg_entity": "Runtime mål-FG-källa"
         }
       }
     },
@@ -29,7 +34,12 @@
           "recipe_target_entity": "Måltemperatur från recept/runtime",
           "cold_crash_active_entity": "Cold crash aktiv-helper",
           "cold_crash_target_entity": "Cold crash måltemperatur-helper",
-          "gravity_entity": "SG/gravity-källa"
+          "gravity_entity": "SG/gravity-källa",
+          "runtime_recipe_name_entity": "Runtime receptnamn-källa",
+          "runtime_status_entity": "Runtime status-källa",
+          "runtime_primary_target_entity": "Runtime primär måltemperatur-källa",
+          "runtime_cold_crash_target_entity": "Runtime cold crash måltemperatur-källa",
+          "runtime_target_fg_entity": "Runtime mål-FG-källa"
         }
       }
     }
@@ -70,11 +80,18 @@
       "configured_cold_crash_target_entity": {"name": "Konfigurerad cold crash mål-entity"},
       "configured_gravity_entity": {"name": "Konfigurerad SG-entity"},
       "next_recommended_action": {"name": "Nästa rekommenderade åtgärd"},
+      "runtime_recipe_name": {"name": "Runtime receptnamn"},
+      "runtime_status": {"name": "Runtime status"},
+      "runtime_primary_target_temperature": {"name": "Runtime primär måltemperatur"},
+      "runtime_cold_crash_target_temperature": {"name": "Runtime cold crash måltemperatur"},
+      "runtime_target_fg": {"name": "Runtime mål-FG"},
+      "runtime_source_status": {"name": "Runtime källstatus"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
       "temperature_fallback_active": {"name": "Temperaturfallback aktiv"},
       "runtime_ready": {"name": "Runtime redo"},
+      "runtime_brewfather_available": {"name": "Runtime Brewfather tillgänglig"},
       "smart_heat_needed_core": {"name": "Smart värme behövs"},
       "smart_heat_permitted_core": {"name": "Smart värme tillåten"},
       "smart_cooling_recommended_core": {"name": "Smart kylning rekommenderas"},
