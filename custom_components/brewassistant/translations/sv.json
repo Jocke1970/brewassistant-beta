@@ -18,6 +18,22 @@
       "already_configured": "BrewAssistant är redan konfigurerad."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BrewAssistant inställningar",
+        "description": "Uppdatera vilka befintliga Home Assistant-entities BrewAssistant ska läsa och normalisera.",
+        "data": {
+          "liquid_temp_entity": "Vätsketemperaturkälla",
+          "chamber_temp_entity": "Fallback för kammartemperatur",
+          "recipe_target_entity": "Måltemperatur från recept/runtime",
+          "cold_crash_active_entity": "Cold crash aktiv-helper",
+          "cold_crash_target_entity": "Cold crash måltemperatur-helper",
+          "gravity_entity": "SG/gravity-källa"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "liquid_temperature": {"name": "Vätsketemperatur"},
@@ -43,6 +59,8 @@
       "smart_heat_block_reason_core": {"name": "Smart värmeblockering"},
       "smart_suggested_heat_pulse_minutes": {"name": "Smart föreslagen värmepuls"},
       "smart_recommendation_mode": {"name": "Smart rekommendationsläge"},
+      "smart_pill_status_core": {"name": "Smart Pill-status"},
+      "smart_pill_temp_age_minutes_core": {"name": "Smart Pill temperaturålder"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
@@ -52,7 +70,8 @@
       "smart_heat_permitted_core": {"name": "Smart värme tillåten"},
       "smart_cooling_recommended_core": {"name": "Smart kylning rekommenderas"},
       "smart_fan_recommended_core": {"name": "Smart fläkt rekommenderas"},
-      "smart_rising_too_fast_core": {"name": "Smart temp stiger för snabbt"}
+      "smart_rising_too_fast_core": {"name": "Smart temp stiger för snabbt"},
+      "smart_pill_stale_core": {"name": "Smart Pill stale"}
     }
   }
 }
