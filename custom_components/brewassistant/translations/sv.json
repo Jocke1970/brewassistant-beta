@@ -36,11 +36,23 @@
       "process_current_action_stage": {"name": "Process current action stage"},
       "process_next_action_stage": {"name": "Process next action stage"},
       "process_summary": {"name": "Processsammanfattning"},
+      "smart_recommendation_summary": {"name": "Smart rekommendationssammanfattning"},
+      "smart_heat_recommendation": {"name": "Smart värmerekommendation"},
+      "smart_cooling_recommendation": {"name": "Smart kylrekommendation"},
+      "smart_fan_recommendation": {"name": "Smart fläktrekommendation"},
+      "smart_heat_block_reason_core": {"name": "Smart värmeblockering"},
+      "smart_suggested_heat_pulse_minutes": {"name": "Smart föreslagen värmepuls"},
+      "smart_recommendation_mode": {"name": "Smart rekommendationsläge"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
       "temperature_fallback_active": {"name": "Temperaturfallback aktiv"},
-      "runtime_ready": {"name": "Runtime redo"}
+      "runtime_ready": {"name": "Runtime redo"},
+      "smart_heat_needed_core": {"name": "Smart värme behövs"},
+      "smart_heat_permitted_core": {"name": "Smart värme tillåten"},
+      "smart_cooling_recommended_core": {"name": "Smart kylning rekommenderas"},
+      "smart_fan_recommended_core": {"name": "Smart fläkt rekommenderas"},
+      "smart_rising_too_fast_core": {"name": "Smart temp stiger för snabbt"}
     }
   }
 }
