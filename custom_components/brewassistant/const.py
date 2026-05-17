@@ -20,7 +20,7 @@ CONF_GRAVITY_ENTITY = "gravity_entity"
 DEFAULT_LIQUID_TEMP_ENTITY = "sensor.yellow_pill_temperature"
 DEFAULT_CHAMBER_TEMP_ENTITY = "sensor.kyl_temperatur_4"
 DEFAULT_RECIPE_TARGET_ENTITY = "sensor.brew_recipe_active_target_temp"
-DEFAULT_GRAVITY_ENTITY = "sensor.yellow_pill_gravity_2"
+DEFAULT_GRAVITY_ENTITY = "sensor.yellow_pill_gravity"
 
 ATTR_SOURCE = "source"
 ATTR_SOURCE_ENTITY = "source_entity"
