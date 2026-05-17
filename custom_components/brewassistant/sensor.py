@@ -12,7 +12,7 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import ATTR_SOURCE, ATTR_SOURCE_ENTITY, ATTR_TARGET_ENTITY, DOMAIN
+from .const import ATTR_SOURCE, ATTR_SOURCE_ENTITY, ATTR_TARGET_ENTITY, ATTR_TARGET_MODE, DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 
@@ -34,7 +34,11 @@ def _liquid_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
 
 
 def _target_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    return {ATTR_TARGET_ENTITY: coordinator.configured_entities.get("recipe_target_entity")}
+    data = coordinator.data
+    return {
+        ATTR_TARGET_ENTITY: data.recipe_target_temperature_entity if data else None,
+        ATTR_TARGET_MODE: data.temperature_target_mode if data else None,
+    }
 
 
 def _source_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
