@@ -1,57 +1,63 @@
 type: custom:vertical-stack-in-card
 cards:
   - type: custom:button-card
-    entity: sensor.brewassistant_problem_level
-    name: BrewAssistant Core Debug
-    icon: mdi:bug-check
+    entity: sensor.brewassistant_source_health_level
+    name: BrewAssistant Core Debug v2
+    icon: mdi:bug-check-outline
     show_state: true
     show_label: true
     tap_action:
       action: more-info
-      entity: sensor.brewassistant_status_summary
+      entity: sensor.brewassistant_source_health_summary
     label: |
       [[[
+        const get = (id, fallback = 'unknown') => states[id]?.state ?? fallback;
+        const attr = (id, key, fallback = '—') => states[id]?.attributes?.[key] ?? fallback;
         const valid = (v) => v !== undefined && v !== null && !['unknown','unavailable','none',''].includes(String(v));
 
-        const baProcess = states['sensor.brewassistant_process_status']?.state ?? 'unknown';
-        const yamlProcess = states['sensor.brew_process_status']?.state ?? 'unknown';
-        const next = states['sensor.brewassistant_process_next_step']?.state ?? 'unknown';
-        const reason = states['sensor.brewassistant_process_status']?.attributes?.process_reason ?? '—';
+        const sourceLevel = get('sensor.brewassistant_source_health_level');
+        const sourceSummary = get('sensor.brewassistant_source_health_summary');
+        const problem = get('sensor.brewassistant_problem_level');
+        const runtime = get('binary_sensor.brewassistant_runtime_ready');
+        const pill = get('sensor.brewassistant_smart_pill_status_core');
+        const pillStale = get('binary_sensor.brewassistant_smart_pill_stale_core');
 
-        const targetMode = states['sensor.brewassistant_temperature_target_mode']?.state ?? 'unknown';
-        const target = states['sensor.brewassistant_recipe_target_temperature']?.state ?? 'unknown';
-        const temp = states['sensor.brewassistant_liquid_temperature']?.state ?? 'unknown';
-        const delta = states['sensor.brewassistant_temperature_delta']?.state ?? 'unknown';
-        const source = states['sensor.brewassistant_liquid_temperature_source']?.state ?? 'unknown';
+        const process = get('sensor.brewassistant_process_status');
+        const yamlProcess = attr('sensor.brewassistant_process_status', 'yaml_process_status', get('sensor.brew_process_status'));
+        const next = get('sensor.brewassistant_process_next_step');
 
-        const fallback = states['binary_sensor.brewassistant_temperature_fallback_active']?.state ?? 'unknown';
-        const runtime = states['binary_sensor.brewassistant_runtime_ready']?.state ?? 'unknown';
-        const problem = states['sensor.brewassistant_problem_level']?.state ?? 'unknown';
-        const severity = states['sensor.brewassistant_temperature_severity']?.state ?? 'unknown';
+        const temp = get('sensor.brewassistant_liquid_temperature');
+        const target = get('sensor.brewassistant_recipe_target_temperature');
+        const delta = get('sensor.brewassistant_temperature_delta');
+        const targetMode = get('sensor.brewassistant_temperature_target_mode');
+        const source = get('sensor.brewassistant_liquid_temperature_source');
+        const gravity = get('sensor.brewassistant_gravity');
 
-        const mismatch =
-          valid(baProcess) &&
-          valid(yamlProcess) &&
-          baProcess !== yamlProcess;
+        const smart = get('sensor.brewassistant_smart_recommendation_summary');
+        const heat = get('sensor.brewassistant_smart_heat_recommendation');
+        const cooling = get('sensor.brewassistant_smart_cooling_recommendation');
+        const fan = get('sensor.brewassistant_smart_fan_recommendation');
 
-        const mismatchText = mismatch
-          ? `Mismatch: Python=${baProcess} / YAML=${yamlProcess}`
-          : `Process aligned: ${baProcess}`;
+        const mismatch = valid(process) && valid(yamlProcess) && process !== yamlProcess;
+        const healthLine = `${sourceSummary} · runtime ${runtime} · pill stale ${pillStale}`;
+        const processLine = mismatch
+          ? `Process mismatch · Python ${process} / YAML ${yamlProcess}`
+          : `Process ${process} · next ${next}`;
 
         return `
-          <div style="line-height:1.42;">
-            <div style="font-size:12px;opacity:.78;">${mismatchText}</div>
-            <div style="margin-top:4px;font-size:13px;font-weight:850;">
-              ${targetMode} · ${temp} → ${target} °C · Δ ${delta} °C
+          <div style="line-height:1.36;">
+            <div style="font-size:12px;opacity:.76;">${healthLine}</div>
+            <div style="margin-top:5px;font-size:15px;font-weight:900;">
+              ${targetMode} · ${temp} → ${target} °C · Δ ${delta} °C · SG ${gravity}
             </div>
-            <div style="margin-top:4px;font-size:12px;opacity:.88;">
-              Source: ${source} · fallback ${fallback} · runtime ${runtime}
+            <div style="margin-top:5px;font-size:12px;opacity:.88;">
+              ${processLine}
             </div>
-            <div style="margin-top:4px;font-size:12px;opacity:.78;">
-              Next: ${next}
+            <div style="margin-top:5px;font-size:12px;opacity:.82;">
+              ${heat} · ${cooling} · ${fan}
             </div>
-            <div style="margin-top:4px;font-size:11px;opacity:.68;">
-              Reason: ${reason} · severity ${severity} · problem ${problem}
+            <div style="margin-top:5px;font-size:11px;opacity:.66;">
+              ${pill} · source ${source} · problem ${problem} · source health ${sourceLevel}
             </div>
           </div>
         `;
@@ -63,52 +69,55 @@ cards:
         - color: white
         - background: |
             [[[
+              const sourceLevel = states['sensor.brewassistant_source_health_level']?.state ?? 'unknown';
               const problem = states['sensor.brewassistant_problem_level']?.state ?? 'unknown';
+              const pillStale = states['binary_sensor.brewassistant_smart_pill_stale_core']?.state ?? 'unknown';
               const baProcess = states['sensor.brewassistant_process_status']?.state ?? '';
-              const yamlProcess = states['sensor.brew_process_status']?.state ?? '';
+              const yamlProcess = states['sensor.brewassistant_process_status']?.attributes?.yaml_process_status ?? states['sensor.brew_process_status']?.state ?? '';
               const mismatch = baProcess && yamlProcess && baProcess !== yamlProcess;
 
-              if (problem === 'problem') {
-                return 'linear-gradient(135deg, rgba(120,20,20,0.96), rgba(40,5,5,0.96))';
+              if (sourceLevel === 'problem' || problem === 'problem' || pillStale === 'on') {
+                return 'linear-gradient(135deg, rgba(125,22,22,0.96), rgba(38,6,8,0.98))';
               }
-              if (problem === 'warning' || mismatch) {
-                return 'linear-gradient(135deg, rgba(95,70,20,0.96), rgba(38,25,8,0.96))';
+              if (sourceLevel === 'warning' || problem === 'warning' || mismatch) {
+                return 'linear-gradient(135deg, rgba(105,74,22,0.96), rgba(40,26,8,0.98))';
               }
               if (problem === 'info') {
-                return 'linear-gradient(135deg, rgba(30,55,85,0.96), rgba(10,20,40,0.96))';
+                return 'linear-gradient(135deg, rgba(28,60,92,0.96), rgba(8,20,38,0.98))';
               }
-              return 'linear-gradient(135deg, rgba(20,80,55,0.96), rgba(8,35,26,0.96))';
+              return 'linear-gradient(135deg, rgba(16,85,62,0.96), rgba(7,34,28,0.98))';
             ]]]
-        - box-shadow: 0 10px 28px rgba(0,0,0,0.34)
+        - box-shadow: 0 12px 32px rgba(0,0,0,0.36)
       grid:
         - grid-template-areas: '"i n" "i s" "i l"'
-        - grid-template-columns: 56px 1fr
+        - grid-template-columns: 58px 1fr
         - grid-template-rows: min-content min-content 1fr
       img_cell:
-        - width: 44px
-        - height: 44px
+        - width: 46px
+        - height: 46px
         - border-radius: 50%
-        - background: rgba(255,255,255,0.12)
-        - border: 1px solid rgba(255,255,255,0.10)
+        - background: rgba(255,255,255,0.13)
+        - border: 1px solid rgba(255,255,255,0.12)
       icon:
-        - width: 26px
+        - width: 27px
         - color: |
             [[[
+              const sourceLevel = states['sensor.brewassistant_source_health_level']?.state ?? 'unknown';
               const problem = states['sensor.brewassistant_problem_level']?.state ?? 'unknown';
-              if (problem === 'problem') return '#ff8a80';
-              if (problem === 'warning') return '#ffd166';
+              if (sourceLevel === 'problem' || problem === 'problem') return '#ff8a80';
+              if (sourceLevel === 'warning' || problem === 'warning') return '#ffd166';
               if (problem === 'info') return '#90caf9';
               return '#7ee787';
             ]]]
       name:
         - justify-self: start
         - font-size: 17px
-        - font-weight: 900
+        - font-weight: 950
         - color: white
       state:
         - justify-self: start
         - font-size: 13px
-        - font-weight: 800
+        - font-weight: 850
         - color: rgba(255,255,255,0.86)
       label:
         - justify-self: start
@@ -118,120 +127,102 @@ cards:
         - white-space: normal
 
   - type: grid
-    columns: 3
+    columns: 2
     square: false
     cards:
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_status_summary
+        primary: Core
+        secondary: >
+          {{ states('sensor.brewassistant_temperature_target_mode') }} ·
+          {{ states('sensor.brewassistant_liquid_temperature') }} →
+          {{ states('sensor.brewassistant_recipe_target_temperature') }} °C ·
+          Δ {{ states('sensor.brewassistant_temperature_delta') }} °C
+        icon: mdi:thermometer-lines
+        icon_color: >
+          {% set s = states('sensor.brewassistant_temperature_severity') %}
+          {% if s == 'ok' %} green
+          {% elif s == 'info' %} blue
+          {% elif s == 'warning' %} amber
+          {% else %} red
+          {% endif %}
+        tap_action:
+          action: more-info
+
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_process_status
         primary: Process
         secondary: >
-          {{ states('sensor.brewassistant_process_status') }} · YAML:
-          {{ states('sensor.brew_process_status') }}
+          {{ states('sensor.brewassistant_process_status') }} ·
+          {{ states('sensor.brewassistant_process_next_step') }}
         icon: mdi:state-machine
         icon_color: >
-          {% if states('sensor.brewassistant_process_status') != states('sensor.brew_process_status') %}
-            amber
-          {% else %}
-            green
+          {% set py = states('sensor.brewassistant_process_status') %}
+          {% set yaml = state_attr('sensor.brewassistant_process_status', 'yaml_process_status') %}
+          {% if yaml not in ['unknown','unavailable', none, ''] and py != yaml %} amber
+          {% else %} green
           {% endif %}
-        layout: vertical
         tap_action:
           action: more-info
+
       - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_temperature_target_mode
-        primary: Target mode
+        entity: sensor.brewassistant_smart_recommendation_summary
+        primary: Smart recommendations
         secondary: >
-          {{ states('sensor.brewassistant_temperature_target_mode') }} ·
-          {{ states('sensor.brewassistant_recipe_target_temperature') }} °C
-        icon: mdi:target
+          {{ states('sensor.brewassistant_smart_heat_recommendation') }} ·
+          {{ states('sensor.brewassistant_smart_cooling_recommendation') }}
+        icon: mdi:brain
         icon_color: >
-          {% if is_state('sensor.brewassistant_temperature_target_mode', 'Cold crash') %}
-            blue
-          {% else %}
-            green
+          {% if is_state('binary_sensor.brewassistant_smart_heat_permitted_core', 'on') %} orange
+          {% elif is_state('binary_sensor.brewassistant_smart_cooling_recommended_core', 'on') %} blue
+          {% elif is_state('binary_sensor.brewassistant_smart_pill_stale_core', 'on') %} red
+          {% else %} green
           {% endif %}
-        layout: vertical
         tap_action:
           action: more-info
+
       - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_liquid_temperature_source
-        primary: Source
+        entity: sensor.brewassistant_smart_pill_status_core
+        primary: Pill health
         secondary: >
-          {{ states('sensor.brewassistant_liquid_temperature_source') }} ·
-          fallback {{ states('binary_sensor.brewassistant_temperature_fallback_active') }}
-        icon: >
-          {% if is_state('sensor.brewassistant_liquid_temperature_source', 'RAPT Pill') %}
-            mdi:thermometer-water
-          {% elif is_state('sensor.brewassistant_liquid_temperature_source', 'Chamber fallback') %}
-            mdi:fridge-alert
-          {% else %}
-            mdi:alert-circle
-          {% endif %}
+          {{ states('sensor.brewassistant_smart_pill_status_core') }} ·
+          stale {{ states('binary_sensor.brewassistant_smart_pill_stale_core') }}
+        icon: mdi:pill
         icon_color: >
-          {% if is_state('sensor.brewassistant_liquid_temperature_source', 'RAPT Pill') %}
-            blue
-          {% elif is_state('sensor.brewassistant_liquid_temperature_source', 'Chamber fallback') %}
-            amber
-          {% else %}
-            red
+          {% if is_state('binary_sensor.brewassistant_smart_pill_stale_core', 'on') %} red
+          {% elif states('sensor.brewassistant_smart_pill_status_core') in ['unknown','unavailable'] %} amber
+          {% else %} green
           {% endif %}
-        layout: vertical
         tap_action:
           action: more-info
+
       - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_temperature_status
-        primary: Temp status
+        entity: sensor.brewassistant_source_health_summary
+        primary: Source health
         secondary: >
-          {{ states('sensor.brewassistant_temperature_status') }} ·
-          {{ states('sensor.brewassistant_temperature_severity') }}
-        icon: mdi:thermometer-alert
+          {{ states('sensor.brewassistant_source_health_summary') }}
+        icon: mdi:database-search
         icon_color: >
-          {% set s = states('sensor.brewassistant_temperature_severity') %}
-          {% if s == 'ok' %}
-            green
-          {% elif s == 'info' %}
-            blue
-          {% elif s == 'warning' %}
-            amber
-          {% else %}
-            red
+          {% set h = states('sensor.brewassistant_source_health_level') %}
+          {% if h == 'ok' %} green
+          {% elif h == 'warning' %} amber
+          {% else %} red
           {% endif %}
-        layout: vertical
         tap_action:
           action: more-info
+
       - type: custom:mushroom-template-card
         entity: binary_sensor.brewassistant_runtime_ready
         primary: Runtime
         secondary: >
           ready {{ states('binary_sensor.brewassistant_runtime_ready') }} ·
-          SG {{ states('sensor.brewassistant_gravity') }}
+          SG {{ states('sensor.brewassistant_gravity') }} ·
+          source {{ states('sensor.brewassistant_liquid_temperature_source') }}
         icon: mdi:database-check
         icon_color: >
-          {% if is_state('binary_sensor.brewassistant_runtime_ready', 'on') %}
-            green
-          {% else %}
-            red
+          {% if is_state('binary_sensor.brewassistant_runtime_ready', 'on') %} green
+          {% else %} red
           {% endif %}
-        layout: vertical
-        tap_action:
-          action: more-info
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_problem_level
-        primary: Problem level
-        secondary: "{{ states('sensor.brewassistant_problem_level') }}"
-        icon: mdi:shield-check
-        icon_color: >
-          {% set p = states('sensor.brewassistant_problem_level') %}
-          {% if p == 'ok' %}
-            green
-          {% elif p == 'info' %}
-            blue
-          {% elif p == 'warning' %}
-            amber
-          {% else %}
-            red
-          {% endif %}
-        layout: vertical
         tap_action:
           action: more-info
 
@@ -242,34 +233,28 @@ cards:
     cards:
       - type: markdown
         content: >
-          ## BrewAssistant Python Core
+          ## Core
 
           **Status summary**  
           {{ states('sensor.brewassistant_status_summary') }}
 
-          **Process summary**  
-          {{ states('sensor.brewassistant_process_summary') }}
+          **Runtime ready**  
+          `{{ states('binary_sensor.brewassistant_runtime_ready') }}`
 
-          **Process reason**  
-          {{ state_attr('sensor.brewassistant_process_status', 'process_reason') }}
-
-          **Process mirror**  
-          Python: `{{ states('sensor.brewassistant_process_status') }}`  
-          YAML: `{{ state_attr('sensor.brewassistant_process_status', 'yaml_process_status') }}`
-
-          **Action stages**  
-          Current: `{{ states('sensor.brewassistant_process_current_action_stage') }}`  
-          Next: `{{ states('sensor.brewassistant_process_next_action_stage') }}`
-
-          **Target**  
-          Mode: `{{ states('sensor.brewassistant_temperature_target_mode') }}`  
-          Entity: `{{ state_attr('sensor.brewassistant_recipe_target_temperature', 'target_entity') }}`  
-          Target: `{{ states('sensor.brewassistant_recipe_target_temperature') }} °C`
+          **Temperature**  
+          Liquid: `{{ states('sensor.brewassistant_liquid_temperature') }} °C`  
+          Target: `{{ states('sensor.brewassistant_recipe_target_temperature') }} °C`  
+          Delta: `{{ states('sensor.brewassistant_temperature_delta') }} °C`  
+          Target mode: `{{ states('sensor.brewassistant_temperature_target_mode') }}`  
+          Target entity: `{{ state_attr('sensor.brewassistant_recipe_target_temperature', 'target_entity') }}`
 
           **Source**  
-          Liquid: `{{ states('sensor.brewassistant_liquid_temperature') }} °C`  
           Source: `{{ states('sensor.brewassistant_liquid_temperature_source') }}`  
-          Fallback: `{{ states('binary_sensor.brewassistant_temperature_fallback_active') }}`
+          Source entity: `{{ state_attr('sensor.brewassistant_liquid_temperature', 'source_entity') }}`  
+          Fallback active: `{{ states('binary_sensor.brewassistant_temperature_fallback_active') }}`
+
+          **Gravity**  
+          SG: `{{ states('sensor.brewassistant_gravity') }}`
         card_mod:
           style: |
             ha-card {
@@ -280,13 +265,108 @@ cards:
               color: white;
               padding: 12px;
             }
-            ha-markdown {
-              padding: 0 !important;
+            ha-markdown { padding: 0 !important; }
+            h2 { margin-top: 0 !important; font-size: 16px !important; }
+
+  - type: custom:expander-card
+    title: Process & smart recommendations
+    padding: 0
+    clear: true
+    cards:
+      - type: markdown
+        content: >
+          ## Process
+
+          **Process summary**  
+          {{ states('sensor.brewassistant_process_summary') }}
+
+          **Process state**  
+          Python: `{{ states('sensor.brewassistant_process_status') }}`  
+          YAML: `{{ state_attr('sensor.brewassistant_process_status', 'yaml_process_status') }}`  
+          Reason: `{{ state_attr('sensor.brewassistant_process_status', 'process_reason') }}`
+
+          **Action stages**  
+          Current: `{{ states('sensor.brewassistant_process_current_action_stage') }}`  
+          Next: `{{ states('sensor.brewassistant_process_next_action_stage') }}`
+
+          ## Smart recommendations
+
+          **Summary**  
+          {{ states('sensor.brewassistant_smart_recommendation_summary') }}
+
+          **Heat**  
+          {{ states('sensor.brewassistant_smart_heat_recommendation') }}  
+          Needed: `{{ states('binary_sensor.brewassistant_smart_heat_needed_core') }}`  
+          Permitted: `{{ states('binary_sensor.brewassistant_smart_heat_permitted_core') }}`  
+          Block reason: `{{ states('sensor.brewassistant_smart_heat_block_reason_core') }}`  
+          Suggested pulse: `{{ states('sensor.brewassistant_smart_suggested_heat_pulse_minutes') }} min`
+
+          **Cooling / fan**  
+          Cooling: `{{ states('sensor.brewassistant_smart_cooling_recommendation') }}`  
+          Cooling recommended: `{{ states('binary_sensor.brewassistant_smart_cooling_recommended_core') }}`  
+          Fan: `{{ states('sensor.brewassistant_smart_fan_recommendation') }}`  
+          Fan recommended: `{{ states('binary_sensor.brewassistant_smart_fan_recommended_core') }}`
+        card_mod:
+          style: |
+            ha-card {
+              background: rgba(255,255,255,0.035);
+              border-radius: 18px;
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              color: white;
+              padding: 12px;
             }
-            h2 {
-              margin-top: 0 !important;
-              font-size: 16px !important;
+            ha-markdown { padding: 0 !important; }
+            h2 { margin-top: 0 !important; font-size: 16px !important; }
+
+  - type: custom:expander-card
+    title: Pill & source diagnostics
+    padding: 0
+    clear: true
+    cards:
+      - type: markdown
+        content: >
+          ## Pill health
+
+          Status: `{{ states('sensor.brewassistant_smart_pill_status_core') }}`  
+          Age: `{{ states('sensor.brewassistant_smart_pill_temp_age_minutes_core') }} min`  
+          Stale: `{{ states('binary_sensor.brewassistant_smart_pill_stale_core') }}`
+
+          ## Source health
+
+          Summary: `{{ states('sensor.brewassistant_source_health_summary') }}`  
+          Level: `{{ states('sensor.brewassistant_source_health_level') }}`  
+          Available: `{{ state_attr('sensor.brewassistant_source_health_summary', 'sources_available') }} / {{ state_attr('sensor.brewassistant_source_health_summary', 'sources_total') }}`
+
+          ## Configured entities
+
+          Liquid temp: `{{ states('sensor.brewassistant_configured_liquid_temp_entity') }}` · `{{ states('binary_sensor.brewassistant_source_liquid_temp_available') }}`  
+          Chamber temp: `{{ states('sensor.brewassistant_configured_chamber_temp_entity') }}` · `{{ states('binary_sensor.brewassistant_source_chamber_temp_available') }}`  
+          Recipe target: `{{ states('sensor.brewassistant_configured_recipe_target_entity') }}` · `{{ states('binary_sensor.brewassistant_source_recipe_target_available') }}`  
+          Cold crash active: `{{ states('sensor.brewassistant_configured_cold_crash_active_entity') }}` · `{{ states('binary_sensor.brewassistant_source_cold_crash_active_available') }}`  
+          Cold crash target: `{{ states('sensor.brewassistant_configured_cold_crash_target_entity') }}` · `{{ states('binary_sensor.brewassistant_source_cold_crash_target_available') }}`  
+          Gravity: `{{ states('sensor.brewassistant_configured_gravity_entity') }}` · `{{ states('binary_sensor.brewassistant_source_gravity_available') }}`
+
+          ## Source reasons
+
+          Liquid: `{{ state_attr('sensor.brewassistant_source_health_summary', 'liquid_temp_entity_reason') }}`  
+          Chamber: `{{ state_attr('sensor.brewassistant_source_health_summary', 'chamber_temp_entity_reason') }}`  
+          Recipe target: `{{ state_attr('sensor.brewassistant_source_health_summary', 'recipe_target_entity_reason') }}`  
+          Cold crash active: `{{ state_attr('sensor.brewassistant_source_health_summary', 'cold_crash_active_entity_reason') }}`  
+          Cold crash target: `{{ state_attr('sensor.brewassistant_source_health_summary', 'cold_crash_target_entity_reason') }}`  
+          Gravity: `{{ state_attr('sensor.brewassistant_source_health_summary', 'gravity_entity_reason') }}`
+        card_mod:
+          style: |
+            ha-card {
+              background: rgba(255,255,255,0.035);
+              border-radius: 18px;
+              border: 1px solid rgba(255,255,255,0.07);
+              box-shadow: none;
+              color: white;
+              padding: 12px;
             }
+            ha-markdown { padding: 0 !important; }
+            h2 { margin-top: 0 !important; font-size: 16px !important; }
 card_mod:
   style: |
     ha-card {
