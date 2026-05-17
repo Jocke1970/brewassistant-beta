@@ -31,6 +31,11 @@
       "source_summary": {"name": "Källsammanfattning"},
       "status_summary": {"name": "Statussammanfattning"},
       "problem_level": {"name": "Problemnivå"},
+      "process_status": {"name": "Processstatus"},
+      "process_next_step": {"name": "Nästa processsteg"},
+      "process_current_action_stage": {"name": "Aktivt process-steg"},
+      "process_next_action_stage": {"name": "Nästa action-steg"},
+      "process_summary": {"name": "Processsammanfattning"},
       "gravity": {"name": "SG"}
     },
     "binary_sensor": {
