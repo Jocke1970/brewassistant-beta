@@ -20,6 +20,36 @@ No climate, switch, fan, heater, fridge, relay or compressor actions are perform
 
 ---
 
+## Validation
+
+```text
+[x] Core version reports 1.1.0
+[x] Milestone reports Read-only Core Stable
+[x] Hardware control reports False
+[x] Source health reports OK · 6/6 sources available
+[x] Runtime source reports OK · 5/5 runtime sources available
+[x] Runtime recipe/status resolve correctly
+[x] Next recommended action resolves correctly
+[x] Logo path is available for dashboard use
+```
+
+Validation notes:
+
+```text
+Core version: 1.1.0
+Milestone: Read-only Core Stable
+Hardware control: False
+Source health: OK · 6/6 sources available
+Runtime source: OK · 5/5 runtime sources available
+Runtime recipe: FWK Creative Extra Light - Summer IPL v3 (NovaLager)
+Runtime status: Fermenting
+Next action: Cooling + fan recommended
+Next reason: Cooling would help · Fan assist recommended for cooling
+Logo path: /local/brewassistant/BrewAssistant_color_small.png
+```
+
+---
+
 ## New files
 
 ```text
