@@ -94,36 +94,30 @@ Reason: Cooling would help · Fan assist recommended for cooling
 Icon: mdi:fan-chevron-up
 ```
 
----
-
-## v0.9 Brewfather Runtime Normalization
-
-Goal: reduce dependency on YAML/Jinja runtime parsing.
-
-Entities:
+### v0.9 Brewfather Runtime Normalization
 
 ```text
-sensor.brewassistant_runtime_recipe_name
-sensor.brewassistant_runtime_status
-sensor.brewassistant_runtime_primary_target_temperature
-sensor.brewassistant_runtime_cold_crash_target_temperature
-sensor.brewassistant_runtime_target_fg
-sensor.brewassistant_runtime_source_status
-binary_sensor.brewassistant_runtime_brewfather_available
-```
-
-Validation checklist:
-
-```text
-[ ] Runtime recipe name sensor works
-[ ] Runtime status sensor works
-[ ] Runtime primary target temperature sensor works
-[ ] Runtime cold crash target temperature sensor works
-[ ] Runtime target FG sensor works or safely reports unknown when source is missing
-[ ] Runtime source status sensor works
-[ ] Runtime Brewfather availability binary sensor works
+[x] Runtime recipe name sensor works
+[x] Runtime status sensor works
+[x] Runtime primary target temperature sensor works
+[x] Runtime cold crash target temperature sensor works
+[x] Runtime target FG sensor works
+[x] Runtime source status sensor works
+[x] Runtime Brewfather availability binary sensor works
 [ ] Runtime source options appear under BrewAssistant -> Configure
 [ ] Saving runtime options reloads cleanly
+```
+
+Validation notes:
+
+```text
+Recipe name: FWK Creative Extra Light - Summer IPL v3 (NovaLager)
+Runtime status: Fermenting
+Primary target: 15.0 °C
+Cold crash target: 2.0 °C
+Target FG: 0.99
+Source status: OK · 5/5 runtime sources available
+Brewfather available: on
 ```
 
 ---
@@ -140,7 +134,7 @@ v1.0 should mean:
 [x] Debug card is useful
 [x] Options flow works
 [x] Next recommended action works
-[ ] Runtime normalization works
+[x] Runtime normalization works
 [x] No hardware control in Python Core yet
 ```
 
