@@ -1,4 +1,4 @@
-# BrewAssistant Python Core v0.2
+# BrewAssistant Python Core v0.3
 
 This is the first cautious step toward moving BrewAssistant business logic from YAML/Jinja packages into a Home Assistant custom integration.
 
@@ -8,7 +8,7 @@ The goal is **not** to replace the existing package modules yet. The goal is to 
 
 ## Current scope
 
-v0.2 is still read-only.
+v0.3 is still read-only.
 
 It reads existing Home Assistant entities and exposes normalized BrewAssistant entities:
 
@@ -23,6 +23,11 @@ It reads existing Home Assistant entities and exposes normalized BrewAssistant e
 - `sensor.brewassistant_source_summary`
 - `sensor.brewassistant_status_summary`
 - `sensor.brewassistant_problem_level`
+- `sensor.brewassistant_process_status`
+- `sensor.brewassistant_process_next_step`
+- `sensor.brewassistant_process_current_action_stage`
+- `sensor.brewassistant_process_next_action_stage`
+- `sensor.brewassistant_process_summary`
 - `sensor.brewassistant_gravity`
 - `binary_sensor.brewassistant_temperature_fallback_active`
 - `binary_sensor.brewassistant_runtime_ready`
@@ -59,7 +64,7 @@ These can be changed during setup.
 
 ## v0.2 dashboard support logic
 
-v0.2 adds dashboard-friendly status sensors so cards do not need to duplicate the same JavaScript/Jinja logic.
+v0.2 added dashboard-friendly status sensors so cards do not need to duplicate the same JavaScript/Jinja logic.
 
 Examples:
 
@@ -69,7 +74,29 @@ Examples:
 - `sensor.brewassistant_status_summary` returns a compact display line with target mode, liquid temp, target, delta, source, and SG when available.
 - `sensor.brewassistant_problem_level` gives dashboards a simple top-level health signal.
 
-These are display/support signals only. They do not control any hardware.
+---
+
+## v0.3 process mirror logic
+
+v0.3 adds read-only process mirror sensors.
+
+The goal is to expose a Python interpretation of the current brewing process before replacing the existing YAML workflow package.
+
+Examples:
+
+- `sensor.brewassistant_process_status`
+- `sensor.brewassistant_process_next_step`
+- `sensor.brewassistant_process_current_action_stage`
+- `sensor.brewassistant_process_next_action_stage`
+- `sensor.brewassistant_process_summary`
+
+The process mirror currently prioritizes obvious high-confidence states such as:
+
+- Cold crash helper active or cold crash target mode.
+- YAML process state reporting ready for transfer, ready for cold crash, dry hop, spunding or finished.
+- Brewfather/runtime status reporting fermenting.
+
+This is still a mirror/support layer. It does not change helpers, run scripts, control hardware or replace the YAML workflow package yet.
 
 ---
 
@@ -102,10 +129,11 @@ Future versions can move more logic in this order:
 
 1. Fermentation temperature source, fallback and delta.
 2. Dashboard status summaries and severity hints.
-3. Smart fermentation recommendations and safety/block reasons.
-4. Brewfather runtime normalization.
-5. BIAB calculations and brew day state.
-6. Buttons/services for actions such as applying target temperature.
+3. Process state mirror.
+4. Smart fermentation recommendations and safety/block reasons.
+5. Brewfather runtime normalization.
+6. BIAB calculations and brew day state.
+7. Buttons/services for actions such as applying target temperature.
 
 ---
 
