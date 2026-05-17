@@ -32,7 +32,7 @@ The config flow defaults to the current BrewAssistant setup:
 | Liquid temperature | `sensor.yellow_pill_temperature` |
 | Chamber temperature fallback | `sensor.kyl_temperatur_4` |
 | Recipe target temperature | `sensor.brew_recipe_active_target_temp` |
-| Gravity | `sensor.yellow_pill_gravity_2` |
+| Gravity | `sensor.yellow_pill_gravity` |
 
 These can be changed during setup.
 
