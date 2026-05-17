@@ -31,6 +31,11 @@ from .const import (
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 from .smart_recommendations import SmartRecommendationData, build_smart_recommendations
+from .source_health import (
+    SOURCE_SENSOR_KEYS,
+    build_source_health,
+    source_health_attrs,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,6 +128,10 @@ def _smart_attrs(smart: SmartRecommendationData | None) -> dict[str, Any]:
         "pill_age_minutes": smart.pill_age_minutes,
         "pill_stale": smart.pill_stale,
     }
+
+
+def _source_health(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    return build_source_health(coordinator.hass, coordinator.configured_entities)
 
 
 SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
@@ -293,6 +302,15 @@ SMART_SENSORS: tuple[BrewAssistantSmartSensorDescription, ...] = (
     ),
 )
 
+SOURCE_SENSORS = {
+    "source_health_summary": lambda coordinator: _source_health(coordinator)["summary"],
+    "source_health_level": lambda coordinator: _source_health(coordinator)["level"],
+    **{
+        sensor_key: (lambda coordinator, source_key=source_key: coordinator.configured_entities[source_key])
+        for sensor_key, source_key in SOURCE_SENSOR_KEYS.items()
+    },
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -304,6 +322,7 @@ async def async_setup_entry(
     async_add_entities(
         [BrewAssistantSensor(coordinator, description) for description in SENSORS]
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
+        + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
     )
 
 
@@ -365,3 +384,28 @@ class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return smart recommendation attributes."""
         return _smart_attrs(_smart_data(self.coordinator))
+
+
+class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only source health/configuration sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        """Initialize the source sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+
+    @property
+    def native_value(self) -> Any:
+        """Return source sensor value."""
+        return SOURCE_SENSORS[self._key](self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return source health attributes."""
+        if self._key not in {"source_health_summary", "source_health_level"}:
+            return None
+        return source_health_attrs(_source_health(self.coordinator))
