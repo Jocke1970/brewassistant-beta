@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_RUNTIME_STATUS_ENTITY,
     DEFAULT_RUNTIME_TARGET_FG_ENTITY,
     DOMAIN,
+    VERSION,
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
@@ -394,6 +395,7 @@ async def async_setup_entry(
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
+        + [BrewAssistantCoreVersionSensor(coordinator)]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
 
@@ -513,6 +515,33 @@ class BrewAssistantRuntimeSensor(BrewAssistantEntity, SensorEntity):
         if self._key not in {"runtime_source_status", "runtime_recipe_name", "runtime_status"}:
             return None
         return runtime_attrs(_runtime_snapshot(self.coordinator))
+
+
+class BrewAssistantCoreVersionSensor(BrewAssistantEntity, SensorEntity):
+    """BrewAssistant Core version sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        """Initialize the core version sensor."""
+        super().__init__(coordinator, "core_version")
+        self._attr_name = "BrewAssistant Core Version"
+        self._attr_suggested_object_id = f"{DOMAIN}_core_version"
+
+    @property
+    def native_value(self) -> str:
+        """Return BrewAssistant Core version."""
+        return VERSION
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return core milestone attributes."""
+        return {
+            "milestone": "Read-only Core Stable",
+            "hardware_control": False,
+            "safe_mode": "read_only",
+            "notes": "No climate, switch, fan or heater control is performed by Python Core.",
+        }
 
 
 class BrewAssistantNextActionSensor(BrewAssistantEntity, SensorEntity):
