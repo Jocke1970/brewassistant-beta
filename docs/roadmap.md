@@ -302,6 +302,8 @@ Recommended first target:
 BIAB Python v0.1 read-only calculations
 ```
 
+Brewfather BrewTracker should be investigated early because it may provide read-only brewday step/timer/addition data and reduce the amount of duplicated BIAB workflow code needed in Home Assistant.
+
 Suggested v0.1 entities:
 
 ```text
@@ -316,12 +318,26 @@ sensor.brewassistant_biab_calculation_summary
 binary_sensor.brewassistant_biab_ready_for_brewday
 ```
 
+Suggested BrewTracker / brewday mirror entities:
+
+```text
+sensor.brewassistant_biab_brewtracker_stage
+sensor.brewassistant_biab_brewtracker_step
+sensor.brewassistant_biab_brewtracker_next_addition
+sensor.brewassistant_biab_brewtracker_timer_remaining
+sensor.brewassistant_biab_brewtracker_summary
+binary_sensor.brewassistant_biab_brewtracker_available
+```
+
 Tasks:
 
 ```text
 [ ] Identify current BIAB helpers used as inputs
+[ ] Research Brewfather BrewTracker data/API availability
+[ ] Decide whether BrewTracker can act as read-only brewday source
 [ ] Move BIAB calculations into Python read-only sensors
 [ ] Mirror current BIAB profile/settings
+[ ] Optionally mirror BrewTracker stage/step/timers/additions
 [ ] Add calculation summary sensor
 [ ] Add dashboard card using Python BIAB sensors
 [ ] Keep existing YAML helpers as source of truth initially
@@ -397,7 +413,7 @@ Potential tasks:
 [ ] Mash step tracking
 [ ] Boil timer
 [ ] Hop addition reminders
-[ ] Brewfather BrewTracker research
+[x] Brewfather BrewTracker added to BIAB research path
 [ ] Brew day dashboard
 ```
 
