@@ -242,7 +242,57 @@ Tasks:
 
 ---
 
-## v4.10 BIAB Python module
+## v4.10 carbonation and packaging process
+
+Goal: add carbonation/kolsyrning as a post-fermentation process stage after transfer and before serving/storage.
+
+This belongs near Fermentation Process, but should be modeled as packaging/post-fermentation rather than active fermentation control.
+
+Process sequence:
+
+```text
+Fermentation -> Cold crash -> Transfer -> Carbonation -> Serving / Storage
+```
+
+Suggested entities:
+
+```text
+sensor.brewassistant_carbonation_status
+sensor.brewassistant_carbonation_method
+sensor.brewassistant_carbonation_target_co2_volumes
+sensor.brewassistant_carbonation_temperature
+sensor.brewassistant_carbonation_pressure_bar
+sensor.brewassistant_carbonation_pressure_psi
+sensor.brewassistant_carbonation_time_remaining
+sensor.brewassistant_carbonation_summary
+binary_sensor.brewassistant_carbonation_active
+binary_sensor.brewassistant_carbonation_ready
+```
+
+Tasks:
+
+```text
+[ ] Add carbonation as process stage after transfer
+[ ] Support force carbonation in keg
+[ ] Support natural carbonation / priming as optional later path
+[ ] Calculate pressure from target CO2 volumes and beer temperature
+[ ] Show bar/psi conversion
+[ ] Track carbonation start time and estimated ready time
+[ ] Add carbonation summary to process card / next action
+[ ] Add ready-for-serving state
+[ ] Keep read-only/calculation-first before any gas-control ideas
+```
+
+Notes:
+
+```text
+Initial scope should be calculation/tracking only.
+No CO2 regulator or hardware control should be assumed.
+```
+
+---
+
+## v4.11 BIAB Python module
 
 Goal: migrate BIAB calculations and brewday status toward Python, starting read-only.
 
@@ -279,7 +329,7 @@ Tasks:
 
 ---
 
-## v4.11 manual mode improvements
+## v4.12 manual mode improvements
 
 Goal: make manual cider/bucket fermentation tracking strong enough to use standalone.
 
@@ -299,7 +349,7 @@ Tasks:
 
 ---
 
-## v4.12 chamber automation polish
+## v4.13 chamber automation polish
 
 Goal: make fermentation chamber control safe, visible and semi-automatic.
 
@@ -316,7 +366,7 @@ Tasks:
 
 ---
 
-## v4.13 notifications polish
+## v4.14 notifications polish
 
 Goal: make alerts useful without being noisy.
 
@@ -330,6 +380,7 @@ Tasks:
 [ ] Cold crash readiness notification
 [ ] Transfer readiness notification
 [ ] Chamber warning notification
+[ ] Carbonation ready notification
 ```
 
 ---
