@@ -26,6 +26,7 @@ from .const import (
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_MODE,
     ATTR_YAML_PROCESS_STATUS,
+    CONF_GRAVITY_ENTITY,
     CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
     CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
     CONF_RUNTIME_RECIPE_NAME_ENTITY,
@@ -194,6 +195,27 @@ def _next_action(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
         smart=_smart_data(coordinator),
         source_health=_source_health(coordinator),
     )
+
+
+def _gravity_last_updated(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    """Return last-updated metadata for the configured gravity source."""
+    source_entity = coordinator.configured_entities.get(CONF_GRAVITY_ENTITY)
+    state = coordinator.hass.states.get(source_entity) if source_entity else None
+    if state is None:
+        return {
+            "last_updated": None,
+            "source_entity": source_entity,
+            "source_state": None,
+            "source_last_updated_iso": None,
+        }
+
+    last_updated = state.last_updated.isoformat()
+    return {
+        "last_updated": last_updated,
+        "source_entity": source_entity,
+        "source_state": state.state,
+        "source_last_updated_iso": last_updated,
+    }
 
 
 SENSORS: tuple[BrewAssistantSensorDescription, ...] = (
@@ -367,6 +389,7 @@ SMART_SENSORS: tuple[BrewAssistantSmartSensorDescription, ...] = (
 SOURCE_SENSORS = {
     "source_health_summary": lambda coordinator: _source_health(coordinator)["summary"],
     "source_health_level": lambda coordinator: _source_health(coordinator)["level"],
+    "gravity_last_updated": lambda coordinator: _gravity_last_updated(coordinator)["last_updated"],
     **{
         sensor_key: (lambda coordinator, source_key=source_key: coordinator.configured_entities[source_key])
         for sensor_key, source_key in SOURCE_SENSOR_KEYS.items()
@@ -480,6 +503,8 @@ class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return source health attributes."""
+        if self._key == "gravity_last_updated":
+            return _gravity_last_updated(self.coordinator)
         if self._key not in {"source_health_summary", "source_health_level"}:
             return None
         return source_health_attrs(_source_health(self.coordinator))
