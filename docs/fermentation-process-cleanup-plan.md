@@ -43,7 +43,17 @@ SG/gravity last updated source:
 sensor.brewassistant_gravity_last_updated
 ```
 
-The `gravity_last_updated` value should come from the configured gravity source entity in Python Core, not from multiple YAML timestamp helper/template sensors.
+The `gravity_last_updated` value comes from the configured gravity source entity in Python Core, not from multiple YAML timestamp helper/template sensors.
+
+Verified example:
+
+```text
+Gravity: 1.004
+Gravity last updated: 2026-05-19T18:52:12.481540+00:00
+Source entity: sensor.yellow_pill_gravity
+Source state: 1.0041
+Source last updated ISO: 2026-05-19T18:52:12.481540+00:00
+```
 
 ---
 
@@ -52,10 +62,10 @@ The `gravity_last_updated` value should come from the configured gravity source 
 ### 1. Python Core gravity timestamp
 
 ```text
-[ ] Add sensor.brewassistant_gravity_last_updated
-[ ] Add attributes: source_entity, source_state, source_last_updated_iso
+[x] Add sensor.brewassistant_gravity_last_updated
+[x] Add attributes: source_entity, source_state, source_last_updated_iso
 [ ] Add EN/SV translations
-[ ] Test after HA restart
+[x] Test after HA restart
 ```
 
 ### 2. Batch age cleanup
