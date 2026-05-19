@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_COLOR_HINT,
@@ -50,6 +51,8 @@ from .source_health import (
     build_source_health,
     source_health_attrs,
 )
+
+BATCH_STARTED_AT_ENTITY = "input_datetime.brew_batch_started_at"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -215,6 +218,51 @@ def _gravity_last_updated(coordinator: BrewAssistantCoordinator) -> dict[str, An
         "source_entity": source_entity,
         "source_state": state.state,
         "source_last_updated_iso": last_updated,
+    }
+
+
+def _parse_batch_started_at(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    """Return parsed batch start metadata from the canonical helper."""
+    state = coordinator.hass.states.get(BATCH_STARTED_AT_ENTITY)
+    if state is None or state.state in {"unknown", "unavailable", "none", ""}:
+        return {
+            "started_at": None,
+            "source_entity": BATCH_STARTED_AT_ENTITY,
+            "source_state": state.state if state else None,
+            "started_at_iso": None,
+            "age_hours": None,
+            "age_days": None,
+        }
+
+    parsed = dt_util.parse_datetime(state.state)
+    if parsed is None:
+        parsed_date = dt_util.parse_date(state.state)
+        if parsed_date is not None:
+            parsed = dt_util.start_of_local_day(parsed_date)
+
+    if parsed is None:
+        return {
+            "started_at": None,
+            "source_entity": BATCH_STARTED_AT_ENTITY,
+            "source_state": state.state,
+            "started_at_iso": None,
+            "age_hours": None,
+            "age_days": None,
+        }
+
+    started_at = dt_util.as_utc(parsed)
+    now = dt_util.utcnow()
+    age_seconds = max(0.0, (now - started_at).total_seconds())
+    age_hours = round(age_seconds / 3600, 1)
+    age_days = round(age_seconds / 86400, 2)
+
+    return {
+        "started_at": started_at.isoformat(),
+        "source_entity": BATCH_STARTED_AT_ENTITY,
+        "source_state": state.state,
+        "started_at_iso": started_at.isoformat(),
+        "age_hours": age_hours,
+        "age_days": age_days,
     }
 
 
@@ -390,6 +438,9 @@ SOURCE_SENSORS = {
     "source_health_summary": lambda coordinator: _source_health(coordinator)["summary"],
     "source_health_level": lambda coordinator: _source_health(coordinator)["level"],
     "gravity_last_updated": lambda coordinator: _gravity_last_updated(coordinator)["last_updated"],
+    "batch_started_at": lambda coordinator: _parse_batch_started_at(coordinator)["started_at"],
+    "batch_age_hours": lambda coordinator: _parse_batch_started_at(coordinator)["age_hours"],
+    "batch_age_days": lambda coordinator: _parse_batch_started_at(coordinator)["age_days"],
     **{
         sensor_key: (lambda coordinator, source_key=source_key: coordinator.configured_entities[source_key])
         for sensor_key, source_key in SOURCE_SENSOR_KEYS.items()
@@ -494,6 +545,12 @@ class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
         self._key = key
         self._attr_name = _display_name_from_key(key)
         self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        if key == "batch_age_hours":
+            self._attr_native_unit_of_measurement = "h"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "batch_age_days":
+            self._attr_native_unit_of_measurement = "d"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def native_value(self) -> Any:
@@ -505,6 +562,8 @@ class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):
         """Return source health attributes."""
         if self._key == "gravity_last_updated":
             return _gravity_last_updated(self.coordinator)
+        if self._key in {"batch_started_at", "batch_age_hours", "batch_age_days"}:
+            return _parse_batch_started_at(self.coordinator)
         if self._key not in {"source_health_summary", "source_health_level"}:
             return None
         return source_health_attrs(_source_health(self.coordinator))
