@@ -31,6 +31,14 @@ Batch start source:
 input_datetime.brew_batch_started_at
 ```
 
+Python Core batch age sensors:
+
+```text
+sensor.brewassistant_batch_started_at
+sensor.brewassistant_batch_age_hours
+sensor.brewassistant_batch_age_days
+```
+
 SG/gravity source:
 
 ```text
@@ -45,7 +53,7 @@ sensor.brewassistant_gravity_last_updated
 
 The `gravity_last_updated` value comes from the configured gravity source entity in Python Core, not from multiple YAML timestamp helper/template sensors.
 
-Verified example:
+Verified gravity example:
 
 ```text
 Gravity: 1.004
@@ -53,6 +61,17 @@ Gravity last updated: 2026-05-19T18:52:12.481540+00:00
 Source entity: sensor.yellow_pill_gravity
 Source state: 1.0041
 Source last updated ISO: 2026-05-19T18:52:12.481540+00:00
+```
+
+Verified batch age example:
+
+```text
+Batch started: 2026-05-02T15:00:00+00:00
+Batch age hours: 412.7
+Batch age days: 17.2
+Source entity: input_datetime.brew_batch_started_at
+Source state: 2026-05-02 17:00:00
+Started at ISO: 2026-05-02T15:00:00+00:00
 ```
 
 ---
@@ -71,8 +90,9 @@ Source last updated ISO: 2026-05-19T18:52:12.481540+00:00
 ### 2. Batch age cleanup
 
 ```text
-[ ] Decide canonical batch start helper
-[ ] Add Python/Core batch age days/hours or fix YAML source
+[x] Decide canonical batch start helper
+[x] Add Python/Core batch age days/hours or fix YAML source
+[ ] Add EN/SV translations
 [ ] Update Fermentation Process card to canonical source
 ```
 
@@ -114,6 +134,32 @@ Source state:
 
 Source last updated ISO:
 {{ state_attr('sensor.brewassistant_gravity_last_updated', 'source_last_updated_iso') }}
+```
+
+---
+
+## Test template after batch age patch
+
+```jinja
+# BrewAssistant batch age check
+
+Batch started:
+{{ states('sensor.brewassistant_batch_started_at') }}
+
+Batch age hours:
+{{ states('sensor.brewassistant_batch_age_hours') }}
+
+Batch age days:
+{{ states('sensor.brewassistant_batch_age_days') }}
+
+Source entity:
+{{ state_attr('sensor.brewassistant_batch_age_days', 'source_entity') }}
+
+Source state:
+{{ state_attr('sensor.brewassistant_batch_age_days', 'source_state') }}
+
+Started at ISO:
+{{ state_attr('sensor.brewassistant_batch_age_days', 'started_at_iso') }}
 ```
 
 ---
