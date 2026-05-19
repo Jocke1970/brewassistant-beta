@@ -52,6 +52,7 @@ from .source_health import (
     source_health_attrs,
 )
 
+BREWFATHER_FERMENTATION_START_ENTITY = "sensor.brewfather_fermentation_start"
 BATCH_STARTED_AT_ENTITY = "input_datetime.brew_batch_started_at"
 
 
@@ -221,33 +222,56 @@ def _gravity_last_updated(coordinator: BrewAssistantCoordinator) -> dict[str, An
     }
 
 
+def _parse_datetime_state(raw_state: str) -> Any:
+    """Parse a Home Assistant datetime/date state."""
+    parsed = dt_util.parse_datetime(raw_state)
+    if parsed is not None:
+        return parsed
+
+    parsed_date = dt_util.parse_date(raw_state)
+    if parsed_date is not None:
+        return dt_util.start_of_local_day(parsed_date)
+
+    return None
+
+
+def _batch_start_source(coordinator: BrewAssistantCoordinator) -> tuple[str, Any | None]:
+    """Return the best available batch start source state.
+
+    Prefer Brewfather fermentation start for Brewfather-backed batches.
+    Fall back to the manual BrewAssistant helper.
+    """
+    for entity_id in (BREWFATHER_FERMENTATION_START_ENTITY, BATCH_STARTED_AT_ENTITY):
+        state = coordinator.hass.states.get(entity_id)
+        if state is not None and state.state not in {"unknown", "unavailable", "none", ""}:
+            return entity_id, state
+    return BREWFATHER_FERMENTATION_START_ENTITY, None
+
+
 def _parse_batch_started_at(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    """Return parsed batch start metadata from the canonical helper."""
-    state = coordinator.hass.states.get(BATCH_STARTED_AT_ENTITY)
-    if state is None or state.state in {"unknown", "unavailable", "none", ""}:
+    """Return parsed batch start metadata from Brewfather or manual fallback."""
+    source_entity, state = _batch_start_source(coordinator)
+    if state is None:
         return {
             "started_at": None,
-            "source_entity": BATCH_STARTED_AT_ENTITY,
-            "source_state": state.state if state else None,
+            "source_entity": source_entity,
+            "source_state": None,
             "started_at_iso": None,
             "age_hours": None,
             "age_days": None,
+            "source_priority": "brewfather_then_manual",
         }
 
-    parsed = dt_util.parse_datetime(state.state)
-    if parsed is None:
-        parsed_date = dt_util.parse_date(state.state)
-        if parsed_date is not None:
-            parsed = dt_util.start_of_local_day(parsed_date)
-
+    parsed = _parse_datetime_state(state.state)
     if parsed is None:
         return {
             "started_at": None,
-            "source_entity": BATCH_STARTED_AT_ENTITY,
+            "source_entity": source_entity,
             "source_state": state.state,
             "started_at_iso": None,
             "age_hours": None,
             "age_days": None,
+            "source_priority": "brewfather_then_manual",
         }
 
     started_at = dt_util.as_utc(parsed)
@@ -258,11 +282,12 @@ def _parse_batch_started_at(coordinator: BrewAssistantCoordinator) -> dict[str, 
 
     return {
         "started_at": started_at.isoformat(),
-        "source_entity": BATCH_STARTED_AT_ENTITY,
+        "source_entity": source_entity,
         "source_state": state.state,
         "started_at_iso": started_at.isoformat(),
         "age_hours": age_hours,
         "age_days": age_days,
+        "source_priority": "brewfather_then_manual",
     }
 
 
