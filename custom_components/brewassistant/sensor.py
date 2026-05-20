@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .carbonation import build_carbonation_snapshot
 from .const import (
     ATTR_COLOR_HINT,
     ATTR_ICON_HINT,
@@ -481,6 +482,18 @@ RUNTIME_SENSORS = {
     "runtime_source_status": lambda coordinator: _runtime_snapshot(coordinator)["source_status"],
 }
 
+CARBONATION_SENSORS = {
+    "carbonation_status": "status",
+    "carbonation_method": "method",
+    "carbonation_target_volumes": "target_volumes",
+    "carbonation_temperature": "temperature",
+    "carbonation_recommended_pressure_bar": "pressure_bar",
+    "carbonation_recommended_pressure_psi": "pressure_psi",
+    "carbonation_started_at": "started_at",
+    "carbonation_age_days": "age_days",
+    "carbonation_summary": "summary",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -494,6 +507,7 @@ async def async_setup_entry(
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
+        + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
         + [BrewAssistantCoreVersionSensor(coordinator)]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
@@ -624,6 +638,46 @@ class BrewAssistantRuntimeSensor(BrewAssistantEntity, SensorEntity):
         if self._key not in {"runtime_source_status", "runtime_recipe_name", "runtime_status"}:
             return None
         return runtime_attrs(_runtime_snapshot(self.coordinator))
+
+
+class BrewAssistantCarbonationSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only carbonation sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        """Initialize the carbonation sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._snapshot_key = CARBONATION_SENSORS[key]
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        if key == "carbonation_temperature":
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "carbonation_recommended_pressure_bar":
+            self._attr_native_unit_of_measurement = "bar"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "carbonation_recommended_pressure_psi":
+            self._attr_native_unit_of_measurement = "psi"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "carbonation_target_volumes":
+            self._attr_native_unit_of_measurement = "vol"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "carbonation_age_days":
+            self._attr_native_unit_of_measurement = "d"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> Any:
+        """Return carbonation sensor value."""
+        return build_carbonation_snapshot(self.coordinator.hass).get(self._snapshot_key)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return carbonation diagnostic attributes."""
+        return build_carbonation_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantCoreVersionSensor(BrewAssistantEntity, SensorEntity):
