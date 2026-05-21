@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .carbonation import build_carbonation_snapshot
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
@@ -159,6 +160,11 @@ SMART_BINARY_KEYS = {
     "smart_pill_stale_core",
 }
 
+CARBONATION_BINARY_SENSORS = {
+    "carbonation_active": "active",
+    "carbonation_ready": "ready",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -170,6 +176,7 @@ async def async_setup_entry(
     async_add_entities(
         [BrewAssistantBinarySensor(coordinator, description) for description in BINARY_SENSORS]
         + [BrewAssistantSourceBinarySensor(coordinator, key) for key in SOURCE_BINARY_KEYS]
+        + [BrewAssistantCarbonationBinarySensor(coordinator, key) for key in CARBONATION_BINARY_SENSORS]
         + [BrewAssistantRuntimeAvailableBinarySensor(coordinator)]
     )
 
@@ -251,6 +258,33 @@ class BrewAssistantSourceBinarySensor(BrewAssistantEntity, BinarySensorEntity):
             "state": item.get("state"),
             "reason": item.get("reason"),
         }
+
+
+class BrewAssistantCarbonationBinarySensor(BrewAssistantEntity, BinarySensorEntity):
+    """Read-only carbonation binary sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        """Initialize the carbonation binary sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._snapshot_key = CARBONATION_BINARY_SENSORS[key]
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        if key == "carbonation_ready":
+            self._attr_device_class = BinarySensorDeviceClass.SAFETY
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return carbonation binary state."""
+        snapshot = build_carbonation_snapshot(self.coordinator.hass)
+        return bool(snapshot.get(self._snapshot_key))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return carbonation diagnostic attributes."""
+        return build_carbonation_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantRuntimeAvailableBinarySensor(BrewAssistantEntity, BinarySensorEntity):
