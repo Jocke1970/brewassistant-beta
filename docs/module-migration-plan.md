@@ -8,26 +8,159 @@ The guiding rule remains:
 Read-only first. Recommendations before control. Control only after validation.
 ```
 
+The new architectural rule is stricter:
+
+```text
+Python owns backend logic.
+YAML owns presentation only.
+```
+
+YAML packages should be treated as legacy/bridge code unless they only define dashboard cards or very thin user-facing helpers.
+
+---
+
+## Target architecture
+
+```text
+custom_components/brewassistant/
+  Owns state, calculations, readiness, summaries, recommendations and future services.
+
+packages/*.yaml
+  Legacy bridge during migration. Should shrink over time.
+
+dashboards/**/*.yaml
+  Presentation layer only. Cards may call entities/services, but should not contain business logic.
+```
+
 ---
 
 ## Recommended order
 
 ```text
-1. BIAB module
-2. Manual Fermentation module
-3. Notifications polish
-4. Smart fermentation control, much later
+1. Workflow / batch lifecycle engine
+2. Packaging / transfer readiness
+3. Runtime adapter cleanup
+4. BIAB read-only calculations
+5. Manual Fermentation summary bridge
+6. Smart fermentation control, much later
+7. Hardware control, last
 ```
+
+Why workflow first:
+
+- It is the system brain.
+- It currently drives many downstream cards and notifications.
+- It removes the need to rebuild new backend sensors in YAML.
+- It creates a clean source of truth before BIAB, BrewZilla and multi-batch logic expand.
+
+---
+
+## Workflow engine
+
+Workflow should become the first major YAML-retirement target.
+
+### Workflow v0.1 read-only state mirror
+
+Expose current lifecycle state without controlling hardware.
+
+Suggested entities:
+
+```text
+sensor.brewassistant_process_status
+sensor.brewassistant_process_status_sv
+sensor.brewassistant_process_stage
+sensor.brewassistant_process_summary
+sensor.brewassistant_next_step
+sensor.brewassistant_next_step_sv
+binary_sensor.brewassistant_batch_active
+binary_sensor.brewassistant_cold_crash_active
+binary_sensor.brewassistant_ready_for_packaging
+binary_sensor.brewassistant_ready_for_transfer
+```
+
+Inputs may initially come from existing HA entities, Brewfather runtime sensors and RAPT/Pill readings.
+
+### Workflow v0.2 lifecycle actions
+
+Add safe Python buttons/services for lifecycle marking only.
+
+Suggested actions:
+
+```text
+button.brewassistant_start_batch
+button.brewassistant_start_cold_crash
+button.brewassistant_mark_packaging_done
+button.brewassistant_mark_transferred_to_keg
+button.brewassistant_reset_batch
+```
+
+These actions should update integration-owned state, not YAML helpers.
+
+### Workflow v0.3 event model
+
+Emit internal BrewAssistant events for dashboards/notifications to consume later.
+
+Suggested events:
+
+```text
+brewassistant_batch_started
+brewassistant_cold_crash_started
+brewassistant_ready_for_packaging
+brewassistant_transferred_to_keg
+brewassistant_batch_completed
+```
+
+No notification side effects yet.
+
+---
+
+## Packaging / transfer readiness
+
+Packaging should move after Workflow v0.1 exists.
+
+Suggested entities:
+
+```text
+binary_sensor.brewassistant_packaging_recommended
+sensor.brewassistant_packaging_reason
+sensor.brewassistant_packaging_checklist_status
+sensor.brewassistant_transfer_summary
+```
+
+Initial rules can be conservative:
+
+```text
+batch active
+cold crash active or completed
+liquid temperature below configured threshold
+gravity at/below target FG threshold or stable
+source health OK or explicitly acknowledged
+```
+
+---
+
+## Runtime adapter cleanup
+
+Runtime should normalize Brewfather/manual/source data into integration-native objects.
+
+Suggested direction:
+
+```text
+Brewfather sensors -> Python runtime model -> BrewAssistant workflow entities
+Manual inputs     -> Python runtime model -> BrewAssistant workflow entities
+Future BrewZilla  -> Python runtime model -> BrewAssistant workflow entities
+```
+
+Dashboards should read BrewAssistant entities, not nested Brewfather details directly.
 
 ---
 
 ## BIAB module
 
-BIAB is the best next Python candidate.
+BIAB is still a strong Python candidate, but should follow the workflow engine so brewday logic has a lifecycle model to attach to.
 
 Why:
 
-- It is smaller than fermentation core.
 - It is calculation-heavy.
 - It benefits from stable Python sensors.
 - Dashboard YAML should not own calculations.
@@ -53,7 +186,7 @@ sensor.brewassistant_biab_calculation_summary
 binary_sensor.brewassistant_biab_ready_for_brewday
 ```
 
-Inputs can still be existing helpers/options.
+Inputs can initially come from existing helpers/options.
 
 ### BIAB v0.2 brewday status mirror
 
@@ -69,36 +202,25 @@ sensor.brewassistant_biab_timer_summary
 sensor.brewassistant_biab_problem_level
 ```
 
-### BIAB v0.3 Digiboil power diagnostics
+### BIAB v0.3 Digiboil/BrewZilla power diagnostics
 
-Read-only diagnostics for Digiboil state.
+Read-only diagnostics for hot-side equipment state.
 
 Suggested entities:
 
 ```text
-sensor.brewassistant_biab_digiboil_power_w
-sensor.brewassistant_biab_digiboil_power_mode
-binary_sensor.brewassistant_biab_digiboil_heating_active
+sensor.brewassistant_hot_side_power_w
+sensor.brewassistant_hot_side_power_mode
+binary_sensor.brewassistant_hot_side_heating_active
 ```
 
 No power control yet.
-
-### BIAB v1.0 read-only stable
-
-Only after v0.1-v0.3 have been tested in real brewday scenarios.
 
 ---
 
 ## Manual Fermentation module
 
-Manual Fermentation should stay mostly helper/UI-driven for now.
-
-Why:
-
-- It is user-input heavy.
-- It needs flexible notes and manual status changes.
-- YAML/helpers are currently a good fit.
-- Python can help by normalizing and summarizing, not replacing everything immediately.
+Manual Fermentation should become a Python summary/runtime source, not a separate YAML brain.
 
 Recommended phases:
 
@@ -117,9 +239,9 @@ sensor.brewassistant_manual_summary
 binary_sensor.brewassistant_manual_batch_active
 ```
 
-### Manual v0.2 notes/status helper bridge
+### Manual v0.2 integration-owned state
 
-Keep helpers as the source of truth, but expose clean Python sensors.
+Move manual lifecycle state into integration storage/options where practical.
 
 ### Manual v1.0 stable
 
@@ -129,7 +251,7 @@ Only after the manual workflow has been used across multiple batches.
 
 ## What should not move yet
 
-Do not move these into Python until read-only layers are stable:
+Do not move these into active Python control until read-only layers are stable:
 
 ```text
 [ ] chamber hardware control
@@ -140,6 +262,21 @@ Do not move these into Python until read-only layers are stable:
 [ ] notification sending side effects
 ```
 
+These may get read-only diagnostics earlier, but no control side effects.
+
+---
+
+## YAML retirement checklist
+
+```text
+[ ] Identify YAML sensors that only calculate or summarize state
+[ ] Recreate them as Python entities
+[ ] Update dashboard cards to read Python entities
+[ ] Keep old YAML entities temporarily as fallback
+[ ] Remove/disable old YAML logic once Python entities are validated
+[ ] Leave dashboard/card YAML intact
+```
+
 ---
 
 ## Recommendation
@@ -147,7 +284,7 @@ Do not move these into Python until read-only layers are stable:
 Next implementation target:
 
 ```text
-BIAB Python v0.1 read-only calculations
+Workflow Python v0.1 read-only lifecycle engine
 ```
 
-Manual Fermentation should follow later as a read-only summary/bridge module.
+After that, build packaging readiness and lifecycle actions before moving deeper into BIAB or hardware control.
