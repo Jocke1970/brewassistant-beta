@@ -487,8 +487,13 @@ CARBONATION_SENSORS = {
     "carbonation_method": "method",
     "carbonation_target_volumes": "target_volumes",
     "carbonation_temperature": "temperature",
-    "carbonation_recommended_pressure_bar": "pressure_bar",
-    "carbonation_recommended_pressure_psi": "pressure_psi",
+    "carbonation_recommended_pressure_bar": "recommended_pressure_bar",
+    "carbonation_recommended_pressure_psi": "recommended_pressure_psi",
+    "carbonation_actual_pressure_bar": "actual_pressure_bar",
+    "carbonation_actual_pressure_psi": "actual_pressure_psi",
+    "carbonation_equilibrium_volumes": "equilibrium_volumes",
+    "carbonation_estimated_volumes": "estimated_volumes",
+    "carbonation_progress_percent": "progress_percent",
     "carbonation_started_at": "started_at",
     "carbonation_age_days": "age_days",
     "carbonation_summary": "summary",
@@ -656,14 +661,21 @@ class BrewAssistantCarbonationSensor(BrewAssistantEntity, SensorEntity):
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_state_class = SensorStateClass.MEASUREMENT
-        if key == "carbonation_recommended_pressure_bar":
+        if key in {"carbonation_recommended_pressure_bar", "carbonation_actual_pressure_bar"}:
             self._attr_native_unit_of_measurement = "bar"
             self._attr_state_class = SensorStateClass.MEASUREMENT
-        if key == "carbonation_recommended_pressure_psi":
+        if key in {"carbonation_recommended_pressure_psi", "carbonation_actual_pressure_psi"}:
             self._attr_native_unit_of_measurement = "psi"
             self._attr_state_class = SensorStateClass.MEASUREMENT
-        if key == "carbonation_target_volumes":
+        if key in {
+            "carbonation_target_volumes",
+            "carbonation_equilibrium_volumes",
+            "carbonation_estimated_volumes",
+        }:
             self._attr_native_unit_of_measurement = "vol"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "carbonation_progress_percent":
+            self._attr_native_unit_of_measurement = "%"
             self._attr_state_class = SensorStateClass.MEASUREMENT
         if key == "carbonation_age_days":
             self._attr_native_unit_of_measurement = "d"
