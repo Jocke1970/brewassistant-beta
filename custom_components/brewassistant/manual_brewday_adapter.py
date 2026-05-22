@@ -2,9 +2,6 @@
 
 This module bridges the pure ManualRuntimeSession engine into the normalized
 BrewAssistant Brewday Runtime snapshot shape.
-
-It is intentionally small so it can be wired into brewday_runtime_core.py with a
-minimal follow-up patch.
 """
 
 from __future__ import annotations
@@ -13,7 +10,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .manual_brewday_runtime import ManualRuntimeSession
+from .manual_brewday_store import get_manual_brewday_session
 
 BAD = {"unknown", "unavailable", "none", ""}
 
@@ -46,28 +43,34 @@ def _int_state(hass: HomeAssistant, entity_id: str, default: int = 0) -> int:
     return default if value is None else int(value)
 
 
-def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Return a normalized Manual Brewday snapshot from the Python engine.
+def _sync_legacy_status(hass: HomeAssistant) -> None:
+    """Best-effort legacy helper sync until native services replace scripts.
 
-    v0.1 still uses existing manual helpers to select high-level state and to
-    optionally override progress/time. The plan, stages, steps, target temp,
-    next step and timeline now come from ManualRuntimeSession.
+    Existing dashboard buttons still drive old helpers. This keeps the new
+    Python session aligned without recreating it on every update.
     """
-    session = ManualRuntimeSession()
+    session = get_manual_brewday_session(hass)
     manual_status = _state(hass, MANUAL_STATUS, "inactive")
     manual_active = _state(hass, MANUAL_ACTIVE) == "on"
 
-    if manual_status == "running":
-        session.prepare()
+    if manual_status == "running" and session.state.value not in {"running", "awaiting_confirm"}:
+        if session.state.value == "idle":
+            session.prepare()
         session.start()
-    elif manual_status == "paused":
-        session.prepare()
+    elif manual_status == "paused" and session.state.value != "paused":
+        if session.state.value == "idle":
+            session.prepare()
         session.pause()
-    elif manual_status == "completed":
+    elif manual_status == "completed" and session.state.value != "completed":
         session.finish()
-    elif manual_active:
+    elif manual_active and session.state.value == "idle":
         session.prepare()
 
+
+def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
+    """Return a normalized Manual Brewday snapshot from the Python engine."""
+    _sync_legacy_status(hass)
+    session = get_manual_brewday_session(hass)
     snapshot = session.to_snapshot()
 
     helper_remaining = _int_state(hass, MANUAL_REMAINING_MIN, 0) * 60
