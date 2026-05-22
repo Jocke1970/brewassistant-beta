@@ -47,6 +47,96 @@ YAML packages/dashboard = UI, layout, manual presentation tweaks
 
 ---
 
+## Brewday Runtime Engine
+
+BrewAssistant now contains a dedicated Brewday Runtime Engine for Brewfather Brew Tracker workflows.
+
+Architecture:
+
+```text
+Brewfather Brew Tracker
+        ↓
+BrewAssistant Runtime Engine
+        ↓
+Normalized runtime sensors
+        ↓
+Timeline / Dashboard / Notifications
+```
+
+The Brewfather integration is intentionally treated as a generic read-only source.
+All orchestration, normalization, live countdown logic and process visualization is handled by BrewAssistant.
+
+### Runtime features
+
+```text
+✅ Brewfather Brew Tracker support
+✅ Manual Brewday mode
+✅ Live countdown between Brewfather snapshots
+✅ Snapshot age tracking
+✅ Runtime state normalization
+✅ Timeline generation
+✅ Current/next step resolver
+✅ Awaiting snapshot state
+✅ Refresh compensation hook
+✅ Dashboard-safe normalized entities
+```
+
+### Runtime states
+
+```text
+idle
+live
+paused
+awaiting_snapshot
+completed
+```
+
+### Refresh compensation
+
+Brewfather Brew Tracker snapshots are normally updated on a scheduled polling interval.
+
+BrewAssistant compensates for this by:
+
+```text
+1. Running a local live countdown.
+2. Detecting when countdown reaches 0.
+3. Triggering guarded update_entity refreshes.
+4. Resolving the next Brewfather snapshot immediately.
+```
+
+This gives BrewAssistant near realtime Brewday transitions without modifying Brewfather itself.
+
+### Brewday Runtime entities
+
+Examples:
+
+```text
+sensor.brewassistant_brewday_runtime_source
+sensor.brewassistant_brewday_runtime_state
+sensor.brewassistant_brewday_runtime_status
+sensor.brewassistant_brewday_runtime_stage
+sensor.brewassistant_brewday_runtime_step
+sensor.brewassistant_brewday_runtime_next_step
+sensor.brewassistant_brewday_runtime_summary
+sensor.brewassistant_brewday_live_progress
+sensor.brewassistant_brewday_live_time_remaining_minutes
+sensor.brewassistant_brewday_snapshot_age_minutes
+sensor.brewassistant_brewday_awaiting_snapshot
+sensor.brewassistant_brewday_refresh_recommended
+```
+
+### Runtime internals
+
+Core runtime modules:
+
+```text
+brewday_runtime_core.py
+brewday_runtime.py
+brewday_refresh.py
+```
+
+---
+
 ## Python Core v1.1
 
 `custom_components/brewassistant/` contains the BrewAssistant Home Assistant custom integration.
@@ -77,264 +167,6 @@ Python Core v1.1 is read-only.
 No climate, switch, fan, heater, fridge, relay or compressor actions are performed by Python Core.
 ```
 
-Primary documentation:
-
-```text
-docs/python-core-install-update.md
-docs/python-core-branding.md
-docs/python-core-v1.1-test-plan.md
-docs/python-core-v1.1-release-notes.md
-```
-
-Recommended active debug/status card:
-
-```text
-dashboards/cards/brewassistant_core_debug_card_v1_1.yaml
-```
-
----
-
-## Python Core entity groups
-
-### Core
-
-```text
-sensor.brewassistant_core_version
-sensor.brewassistant_liquid_temperature
-sensor.brewassistant_liquid_temperature_source
-sensor.brewassistant_chamber_temperature
-sensor.brewassistant_recipe_target_temperature
-sensor.brewassistant_temperature_delta
-sensor.brewassistant_temperature_target_mode
-sensor.brewassistant_temperature_status
-sensor.brewassistant_temperature_severity
-sensor.brewassistant_source_summary
-sensor.brewassistant_status_summary
-sensor.brewassistant_problem_level
-sensor.brewassistant_gravity
-binary_sensor.brewassistant_temperature_fallback_active
-binary_sensor.brewassistant_runtime_ready
-```
-
-### Process
-
-```text
-sensor.brewassistant_process_status
-sensor.brewassistant_process_next_step
-sensor.brewassistant_process_current_action_stage
-sensor.brewassistant_process_next_action_stage
-sensor.brewassistant_process_summary
-```
-
-### Smart recommendations
-
-```text
-sensor.brewassistant_smart_recommendation_summary
-sensor.brewassistant_smart_heat_recommendation
-sensor.brewassistant_smart_cooling_recommendation
-sensor.brewassistant_smart_fan_recommendation
-sensor.brewassistant_smart_heat_block_reason_core
-sensor.brewassistant_smart_suggested_heat_pulse_minutes
-sensor.brewassistant_smart_recommendation_mode
-binary_sensor.brewassistant_smart_heat_needed_core
-binary_sensor.brewassistant_smart_heat_permitted_core
-binary_sensor.brewassistant_smart_cooling_recommended_core
-binary_sensor.brewassistant_smart_fan_recommended_core
-binary_sensor.brewassistant_smart_rising_too_fast_core
-```
-
-### Pill diagnostics
-
-```text
-sensor.brewassistant_smart_pill_status_core
-sensor.brewassistant_smart_pill_temp_age_minutes_core
-binary_sensor.brewassistant_smart_pill_stale_core
-```
-
-### Source health
-
-```text
-sensor.brewassistant_source_health_summary
-sensor.brewassistant_source_health_level
-sensor.brewassistant_configured_liquid_temp_entity
-sensor.brewassistant_configured_chamber_temp_entity
-sensor.brewassistant_configured_recipe_target_entity
-sensor.brewassistant_configured_cold_crash_active_entity
-sensor.brewassistant_configured_cold_crash_target_entity
-sensor.brewassistant_configured_gravity_entity
-binary_sensor.brewassistant_source_liquid_temp_available
-binary_sensor.brewassistant_source_chamber_temp_available
-binary_sensor.brewassistant_source_recipe_target_available
-binary_sensor.brewassistant_source_cold_crash_active_available
-binary_sensor.brewassistant_source_cold_crash_target_available
-binary_sensor.brewassistant_source_gravity_available
-```
-
-### Runtime / Brewfather
-
-```text
-sensor.brewassistant_runtime_recipe_name
-sensor.brewassistant_runtime_status
-sensor.brewassistant_runtime_primary_target_temperature
-sensor.brewassistant_runtime_cold_crash_target_temperature
-sensor.brewassistant_runtime_target_fg
-sensor.brewassistant_runtime_source_status
-binary_sensor.brewassistant_runtime_brewfather_available
-```
-
-### Next action
-
-```text
-sensor.brewassistant_next_recommended_action
-```
-
----
-
-## Recommended repository layout
-
-```text
-brewassistant/
-├── README.md
-├── custom_components/
-│   └── brewassistant/
-│       ├── manifest.json
-│       ├── __init__.py
-│       ├── config_flow.py
-│       ├── coordinator.py
-│       ├── sensor.py
-│       ├── binary_sensor.py
-│       └── translations/
-├── packages/
-│   ├── brewassistant_helpers.yaml
-│   ├── brewassistant_runtime.yaml
-│   ├── brewassistant_workflow.yaml
-│   ├── brewassistant_chamber.yaml
-│   ├── brewassistant_notifications.yaml
-│   ├── brewassistant_manual_mode.yaml
-│   └── brewassistant_hot_side_workflow.yaml        # optional / future
-├── dashboards/
-│   ├── fermentation.yaml
-│   ├── manual-mode.yaml
-│   ├── chamber.yaml
-│   ├── kegerator.yaml
-│   ├── cards/
-│   │   └── brewassistant_core_debug_card_v1_1.yaml
-│   └── brewzilla.yaml                             # optional / future
-└── docs/
-    ├── setup.md
-    ├── structure.md
-    ├── entities.md
-    ├── state-machine.md
-    ├── manual-mode.md
-    ├── dashboard.md
-    ├── brewfather.md
-    ├── custom-integration.md
-    ├── legacy-migration.md
-    ├── python-core-install-update.md
-    ├── python-core-branding.md
-    └── roadmap.md
-```
-
----
-
-## Core modules
-
-### Helpers
-
-`brewassistant_helpers.yaml` contains the reusable Home Assistant helpers used by the rest of the system.
-
-Typical helper categories:
-
-- Batch active / packaged state.
-- Current phase.
-- Manual batch name and notes.
-- Target gravity and measured gravity.
-- Automation toggles.
-- Dashboard expand/collapse toggles.
-- Notification preferences.
-
-### Runtime
-
-`brewassistant_runtime.yaml` normalizes external data into predictable internal sensors.
-
-Examples:
-
-- Recipe name.
-- Recipe source.
-- Fermentation status.
-- Primary fermentation target temperature.
-- Cold crash target temperature.
-- Fermentation start date.
-- Target FG.
-
-### Workflow
-
-`brewassistant_workflow.yaml` decides what is currently happening.
-
-Examples:
-
-- Idle.
-- Fermenting.
-- Ready for cold crash.
-- Cold crash.
-- Ready for transfer.
-- Packaged / finished.
-
-### Chamber
-
-`brewassistant_chamber.yaml` connects recipe targets and workflow decisions to the fermentation chamber.
-
-Examples:
-
-- Apply Brewfather target to `climate.fermentation_chamber`.
-- Show delta between liquid temperature and target.
-- Detect cooling/heating/idle state.
-- Support semi-automatic chamber updates.
-
-### Manual Mode
-
-`brewassistant_manual_mode.yaml` is a standalone manual fermentation tracker.
-
-It is intended for:
-
-- Cider.
-- Small test batches.
-- Hydrometer-only fermentation.
-- Batches without Brewfather or RAPT data.
-
-### Notifications
-
-`brewassistant_notifications.yaml` contains alerts and persistent notifications.
-
-Examples:
-
-- Fermentation appears complete.
-- Cold crash can start.
-- Cold crash appears complete.
-- Batch is ready for transfer.
-- Manual SG reading reminder.
-
----
-
-## Naming direction
-
-Older BrewAssistant builds used many `fwk_*` names. Those names came from a Fresh Wort Kit focused workflow.
-
-In v4, the recommended direction is more generic:
-
-```text
-fwk_*                  legacy
-brew_process_*         workflow/process state
-brew_batch_*           current batch state
-brew_recipe_*          recipe/runtime data
-brew_chamber_*         fermentation chamber data
-brew_manual_*          manual mode data
-brew_notification_*    notification controls/state
-brewassistant_*        Python Core / custom integration entities
-```
-
-The migration does not need to happen all at once, but new files should avoid adding more `fwk_*` entities unless they are deliberately marked as compatibility entities.
-
 ---
 
 ## Status
@@ -344,17 +176,18 @@ BrewAssistant v4 is actively evolving.
 Current Python Core status:
 
 ```text
-v1.1 Read-only Core Stable + dashboard branding polish
+v1.1 Read-only Core Stable + Brewday Runtime Engine
 ```
 
-Recommended next cleanup steps:
+Current Brewday Runtime status:
 
-1. Keep backend packages, Python Core and dashboard cards aligned.
-2. Document all current entities.
-3. Migrate old `fwk_*` naming gradually.
-4. Move dashboard decision logic into Python support sensors.
-5. Keep manual mode separate from automated Brewfather/RAPT mode.
-6. Add future hot-side/BrewZilla logic as optional modules.
+```text
+✅ Runtime normalization
+✅ Timeline engine
+✅ Brewfather compensation hook
+✅ Premium runtime dashboard support
+🔜 BrewZilla hardware orchestration
+```
 
 ---
 
