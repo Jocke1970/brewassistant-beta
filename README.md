@@ -27,14 +27,14 @@ BrewAssistant v4 separates the brewing system into clear layers:
 
 | Layer | Purpose |
 | --- | --- |
-| Python Core | Normalize source entities and expose dashboard-safe, read-only state. |
-| Helpers | Store user choices, toggles, manual input and workflow state. |
-| Runtime | Normalize recipe, batch, Brewfather and sensor data. |
+| Python Core | Normalize source entities and expose dashboard-safe state. |
+| Runtime | Normalize recipe, batch, Brewfather, Manual Brewday and sensor data. |
 | Workflow | Decide current process state, next step and readiness. |
 | Chamber | Apply and monitor fermentation chamber targets. |
-| Manual Mode | Track batches without Brewfather/RAPT automation. |
+| Manual Mode | Track batches and brew days without Brewfather/RAPT automation. |
+| Hardware Layer | Normalize BrewZilla/RAPT hardware state before any future control. |
 | Notifications | Alert when attention is needed. |
-| Dashboard | Visualize the system without owning business logic. |
+| Dashboard | Visualize and control the system without owning business logic. |
 
 The dashboard should display and control the system, but should not contain hidden workflow logic that belongs in backend packages or the Python integration.
 
@@ -49,12 +49,12 @@ YAML packages/dashboard = UI, layout, manual presentation tweaks
 
 ## Brewday Runtime Engine
 
-BrewAssistant now contains a dedicated Brewday Runtime Engine for Brewfather Brew Tracker workflows.
+BrewAssistant contains a dedicated Brewday Runtime Engine for Brewfather Brew Tracker and Manual Brewday workflows.
 
 Architecture:
 
 ```text
-Brewfather Brew Tracker
+Brewfather Brew Tracker / Manual Brewday
         ↓
 BrewAssistant Runtime Engine
         ↓
@@ -71,13 +71,19 @@ All orchestration, normalization, live countdown logic and process visualization
 ```text
 ✅ Brewfather Brew Tracker support
 ✅ Manual Brewday mode
+✅ Manual Brewday Python engine
+✅ Manual Brewday persistent session in hass.data
+✅ Manual Brewday services
 ✅ Live countdown between Brewfather snapshots
+✅ Current-step remaining timer
+✅ Stage remaining timer
 ✅ Snapshot age tracking
 ✅ Runtime state normalization
 ✅ Timeline generation
 ✅ Current/next step resolver
 ✅ Awaiting snapshot state
 ✅ Refresh compensation hook
+✅ Manual Brewfather refresh service with 15 minute cooldown
 ✅ Dashboard-safe normalized entities
 ```
 
@@ -85,13 +91,16 @@ All orchestration, normalization, live countdown logic and process visualization
 
 ```text
 idle
+prepared
+running
 live
 paused
+awaiting_confirm
 awaiting_snapshot
 completed
 ```
 
-### Refresh compensation
+### Brewfather refresh compensation
 
 Brewfather Brew Tracker snapshots are normally updated on a scheduled polling interval.
 
@@ -99,12 +108,36 @@ BrewAssistant compensates for this by:
 
 ```text
 1. Running a local live countdown.
-2. Detecting when countdown reaches 0.
-3. Triggering guarded update_entity refreshes.
-4. Resolving the next Brewfather snapshot immediately.
+2. Separating current-step remaining time from full-stage remaining time.
+3. Detecting when the active step reaches 0.
+4. Triggering guarded update_entity refreshes.
+5. Resolving the next Brewfather snapshot immediately when available.
 ```
 
 This gives BrewAssistant near realtime Brewday transitions without modifying Brewfather itself.
+
+Manual refresh is also exposed through:
+
+```text
+service: brewassistant.force_brewfather_refresh
+```
+
+The manual service uses a 15 minute cooldown to avoid excessive polling.
+
+### Manual Brewday services
+
+Manual Brewday can now be controlled through Python services:
+
+```text
+brewassistant.manual_brewday_prepare
+brewassistant.manual_brewday_start
+brewassistant.manual_brewday_pause
+brewassistant.manual_brewday_next
+brewassistant.manual_brewday_finish
+brewassistant.manual_brewday_reset
+```
+
+These services operate on the persistent Manual Brewday runtime session and are intended to replace older helper-script driven manual controls.
 
 ### Brewday Runtime entities
 
@@ -125,6 +158,17 @@ sensor.brewassistant_brewday_awaiting_snapshot
 sensor.brewassistant_brewday_refresh_recommended
 ```
 
+The runtime summary attributes also expose timeline data and diagnostics such as:
+
+```text
+stage_remaining_seconds
+stage_remaining_minutes
+current_step_remaining_seconds
+current_step_remaining_minutes
+current_step_description
+next_step_description
+```
+
 ### Runtime internals
 
 Core runtime modules:
@@ -132,8 +176,29 @@ Core runtime modules:
 ```text
 brewday_runtime_core.py
 brewday_runtime.py
+brewday_runtime_sensor.py
 brewday_refresh.py
+manual_brewday_runtime.py
+manual_brewday_adapter.py
+manual_brewday_store.py
 ```
+
+---
+
+## BrewZilla hardware skeleton
+
+BrewAssistant includes an early BrewZilla runtime skeleton.
+
+Current intent:
+
+```text
+✅ read-only hardware normalization
+✅ connected/power/temp/target abstractions
+✅ safe UI/debug foundation
+❌ no automatic hardware control yet
+```
+
+Next phase is reality testing against RAPT/HA-exposed BrewZilla entities and patching the mapping layer accordingly.
 
 ---
 
@@ -144,7 +209,7 @@ brewday_refresh.py
 Current milestone:
 
 ```text
-BrewAssistant Python Core v1.1 · Read-only Core Stable
+BrewAssistant Python Core v1.1 · Runtime Engine + Read-only Core
 ```
 
 Current scope:
@@ -158,13 +223,15 @@ Current scope:
 - Expose source health diagnostics for configured entities.
 - Normalize Brewfather/runtime recipe name, status, targets and target FG.
 - Expose one compact next recommended action sensor for dashboards and notifications.
+- Normalize Brewday Runtime state, Brewfather Brew Tracker state and Manual Brewday state.
 - Run beside the existing YAML packages without controlling hardware.
 
 Safety boundary:
 
 ```text
-Python Core v1.1 is read-only.
-No climate, switch, fan, heater, fridge, relay or compressor actions are performed by Python Core.
+Python Core v1.1 is mostly read-only.
+Manual Brewday services only update BrewAssistant's own runtime session and legacy helper mirrors.
+No climate, switch, fan, heater, fridge, relay, compressor or BrewZilla hardware actions are performed by Python Core.
 ```
 
 ---
@@ -176,7 +243,7 @@ BrewAssistant v4 is actively evolving.
 Current Python Core status:
 
 ```text
-v1.1 Read-only Core Stable + Brewday Runtime Engine
+v1.1 Runtime Engine + Read-only Core
 ```
 
 Current Brewday Runtime status:
@@ -185,8 +252,13 @@ Current Brewday Runtime status:
 ✅ Runtime normalization
 ✅ Timeline engine
 ✅ Brewfather compensation hook
+✅ Manual refresh service
+✅ Manual Brewday engine/services
 ✅ Premium runtime dashboard support
-🔜 BrewZilla hardware orchestration
+🔜 Manual timed-step auto-advance
+🔜 Manual session persistence across HA restart
+🔜 BrewZilla hardware reality mapping
+🔜 Timed Fermentation Runtime
 ```
 
 ---
