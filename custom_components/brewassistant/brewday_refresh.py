@@ -10,12 +10,23 @@ from homeassistant.util import dt as dt_util
 from .brewday_runtime_core import BF_REMAINING, BF_STATUS, build_core_snapshot
 
 COOLDOWN_SECONDS = 90
+MANUAL_COOLDOWN_SECONDS = 15 * 60
 MAX_RETRIES = 3
 
 
 def _state_store(hass: HomeAssistant) -> dict[str, Any]:
     """Return integration-local refresh state storage."""
     return hass.data.setdefault("brewassistant_brewday_refresh", {})
+
+
+async def _update_brewfather_tracker_entities(hass: HomeAssistant) -> None:
+    """Ask Home Assistant to refresh Brewfather tracker entities."""
+    await hass.services.async_call(
+        "homeassistant",
+        "update_entity",
+        {"entity_id": [BF_STATUS, BF_REMAINING]},
+        blocking=False,
+    )
 
 
 async def maybe_request_brewfather_refresh(hass: HomeAssistant) -> None:
@@ -51,9 +62,32 @@ async def maybe_request_brewfather_refresh(hass: HomeAssistant) -> None:
     store["retry_count"] = retry_count + 1
     store["last_refresh_ts"] = now
 
-    await hass.services.async_call(
-        "homeassistant",
-        "update_entity",
-        {"entity_id": [BF_STATUS, BF_REMAINING]},
-        blocking=False,
-    )
+    await _update_brewfather_tracker_entities(hass)
+
+
+async def request_manual_brewfather_refresh(hass: HomeAssistant) -> dict[str, Any]:
+    """Manually refresh Brewfather tracker entities with a 15 minute cooldown.
+
+    Returns a small result dict so service handlers can log or expose why a
+    refresh was skipped.
+    """
+    store = _state_store(hass)
+    now = dt_util.utcnow().timestamp()
+    last_manual_refresh_ts = store.get("last_manual_refresh_ts")
+
+    if last_manual_refresh_ts is not None:
+        elapsed = now - float(last_manual_refresh_ts)
+        if elapsed < MANUAL_COOLDOWN_SECONDS:
+            return {
+                "refreshed": False,
+                "reason": "cooldown",
+                "cooldown_remaining_seconds": int(MANUAL_COOLDOWN_SECONDS - elapsed),
+            }
+
+    store["last_manual_refresh_ts"] = now
+    await _update_brewfather_tracker_entities(hass)
+    return {
+        "refreshed": True,
+        "reason": "manual",
+        "cooldown_remaining_seconds": MANUAL_COOLDOWN_SECONDS,
+    }
