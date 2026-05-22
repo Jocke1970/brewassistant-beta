@@ -36,8 +36,16 @@ YAML as presentation layer only
 [x] Read-only safe-mode architecture
 [x] Brewday Runtime Engine
 [x] Brewfather Brew Tracker normalization
+[x] Brewday current-step timer resolver
+[x] Brewday stage timer resolver
 [x] Brewday timeline generation
 [x] Brewday refresh compensation hook
+[x] Guarded manual Brewfather refresh service
+[x] Manual Brewday Python engine
+[x] Manual Brewday source adapter
+[x] Manual Brewday persistent session in hass.data
+[x] Manual Brewday Python services
+[x] Manual Brewday Control Card v3
 [x] BrewZilla runtime skeleton
 ```
 
@@ -46,7 +54,9 @@ YAML as presentation layer only
 ```text
 Python Core stabilization
 ↓
-Brewday/BrewZilla reality testing
+Brewday Runtime validation
+↓
+BrewZilla/RAPT reality testing
 ↓
 Workflow/lifecycle migration
 ↓
@@ -59,11 +69,77 @@ Future orchestration/control
 
 ---
 
-# v4.4 Workflow/lifecycle engine
+# v4.3 Brewday Runtime Stabilization
+
+Goal: stabilize Brewday Runtime before expanding into hardware orchestration.
+
+Completed:
+
+```text
+[x] Brewfather Brew Tracker source adapter
+[x] Manual Brewday source adapter
+[x] Runtime state normalization
+[x] Current/next step resolver
+[x] Timeline generation
+[x] Snapshot age tracking
+[x] Live countdown between Brewfather snapshots
+[x] Separate current-step remaining from stage remaining
+[x] Awaiting snapshot state
+[x] Guarded automatic refresh at step boundary
+[x] Manual Brewfather refresh service with 15 minute cooldown
+[x] Manual Brewday Runtime engine
+[x] Manual Brewday persistent session in hass.data
+[x] Manual Brewday services
+[x] Manual Brewday Control Card v3
+```
+
+Remaining:
+
+```text
+[ ] Validate Manual Brewday service flow in Home Assistant
+[ ] Add Manual timed-step auto-advance
+[ ] Add Manual timed-step awaiting-confirm behavior at 0 seconds
+[ ] Add Manual session persistence across Home Assistant restart
+[ ] Add optional Manual plan import/building from Brewfather recipe data
+[ ] Add optional Manual plan editing/profile selection
+[ ] Add services documentation and dashboard examples
+```
+
+---
+
+# v4.4 BrewZilla/RAPT hardware reality mapping
+
+Goal: map real BrewZilla/RAPT entities into BrewAssistant hardware abstractions.
+
+Current status:
+
+```text
+[x] BrewZilla read-only runtime skeleton
+[x] BrewZilla UI stub
+[ ] Identify actual RAPT/HA entity names
+[ ] Map current temperature source
+[ ] Map target temperature source
+[ ] Map power/heating source
+[ ] Map pump state source
+[ ] Map connected/availability source
+[ ] Map profile/mode/status source if exposed
+[ ] Expose normalized BrewAssistant BrewZilla sensors
+[ ] Keep all hardware actions disabled until reviewed
+```
+
+Safety rule:
+
+```text
+Read and visualize first.
+Recommend second.
+Control only after explicit design and validation.
+```
+
+---
+
+# v4.5 Workflow/lifecycle engine
 
 Goal: move fermentation/batch lifecycle ownership into Python.
-
-This is now considered the highest-priority backend migration.
 
 Tasks:
 
@@ -83,7 +159,7 @@ Tasks:
 
 ---
 
-# v4.5 Timed Fermentation Runtime
+# v4.6 Timed Fermentation Runtime
 
 Goal: create a Python-owned fermentation schedule/runtime engine using the same architecture as Brewday Runtime.
 
@@ -133,7 +209,7 @@ Tasks:
 
 ---
 
-# v4.6 YAML retirement
+# v4.7 YAML retirement
 
 Goal: progressively remove backend logic from YAML packages.
 
