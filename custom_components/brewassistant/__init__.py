@@ -15,9 +15,16 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from .brewday_refresh import request_manual_brewfather_refresh
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
+from .manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
 _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
+SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
+SERVICE_MANUAL_START = "manual_brewday_start"
+SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
+SERVICE_MANUAL_NEXT = "manual_brewday_next"
+SERVICE_MANUAL_FINISH = "manual_brewday_finish"
+SERVICE_MANUAL_RESET = "manual_brewday_reset"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -37,6 +44,20 @@ def _register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH):
         return
 
+    async def _refresh_runtime_sensors() -> None:
+        await hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {"entity_id": [
+                "sensor.brewassistant_brewday_runtime_summary",
+                "sensor.brewassistant_brewday_runtime_state",
+                "sensor.brewassistant_brewday_runtime_step",
+                "sensor.brewassistant_brewday_runtime_next_step",
+                "sensor.brewassistant_brewday_live_time_remaining_minutes",
+            ]},
+            blocking=False,
+        )
+
     async def _handle_force_brewfather_refresh(call: ServiceCall) -> None:
         result = await request_manual_brewfather_refresh(hass)
         if result.get("refreshed"):
@@ -48,11 +69,42 @@ def _register_services(hass: HomeAssistant) -> None:
                 result.get("cooldown_remaining_seconds"),
             )
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_FORCE_BREWFATHER_REFRESH,
-        _handle_force_brewfather_refresh,
-    )
+    async def _handle_manual_prepare(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        session.prepare()
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_start(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        session.start()
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_pause(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        session.pause()
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_next(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        session.next()
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_finish(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        session.finish()
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_reset(call: ServiceCall) -> None:
+        new_manual_brewday_session(hass)
+        await _refresh_runtime_sensors()
+
+    hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_NEXT, _handle_manual_next)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_FINISH, _handle_manual_finish)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_RESET, _handle_manual_reset)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
