@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .brewday_runtime_sensor import create_brewday_runtime_sensors
 from .carbonation import build_carbonation_snapshot
 from .const import (
     ATTR_COLOR_HINT,
@@ -513,6 +514,7 @@ async def async_setup_entry(
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
         + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
+        + create_brewday_runtime_sensors(coordinator)
         + [BrewAssistantCoreVersionSensor(coordinator)]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
