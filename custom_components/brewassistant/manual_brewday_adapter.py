@@ -53,12 +53,15 @@ def _sync_legacy_status(hass: HomeAssistant) -> None:
     manual_status = _state(hass, MANUAL_STATUS, "inactive")
     manual_active = _state(hass, MANUAL_ACTIVE) == "on"
 
-    if manual_status == "running" and session.state.value not in {"running", "awaiting_confirm"}:
-        if session.state.value == "idle":
+    if manual_status in {"prepared", "inactive"} and manual_active:
+        if session.state.value in {"idle", "completed"}:
+            session.prepare()
+    elif manual_status == "running" and session.state.value not in {"running", "awaiting_confirm"}:
+        if session.state.value in {"idle", "completed"}:
             session.prepare()
         session.start()
     elif manual_status == "paused" and session.state.value != "paused":
-        if session.state.value == "idle":
+        if session.state.value in {"idle", "completed"}:
             session.prepare()
         session.pause()
     elif manual_status == "completed" and session.state.value != "completed":
