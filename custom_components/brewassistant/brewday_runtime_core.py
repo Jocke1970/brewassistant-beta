@@ -161,6 +161,38 @@ def next_step(hass: HomeAssistant) -> tuple[str, str | None, dict[str, Any] | No
     return state(hass, BF_NEXT, "None"), None, None
 
 
+def current_step_remaining(stage: dict[str, Any], step_index: int | None, stage_remaining: int) -> int:
+    """Return time until the next Brew Tracker step boundary.
+
+    Brewfather exposes stage remaining time plus each step's anchor time within
+    that countdown. For example, a 90 min mash stage has a 10 min ramp from
+    time=5400 to the next step at time=4800. The active step remaining is
+    therefore stage_remaining - next_step.time, not the full stage remaining.
+    """
+    if step_index is None or step_index < 0:
+        return stage_remaining
+
+    step_list = stage.get("steps") if isinstance(stage.get("steps"), list) else []
+    if step_index >= len(step_list):
+        return stage_remaining
+
+    boundary = 0.0
+    for pos in range(step_index + 1, len(step_list)):
+        step = step_list[pos]
+        if isinstance(step, dict):
+            anchor = as_float(step.get("time"))
+            if anchor is not None:
+                boundary = anchor
+                break
+
+    remaining = max(stage_remaining - int(boundary), 0)
+    current = step_list[step_index]
+    duration = as_float(current.get("duration")) if isinstance(current, dict) else None
+    if duration and duration > 0:
+        remaining = min(remaining, int(duration))
+    return remaining
+
+
 def snapshot_age(hass: HomeAssistant) -> int:
     obj = state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     if obj is None:
@@ -239,15 +271,17 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     status = state(hass, BF_STATUS, "inactive")
     raw_remaining = as_int(state(hass, BF_REMAINING), 0)
     age = snapshot_age(hass)
-    live_remaining = max(raw_remaining - age, 0) if status == "running" else max(raw_remaining, 0)
+    stage_remaining = max(raw_remaining - age, 0) if status == "running" else max(raw_remaining, 0)
     live_timer = status == "running"
     stage = current_stage(hass)
+    stage_index, step_index = indices(hass)
+    step_remaining = current_step_remaining(stage, step_index, stage_remaining)
     duration = as_float(stage.get("duration"))
     progress = as_float(state(hass, BF_PROGRESS)) or 0.0
     if duration and duration > 0:
-        progress = round(min(max(((duration - live_remaining) / duration) * 100, 0), 100), 1)
-    runtime_state = "completed" if status == "completed" else "awaiting_snapshot" if live_remaining <= 0 and status in {"running", "paused"} else "live" if status == "running" else "paused" if status == "paused" else "idle"
-    refresh = status == "running" and live_remaining <= 0
+        progress = round(min(max(((duration - stage_remaining) / duration) * 100, 0), 100), 1)
+    runtime_state = "completed" if status == "completed" else "awaiting_snapshot" if step_remaining <= 0 and status in {"running", "paused"} else "live" if status == "running" else "paused" if status == "paused" else "idle"
+    refresh = status == "running" and step_remaining <= 0
     awaiting = runtime_state == "awaiting_snapshot"
     cur_step = current_step(hass)
     nxt_name, nxt_desc, nxt_step = next_step(hass)
@@ -257,7 +291,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         nxt_desc = "Runtime väntar på att Brewfather publicerar nästa checkpoint."
     snap_obj = state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     stage_name = state(hass, BF_STAGE, "Unknown")
-    elapsed = max((duration or 0) - live_remaining, 0) if duration else as_float(stage.get("elapsedSeconds"))
+    elapsed = max((duration or 0) - stage_remaining, 0) if duration else as_float(stage.get("elapsedSeconds"))
     target = as_float(cur_step.get("value")) or as_float(nxt_step.get("value") if isinstance(nxt_step, dict) else None)
     return {
         "source": "Brewfather Brew Tracker",
@@ -267,11 +301,11 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "step": step,
         "next_step": nxt_name,
         "progress": round(progress, 1),
-        "time_remaining_seconds": live_remaining,
-        "time_remaining_minutes": round(live_remaining / 60),
+        "time_remaining_seconds": step_remaining,
+        "time_remaining_minutes": round(step_remaining / 60),
         "target_temperature": target,
         "actual_temperature": None,
-        "summary": f"{runtime_state} · {stage_name} · {step} · {round(progress)}% · {fmt(live_remaining)} kvar",
+        "summary": f"{runtime_state} · {stage_name} · {step} · {round(progress)}% · {fmt(step_remaining)} kvar",
         "source_entity": BF_STATUS,
         "snapshot_entity": snap_obj.entity_id if snap_obj else None,
         "snapshot_updated_at": snap_obj.last_updated.isoformat() if snap_obj else None,
@@ -284,8 +318,11 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "awaiting_snapshot": awaiting,
         "stage_duration_seconds": duration,
         "stage_elapsed_seconds": elapsed,
-        "stage_remaining_seconds": live_remaining,
+        "stage_remaining_seconds": stage_remaining,
+        "stage_remaining_minutes": round(stage_remaining / 60),
         "stage_progress_percent": round(progress, 1),
+        "current_step_remaining_seconds": step_remaining,
+        "current_step_remaining_minutes": round(step_remaining / 60),
         "current_step_description": step_desc(cur_step),
         "next_step_description": nxt_desc,
         "timeline": timeline(hass),
@@ -325,7 +362,10 @@ def manual_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "stage_duration_seconds": None,
         "stage_elapsed_seconds": None,
         "stage_remaining_seconds": remaining,
+        "stage_remaining_minutes": round(remaining / 60),
         "stage_progress_percent": progress,
+        "current_step_remaining_seconds": remaining,
+        "current_step_remaining_minutes": round(remaining / 60),
         "current_step_description": state(hass, "input_text.brewassistant_brewday_manual_step_description", ""),
         "next_step_description": state(hass, "input_text.brewassistant_brewday_manual_next_step_description", ""),
         "timeline": [],
@@ -339,7 +379,9 @@ def inactive_snapshot() -> dict[str, Any]:
         "summary": "idle · Idle", "source_entity": None, "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0,
         "snapshot_age_minutes": 0, "raw_remaining_seconds": None, "live_elapsed_since_snapshot_seconds": 0, "live_timer_active": False,
         "refresh_recommended": False, "awaiting_snapshot": False, "stage_duration_seconds": None, "stage_elapsed_seconds": None,
-        "stage_remaining_seconds": 0, "stage_progress_percent": 0, "current_step_description": None, "next_step_description": None, "timeline": [],
+        "stage_remaining_seconds": 0, "stage_remaining_minutes": 0, "stage_progress_percent": 0,
+        "current_step_remaining_seconds": 0, "current_step_remaining_minutes": 0,
+        "current_step_description": None, "next_step_description": None, "timeline": [],
     }
 
 
