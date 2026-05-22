@@ -8,7 +8,7 @@ presentation-only while the engine owns timers, steps and transitions.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -246,17 +246,16 @@ class ManualRuntimeSession:
     def start(self, now: datetime | None = None) -> None:
         """Start or resume current manual step."""
         now = now or datetime.now(timezone.utc)
-        if self.state in {ManualRuntimeState.IDLE, ManualRuntimeState.PREPARED}:
+        if self.state in {ManualRuntimeState.IDLE, ManualRuntimeState.PREPARED, ManualRuntimeState.AWAITING_CONFIRM}:
             self.step_started_at = now
             self.remaining_when_paused = None
         elif self.state == ManualRuntimeState.PAUSED:
-            remaining = self.remaining_seconds(now)
+            remaining = self.remaining_when_paused
             duration = self.active_step.duration_seconds if self.active_step else None
             if duration is not None and remaining is not None:
                 elapsed = max(duration - remaining, 0)
-                self.step_started_at = now.replace() if elapsed == 0 else now
-                # Keep elapsed handling simple for v0.1 by carrying paused remaining.
-                self.remaining_when_paused = remaining
+                self.step_started_at = now - timedelta(seconds=elapsed)
+            self.remaining_when_paused = None
         self.state = ManualRuntimeState.RUNNING
         self.paused_at = None
 
@@ -296,6 +295,15 @@ class ManualRuntimeSession:
         self.step_started_at = None
         self.paused_at = None
         self.remaining_when_paused = 0
+
+    def reset(self) -> None:
+        """Reset manual brewday to idle."""
+        self.state = ManualRuntimeState.IDLE
+        self.active_stage_index = 0
+        self.active_step_index = 0
+        self.step_started_at = None
+        self.paused_at = None
+        self.remaining_when_paused = None
 
     def remaining_seconds(self, now: datetime | None = None) -> int | None:
         """Return remaining seconds for active step."""
