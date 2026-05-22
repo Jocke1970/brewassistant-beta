@@ -26,6 +26,9 @@ SERVICE_MANUAL_NEXT = "manual_brewday_next"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
 
+MANUAL_ACTIVE = "input_boolean.brewassistant_brewday_manual_active"
+MANUAL_STATUS = "input_select.brewassistant_brewday_manual_status"
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
@@ -43,6 +46,21 @@ def _register_services(hass: HomeAssistant) -> None:
     """Register BrewAssistant services."""
     if hass.services.has_service(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH):
         return
+
+    async def _set_manual_helper_status(status: str, active: bool = True) -> None:
+        """Keep legacy manual helpers aligned while dashboard migrates to services."""
+        await hass.services.async_call(
+            "input_boolean",
+            "turn_on" if active else "turn_off",
+            {"entity_id": MANUAL_ACTIVE},
+            blocking=False,
+        )
+        await hass.services.async_call(
+            "input_select",
+            "select_option",
+            {"entity_id": MANUAL_STATUS, "option": status},
+            blocking=False,
+        )
 
     async def _refresh_runtime_sensors() -> None:
         await hass.services.async_call(
@@ -72,30 +90,36 @@ def _register_services(hass: HomeAssistant) -> None:
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.prepare()
+        await _set_manual_helper_status("prepared", True)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.start()
+        await _set_manual_helper_status("running", True)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_pause(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.pause()
+        await _set_manual_helper_status("paused", True)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_next(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.next()
+        await _set_manual_helper_status(session.state.value, session.state.value != "idle")
         await _refresh_runtime_sensors()
 
     async def _handle_manual_finish(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.finish()
+        await _set_manual_helper_status("completed", True)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_reset(call: ServiceCall) -> None:
         new_manual_brewday_session(hass)
+        await _set_manual_helper_status("inactive", False)
         await _refresh_runtime_sensors()
 
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
