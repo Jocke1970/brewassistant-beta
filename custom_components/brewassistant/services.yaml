@@ -1,0 +1,27 @@
+force_brewfather_refresh:
+  name: Force Brewfather refresh
+  description: Request a guarded manual refresh of Brewfather Brew Tracker source entities.
+
+manual_brewday_prepare:
+  name: Manual Brewday prepare
+  description: Prepare the BrewAssistant manual brewday runtime session.
+
+manual_brewday_start:
+  name: Manual Brewday start
+  description: Start the BrewAssistant manual brewday runtime session.
+
+manual_brewday_pause:
+  name: Manual Brewday pause
+  description: Pause the BrewAssistant manual brewday runtime session.
+
+manual_brewday_next:
+  name: Manual Brewday next
+  description: Advance the BrewAssistant manual brewday runtime session to the next step.
+
+manual_brewday_finish:
+  name: Manual Brewday finish
+  description: Finish the BrewAssistant manual brewday runtime session.
+
+manual_brewday_reset:
+  name: Manual Brewday reset
+  description: Reset the BrewAssistant manual brewday runtime session.
