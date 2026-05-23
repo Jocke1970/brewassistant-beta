@@ -1,30 +1,38 @@
 # Project Structure
 
-BrewAssistant v4 is structured as a modular Home Assistant package set.
+BrewAssistant v4 is structured around a Home Assistant custom integration with optional dashboard/card YAML.
 
-The main goal is to keep business logic in backend packages and keep dashboard YAML focused on presentation.
+The main goal is to keep brewing decisions, runtime interpretation, calculations and safety checks in Python, while dashboards focus on presentation and explicit user actions.
 
 ---
 
-## Recommended repository structure
+## Current repository direction
 
 ```text
 brewassistant/
 ├── README.md
-├── packages/
-│   ├── brewassistant_helpers.yaml
-│   ├── brewassistant_runtime.yaml
-│   ├── brewassistant_workflow.yaml
-│   ├── brewassistant_chamber.yaml
-│   ├── brewassistant_notifications.yaml
-│   ├── brewassistant_manual_mode.yaml
-│   └── brewassistant_hot_side_workflow.yaml
+├── custom_components/
+│   └── brewassistant/
+│       ├── __init__.py
+│       ├── const.py
+│       ├── coordinator.py
+│       ├── sensor.py
+│       ├── binary_sensor.py
+│       ├── switch.py
+│       ├── brewday_runtime_core.py
+│       ├── brewday_runtime.py
+│       ├── brewday_runtime_sensor.py
+│       ├── brewday_stage_engine.py
+│       ├── brewday_stage_sensor.py
+│       ├── brewday_refresh.py
+│       ├── brewzilla_sensor.py
+│       ├── brewzilla_orchestration.py
+│       ├── brewzilla_orchestration_sensor.py
+│       ├── manual_brewday_runtime.py
+│       ├── manual_brewday_adapter.py
+│       └── manual_brewday_store.py
 ├── dashboards/
-│   ├── fermentation.yaml
-│   ├── manual-mode.yaml
-│   ├── chamber.yaml
-│   ├── kegerator.yaml
-│   └── brewzilla.yaml
+│   └── optional dashboard/card examples
 └── docs/
     ├── setup.md
     ├── structure.md
@@ -37,128 +45,144 @@ brewassistant/
     └── roadmap.md
 ```
 
----
-
-## Package responsibilities
-
-### `brewassistant_helpers.yaml`
-
-Contains reusable helpers.
-
-Examples:
-
-- `input_boolean`
-- `input_select`
-- `input_text`
-- `input_number`
-- `input_datetime`
-
-This file should not contain complex decision logic.
+Legacy `packages/*.yaml` may still exist in older local Home Assistant installs, but they should not be the source of truth for new BrewAssistant logic.
 
 ---
 
-### `brewassistant_runtime.yaml`
+## Layer responsibilities
 
-Normalizes external brewing data into internal recipe/runtime sensors.
+### Python custom integration
+
+The Python integration owns backend logic.
+
+Responsibilities:
+
+- Normalize source entities.
+- Normalize Brewfather Brew Tracker and Manual Brewday runtime data.
+- Interpret brewday stages.
+- Normalize BrewZilla/RAPT hardware telemetry.
+- Expose dashboard-safe sensors.
+- Expose explicit services.
+- Keep safety/orchestration checks outside the dashboard.
+- Avoid hidden workflow logic in Lovelace cards.
+
+---
+
+### `brewday_runtime_*`
+
+Brewday Runtime normalizes planned/runtime brewday data.
 
 Sources may include:
 
-- Brewfather.
-- RAPT Cloud.
-- Manual input.
-- Static fallback helpers.
+- Brewfather Brew Tracker.
+- Manual Brewday runtime.
+- Future local/manual plans.
 
-The runtime layer should answer questions like:
+The runtime layer should answer:
 
-- What batch is active?
-- What recipe is active?
-- What is the target fermentation temperature?
-- What is the target final gravity?
-- What source is currently providing the data?
-
----
-
-### `brewassistant_workflow.yaml`
-
-Contains the process state machine.
-
-The workflow layer should answer questions like:
-
-- Is a batch active?
-- Is fermentation complete?
-- Is cold crash ready?
-- Is the batch ready for transfer?
-- What is the next recommended action?
+- What source is active?
+- Is the brewday idle, prepared, running, live, paused or completed?
+- What is the current stage/step?
+- What is the next step?
+- How much time remains?
+- How old is the last Brewfather snapshot?
 
 ---
 
-### `brewassistant_chamber.yaml`
+### `brewday_stage_engine.py`
 
-Controls and monitors fermentation chamber behaviour.
+The Stage Engine interprets what is actually happening.
 
-Responsibilities:
+Inputs:
 
-- Compare liquid temperature to target.
-- Read chamber climate state.
-- Show cooling/heating/idle status.
-- Apply recipe target temperature when requested.
-- Keep chamber automation separated from generic process state.
+- Brewday Runtime state.
+- Brewday Runtime stage/step/next step.
+- BrewZilla runtime state.
+- BrewZilla current temperature.
+- BrewZilla target temperature.
+- BrewZilla power.
+- BrewZilla pump/heat utilization.
 
----
+Outputs:
 
-### `brewassistant_notifications.yaml`
+- Current interpreted stage.
+- Stage reason.
+- Stage icon.
+- Stage group.
+- Stage priority.
+- Suggested user action.
+- Control hint for future explicit-action cards.
+- Progress, remaining time and BrewZilla telemetry context.
 
-Contains user-facing notifications and alert toggles.
-
-Responsibilities:
-
-- Warning notifications.
-- Persistent notifications.
-- Manual-mode reminders.
-- Cold crash and transfer readiness alerts.
-
----
-
-### `brewassistant_manual_mode.yaml`
-
-Standalone manual fermentation tracker.
-
-Responsibilities:
-
-- Manual batch state.
-- Manual gravity readings.
-- Manual target FG.
-- Manual packaging state.
-- Simple derived manual status.
-
-This module should be able to run without Brewfather, RAPT or BrewZilla.
+The Stage Engine is read-only.
 
 ---
 
-### `brewassistant_hot_side_workflow.yaml`
+### BrewZilla runtime and orchestration modules
 
-Optional/future module for brew-day and hot-side logic.
+BrewZilla runtime normalizes hardware telemetry.
 
-Potential responsibilities:
+BrewZilla orchestration safety modules decide whether an explicit user-requested action may run.
 
-- Mash step state.
-- Boil state.
-- Hop addition reminders.
-- BrewZilla/RAPT control status.
-- Brewfather BrewTracker data.
+Current safety switch pattern:
+
+```text
+switch.brewassistant_brewzilla_orchestration_enabled
+switch.brewassistant_brewzilla_apply_target_temp
+switch.brewassistant_brewzilla_allow_heater_control
+switch.brewassistant_brewzilla_allow_pump_control
+switch.brewassistant_brewzilla_allow_boil_mode
+switch.brewassistant_brewzilla_safe_mode
+```
+
+Important rule:
+
+```text
+Dashboard buttons may request actions.
+Python safety decides whether actions are allowed.
+```
 
 ---
 
-## Dashboard responsibilities
+### Dashboard responsibilities
 
 Dashboard cards should:
 
 - Display current state.
-- Provide buttons for user actions.
+- Provide explicit buttons for user actions.
 - Show status, warnings and next steps.
 - Avoid duplicating backend workflow logic.
 
-A card can contain display calculations for formatting, but the real state should come from backend sensors.
+A card may contain display-only formatting, but the real process state should come from Python sensors.
+
+---
+
+## YAML policy
+
+Current policy:
+
+```text
+YAML may render.
+Python should decide.
+```
+
+Allowed YAML use:
+
+- Lovelace/dashboard layout.
+- Card styling.
+- Display-only formatting.
+- Temporary local testing.
+
+Avoid new YAML use for:
+
+- Process state machines.
+- Stage detection.
+- Brewday timing logic.
+- BrewZilla safety logic.
+- Target selection logic.
+- Hidden automations that duplicate Python services.
+
+`services.yaml` inside the custom integration is allowed and required by Home Assistant as service metadata. It is not workflow logic.
 
 ---
 
@@ -167,20 +191,21 @@ A card can contain display calculations for formatting, but the real state shoul
 Recommended v4 naming direction:
 
 ```text
-brew_process_*         workflow/process state
-brew_batch_*           batch state
-brew_recipe_*          recipe/runtime state
-brew_chamber_*         chamber state
-brew_manual_*          manual mode
-brew_notification_*    notifications
-brew_hot_side_*        hot-side workflow
-brewzilla_*            BrewZilla/RAPT device data
+brewassistant_*                 Python-owned normalized entities
+brewassistant_brewday_*         Brewday Runtime and Stage Engine
+brewassistant_brewzilla_*       BrewZilla runtime/orchestration
+brewassistant_fermentation_*    Future fermentation runtime
+brewassistant_carbonation_*     Carbonation calculations
+brewassistant_source_*          Source diagnostics
 ```
 
 Legacy names:
 
 ```text
-fwk_*                  old Fresh Wort Kit specific namespace
+fwk_*                           old Fresh Wort Kit specific namespace
+brew_process_*                  older process namespace
+brew_batch_*                    older batch namespace
+brew_recipe_*                   older recipe/runtime namespace
 ```
 
 New development should avoid adding new `fwk_*` entities.
@@ -211,11 +236,12 @@ sensor.yellow_pill_gravity
 sensor.brewassistant_gravity
 ```
 
+If old YAML/template entities block canonical Python entity IDs locally, rename the old entities with a `_yaml` suffix and let Python keep the canonical entity ID.
+
 ---
 
 ## Design rule
 
-If a piece of logic affects brewing decisions, place it in a package.
+If a piece of logic affects brewing decisions, place it in Python.
 
 If it only affects how something looks, place it in the dashboard card.
-
