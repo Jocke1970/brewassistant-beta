@@ -13,12 +13,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from .brewday_refresh import request_manual_brewfather_refresh
+from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
 from .manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
 _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
+SERVICE_APPLY_BREWZILLA_TARGET = "apply_brewzilla_target"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -72,6 +74,11 @@ def _register_services(hass: HomeAssistant) -> None:
                 "sensor.brewassistant_brewday_runtime_step",
                 "sensor.brewassistant_brewday_runtime_next_step",
                 "sensor.brewassistant_brewday_live_time_remaining_minutes",
+                "sensor.brewassistant_brewzilla_orchestration_mode",
+                "sensor.brewassistant_brewzilla_control_reason",
+                "sensor.brewassistant_brewzilla_requested_target",
+                "sensor.brewassistant_brewzilla_applied_target",
+                "sensor.brewassistant_brewzilla_target_delta",
             ]},
             blocking=False,
         )
@@ -85,6 +92,21 @@ def _register_services(hass: HomeAssistant) -> None:
                 "Manual Brewfather Brew Tracker refresh skipped: %s (%s s remaining)",
                 result.get("reason"),
                 result.get("cooldown_remaining_seconds"),
+            )
+
+    async def _handle_apply_brewzilla_target(call: ServiceCall) -> None:
+        result = await async_apply_brewzilla_target_if_allowed(hass)
+        await _refresh_runtime_sensors()
+        if result.get("applied"):
+            _LOGGER.info(
+                "BrewZilla target applied: %s °C",
+                result.get("requested_target"),
+            )
+        else:
+            _LOGGER.info(
+                "BrewZilla target apply skipped: %s (%s)",
+                result.get("apply_result"),
+                result.get("control_reason"),
             )
 
     async def _handle_manual_prepare(call: ServiceCall) -> None:
@@ -123,6 +145,7 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_runtime_sensors()
 
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
+    hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
