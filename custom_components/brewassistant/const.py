@@ -10,7 +10,7 @@ DOMAIN = "brewassistant"
 NAME = "BrewAssistant"
 VERSION = "1.2.0"
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
 
