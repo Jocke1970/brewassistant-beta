@@ -1,8 +1,7 @@
 """BrewZilla hardware normalization helpers.
 
-This module is intentionally read-only. It normalizes likely BrewZilla/RAPT
-entities into a stable BrewAssistant hardware snapshot while we learn what
-RAPT exposes in Home Assistant.
+This module is intentionally read-only. It normalizes BrewZilla/RAPT entities
+into a stable BrewAssistant hardware snapshot.
 """
 
 from __future__ import annotations
@@ -13,16 +12,15 @@ from homeassistant.core import HomeAssistant
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
-# Current known/preferred entities. These are deliberately easy to patch once
-# RAPT exposes the real BrewZilla entity set.
 BREWZILLA_POWER_SWITCH = "switch.brewzilla"
 BREWZILLA_POWER_SENSOR = "sensor.brewzilla_power"
+BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
-BREWZILLA_TARGET_SENSOR = "sensor.brewzilla_target_temperature"
-BREWZILLA_MODE_SENSOR = "sensor.brewzilla_mode"
+BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
-BREWZILLA_HEAT_SWITCH = "switch.brewzilla_heating"
-BREWZILLA_PROFILE_SENSOR = "sensor.brewzilla_profile"
+BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
+BREWZILLA_HEAT_UTILIZATION = "number.brewzilla_heat_utilization"
+BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 
 RUNTIME_TARGET_SENSOR = "sensor.brewassistant_brewday_target_temperature"
 RUNTIME_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
@@ -31,10 +29,10 @@ RUNTIME_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
 
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
-    state = hass.states.get(entity_id)
-    if state is None or state.state in BAD_STATES:
+    entity_state = hass.states.get(entity_id)
+    if entity_state is None or entity_state.state in BAD_STATES:
         return default
-    return state.state
+    return entity_state.state
 
 
 def _float(hass: HomeAssistant, entity_id: str) -> float | None:
@@ -51,7 +49,7 @@ def _bool_on(hass: HomeAssistant, entity_id: str) -> bool | None:
     raw = _state(hass, entity_id)
     if raw is None:
         return None
-    return raw.lower() in {"on", "true", "active", "running", "heat", "heating"}
+    return raw.lower() in {"on", "true", "active", "running", "heat", "heating", "connected"}
 
 
 def _available(hass: HomeAssistant, entity_id: str) -> bool:
@@ -59,29 +57,42 @@ def _available(hass: HomeAssistant, entity_id: str) -> bool:
     return entity_state is not None and entity_state.state not in BAD_STATES
 
 
+def _connection_ok(hass: HomeAssistant) -> bool:
+    raw = _state(hass, BREWZILLA_CONNECTION_SENSOR)
+    if raw is None:
+        return _available(hass, BREWZILLA_TEMP_SENSOR) or _available(hass, BREWZILLA_POWER_SENSOR)
+    return raw.lower() == "connected"
+
+
 def _hardware_state(
     *,
+    connected: bool,
     power_on: bool | None,
+    heater_on: bool | None,
+    pump_on: bool | None,
     power_w: float | None,
     current_temp: float | None,
     target_temp: float | None,
-    pump_on: bool | None,
 ) -> str:
+    if not connected:
+        return "disconnected"
     if power_on is False:
         return "off"
-    if power_on is None and power_w is None and current_temp is None:
-        return "disconnected"
+    if pump_on is True and heater_on is True:
+        return "heating_pumping"
     if pump_on is True:
         return "pumping"
+    if heater_on is True:
+        return "heating"
     if power_w is not None and power_w >= 1000:
         return "heating"
     if power_w is not None and power_w > 50:
         return "powered"
     if current_temp is not None and target_temp is not None:
-        delta = target_temp - current_temp
-        if delta > 1.0:
+        delta_to_target = target_temp - current_temp
+        if delta_to_target > 1.0:
             return "heating_needed"
-        if abs(delta) <= 0.5:
+        if abs(delta_to_target) <= 0.5:
             return "holding"
     if power_on is True:
         return "idle"
@@ -98,7 +109,7 @@ def _summary(
     runtime_stage: str,
 ) -> str:
     if not connected:
-        return "disconnected · waiting for BrewZilla entities"
+        return "disconnected · waiting for BrewZilla"
     temp = "—"
     if current_temp is not None and target_temp is not None:
         temp = f"{current_temp:.1f} → {target_temp:.1f} °C"
@@ -110,57 +121,54 @@ def _summary(
 
 def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build a normalized BrewZilla hardware snapshot."""
+    connected = _connection_ok(hass)
+    connection_state = _state(hass, BREWZILLA_CONNECTION_SENSOR, "unknown")
     power_on = _bool_on(hass, BREWZILLA_POWER_SWITCH)
     pump_on = _bool_on(hass, BREWZILLA_PUMP_SWITCH)
-    heat_on = _bool_on(hass, BREWZILLA_HEAT_SWITCH)
+    heater_on = _bool_on(hass, BREWZILLA_HEATER_SWITCH)
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
     current_temp = _float(hass, BREWZILLA_TEMP_SENSOR)
-    target_temp = _float(hass, BREWZILLA_TARGET_SENSOR)
+    device_target = _float(hass, BREWZILLA_TARGET_NUMBER)
     runtime_target = _float(hass, RUNTIME_TARGET_SENSOR)
-    mode = _state(hass, BREWZILLA_MODE_SENSOR, "unknown")
-    profile = _state(hass, BREWZILLA_PROFILE_SENSOR, "none")
+    heat_utilization = _float(hass, BREWZILLA_HEAT_UTILIZATION)
+    pump_utilization = _float(hass, BREWZILLA_PUMP_UTILIZATION)
     runtime_state = _state(hass, RUNTIME_STATE_SENSOR, "idle")
     runtime_stage = _state(hass, RUNTIME_STAGE_SENSOR, "Idle")
     runtime_step = _state(hass, RUNTIME_STEP_SENSOR, "Idle")
 
-    effective_target = target_temp if target_temp is not None else runtime_target
+    effective_target = device_target if device_target is not None and device_target >= 0 else runtime_target
     temp_delta = None
     if current_temp is not None and effective_target is not None:
         temp_delta = round(current_temp - effective_target, 2)
 
-    connected = any(
-        _available(hass, entity_id)
-        for entity_id in (
-            BREWZILLA_POWER_SWITCH,
-            BREWZILLA_POWER_SENSOR,
-            BREWZILLA_TEMP_SENSOR,
-            BREWZILLA_MODE_SENSOR,
-        )
-    )
-    heating = bool(heat_on) or (power_w is not None and power_w >= 1000)
     state = _hardware_state(
+        connected=connected,
         power_on=power_on,
+        heater_on=heater_on,
+        pump_on=pump_on,
         power_w=power_w,
         current_temp=current_temp,
         target_temp=effective_target,
-        pump_on=pump_on,
     )
+
+    heating = bool(heater_on) or (power_w is not None and power_w >= 1000)
 
     return {
         "connected": connected,
+        "connection_state": connection_state,
         "hardware_state": state,
         "power_on": power_on,
         "power_w": power_w,
         "current_temperature": current_temp,
         "target_temperature": effective_target,
-        "device_target_temperature": target_temp,
+        "device_target_temperature": device_target,
         "runtime_target_temperature": runtime_target,
         "temperature_delta": temp_delta,
-        "mode": mode,
-        "profile": profile,
         "pump_on": pump_on,
+        "heater_on": heater_on,
         "heating": heating,
-        "heat_switch_on": heat_on,
+        "heat_utilization": heat_utilization,
+        "pump_utilization": pump_utilization,
         "runtime_state": runtime_state,
         "runtime_stage": runtime_stage,
         "runtime_step": runtime_step,
@@ -175,12 +183,13 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "source_entities": {
             "power_switch": BREWZILLA_POWER_SWITCH,
             "power_sensor": BREWZILLA_POWER_SENSOR,
+            "connection_sensor": BREWZILLA_CONNECTION_SENSOR,
             "temperature_sensor": BREWZILLA_TEMP_SENSOR,
-            "target_sensor": BREWZILLA_TARGET_SENSOR,
-            "mode_sensor": BREWZILLA_MODE_SENSOR,
+            "target_number": BREWZILLA_TARGET_NUMBER,
             "pump_switch": BREWZILLA_PUMP_SWITCH,
-            "heat_switch": BREWZILLA_HEAT_SWITCH,
-            "profile_sensor": BREWZILLA_PROFILE_SENSOR,
+            "heater_switch": BREWZILLA_HEATER_SWITCH,
+            "heat_utilization": BREWZILLA_HEAT_UTILIZATION,
+            "pump_utilization": BREWZILLA_PUMP_UTILIZATION,
         },
     }
 
