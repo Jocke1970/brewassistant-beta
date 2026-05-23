@@ -2,6 +2,10 @@ force_brewfather_refresh:
   name: Force Brewfather refresh
   description: Request a guarded manual refresh of Brewfather Brew Tracker source entities.
 
+apply_brewzilla_target:
+  name: Apply BrewZilla target
+  description: Apply the current Brewday Runtime target temperature to BrewZilla when orchestration safety checks allow it.
+
 manual_brewday_prepare:
   name: Manual Brewday prepare
   description: Prepare the BrewAssistant manual brewday runtime session.
