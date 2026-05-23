@@ -202,64 +202,45 @@ def _process_context(
     *,
     cold_crash_active: bool,
     target_mode: str,
-    yaml_process_status: str | None,
     runtime_status: str | None,
     liquid_temp: float | None,
     target_temp: float | None,
     gravity: float | None,
 ) -> dict[str, str]:
-    """Build read-only process mirror state from existing helpers and normalized data."""
-    yaml_status = yaml_process_status or "Idle"
-    normalized_yaml = yaml_status.lower()
+    """Build read-only Python-owned process mirror state."""
 
-    if cold_crash_active or target_mode == "Cold crash" or "cold" in normalized_yaml:
+    normalized_runtime = (runtime_status or "").lower()
+
+    if cold_crash_active or target_mode == "Cold crash":
         status = "Cold crash"
         next_step = "Maintain cold crash and positive pressure"
         current_stage = "cold_crash"
         next_stage = "transfer"
-        reason = "Cold crash helper/target is active"
-    elif "ready for transfer" in normalized_yaml:
-        status = "Ready for transfer"
-        next_step = "Perform closed transfer to keg"
-        current_stage = "transfer"
-        next_stage = "none"
-        reason = "YAML process reports ready for transfer"
-    elif "ready for cold crash" in normalized_yaml:
-        status = "Ready for cold crash"
-        next_step = "Start cold crash"
-        current_stage = "none"
+        reason = "Cold crash target is active"
+    elif normalized_runtime == "fermenting":
+        status = "Primary fermentation"
+        next_step = "Monitor fermentation"
+        current_stage = "fermentation"
         next_stage = "cold_crash"
-        reason = "YAML process reports ready for cold crash"
-    elif "dry hop" in normalized_yaml:
-        status = "Dry hop now"
-        next_step = "Add dry hop charge"
-        current_stage = "dry_hop"
-        next_stage = "none"
-        reason = "YAML process reports dry hop"
-    elif "spunding" in normalized_yaml or "spund" in normalized_yaml:
-        status = "Install spunding"
-        next_step = "Install or verify spunding valve"
-        current_stage = "spunding"
-        next_stage = "none"
-        reason = "YAML process reports spunding"
-    elif "finished" in normalized_yaml or "packaged" in normalized_yaml or "transferred" in normalized_yaml:
+        reason = "Runtime status is fermenting"
+    elif normalized_runtime in {"completed", "finished", "packaged"}:
         status = "Finished / transferred to keg"
         next_step = "Batch completed"
         current_stage = "none"
         next_stage = "none"
-        reason = "YAML process reports completed batch"
-    elif runtime_status and runtime_status.lower() == "fermenting":
-        status = "Primary fermentation"
-        next_step = "Monitor fermentation"
-        current_stage = "none"
-        next_stage = "cold_crash"
-        reason = "Runtime status is fermenting"
+        reason = "Runtime status indicates completed batch"
+    elif normalized_runtime:
+        status = runtime_status or "Monitoring"
+        next_step = "Monitor active runtime"
+        current_stage = "runtime"
+        next_stage = "none"
+        reason = "Runtime status is available"
     else:
-        status = yaml_status
-        next_step = "Start or select an active batch" if status == "Idle" else "Monitor fermentation"
+        status = "Idle"
+        next_step = "Start or select an active batch"
         current_stage = "none"
         next_stage = "none"
-        reason = "No active process override detected"
+        reason = "No active Python runtime detected"
 
     summary_parts = [status, next_step]
     if liquid_temp is not None and target_temp is not None:
@@ -332,7 +313,6 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         recipe_target_temp = _state_float(self.hass, target_entity)
         cold_crash_target_temp = _state_float(self.hass, cold_crash_target_entity)
         gravity = _state_float(self.hass, gravity_entity)
-        yaml_process_status = _state_string(self.hass, "sensor.brew_process_status")
         runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")
 
         cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
@@ -375,7 +355,6 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         process = _process_context(
             cold_crash_active=cold_crash_active,
             target_mode=target_mode,
-            yaml_process_status=yaml_process_status,
             runtime_status=runtime_status,
             liquid_temp=rounded_liquid,
             target_temp=rounded_target,
@@ -409,7 +388,7 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             process_next_action_stage=process["next_stage"],
             process_summary=process["summary"],
             process_reason=process["reason"],
-            yaml_process_status=yaml_process_status,
+            yaml_process_status=None,
             gravity=rounded_gravity,
             fallback_active=fallback_active,
             ready=liquid_temp is not None and target_temp is not None,
