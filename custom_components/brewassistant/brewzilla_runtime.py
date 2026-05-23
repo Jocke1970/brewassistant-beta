@@ -99,10 +99,56 @@ def _hardware_state(
     return "unknown"
 
 
+def _brew_mode(
+    *,
+    connected: bool,
+    heater_on: bool | None,
+    pump_on: bool | None,
+    power_w: float | None,
+    current_temp: float | None,
+    target_temp: float | None,
+) -> str:
+    """Resolve intelligent brewing mode."""
+
+    if not connected:
+        return "Disconnected"
+
+    if current_temp is not None and current_temp >= 99 and (power_w or 0) >= 1800:
+        return "Boiling"
+
+    if current_temp is not None and target_temp is not None:
+        delta = target_temp - current_temp
+
+        if delta > 5:
+            if heater_on and pump_on:
+                return "Heating + circulation"
+            if heater_on:
+                return "Heating"
+
+        if 1 < delta <= 5:
+            return "Approaching target"
+
+        if abs(delta) <= 1:
+            if pump_on:
+                return "Holding target"
+            return "Near target"
+
+        if delta < -1:
+            return "Overshooting"
+
+    if pump_on and not heater_on:
+        return "Pump circulation"
+
+    if heater_on:
+        return "Heating"
+
+    return "Idle"
+
+
 def _summary(
     *,
     connected: bool,
-    state: str,
+    mode: str,
     current_temp: float | None,
     target_temp: float | None,
     power_w: float | None,
@@ -116,7 +162,7 @@ def _summary(
     elif current_temp is not None:
         temp = f"{current_temp:.1f} °C"
     power = f"{power_w:.0f} W" if power_w is not None else "— W"
-    return f"{state} · {runtime_stage} · {temp} · {power}"
+    return f"{mode} · {runtime_stage} · {temp} · {power}"
 
 
 def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -151,12 +197,22 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         target_temp=effective_target,
     )
 
+    mode = _brew_mode(
+        connected=connected,
+        heater_on=heater_on,
+        pump_on=pump_on,
+        power_w=power_w,
+        current_temp=current_temp,
+        target_temp=effective_target,
+    )
+
     heating = bool(heater_on) or (power_w is not None and power_w >= 1000)
 
     return {
         "connected": connected,
         "connection_state": connection_state,
         "hardware_state": state,
+        "mode": mode,
         "power_on": power_on,
         "power_w": power_w,
         "current_temperature": current_temp,
@@ -174,7 +230,7 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_step": runtime_step,
         "summary": _summary(
             connected=connected,
-            state=state,
+            mode=mode,
             current_temp=current_temp,
             target_temp=effective_target,
             power_w=power_w,
