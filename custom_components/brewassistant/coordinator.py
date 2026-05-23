@@ -58,7 +58,6 @@ class BrewAssistantData:
     process_next_action_stage: str
     process_summary: str
     process_reason: str
-    yaml_process_status: str | None
     gravity: float | None
     fallback_active: bool
     ready: bool
@@ -388,7 +387,6 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             process_next_action_stage=process["next_stage"],
             process_summary=process["summary"],
             process_reason=process["reason"],
-            yaml_process_status=None,
             gravity=rounded_gravity,
             fallback_active=fallback_active,
             ready=liquid_temp is not None and target_temp is not None,
