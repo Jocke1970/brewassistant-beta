@@ -18,6 +18,10 @@ BREWDAY_STAGE_SENSORS: dict[str, dict[str, Any]] = {
     "brewday_stage_reason": {"field": "stage_reason"},
     "brewday_stage_status_line": {"field": "status_line"},
     "brewday_stage_icon": {"field": "stage_icon"},
+    "brewday_stage_group": {"field": "stage_group"},
+    "brewday_stage_priority": {"field": "stage_priority"},
+    "brewday_stage_suggested_action": {"field": "suggested_action"},
+    "brewday_stage_control_hint": {"field": "control_hint"},
     "brewday_stage_remaining_minutes": {
         "field": "remaining_minutes",
         "unit": "min",
