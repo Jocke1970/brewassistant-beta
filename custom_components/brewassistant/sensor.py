@@ -28,7 +28,6 @@ from .const import (
     ATTR_SOURCE_ENTITY,
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_MODE,
-    ATTR_YAML_PROCESS_STATUS,
     CONF_GRAVITY_ENTITY,
     CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
     CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
@@ -149,8 +148,8 @@ def _process_attrs(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     data = coordinator.data
     return {
         ATTR_PROCESS_REASON: data.process_reason if data else None,
-        ATTR_YAML_PROCESS_STATUS: data.yaml_process_status if data else None,
         ATTR_TARGET_MODE: data.temperature_target_mode if data else None,
+        "source": "python_core",
     }
 
 
