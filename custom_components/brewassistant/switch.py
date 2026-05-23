@@ -14,27 +14,27 @@ from .entity import BrewAssistantEntity
 
 ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
     "brewzilla_orchestration_enabled": {
-        "name": "BrewZilla orchestration",
+        "name": "BrewZilla Orchestration Enabled",
         "icon": "mdi:robot-outline",
     },
     "brewzilla_apply_target_temp": {
-        "name": "Apply Brewday target",
+        "name": "BrewZilla Apply Target Temp",
         "icon": "mdi:target",
     },
     "brewzilla_allow_heater_control": {
-        "name": "Allow heater control",
+        "name": "BrewZilla Allow Heater Control",
         "icon": "mdi:fire-alert",
     },
     "brewzilla_allow_pump_control": {
-        "name": "Allow pump control",
+        "name": "BrewZilla Allow Pump Control",
         "icon": "mdi:pump",
     },
     "brewzilla_allow_boil_mode": {
-        "name": "Allow boil mode",
+        "name": "BrewZilla Allow Boil Mode",
         "icon": "mdi:kettle-steam",
     },
     "brewzilla_safe_mode": {
-        "name": "Safe mode",
+        "name": "BrewZilla Safe Mode",
         "icon": "mdi:shield-check",
         "default": True,
     },
@@ -69,6 +69,11 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         self._attr_icon = config["icon"]
         self._attr_is_on = bool(config.get("default", False))
         self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+
+    @property
+    def name(self) -> str:
+        """Return explicit display name."""
+        return self._attr_name
 
     async def async_added_to_hass(self) -> None:
         """Restore last known switch state."""
