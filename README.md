@@ -1,8 +1,8 @@
 # BrewAssistant v4
 
-**BrewAssistant v4** is a modular Home Assistant brewing assistant for fermentation tracking, chamber control, manual batches, notifications, dashboards, and future hot-side/brew-day integrations.
+**BrewAssistant v4** is a modular Home Assistant brewing assistant for fermentation tracking, Brewday runtime intelligence, BrewZilla/RAPT hardware visualization, notifications, dashboards, and future safe orchestration.
 
-The project is designed around a clean core with optional modules. It can be used for simple manual fermentation tracking, Brewfather-assisted recipe runtime data, RAPT/Pill readings, fermentation chamber automation, kegerator visualisation, and later BrewZilla/RAPT hot-side workflows.
+The project is moving from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation and safety checks live in `custom_components/brewassistant/`.
 
 ---
 
@@ -10,14 +10,15 @@ The project is designed around a clean core with optional modules. It can be use
 
 BrewAssistant v4 aims to provide:
 
-- A clean Home Assistant package and custom integration structure.
+- A clean Home Assistant custom integration with optional dashboard cards.
 - Brewing workflows that survive Home Assistant restarts.
 - A Swedish-friendly UI with English/core entity naming.
-- Fermentation, cold crash, transfer, packaging, and storage workflow support.
-- Optional integration with Brewfather, RAPT, BrewZilla and manual hydrometer readings.
-- Premium dashboard cards that visualise the current batch state.
+- Fermentation, cold crash, transfer, packaging and storage workflow support.
+- Optional integration with Brewfather, RAPT, BrewZilla and manual brewing workflows.
+- Premium dashboard cards that visualize the current batch or brewday state.
 - A migration path away from older `fwk_*` helper/entity names.
-- A migration path from heavy YAML/Jinja decision logic into Python.
+- A migration path away from heavy YAML/Jinja decision logic into Python.
+- Explicit safety boundaries before any hardware control is allowed.
 
 ---
 
@@ -28,22 +29,39 @@ BrewAssistant v4 separates the brewing system into clear layers:
 | Layer | Purpose |
 | --- | --- |
 | Python Core | Normalize source entities and expose dashboard-safe state. |
-| Runtime | Normalize recipe, batch, Brewfather, Manual Brewday and sensor data. |
-| Workflow | Decide current process state, next step and readiness. |
-| Chamber | Apply and monitor fermentation chamber targets. |
-| Manual Mode | Track batches and brew days without Brewfather/RAPT automation. |
+| Runtime | Normalize Brewfather Brew Tracker, Manual Brewday and sensor data. |
+| Stage Engine | Interpret planned/runtime state plus real hardware telemetry into a current brewday stage. |
+| Orchestration Safety | Decide whether a user-requested action is safe to apply. |
 | Hardware Layer | Normalize BrewZilla/RAPT hardware state before any future control. |
 | Notifications | Alert when attention is needed. |
-| Dashboard | Visualize and control the system without owning business logic. |
+| Dashboard | Visualize and trigger explicit user actions without owning business logic. |
 
-The dashboard should display and control the system, but should not contain hidden workflow logic that belongs in backend packages or the Python integration.
+The dashboard should display and control the system, but should not contain hidden workflow logic that belongs in the Python integration.
 
-The long-term direction is:
+The current direction is:
 
 ```text
-Python custom integration = logic, normalization, state machine, calculations
-YAML packages/dashboard = UI, layout, manual presentation tweaks
+Python custom integration = logic, normalization, stage engine, calculations, safety checks
+YAML/dashboard = presentation only
 ```
+
+---
+
+## Python-only cut-over status
+
+The active Python branch no longer treats YAML process helpers as the backend source of truth.
+
+Recent cleanup:
+
+```text
+✅ Manual Brewday services no longer sync legacy input_boolean/input_select helpers
+✅ Python process mirror no longer reads sensor.brew_process_status
+✅ YAML process attributes were removed from Python process sensors
+✅ Legacy yaml_process_status field was removed from the coordinator data model
+✅ Stage Engine is now Python-owned and exposed through canonical BrewAssistant sensors
+```
+
+`services.yaml` remains intentionally because Home Assistant uses it as service metadata for the custom integration. It is not workflow/business logic.
 
 ---
 
@@ -60,11 +78,10 @@ BrewAssistant Runtime Engine
         ↓
 Normalized runtime sensors
         ↓
-Timeline / Dashboard / Notifications
+Stage Engine / Dashboard / Notifications / Orchestration Safety
 ```
 
-The Brewfather integration is intentionally treated as a generic read-only source.
-All orchestration, normalization, live countdown logic and process visualization is handled by BrewAssistant.
+The Brewfather integration is treated as a read-only recipe/timeline source. BrewAssistant handles normalization, live countdown logic, process visualization and future orchestration boundaries.
 
 ### Runtime features
 
@@ -114,9 +131,7 @@ BrewAssistant compensates for this by:
 5. Resolving the next Brewfather snapshot immediately when available.
 ```
 
-This gives BrewAssistant near realtime Brewday transitions without modifying Brewfather itself.
-
-Manual refresh is also exposed through:
+Manual refresh is exposed through:
 
 ```text
 service: brewassistant.force_brewfather_refresh
@@ -126,7 +141,7 @@ The manual service uses a 15 minute cooldown to avoid excessive polling.
 
 ### Manual Brewday services
 
-Manual Brewday can now be controlled through Python services:
+Manual Brewday can be controlled through Python services:
 
 ```text
 brewassistant.manual_brewday_prepare
@@ -137,127 +152,172 @@ brewassistant.manual_brewday_finish
 brewassistant.manual_brewday_reset
 ```
 
-These services operate on the persistent Manual Brewday runtime session and are intended to replace older helper-script driven manual controls.
+These services operate on the persistent Manual Brewday runtime session and replace older helper-script driven manual controls.
 
-### Brewday Runtime entities
+---
 
-Examples:
+## Brewday Stage Engine v2
 
-```text
-sensor.brewassistant_brewday_runtime_source
-sensor.brewassistant_brewday_runtime_state
-sensor.brewassistant_brewday_runtime_status
-sensor.brewassistant_brewday_runtime_stage
-sensor.brewassistant_brewday_runtime_step
-sensor.brewassistant_brewday_runtime_next_step
-sensor.brewassistant_brewday_runtime_summary
-sensor.brewassistant_brewday_live_progress
-sensor.brewassistant_brewday_live_time_remaining_minutes
-sensor.brewassistant_brewday_snapshot_age_minutes
-sensor.brewassistant_brewday_awaiting_snapshot
-sensor.brewassistant_brewday_refresh_recommended
-```
+The Brewday Stage Engine interprets both planned runtime data and real BrewZilla telemetry.
 
-The runtime summary attributes also expose timeline data and diagnostics such as:
+Purpose:
 
 ```text
-stage_remaining_seconds
-stage_remaining_minutes
-current_step_remaining_seconds
-current_step_remaining_minutes
-current_step_description
-next_step_description
+planned Brewfather/Manual step
++
+actual BrewZilla state, temperature, target, power and pump context
+↓
+interpreted current brewday stage
 ```
 
-### Runtime internals
+Supported interpreted stages:
 
-Core runtime modules:
+```text
+Idle
+Strike Water
+Heating Strike
+Mash In
+Mash
+Mash Out
+Heating To Boil
+Boiling
+Hop Addition
+Whirlpool
+Wort Cooling
+Pitch Ready
+Transfer
+Cleaning
+Completed
+```
+
+Stage Engine v2 exposes:
+
+```text
+sensor.brewassistant_brewday_stage
+sensor.brewassistant_brewday_stage_reason
+sensor.brewassistant_brewday_stage_status_line
+sensor.brewassistant_brewday_stage_icon
+sensor.brewassistant_brewday_stage_group
+sensor.brewassistant_brewday_stage_priority
+sensor.brewassistant_brewday_stage_suggested_action
+sensor.brewassistant_brewday_stage_control_hint
+sensor.brewassistant_brewday_stage_remaining_minutes
+sensor.brewassistant_brewday_stage_progress
+sensor.brewassistant_brewday_stage_temperature
+sensor.brewassistant_brewday_stage_target_temperature
+sensor.brewassistant_brewday_stage_power
+```
+
+The Stage Engine now explicitly recognizes wort cooling / counterflow chilling terms such as:
+
+```text
+cool
+chill
+counterflow
+motström
+```
+
+These resolve to:
+
+```text
+Wort Cooling
+```
+
+The Stage Engine is currently read-only. It does not control BrewZilla hardware.
+
+---
+
+## BrewZilla runtime and orchestration safety
+
+BrewAssistant includes a BrewZilla runtime layer and guarded orchestration safety layer.
+
+Current status:
+
+```text
+✅ BrewZilla runtime sensors
+✅ BrewZilla connection/runtime/temperature/target/power normalization
+✅ BrewZilla heat/pump utilization visualization
+✅ BrewZilla orchestration mode sensor
+✅ BrewZilla safety switches
+✅ Apply BrewZilla target service
+✅ Safety validation before target sync
+✅ Premium BrewZilla dashboard cards
+✅ Stage Engine data integrated into BrewZilla UI
+```
+
+Safety switches:
+
+```text
+switch.brewassistant_brewzilla_orchestration_enabled
+switch.brewassistant_brewzilla_apply_target_temp
+switch.brewassistant_brewzilla_allow_heater_control
+switch.brewassistant_brewzilla_allow_pump_control
+switch.brewassistant_brewzilla_allow_boil_mode
+switch.brewassistant_brewzilla_safe_mode
+```
+
+Apply target service:
+
+```text
+service: brewassistant.apply_brewzilla_target
+```
+
+The service only applies a Brewday Runtime target to BrewZilla when the orchestration safety layer allows it.
+
+Current safety boundary:
+
+```text
+Read and visualize first.
+Explicit user action second.
+Hardware automation only after separate design, validation and safety review.
+```
+
+---
+
+## Runtime internals
+
+Core runtime modules include:
 
 ```text
 brewday_runtime_core.py
 brewday_runtime.py
 brewday_runtime_sensor.py
+brewday_stage_engine.py
+brewday_stage_sensor.py
 brewday_refresh.py
+brewzilla_sensor.py
+brewzilla_orchestration.py
+brewzilla_orchestration_sensor.py
 manual_brewday_runtime.py
 manual_brewday_adapter.py
 manual_brewday_store.py
+switch.py
 ```
 
 ---
 
-## BrewZilla hardware skeleton
-
-BrewAssistant includes an early BrewZilla runtime skeleton.
-
-Current intent:
-
-```text
-✅ read-only hardware normalization
-✅ connected/power/temp/target abstractions
-✅ safe UI/debug foundation
-❌ no automatic hardware control yet
-```
-
-Next phase is reality testing against RAPT/HA-exposed BrewZilla entities and patching the mapping layer accordingly.
-
----
-
-## Python Core v1.1
-
-`custom_components/brewassistant/` contains the BrewAssistant Home Assistant custom integration.
-
-Current milestone:
-
-```text
-BrewAssistant Python Core v1.1 · Runtime Engine + Read-only Core
-```
-
-Current scope:
-
-- Read existing Home Assistant entities.
-- Normalize liquid temperature, chamber fallback temperature, effective target temperature and gravity.
-- Use cold crash target when cold crash is active.
-- Mirror process state and next process step from existing workflow/YAML signals.
-- Expose smart fermentation recommendations without controlling hardware.
-- Detect Pill stale/fresh status.
-- Expose source health diagnostics for configured entities.
-- Normalize Brewfather/runtime recipe name, status, targets and target FG.
-- Expose one compact next recommended action sensor for dashboards and notifications.
-- Normalize Brewday Runtime state, Brewfather Brew Tracker state and Manual Brewday state.
-- Run beside the existing YAML packages without controlling hardware.
-
-Safety boundary:
-
-```text
-Python Core v1.1 is mostly read-only.
-Manual Brewday services only update BrewAssistant's own runtime session and legacy helper mirrors.
-No climate, switch, fan, heater, fridge, relay, compressor or BrewZilla hardware actions are performed by Python Core.
-```
-
----
-
-## Status
+## Current status
 
 BrewAssistant v4 is actively evolving.
 
 Current Python Core status:
 
 ```text
-v1.1 Runtime Engine + Read-only Core
+v1.2 Python Core · Brewday Runtime + Stage Engine v2 + BrewZilla safety layer
 ```
 
-Current Brewday Runtime status:
+Current near-term focus:
 
 ```text
-✅ Runtime normalization
-✅ Timeline engine
-✅ Brewfather compensation hook
-✅ Manual refresh service
-✅ Manual Brewday engine/services
-✅ Premium runtime dashboard support
+✅ Python-only cleanup of legacy YAML process dependencies
+✅ Stage Engine v2 backend
+✅ Stage Engine v2 UI
+✅ BrewZilla runtime card with Stage Engine intelligence
+🔜 BrewZilla runtime card power-button polish
+🔜 Apply Target button/card gated by safety state
+🔜 Counterflow wort cooling UI and metrics
 🔜 Manual timed-step auto-advance
 🔜 Manual session persistence across HA restart
-🔜 BrewZilla hardware reality mapping
 🔜 Timed Fermentation Runtime
 ```
 
@@ -265,4 +325,4 @@ Current Brewday Runtime status:
 
 ## Disclaimer
 
-This project is intended for hobby brewing automation and process tracking. Always verify sanitation, pressure limits, electrical safety, and fermentation decisions manually when needed.
+This project is intended for hobby brewing automation and process tracking. Always verify sanitation, pressure limits, electrical safety, hot-side safety, electrical switching, and fermentation decisions manually when needed.
