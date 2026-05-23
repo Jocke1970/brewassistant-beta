@@ -8,6 +8,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from .brewday_runtime import build_brewday_runtime_snapshot, brewday_runtime_attrs
+from .brewzilla_orchestration_sensor import BrewAssistantBrewZillaOrchestrationSensor, ORCHESTRATION_SENSORS
 from .brewzilla_sensor import create_brewzilla_sensors
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
@@ -65,6 +66,7 @@ def _display_name_from_key(key: str) -> str:
     return f"BrewAssistant {key.replace('_', ' ').title()}"
 
 
+
 def create_brewday_runtime_sensors(
     coordinator: BrewAssistantCoordinator,
 ) -> list[SensorEntity]:
@@ -72,6 +74,10 @@ def create_brewday_runtime_sensors(
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
         + create_brewzilla_sensors(coordinator)
+        + [
+            BrewAssistantBrewZillaOrchestrationSensor(coordinator, key)
+            for key in ORCHESTRATION_SENSORS
+        ]
     )
 
 
