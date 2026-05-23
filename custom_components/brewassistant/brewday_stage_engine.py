@@ -72,6 +72,95 @@ def _stage_icon(stage: str) -> str:
     }.get(stage, "mdi:state-machine")
 
 
+def _stage_group(stage: str) -> str:
+    if stage in {"Strike Water", "Heating Strike", "Mash In", "Mash", "Mash Out"}:
+        return "mash"
+    if stage in {"Heating To Boil", "Boiling", "Hop Addition"}:
+        return "boil"
+    if stage in {"Whirlpool", "Wort Cooling", "Pitch Ready", "Transfer"}:
+        return "post_boil"
+    if stage in {"Cleaning", "Completed"}:
+        return "wrap_up"
+    return "idle"
+
+
+def _stage_priority(stage: str) -> str:
+    if stage in {"Hop Addition", "Pitch Ready"}:
+        return "attention"
+    if stage in {"Boiling", "Wort Cooling", "Transfer"}:
+        return "active"
+    if stage in {"Heating Strike", "Heating To Boil", "Mash Out"}:
+        return "warming"
+    if stage in {"Mash", "Whirlpool", "Strike Water", "Mash In"}:
+        return "monitor"
+    if stage == "Completed":
+        return "done"
+    return "idle"
+
+
+def _suggested_action(stage: str, remaining_min: float | None, delta: float | None) -> str:
+    remaining = remaining_min if remaining_min is not None else 0
+    abs_delta = abs(delta) if delta is not None else None
+
+    if stage == "Idle":
+        return "Prepare brewday or connect Brew Tracker"
+    if stage == "Strike Water":
+        return "Verify strike temperature before mash in"
+    if stage == "Heating Strike":
+        return "Heat toward strike target"
+    if stage == "Mash In":
+        return "Add grain and stabilize mash temperature"
+    if stage == "Mash":
+        if remaining > 0:
+            return f"Maintain mash · {remaining:.0f} min remaining"
+        return "Maintain mash temperature"
+    if stage == "Mash Out":
+        return "Ramp to mash-out target"
+    if stage == "Heating To Boil":
+        return "Heat to boil and watch for hot break"
+    if stage == "Boiling":
+        if remaining > 0:
+            return f"Maintain boil · {remaining:.0f} min remaining"
+        return "Maintain stable boil"
+    if stage == "Hop Addition":
+        return "Add scheduled hops now"
+    if stage == "Whirlpool":
+        return "Run whirlpool or hop stand schedule"
+    if stage == "Wort Cooling":
+        return "Start/monitor counterflow cooling"
+    if stage == "Pitch Ready":
+        return "Transfer and pitch when sanitation is ready"
+    if stage == "Transfer":
+        return "Transfer wort to fermenter"
+    if stage == "Cleaning":
+        return "Clean and rinse BrewZilla and chiller"
+    if stage == "Completed":
+        return "Brewday completed"
+    if abs_delta is not None and abs_delta > 2:
+        return "Monitor temperature delta"
+    return "Monitor brewday"
+
+
+def _control_hint(stage: str, bz_state: str | None, power: float | None, pump_util: float | None) -> str:
+    power_value = power if power is not None else 0
+    pump_value = pump_util if pump_util is not None else 0
+    bz = bz_state or "unknown"
+
+    if stage in {"Idle", "Completed"}:
+        return "observe_only"
+    if stage in {"Heating Strike", "Mash Out", "Heating To Boil"}:
+        return "target_sync_candidate"
+    if stage in {"Mash", "Whirlpool"} and pump_value > 0:
+        return "circulation_active"
+    if stage == "Boiling" and power_value > 0:
+        return "boil_monitor"
+    if stage == "Wort Cooling":
+        return "cooling_monitor"
+    if stage in {"Hop Addition", "Pitch Ready", "Transfer"}:
+        return "manual_attention"
+    return f"observe_{bz}"
+
+
 def _resolve_stage(
     *,
     runtime_state: str | None,
@@ -103,8 +192,10 @@ def _resolve_stage(
 
     if _contains(stage_blob, "clean"):
         return "Cleaning", "Runtime text indicates cleaning"
-    if _contains(stage_blob, "cool", "chill"):
+    if _contains(stage_blob, "cool", "chill", "counterflow", "motström"):
         return "Wort Cooling", "Runtime text indicates cooling"
+    if _contains(stage_blob, "pitch") and temp_value <= 25:
+        return "Pitch Ready", "Runtime text and temperature indicate pitch readiness"
     if _contains(stage_blob, "transfer"):
         return "Transfer", "Runtime text indicates transfer"
     if _contains(stage_blob, "whirlpool", "hop stand", "hopstand"):
@@ -181,6 +272,10 @@ def build_brewday_stage_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "stage": stage,
         "stage_reason": reason,
         "stage_icon": _stage_icon(stage),
+        "stage_group": _stage_group(stage),
+        "stage_priority": _stage_priority(stage),
+        "suggested_action": _suggested_action(stage, remaining_min, delta),
+        "control_hint": _control_hint(stage, bz_state, power, pump_util),
         "status_line": status_line,
         "runtime_state": runtime_state,
         "runtime_stage": runtime_stage,
