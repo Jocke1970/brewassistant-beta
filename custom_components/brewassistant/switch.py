@@ -14,27 +14,33 @@ from .entity import BrewAssistantEntity
 
 ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
     "brewzilla_orchestration_enabled": {
-        "name": "BrewZilla Orchestration Enabled",
+        "name": "BrewAssistant BrewZilla Orchestration Enabled",
+        "object_id": "brewassistant_brewzilla_orchestration_enabled",
         "icon": "mdi:robot-outline",
     },
     "brewzilla_apply_target_temp": {
-        "name": "BrewZilla Apply Target Temp",
+        "name": "BrewAssistant BrewZilla Apply Target Temp",
+        "object_id": "brewassistant_brewzilla_apply_target_temp",
         "icon": "mdi:target",
     },
     "brewzilla_allow_heater_control": {
-        "name": "BrewZilla Allow Heater Control",
+        "name": "BrewAssistant BrewZilla Allow Heater Control",
+        "object_id": "brewassistant_brewzilla_allow_heater_control",
         "icon": "mdi:fire-alert",
     },
     "brewzilla_allow_pump_control": {
-        "name": "BrewZilla Allow Pump Control",
+        "name": "BrewAssistant BrewZilla Allow Pump Control",
+        "object_id": "brewassistant_brewzilla_allow_pump_control",
         "icon": "mdi:pump",
     },
     "brewzilla_allow_boil_mode": {
-        "name": "BrewZilla Allow Boil Mode",
+        "name": "BrewAssistant BrewZilla Allow Boil Mode",
+        "object_id": "brewassistant_brewzilla_allow_boil_mode",
         "icon": "mdi:kettle-steam",
     },
     "brewzilla_safe_mode": {
-        "name": "BrewZilla Safe Mode",
+        "name": "BrewAssistant BrewZilla Safe Mode",
+        "object_id": "brewassistant_brewzilla_safe_mode",
         "icon": "mdi:shield-check",
         "default": True,
     },
@@ -65,10 +71,11 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     ) -> None:
         super().__init__(coordinator, key)
         self._key = key
-        self._attr_name = f"BrewAssistant {config['name']}"
-        self._attr_icon = config["icon"]
+        self._attr_unique_id = f"{DOMAIN}_switch_{key}"
+        self._attr_name = str(config["name"])
+        self._attr_icon = str(config["icon"])
         self._attr_is_on = bool(config.get("default", False))
-        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        self._attr_suggested_object_id = str(config["object_id"])
 
     @property
     def name(self) -> str:
@@ -85,7 +92,7 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     @property
     def is_on(self) -> bool:
         """Return switch state."""
-        return self._attr_is_on
+        return bool(self._attr_is_on)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
