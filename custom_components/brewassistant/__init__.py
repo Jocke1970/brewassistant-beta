@@ -27,6 +27,9 @@ SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
 SERVICE_MANUAL_NEXT = "manual_brewday_next"
+SERVICE_MANUAL_START_MASH = "manual_brewday_start_mash"
+SERVICE_MANUAL_START_BOIL = "manual_brewday_start_boil"
+SERVICE_MANUAL_START_WHIRLPOOL = "manual_brewday_start_whirlpool"
 SERVICE_MANUAL_START_COOLING = "manual_brewday_start_cooling"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
@@ -86,6 +89,26 @@ def _register_services(hass: HomeAssistant) -> None:
             blocking=False,
         )
 
+    def _jump_to_manual_stage(*, keywords: tuple[str, ...], fallback_index: int | None = None) -> None:
+        session = get_manual_brewday_session(hass)
+        stage_index = None
+        for index, stage in enumerate(session.plan.stages):
+            stage_name = stage.name.lower()
+            if any(keyword in stage_name for keyword in keywords):
+                stage_index = index
+                break
+
+        if stage_index is None:
+            stage_index = fallback_index if fallback_index is not None else 0
+        stage_index = max(0, min(stage_index, len(session.plan.stages) - 1))
+
+        session.active_stage_index = stage_index
+        session.active_step_index = 0
+        session.step_started_at = datetime.now(timezone.utc)
+        session.paused_at = None
+        session.remaining_when_paused = None
+        session.state = ManualRuntimeState.RUNNING
+
     async def _handle_force_brewfather_refresh(call: ServiceCall) -> None:
         result = await request_manual_brewfather_refresh(hass)
         if result.get("refreshed"):
@@ -132,24 +155,20 @@ def _register_services(hass: HomeAssistant) -> None:
         session.next()
         await _refresh_runtime_sensors()
 
+    async def _handle_manual_start_mash(call: ServiceCall) -> None:
+        _jump_to_manual_stage(keywords=("mash", "mäsk"), fallback_index=1)
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_start_boil(call: ServiceCall) -> None:
+        _jump_to_manual_stage(keywords=("boil", "kok"), fallback_index=3)
+        await _refresh_runtime_sensors()
+
+    async def _handle_manual_start_whirlpool(call: ServiceCall) -> None:
+        _jump_to_manual_stage(keywords=("whirlpool", "hop stand", "hopstand"), fallback_index=4)
+        await _refresh_runtime_sensors()
+
     async def _handle_manual_start_cooling(call: ServiceCall) -> None:
-        session = get_manual_brewday_session(hass)
-        cooling_stage_index = None
-        for index, stage in enumerate(session.plan.stages):
-            stage_name = stage.name.lower()
-            if any(keyword in stage_name for keyword in ("chill", "cool", "kyl")):
-                cooling_stage_index = index
-                break
-
-        if cooling_stage_index is None:
-            cooling_stage_index = max(0, len(session.plan.stages) - 1)
-
-        session.active_stage_index = cooling_stage_index
-        session.active_step_index = 0
-        session.step_started_at = datetime.now(timezone.utc)
-        session.paused_at = None
-        session.remaining_when_paused = None
-        session.state = ManualRuntimeState.RUNNING
+        _jump_to_manual_stage(keywords=("chill", "cool", "kyl"), fallback_index=max(0, len(get_manual_brewday_session(hass).plan.stages) - 1))
         await _refresh_runtime_sensors()
 
     async def _handle_manual_finish(call: ServiceCall) -> None:
@@ -167,6 +186,9 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_NEXT, _handle_manual_next)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_MASH, _handle_manual_start_mash)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_BOIL, _handle_manual_start_boil)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_WHIRLPOOL, _handle_manual_start_whirlpool)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_COOLING, _handle_manual_start_cooling)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_FINISH, _handle_manual_finish)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_RESET, _handle_manual_reset)
