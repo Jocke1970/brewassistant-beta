@@ -15,6 +15,12 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from .brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
+from .carbonation_runtime import (
+    pause_carbonation_runtime,
+    reset_carbonation_runtime,
+    start_carbonation_runtime,
+    update_carbonation_runtime,
+)
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
 from .manual_brewday_runtime import ManualRuntimeState
@@ -33,6 +39,10 @@ SERVICE_MANUAL_START_WHIRLPOOL = "manual_brewday_start_whirlpool"
 SERVICE_MANUAL_START_COOLING = "manual_brewday_start_cooling"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
+SERVICE_CARBONATION_START = "carbonation_start"
+SERVICE_CARBONATION_UPDATE = "carbonation_update"
+SERVICE_CARBONATION_PAUSE = "carbonation_pause"
+SERVICE_CARBONATION_RESET = "carbonation_reset"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -89,6 +99,29 @@ def _register_services(hass: HomeAssistant) -> None:
             blocking=False,
         )
 
+    async def _refresh_carbonation_sensors() -> None:
+        await hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {"entity_id": [
+                "sensor.brewassistant_carbonation_status",
+                "sensor.brewassistant_carbonation_method",
+                "sensor.brewassistant_carbonation_target_volumes",
+                "sensor.brewassistant_carbonation_temperature",
+                "sensor.brewassistant_carbonation_recommended_pressure_bar",
+                "sensor.brewassistant_carbonation_recommended_pressure_psi",
+                "sensor.brewassistant_carbonation_actual_pressure_bar",
+                "sensor.brewassistant_carbonation_actual_pressure_psi",
+                "sensor.brewassistant_carbonation_equilibrium_volumes",
+                "sensor.brewassistant_carbonation_estimated_volumes",
+                "sensor.brewassistant_carbonation_progress_percent",
+                "sensor.brewassistant_carbonation_started_at",
+                "sensor.brewassistant_carbonation_age_days",
+                "sensor.brewassistant_carbonation_summary",
+            ]},
+            blocking=False,
+        )
+
     def _jump_to_manual_stage(*, keywords: tuple[str, ...], fallback_index: int | None = None) -> None:
         session = get_manual_brewday_session(hass)
         stage_index = None
@@ -124,10 +157,7 @@ def _register_services(hass: HomeAssistant) -> None:
         result = await async_apply_brewzilla_target_if_allowed(hass)
         await _refresh_runtime_sensors()
         if result.get("applied"):
-            _LOGGER.info(
-                "BrewZilla target applied: %s °C",
-                result.get("requested_target"),
-            )
+            _LOGGER.info("BrewZilla target applied: %s °C", result.get("requested_target"))
         else:
             _LOGGER.info(
                 "BrewZilla target apply skipped: %s (%s)",
@@ -180,6 +210,22 @@ def _register_services(hass: HomeAssistant) -> None:
         new_manual_brewday_session(hass)
         await _refresh_runtime_sensors()
 
+    async def _handle_carbonation_start(call: ServiceCall) -> None:
+        start_carbonation_runtime(hass, dict(call.data))
+        await _refresh_carbonation_sensors()
+
+    async def _handle_carbonation_update(call: ServiceCall) -> None:
+        update_carbonation_runtime(hass, dict(call.data))
+        await _refresh_carbonation_sensors()
+
+    async def _handle_carbonation_pause(call: ServiceCall) -> None:
+        pause_carbonation_runtime(hass)
+        await _refresh_carbonation_sensors()
+
+    async def _handle_carbonation_reset(call: ServiceCall) -> None:
+        reset_carbonation_runtime(hass)
+        await _refresh_carbonation_sensors()
+
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
@@ -192,6 +238,10 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_COOLING, _handle_manual_start_cooling)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_FINISH, _handle_manual_finish)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_RESET, _handle_manual_reset)
+    hass.services.async_register(DOMAIN, SERVICE_CARBONATION_START, _handle_carbonation_start)
+    hass.services.async_register(DOMAIN, SERVICE_CARBONATION_UPDATE, _handle_carbonation_update)
+    hass.services.async_register(DOMAIN, SERVICE_CARBONATION_PAUSE, _handle_carbonation_pause)
+    hass.services.async_register(DOMAIN, SERVICE_CARBONATION_RESET, _handle_carbonation_reset)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
