@@ -32,6 +32,17 @@ _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 _ON_STATES = {"on", "true", "yes", "active"}
 _ACTIVE_FERMENTATION_STAGES = {"fermentation", "cold_crash"}
+_INACTIVE_RUNTIME_STATUSES = {
+    "completed",
+    "complete",
+    "finished",
+    "packaged",
+    "transferred",
+    "transferred to keg",
+    "serving",
+    "carbonating",
+    "conditioning",
+}
 
 
 @dataclass(slots=True)
@@ -237,7 +248,13 @@ def _process_context(
 
     normalized_runtime = (runtime_status or "").lower()
 
-    if cold_crash_active or target_mode == "Cold crash":
+    if normalized_runtime in _INACTIVE_RUNTIME_STATUSES:
+        status = "Finished / transferred to keg"
+        next_step = "Batch completed"
+        current_stage = "none"
+        next_stage = "none"
+        reason = f"Runtime status indicates inactive batch: {normalized_runtime}"
+    elif cold_crash_active or target_mode == "Cold crash":
         status = "Cold crash"
         next_step = "Maintain cold crash and positive pressure"
         current_stage = "cold_crash"
@@ -249,12 +266,6 @@ def _process_context(
         current_stage = "fermentation"
         next_stage = "cold_crash"
         reason = "Runtime status is fermenting"
-    elif normalized_runtime in {"completed", "finished", "packaged"}:
-        status = "Finished / transferred to keg"
-        next_step = "Batch completed"
-        current_stage = "none"
-        next_stage = "none"
-        reason = "Runtime status indicates completed batch"
     elif normalized_runtime:
         status = runtime_status or "Monitoring"
         next_step = "Monitor active runtime"
@@ -340,9 +351,11 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         cold_crash_target_temp = _state_float(self.hass, cold_crash_target_entity)
         gravity = _state_float(self.hass, gravity_entity)
         runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")
+        normalized_runtime = (runtime_status or "").lower()
+        runtime_inactive = normalized_runtime in _INACTIVE_RUNTIME_STATUSES
 
         cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
-        if cold_crash_active and cold_crash_target_temp is not None:
+        if cold_crash_active and cold_crash_target_temp is not None and not runtime_inactive:
             target_temp = cold_crash_target_temp
             effective_target_entity = cold_crash_target_entity
             target_mode = "Cold crash"
