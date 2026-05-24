@@ -99,6 +99,16 @@ The runtime layer should answer:
 
 `brewday_runtime_core.py` resolves Brewfather Brew Tracker or None. Python Manual Brewday is handled through `manual_brewday_runtime.py` and `manual_brewday_adapter.py`, then selected by `brewday_runtime.py` when active.
 
+Manual Brewday supports clean restart semantics after a completed state:
+
+```text
+Finish → Start
+= new run from Setup / Prepare equipment
+
+Finish → Reset → Prepare/Start
+= clean new Manual Brewday session
+```
+
 ---
 
 ### `manual_brewday_*`
@@ -112,6 +122,7 @@ Responsibilities:
 - Expose a normalized runtime snapshot.
 - Support prepare/start/pause/next/finish/reset.
 - Support shortcut services for Mash, Boil, Whirlpool and Cooling.
+- Restart safely from the beginning after completed state.
 
 Manual Brewday services do not sync old YAML/input-helper mirrors.
 
@@ -148,6 +159,17 @@ Important rule:
 The active stage/step determines current stage.
 next_step must not wake a future stage early.
 ```
+
+Current explicit stage boundary:
+
+```text
+Runtime prepared / Setup / Prepare equipment
+→ Stage: Prepare
+→ Group: prep
+→ Control hint: observe_only
+```
+
+This prevents a prepared setup step from being interpreted as Strike Water too early.
 
 The Stage Engine is read-only.
 
@@ -266,7 +288,8 @@ Current dashboard milestones:
 Counterflow Cooling Cockpit
 Carbonation Cockpit v3.1
 Fermentation Cockpit v2.1
-BrewZilla/Brewday cockpit cards
+BrewZilla/Brewday top-section v2.2
+Brewday Actions / Runtime Controls v2.2
 ```
 
 ---
