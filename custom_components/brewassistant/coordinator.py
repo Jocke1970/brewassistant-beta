@@ -32,6 +32,12 @@ _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 _ON_STATES = {"on", "true", "yes", "active"}
 _ACTIVE_FERMENTATION_STAGES = {"fermentation", "cold_crash"}
+_FERMENTATION_ACTIVITY_ENTITIES = (
+    "input_boolean.brew_batch_active",
+    "input_boolean.brewassistant_fermentation_active",
+    "input_boolean.brewassistant_fermentation_module_active",
+    "input_boolean.manual_batch_active",
+)
 _INACTIVE_RUNTIME_STATUSES = {
     "completed",
     "complete",
@@ -117,6 +123,11 @@ def _state_is_on(hass: HomeAssistant, entity_id: str | None) -> bool:
         return False
 
     return state.state.lower() in _ON_STATES
+
+
+def _any_state_is_on(hass: HomeAssistant, entity_ids: tuple[str, ...]) -> bool:
+    """Return whether any listed entity is on/active."""
+    return any(_state_is_on(hass, entity_id) for entity_id in entity_ids)
 
 
 def _format_temp(value: float | None) -> str:
@@ -353,9 +364,18 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")
         normalized_runtime = (runtime_status or "").lower()
         runtime_inactive = normalized_runtime in _INACTIVE_RUNTIME_STATUSES
+        runtime_active = bool(normalized_runtime and not runtime_inactive)
+        fermentation_context_active = runtime_active or _any_state_is_on(self.hass, _FERMENTATION_ACTIVITY_ENTITIES)
 
         cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
-        if cold_crash_active and cold_crash_target_temp is not None and not runtime_inactive:
+        cold_crash_in_scope = (
+            cold_crash_active
+            and cold_crash_target_temp is not None
+            and not runtime_inactive
+            and fermentation_context_active
+        )
+
+        if cold_crash_in_scope:
             target_temp = cold_crash_target_temp
             effective_target_entity = cold_crash_target_entity
             target_mode = "Cold crash"
@@ -392,7 +412,7 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             target_mode,
         )
         process = _process_context(
-            cold_crash_active=cold_crash_active,
+            cold_crash_active=cold_crash_in_scope,
             target_mode=target_mode,
             runtime_status=runtime_status,
             liquid_temp=rounded_liquid,
