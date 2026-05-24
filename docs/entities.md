@@ -14,7 +14,8 @@ Preferred current direction:
 sensor.brewassistant_*                 Python-owned normalized sensors
 binary_sensor.brewassistant_*          Python-owned binary state
 switch.brewassistant_*                 Explicit safe user toggles / safety switches
-number.brewassistant_*                 Future explicit numeric controls
+number.brewassistant_*                 Python-owned numeric controls
+select.brewassistant_*                 Python-owned select controls
 button.brewassistant_*                 Future explicit action buttons
 ```
 
@@ -36,7 +37,7 @@ fwk_*                                  old Fresh Wort Kit namespace
 brew_process_*                         older process namespace
 brew_batch_*                           older batch namespace
 brew_recipe_*                          older recipe/runtime namespace
-input_boolean/input_select helpers     old workflow mirrors or local inputs
+input_boolean/input_number helpers     old workflow mirrors or local inputs
 ```
 
 ---
@@ -222,7 +223,7 @@ Heater on during cooling
 
 ## Carbonation entities
 
-Carbonation sensors currently exist and are used by the Carbonation Cockpit UI.
+Carbonation is Python-runtime backed and used by the Carbonation Cockpit UI.
 
 Current sensors:
 
@@ -243,25 +244,43 @@ sensor.brewassistant_carbonation_age_days
 sensor.brewassistant_carbonation_summary
 ```
 
-Known limitation:
+Current controls:
 
 ```text
-carbonation.py is still helper-backed for process/input state.
+number.brewassistant_carbonation_pressure_bar
+number.brewassistant_carbonation_target_volumes
+number.brewassistant_carbonation_start_volumes
+select.brewassistant_carbonation_method
 ```
 
-Planned direction:
+Current services:
 
 ```text
-Python-owned Carbonation Runtime/session
-explicit carbonation start/update/pause/reset services
-optional pressure and temperature source mapping
+brewassistant.carbonation_start
+brewassistant.carbonation_update
+brewassistant.carbonation_pause
+brewassistant.carbonation_reset
+```
+
+Important behavior:
+
+```text
+sensor.kyl_temperatur_4 is the default carbonation temperature source.
+Legacy input_number.brewassistant_carbonation_pressure_bar is not a backend pressure fallback.
+Actual pressure is owned by number.brewassistant_carbonation_pressure_bar / Python runtime.
+```
+
+Current open design question:
+
+```text
+progress_percent currently needs validation: level-percent vs separate level/process progress.
 ```
 
 ---
 
 ## Fermentation entities
 
-Fermentation currently has older smart recommendation and process sensors, with a planned Python-owned Timed Fermentation Runtime later.
+Fermentation currently has coordinator-owned process/scope sensors and older smart recommendation sensors, with a planned Python-owned Timed Fermentation Runtime later.
 
 Current examples:
 
@@ -273,17 +292,29 @@ sensor.brewassistant_recipe_target_temperature
 sensor.brewassistant_temperature_delta
 sensor.brewassistant_temperature_status
 sensor.brewassistant_temperature_severity
+sensor.brewassistant_problem_level
+sensor.brewassistant_process_status
+sensor.brewassistant_process_current_action_stage
+sensor.brewassistant_process_next_action_stage
+sensor.brewassistant_status_summary
 sensor.brewassistant_smart_recommendation_summary
 sensor.brewassistant_smart_heat_recommendation
 sensor.brewassistant_smart_cooling_recommendation
 sensor.brewassistant_smart_fan_recommendation
 ```
 
-Near-term UI fix:
+Scope guard behavior:
 
 ```text
-Fermentation Cockpit should show standby/completed when fermentation is no longer active.
+No active fermentation/batch context
+→ process_status: Idle
+→ process_current_action_stage: none
+→ temperature_status: Standby
+→ temperature_severity: ok
+→ problem_level: ok
 ```
+
+A stale cold-crash helper alone should not keep fermentation warnings active.
 
 ---
 
