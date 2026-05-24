@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 DATA_KEY = "carbonation_runtime"
-LOCAL_PRESSURE_BAR_ENTITY = "input_number.brewassistant_carbonation_pressure_bar"
 LOCAL_TEMPERATURE_ENTITY = "sensor.kyl_temperatur_4"
 FALLBACK_TEMPERATURE_ENTITY = "sensor.brewassistant_liquid_temperature"
 
@@ -164,12 +163,9 @@ def pause_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
     return runtime
 
 
-def _resolved_pressure_bar(hass: HomeAssistant, runtime: CarbonationRuntime) -> tuple[float | None, str | None]:
+def _resolved_pressure_bar(runtime: CarbonationRuntime) -> tuple[float | None, str | None]:
     if runtime.pressure_bar is not None:
         return runtime.pressure_bar, "python_runtime"
-    local = _float_state(hass, LOCAL_PRESSURE_BAR_ENTITY)
-    if local is not None:
-        return local, LOCAL_PRESSURE_BAR_ENTITY
     return None, None
 
 
@@ -188,7 +184,7 @@ def _resolved_temperature_c(hass: HomeAssistant, runtime: CarbonationRuntime) ->
 def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build a read-only carbonation snapshot."""
     runtime = get_carbonation_runtime(hass)
-    pressure_bar, pressure_source = _resolved_pressure_bar(hass, runtime)
+    pressure_bar, pressure_source = _resolved_pressure_bar(runtime)
     temp_c, temp_source = _resolved_temperature_c(hass, runtime)
 
     age_days = None
@@ -207,6 +203,9 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         progress = min(1.0, (age_days or 0) / _method_days_to_full(runtime.method))
         estimated = round(runtime.start_volumes + ((equilibrium - runtime.start_volumes) * progress), 2)
         progress_percent = round(min(100.0, (estimated / runtime.target_volumes) * 100), 1)
+    elif runtime.active:
+        estimated = runtime.start_volumes
+        progress_percent = round(min(100.0, (estimated / runtime.target_volumes) * 100), 1)
 
     status = "Inactive"
     ready = False
@@ -220,8 +219,10 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     if runtime.active and pressure_bar is not None and temp_c is not None and estimated is not None and progress_percent is not None:
         summary = f"{runtime.method} · {pressure_bar:.2f} bar · {temp_c:.1f} °C · Estimated {estimated:.2f} / {runtime.target_volumes:.2f} vol · {progress_percent:.0f}%"
+    elif runtime.active and temp_c is not None and estimated is not None and progress_percent is not None:
+        summary = f"{runtime.method} · {temp_c:.1f} °C · Estimated {estimated:.2f} / {runtime.target_volumes:.2f} vol · {progress_percent:.0f}% · set pressure to estimate equilibrium"
     elif runtime.active:
-        summary = f"Carbonating · {runtime.method} · waiting for pressure/temperature"
+        summary = f"Carbonating · {runtime.method} · waiting for temperature"
     else:
         summary = f"Inactive · {runtime.method}"
 
@@ -247,7 +248,6 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "source": "python_runtime",
         "pressure_source": pressure_source,
         "temperature_source": temp_source,
-        "local_pressure_entity": LOCAL_PRESSURE_BAR_ENTITY,
         "local_temperature_entity": LOCAL_TEMPERATURE_ENTITY,
         "fallback_temperature_entity": FALLBACK_TEMPERATURE_ENTITY,
         "mode": "read_only",
