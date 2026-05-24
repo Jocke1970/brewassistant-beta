@@ -51,6 +51,8 @@ MAX_SAMPLE_SECONDS = 7200
 MIN_MEANINGFUL_RATE_C_PER_H = 0.2
 HEATER_ALLOWED = False
 HEATER_REQUIRED_STATE = "off"
+PUMP_REQUIRED = True
+PUMP_REQUIRED_STATE = "on"
 
 
 @dataclass(slots=True)
@@ -146,10 +148,28 @@ def _cooling_rate(previous: CoolingSample | None, latest: CoolingSample | None) 
     return round(rate, 2)
 
 
-def _cooling_guard(*, heater_state: str | None) -> str:
+def _cooling_delta(reference_temp: float | None, target_temp: float | None) -> float | None:
+    """Return cooling delta in °C, positive when wort is above target."""
+    if reference_temp is None or target_temp is None:
+        return None
+    return reference_temp - target_temp
+
+
+def _cooling_guard(
+    *,
+    heater_state: str | None,
+    pump_state: str | None,
+    reference_temp: float | None,
+    target_temp: float | None,
+) -> str:
     """Return cooling guard state."""
     if heater_state == "on":
         return "heater_off_required"
+
+    delta = _cooling_delta(reference_temp, target_temp)
+    if delta is not None and delta > READY_TOLERANCE_C and pump_state == "off":
+        return "pump_on_required"
+
     return "ok"
 
 
@@ -162,20 +182,20 @@ def _cooling_status(
     pump_state: str | None,
     heater_state: str | None,
 ) -> str:
+    if heater_state == "on":
+        return "heater_off_required"
     if reference_temp is None:
         return "no_reference_temperature"
     if target_temp is None:
         return "no_target"
-    if heater_state == "on":
-        return "heater_off_required"
 
     delta = reference_temp - target_temp
     if abs(delta) <= READY_TOLERANCE_C:
         return "pitch_ready"
     if delta < -READY_TOLERANCE_C:
         return "below_target"
-    if pump_state == "off" and (stage or "") == "Wort Cooling":
-        return "pump_off"
+    if pump_state == "off" and delta > READY_TOLERANCE_C:
+        return "pump_on_required"
     if rate_c_per_h is not None and rate_c_per_h > MIN_MEANINGFUL_RATE_C_PER_H:
         return "cooling"
     if delta > READY_TOLERANCE_C:
@@ -237,7 +257,12 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     heater_state = _state(hass, HEATER_SWITCH, "off")
     power_state = _state(hass, POWER_SWITCH, "off")
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
-    guard = _cooling_guard(heater_state=heater_state)
+    guard = _cooling_guard(
+        heater_state=heater_state,
+        pump_state=pump_state,
+        reference_temp=reference_temp,
+        target_temp=target_temp,
+    )
 
     status = _cooling_status(
         reference_temp=reference_temp,
@@ -253,8 +278,10 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     rate_text = "—" if rate is None else f"{rate:.1f} °C/h"
     eta_text = "—" if eta_minutes is None else f"{eta_minutes:.0f} min"
 
-    if guard != "ok":
+    if guard == "heater_off_required":
         summary = f"Cooling blocked · heater must be OFF · {reference_label} {temp_text} · target {target_text}"
+    elif guard == "pump_on_required":
+        summary = f"Cooling blocked · pump must be ON · {reference_label} {temp_text} → {target_text}"
     elif pitch_ready:
         summary = f"Pitch ready · {reference_label} {temp_text} · target {target_text}"
     elif delta is not None and delta > READY_TOLERANCE_C:
@@ -287,6 +314,8 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "stage": stage,
         "control_hint": control_hint,
         "pump_state": pump_state,
+        "pump_required": PUMP_REQUIRED,
+        "pump_required_state": PUMP_REQUIRED_STATE,
         "heater_state": heater_state,
         "heater_allowed": HEATER_ALLOWED,
         "heater_required_state": HEATER_REQUIRED_STATE,
