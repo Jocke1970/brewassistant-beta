@@ -173,6 +173,18 @@ class ManualPlan:
                     ),
                 ),
                 ManualStage(
+                    name="Whirlpool",
+                    steps=(
+                        ManualStep(
+                            name="Whirlpool / hop stand",
+                            description="Run whirlpool or hop stand schedule before chilling.",
+                            duration_seconds=1200,
+                            target_temperature=80.0,
+                            pause_before=True,
+                        ),
+                    ),
+                ),
+                ManualStage(
                     name="Chill / Transfer",
                     steps=(
                         ManualStep(
