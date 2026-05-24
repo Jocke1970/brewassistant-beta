@@ -22,6 +22,18 @@ manual_brewday_next:
   name: Manual Brewday next
   description: Advance the BrewAssistant manual brewday runtime session to the next step.
 
+manual_brewday_start_mash:
+  name: Manual Brewday start mash
+  description: Jump the BrewAssistant manual brewday runtime session directly to the mash stage.
+
+manual_brewday_start_boil:
+  name: Manual Brewday start boil
+  description: Jump the BrewAssistant manual brewday runtime session directly to the boil stage.
+
+manual_brewday_start_whirlpool:
+  name: Manual Brewday start whirlpool
+  description: Jump the BrewAssistant manual brewday runtime session directly to the whirlpool/hop stand stage.
+
 manual_brewday_start_cooling:
   name: Manual Brewday start cooling
   description: Jump the BrewAssistant manual brewday runtime session directly to the wort cooling/chill step.
