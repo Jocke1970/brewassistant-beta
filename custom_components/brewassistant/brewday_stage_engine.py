@@ -232,37 +232,41 @@ def _resolve_stage(
     if runtime_state == "completed":
         return "Completed", "Brewday runtime completed"
 
-    stage_blob = f"{runtime_stage or ''} {runtime_step or ''} {next_step or ''}".lower()
+    # Only the active stage/step should determine the current interpreted stage.
+    # next_step is intentionally kept out of this blob so an upcoming "Chill wort"
+    # step does not wake the cooling cockpit while Whirlpool is still active.
+    current_blob = f"{runtime_stage or ''} {runtime_step or ''}".lower()
+    next_blob = f"{next_step or ''}".lower()
     temp_value = temp if temp is not None else -999
     target_value = target if target is not None else None
     power_value = power if power is not None else 0
     pump_value = pump_util if pump_util is not None else 0
     delta_value = delta if delta is not None else None
 
-    if _contains(stage_blob, "clean"):
+    if _contains(current_blob, "clean"):
         return "Cleaning", "Runtime text indicates cleaning"
-    if _contains(stage_blob, *COOLING_KEYWORDS):
+    if _contains(current_blob, *COOLING_KEYWORDS):
         return "Wort Cooling", "Runtime text indicates wort cooling/chilling"
-    if _contains(stage_blob, *PITCH_READY_KEYWORDS) and temp_value <= 25:
+    if _contains(current_blob, *PITCH_READY_KEYWORDS) and temp_value <= 25:
         return "Pitch Ready", "Runtime text and temperature indicate pitch readiness"
-    if _contains(stage_blob, *TRANSFER_TO_FERMENTER_KEYWORDS) and temp_value <= 25:
+    if _contains(current_blob, *TRANSFER_TO_FERMENTER_KEYWORDS) and temp_value <= 25:
         return "Pitch Ready", "Runtime text indicates transfer-to-fermenter and temperature is pitch-safe"
-    if _contains(stage_blob, "transfer"):
+    if _contains(current_blob, "transfer"):
         return "Transfer", "Runtime text indicates transfer"
-    if _contains(stage_blob, "whirlpool", "hop stand", "hopstand"):
+    if _contains(current_blob, "whirlpool", "hop stand", "hopstand"):
         return "Whirlpool", "Runtime text indicates whirlpool/hop stand"
     if temp_value >= 95 and power_value >= 1000:
         return "Boiling", "BrewZilla temperature and power indicate boil"
-    if _contains(stage_blob, "boil"):
+    if _contains(current_blob, "boil"):
         if temp_value < 92 and power_value >= 500:
             return "Heating To Boil", "Boil stage active and temperature below boil range"
         return "Boiling", "Runtime stage indicates boil"
-    if _contains(stage_blob, "hop") and _contains(stage_blob, "addition", "giva"):
+    if _contains(current_blob, "hop") and _contains(current_blob, "addition", "giva"):
         return "Hop Addition", "Runtime text indicates hop addition"
-    if _contains(stage_blob, "mash out"):
+    if _contains(current_blob, "mash out"):
         return "Mash Out", "Runtime text indicates mash out"
-    if _contains(stage_blob, "mash", "mäsk"):
-        if _contains(stage_blob, "start", "inmäsk"):
+    if _contains(current_blob, "mash", "mäsk"):
+        if _contains(current_blob, "start", "inmäsk"):
             if target_value is not None and temp_value < target_value - 2:
                 return "Heating Strike", "Mash start active and temperature below target"
             return "Mash In", "Mash start/inmash step active"
@@ -271,6 +275,13 @@ def _resolve_stage(
         if target_value is not None and temp_value < target_value - 1:
             return "Heating Strike", "Mash stage active and BrewZilla below target"
         return "Mash", "Runtime stage indicates mash"
+
+    # If the active text is generic but the upcoming step is a cooling/pitch action,
+    # keep the current stage post-boil instead of prematurely entering cooling.
+    if _contains(next_blob, *COOLING_KEYWORDS, *PITCH_READY_KEYWORDS):
+        if _contains(current_blob, "whirlpool", "hop stand", "hopstand"):
+            return "Whirlpool", "Runtime current stage is whirlpool; cooling is upcoming"
+
     if target_value is not None and temp_value < target_value - 3 and power_value >= 500:
         return "Heating Strike", "BrewZilla heating toward target"
     if target_value is not None and abs(temp_value - target_value) <= 1.0 and pump_value > 0:
