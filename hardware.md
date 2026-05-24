@@ -4,3 +4,11 @@ Cooler / Fermentation-chamber:
   Electrolux 
   Heat Mat
   Fan
+  Aqara T1 Thermometer / Hygrometer
+  RAPT Pill
+
+Brewzilla Gen4 35l
+Shelly Plug S
+RAPT Ble Thermometer
+Red Reaper Couterflow Chiller
+Whirlpool-arm
