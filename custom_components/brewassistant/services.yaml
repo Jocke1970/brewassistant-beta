@@ -22,6 +22,10 @@ manual_brewday_next:
   name: Manual Brewday next
   description: Advance the BrewAssistant manual brewday runtime session to the next step.
 
+manual_brewday_start_cooling:
+  name: Manual Brewday start cooling
+  description: Jump the BrewAssistant manual brewday runtime session directly to the wort cooling/chill step.
+
 manual_brewday_finish:
   name: Manual Brewday finish
   description: Finish the BrewAssistant manual brewday runtime session.
