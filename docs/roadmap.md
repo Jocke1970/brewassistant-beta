@@ -170,10 +170,20 @@ Completed:
 [x] Support Heating To Boil, Boiling and Hop Addition
 [x] Support Whirlpool and Hop Stand
 [x] Support Wort Cooling / counterflow cooling detection
-[x] Support Pitch Ready, Transfer, Cleaning and Completed
+[x] Support Pitch Ready, Transfer and Completed
+[x] Recognize Cleaning as an external housekeeping/wrap-up label only
 [x] Expose stage reason/status/icon/progress/temperature/power sensors
 [x] Add v2 fields: stage_group, stage_priority, suggested_action, control_hint
 [x] Add Stage Engine v2 UI card
+```
+
+Cleaning boundary:
+
+```text
+Cleaning is not a BrewAssistant core workflow.
+It may appear as a Stage Engine wrap-up label if a runtime/source reports it,
+but no dedicated BrewAssistant cleaning module or UI is planned.
+Cleaning remains a separate manual housekeeping process.
 ```
 
 Current Stage Engine sensors:
