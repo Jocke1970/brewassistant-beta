@@ -49,6 +49,8 @@ READY_TOLERANCE_C = 1.0
 MIN_SAMPLE_SECONDS = 60
 MAX_SAMPLE_SECONDS = 7200
 MIN_MEANINGFUL_RATE_C_PER_H = 0.2
+HEATER_ALLOWED = False
+HEATER_REQUIRED_STATE = "off"
 
 
 @dataclass(slots=True)
@@ -144,6 +146,13 @@ def _cooling_rate(previous: CoolingSample | None, latest: CoolingSample | None) 
     return round(rate, 2)
 
 
+def _cooling_guard(*, heater_state: str | None) -> str:
+    """Return cooling guard state."""
+    if heater_state == "on":
+        return "heater_off_required"
+    return "ok"
+
+
 def _cooling_status(
     *,
     reference_temp: float | None,
@@ -157,14 +166,14 @@ def _cooling_status(
         return "no_reference_temperature"
     if target_temp is None:
         return "no_target"
+    if heater_state == "on":
+        return "heater_off_required"
 
     delta = reference_temp - target_temp
     if abs(delta) <= READY_TOLERANCE_C:
         return "pitch_ready"
     if delta < -READY_TOLERANCE_C:
         return "below_target"
-    if heater_state == "on":
-        return "heater_on_during_cooling"
     if pump_state == "off" and (stage or "") == "Wort Cooling":
         return "pump_off"
     if rate_c_per_h is not None and rate_c_per_h > MIN_MEANINGFUL_RATE_C_PER_H:
@@ -228,6 +237,7 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     heater_state = _state(hass, HEATER_SWITCH, "off")
     power_state = _state(hass, POWER_SWITCH, "off")
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
+    guard = _cooling_guard(heater_state=heater_state)
 
     status = _cooling_status(
         reference_temp=reference_temp,
@@ -243,7 +253,9 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     rate_text = "—" if rate is None else f"{rate:.1f} °C/h"
     eta_text = "—" if eta_minutes is None else f"{eta_minutes:.0f} min"
 
-    if pitch_ready:
+    if guard != "ok":
+        summary = f"Cooling blocked · heater must be OFF · {reference_label} {temp_text} · target {target_text}"
+    elif pitch_ready:
         summary = f"Pitch ready · {reference_label} {temp_text} · target {target_text}"
     elif delta is not None and delta > 0:
         summary = f"Cooling · {reference_label} {temp_text} → {target_text} · {rate_text} · ETA {eta_text}"
@@ -273,6 +285,9 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "control_hint": control_hint,
         "pump_state": pump_state,
         "heater_state": heater_state,
+        "heater_allowed": HEATER_ALLOWED,
+        "heater_required_state": HEATER_REQUIRED_STATE,
+        "cooling_guard": guard,
         "power_state": power_state,
         "power_w": power_w,
         "previous_sample_temperature": previous.temperature if previous is not None else None,
