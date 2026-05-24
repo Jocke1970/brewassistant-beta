@@ -22,7 +22,6 @@ YAML/dashboard as presentation layer only
 [x] Runtime normalization
 [x] Source health engine
 [x] Next recommended action engine
-[x] Carbonation calculations and estimates
 [x] Dashboard support entities
 [x] Brewday Runtime Engine
 [x] Brewfather Brew Tracker normalization
@@ -43,7 +42,12 @@ YAML/dashboard as presentation layer only
 [x] Stage Engine v2 dashboard support sensors
 [x] Counterflow Wort Cooling backend
 [x] Counterflow Wort Cooling cockpit UI
-[x] Carbonation Cockpit UI restored
+[x] Python-owned Carbonation Runtime/session
+[x] Carbonation start/update/pause/reset services
+[x] Carbonation number/select controls
+[x] Carbonation Cockpit v3.1 UI
+[x] Fermentation Cockpit scope guard
+[x] Fermentation Cockpit v2.1 UI
 ```
 
 ### Current phase
@@ -59,9 +63,9 @@ BrewZilla/RAPT reality testing
 ↓
 Counterflow wort cooling validation
 ↓
-Fermentation cockpit scope guard
+Carbonation runtime validation
 ↓
-Carbonation backend cleanup
+Fermentation cockpit validation
 ↓
 Timed Fermentation Runtime
 ↓
@@ -213,35 +217,50 @@ Remaining:
 
 # v4.7 Fermentation cockpit/runtime cleanup
 
-Current issue:
+Completed:
 
 ```text
-Fermentation Cockpit can show warning state even after the fermentation step is over.
+[x] Add Fermentation Cockpit scope guard
+[x] Ignore stale cold-crash helper when no fermentation/batch context is active
+[x] Show neutral standby/completed when no fermentation process is active
+[x] Hide smart recommendations in the UI when fermentation is out of scope
+[x] Add Fermentation Cockpit v2.1 UI polish
 ```
 
-Next target:
+Remaining:
 
 ```text
-[ ] Add Fermentation Cockpit scope guard
-[ ] Show neutral standby/completed when no fermentation process is active
-[ ] Keep warnings only for active fermentation/cold-crash/diacetyl stages
+[ ] Validate against an active fermentation batch
+[ ] Validate against active cold crash
 [ ] Later: build Python-owned Timed Fermentation Runtime
+[ ] Later: replace legacy helper/process sources where practical
 ```
 
 ---
 
-# v4.8 Carbonation backend cleanup
+# v4.8 Carbonation runtime cleanup
 
-Current status:
+Completed:
 
 ```text
 [x] Carbonation calculation module exists
 [x] Carbonation sensors are registered
-[x] Carbonation Cockpit UI restored in clean dashboard
-[ ] Replace helper-backed carbonation process state with Python-owned session/runtime
-[ ] Add carbonation start/update/pause/reset services
-[ ] Add optional pressure/temp source mapping
-[ ] Add dashboard buttons for carbonation runtime controls
+[x] Python-owned carbonation runtime/session in hass.data
+[x] Carbonation start/update/pause/reset services
+[x] Carbonation pressure/target/start number controls
+[x] Carbonation method select control
+[x] Cooler/kegerator temperature source defaults to sensor.kyl_temperatur_4
+[x] Legacy helper pressure is no longer used as backend fallback
+[x] Carbonation Cockpit v3.1 UI with inputs, controls, estimated/equilibrium/recommended values
+```
+
+Remaining:
+
+```text
+[ ] Validate estimated volumes over time during real set-and-forget carbonation
+[ ] Decide whether progress_percent should remain level-percent or split into level/process progress
+[ ] Add optional pressure/temp source mapping in config flow/options
+[ ] Add smarter start_volumes estimate from max fermentation temperature or spunding pressure
 ```
 
 ---
@@ -264,6 +283,8 @@ Completed:
 [x] Remove YAML process attributes from Python process sensors
 [x] Remove yaml_process_status from coordinator data model
 [x] Allow old YAML stage sensor to be renamed locally while Python takes canonical stage entity
+[x] Remove carbonation pressure helper as backend dependency
+[x] Scope stale cold-crash helper so it cannot keep Fermentation Cockpit in warning state alone
 ```
 
 Remaining:
@@ -274,7 +295,6 @@ Remaining:
 [ ] Replace dashboard dependencies with Python entities
 [ ] Remove duplicated Jinja logic
 [ ] Reduce helper dependency where practical
-[ ] Clean up carbonation helper-backed backend
 [ ] Remove compatibility layers after validation
 [ ] Leave dashboard layout/cards intact where useful
 ```
@@ -290,8 +310,8 @@ Adapter priorities:
 [x] Manual Brewday source adapter
 [x] BrewZilla read-only hardware skeleton
 [x] Counterflow wort cooling runtime helper
+[x] Python-owned Carbonation Runtime adapter
 [ ] Timed Fermentation Runtime adapter
-[ ] Python-owned Carbonation Runtime adapter
 [ ] BrewZilla hardware capability adapter
 [ ] RAPT-specific hardware/profile adapter
 [ ] Future local/MQTT hardware adapter
@@ -302,11 +322,11 @@ Adapter priorities:
 # Next session checklist
 
 ```text
+[ ] Polish BrewZilla/Brewday top cards
+[ ] Validate Fermentation Cockpit v2.1 standby/completed UI
+[ ] Validate Carbonation Cockpit v3.1 with real carbonation inputs
 [ ] Verify Whirlpool shortcut: Stage = Whirlpool and Cooling = standby
 [ ] Verify Cooling shortcut: Stage = Wort Cooling and Cooling = pump_on_required when pump is off
-[ ] Add Fermentation Cockpit scope guard
-[ ] Revisit Python-owned Carbonation Runtime backend
-[ ] Patch BrewZilla runtime top-card power button color if still needed
 [ ] Add Apply Target Now button/card gated by safety switches and control_hint
 ```
 
