@@ -1,14 +1,8 @@
 # Roadmap
 
-This document outlines the evolving BrewAssistant v4 roadmap.
+This document outlines the BrewAssistant v4 roadmap.
 
-The roadmap has shifted from:
-
-```text
-YAML packages with optional Python helpers
-```
-
-toward:
+BrewAssistant is moving from YAML package logic toward a Python custom integration where runtime state, stage interpretation, calculations and safety checks live in `custom_components/brewassistant/`.
 
 ```text
 Python integration as source of truth
@@ -19,7 +13,7 @@ YAML/dashboard as presentation layer only
 
 ## Current project status
 
-### Already working in Python Core
+### Working in Python Core
 
 ```text
 [x] Custom integration skeleton
@@ -30,10 +24,6 @@ YAML/dashboard as presentation layer only
 [x] Next recommended action engine
 [x] Carbonation calculations and estimates
 [x] Dashboard support entities
-[x] Python-owned process/status mirror entities
-[x] Swedish + English translations
-[x] Debug/runtime dashboard cards
-[x] Read-only safe-mode architecture
 [x] Brewday Runtime Engine
 [x] Brewfather Brew Tracker normalization
 [x] Brewday current-step timer resolver
@@ -45,16 +35,18 @@ YAML/dashboard as presentation layer only
 [x] Manual Brewday source adapter
 [x] Manual Brewday persistent session in hass.data
 [x] Manual Brewday Python services
+[x] Manual Brewday stage shortcut services
 [x] BrewZilla runtime sensors
 [x] BrewZilla orchestration safety switches
 [x] BrewZilla Apply Target service
-[x] Brewday Stage Engine v1
 [x] Brewday Stage Engine v2 guidance fields
 [x] Stage Engine v2 dashboard support sensors
-[x] Python-only cleanup of legacy YAML process references
+[x] Counterflow Wort Cooling backend
+[x] Counterflow Wort Cooling cockpit UI
+[x] Carbonation Cockpit UI restored
 ```
 
-### Current architectural phase
+### Current phase
 
 ```text
 Python Core stabilization
@@ -65,9 +57,11 @@ Stage Engine validation
 ↓
 BrewZilla/RAPT reality testing
 ↓
-BrewZilla UI + explicit-action orchestration
+Counterflow wort cooling validation
 ↓
-Counterflow wort cooling support
+Fermentation cockpit scope guard
+↓
+Carbonation backend cleanup
 ↓
 Timed Fermentation Runtime
 ↓
@@ -79,8 +73,6 @@ Future guarded automation/control
 ---
 
 # v4.3 Brewday Runtime Stabilization
-
-Goal: stabilize Brewday Runtime before expanding into hardware orchestration.
 
 Completed:
 
@@ -99,34 +91,33 @@ Completed:
 [x] Manual Brewday Runtime engine
 [x] Manual Brewday persistent session in hass.data
 [x] Manual Brewday services
-[x] Manual Brewday Control Card v3
-[x] Stop syncing Manual Brewday services to legacy YAML helpers
+[x] Manual Brewday stage shortcut services
+[x] Manual Brewday Control / Brewday Actions UI
+[x] Stop syncing Manual Brewday services to older YAML/input-helper mirrors
+[x] Remove old manual source selection from Brewday Runtime Core
 ```
 
 Remaining:
 
 ```text
-[ ] Validate Manual Brewday service flow in Home Assistant
+[ ] Validate Manual Brewday service flow in a real BrewZilla brewday
 [ ] Add Manual timed-step auto-advance
 [ ] Add Manual timed-step awaiting-confirm behavior at 0 seconds
 [ ] Add Manual session persistence across Home Assistant restart
 [ ] Add optional Manual plan import/building from Brewfather recipe data
 [ ] Add optional Manual plan editing/profile selection
-[ ] Add services documentation and dashboard examples
+[ ] Add service documentation and dashboard examples
 ```
 
 ---
 
 # v4.4 BrewZilla/RAPT hardware reality mapping
 
-Goal: map real BrewZilla/RAPT entities into BrewAssistant hardware abstractions.
-
 Current status:
 
 ```text
 [x] BrewZilla read-only runtime skeleton
 [x] BrewZilla runtime sensors
-[x] BrewZilla UI stub
 [x] BrewZilla premium runtime card
 [x] Map current temperature source
 [x] Map target temperature source
@@ -137,6 +128,8 @@ Current status:
 [x] Add orchestration safety switches
 [x] Add apply-target service with safety checks
 [x] Integrate Stage Engine data into BrewZilla top card
+[x] Add Mash target quick-select UI
+[x] Add Brewday Actions UI with stage shortcut buttons
 [ ] Polish BrewZilla top-card power button state colors
 [ ] Add Apply Target Now card/button gated by safety state
 [ ] Confirm all runtime values against real brewday data
@@ -156,52 +149,24 @@ Automate only after explicit design and validation.
 
 # v4.5 Brewday Stage Engine
 
-Goal: make BrewAssistant understand what is happening during the brewday, not just display raw runtime values.
-
 Completed:
 
 ```text
 [x] Create brewday_stage_engine.py
 [x] Create brewday_stage_sensor.py
 [x] Wire Stage Engine sensors into Brewday runtime factory
-[x] Interpret runtime stage/step/next-step text
+[x] Interpret active runtime stage/step text
+[x] Keep next_step from triggering current stage
 [x] Interpret BrewZilla temperature/target/delta/power/pump context
 [x] Support Idle, Strike Water, Heating Strike, Mash In, Mash, Mash Out
 [x] Support Heating To Boil, Boiling and Hop Addition
 [x] Support Whirlpool and Hop Stand
 [x] Support Wort Cooling / counterflow cooling detection
 [x] Support Pitch Ready, Transfer and Completed
-[x] Recognize Cleaning as an external housekeeping/wrap-up label only
+[x] Recognize Cleaning as external housekeeping/wrap-up label only
 [x] Expose stage reason/status/icon/progress/temperature/power sensors
 [x] Add v2 fields: stage_group, stage_priority, suggested_action, control_hint
 [x] Add Stage Engine v2 UI card
-```
-
-Cleaning boundary:
-
-```text
-Cleaning is not a BrewAssistant core workflow.
-It may appear as a Stage Engine wrap-up label if a runtime/source reports it,
-but no dedicated BrewAssistant cleaning module or UI is planned.
-Cleaning remains a separate manual housekeeping process.
-```
-
-Current Stage Engine sensors:
-
-```text
-sensor.brewassistant_brewday_stage
-sensor.brewassistant_brewday_stage_reason
-sensor.brewassistant_brewday_stage_status_line
-sensor.brewassistant_brewday_stage_icon
-sensor.brewassistant_brewday_stage_group
-sensor.brewassistant_brewday_stage_priority
-sensor.brewassistant_brewday_stage_suggested_action
-sensor.brewassistant_brewday_stage_control_hint
-sensor.brewassistant_brewday_stage_remaining_minutes
-sensor.brewassistant_brewday_stage_progress
-sensor.brewassistant_brewday_stage_temperature
-sensor.brewassistant_brewday_stage_target_temperature
-sensor.brewassistant_brewday_stage_power
 ```
 
 Remaining:
@@ -210,7 +175,6 @@ Remaining:
 [ ] Validate stage transitions during real BrewZilla brewday
 [ ] Tune thresholds for Heating Strike / Mash / Boil / Cooling
 [ ] Add estimated time-to-target where possible
-[ ] Add cooling efficiency and pitch-ready prediction
 [ ] Add event/notification hooks for attention stages
 [ ] Add explicit Apply Target UI gated by control_hint and safety switches
 ```
@@ -219,82 +183,70 @@ Remaining:
 
 # v4.6 Counterflow Wort Cooling
 
-Goal: model wort cooling as a first-class post-boil process.
-
-Initial scope:
+Completed:
 
 ```text
-[ ] Detect Wort Cooling from Brew Tracker / Manual runtime text
-[ ] Surface cooling stage in Stage Engine UI
-[ ] Track BrewZilla temperature fall rate
-[ ] Add optional counterflow output temperature source if available
-[ ] Add estimated pitch-ready status
+[x] Detect Wort Cooling from Brew Tracker / Manual runtime current stage or step
+[x] Keep cooling in standby until Stage Engine enters cooling/pitch state
+[x] Surface cooling stage in Stage Engine UI
+[x] Track BrewZilla/kettle reference temperature
+[x] Track temperature fall rate when trend data exists
+[x] Add optional counterflow output temperature source if available
+[x] Add estimated pitch-ready status
+[x] Add ETA when cooling trend is available
+[x] Require BrewZilla pump during counterflow cooling
+[x] Guard against heater being on during cooling
+[x] Add Counterflow Cooling Cockpit UI
+```
+
+Remaining:
+
+```text
+[ ] Validate cooling rate/ETA during real counterflow chilling
+[ ] Tune pitch-ready tolerance if needed
 [ ] Add cooling efficiency indicator
-[ ] Add transfer/pitch guidance once wort reaches target range
-```
-
-Safety note:
-
-```text
-Counterflow chilling requires manual sanitation and flow control verification.
-BrewAssistant should guide and visualize before it controls anything.
+[ ] Add transfer/pitch notification hooks once wort reaches target range
+[ ] Add optional dedicated output temperature sensor mapping in config flow/options
 ```
 
 ---
 
-# v4.7 Timed Fermentation Runtime
+# v4.7 Fermentation cockpit/runtime cleanup
 
-Goal: create a Python-owned fermentation schedule/runtime engine using the same architecture as Brewday Runtime.
-
-Target flow:
+Current issue:
 
 ```text
-Brewfather fermentation schedule
-Manual fallback schedule
-Current batch age
-Current gravity/temperature context
-↓
-Timed Fermentation Runtime
-↓
-Current fermentation stage
-Current target temperature
-Next temperature step
-Time to next step
-Chamber recommendation/apply layer
+Fermentation Cockpit can show warning state even after the fermentation step is over.
 ```
 
-Planned entities:
+Next target:
 
 ```text
-[ ] sensor.brewassistant_fermentation_runtime_state
-[ ] sensor.brewassistant_fermentation_schedule_source
-[ ] sensor.brewassistant_fermentation_current_stage
-[ ] sensor.brewassistant_fermentation_current_target_temp
-[ ] sensor.brewassistant_fermentation_next_stage
-[ ] sensor.brewassistant_fermentation_next_target_temp
-[ ] sensor.brewassistant_fermentation_time_to_next_step
-[ ] sensor.brewassistant_fermentation_schedule_age_days
-[ ] sensor.brewassistant_fermentation_timeline
-```
-
-Tasks:
-
-```text
-[ ] Parse Brewfather fermentation step schedule
-[ ] Support manual timed fermentation schedule fallback
-[ ] Calculate current fermentation day/age
-[ ] Resolve active stage and target temperature
-[ ] Resolve next stage and time remaining
-[ ] Expose fermentation timeline attributes
-[ ] Provide chamber target recommendation
-[ ] Keep apply-to-chamber as explicit/separate safe layer
+[ ] Add Fermentation Cockpit scope guard
+[ ] Show neutral standby/completed when no fermentation process is active
+[ ] Keep warnings only for active fermentation/cold-crash/diacetyl stages
+[ ] Later: build Python-owned Timed Fermentation Runtime
 ```
 
 ---
 
-# v4.8 YAML retirement
+# v4.8 Carbonation backend cleanup
 
-Goal: remove backend logic from YAML packages and old helpers.
+Current status:
+
+```text
+[x] Carbonation calculation module exists
+[x] Carbonation sensors are registered
+[x] Carbonation Cockpit UI restored in clean dashboard
+[ ] Replace helper-backed carbonation process state with Python-owned session/runtime
+[ ] Add carbonation start/update/pause/reset services
+[ ] Add optional pressure/temp source mapping
+[ ] Add dashboard buttons for carbonation runtime controls
+```
+
+---
+
+# v4.9 YAML retirement
 
 Rules:
 
@@ -307,6 +259,7 @@ Completed:
 
 ```text
 [x] Stop Manual Brewday services from syncing legacy helper mirrors
+[x] Remove old manual selection from Brewday Runtime Core
 [x] Remove coordinator dependency on sensor.brew_process_status
 [x] Remove YAML process attributes from Python process sensors
 [x] Remove yaml_process_status from coordinator data model
@@ -321,31 +274,14 @@ Remaining:
 [ ] Replace dashboard dependencies with Python entities
 [ ] Remove duplicated Jinja logic
 [ ] Reduce helper dependency where practical
+[ ] Clean up carbonation helper-backed backend
 [ ] Remove compatibility layers after validation
 [ ] Leave dashboard layout/cards intact where useful
 ```
 
 ---
 
-# v4.9 Runtime adapter architecture
-
-Goal: normalize all runtime sources into BrewAssistant-native models.
-
-Target flow:
-
-```text
-Brewfather
-RAPT
-Manual input
-BrewZilla
-Future APIs
-↓
-Python runtime adapters
-↓
-BrewAssistant entities
-↓
-Dashboards
-```
+# v4.10 Runtime adapter architecture
 
 Adapter priorities:
 
@@ -353,7 +289,9 @@ Adapter priorities:
 [x] Brewfather Brew Tracker source adapter
 [x] Manual Brewday source adapter
 [x] BrewZilla read-only hardware skeleton
+[x] Counterflow wort cooling runtime helper
 [ ] Timed Fermentation Runtime adapter
+[ ] Python-owned Carbonation Runtime adapter
 [ ] BrewZilla hardware capability adapter
 [ ] RAPT-specific hardware/profile adapter
 [ ] Future local/MQTT hardware adapter
@@ -364,25 +302,16 @@ Adapter priorities:
 # Next session checklist
 
 ```text
-[ ] Patch BrewZilla runtime top-card power button color: red when switch.brewzilla is on
-[ ] Keep lock condition based on actual power draw, not stored Heat/Pump percentages
+[ ] Verify Whirlpool shortcut: Stage = Whirlpool and Cooling = standby
+[ ] Verify Cooling shortcut: Stage = Wort Cooling and Cooling = pump_on_required when pump is off
+[ ] Add Fermentation Cockpit scope guard
+[ ] Revisit Python-owned Carbonation Runtime backend
+[ ] Patch BrewZilla runtime top-card power button color if still needed
 [ ] Add Apply Target Now button/card gated by safety switches and control_hint
-[ ] Validate Stage Engine v2 values during a real or simulated brewday
-[ ] Start counterflow wort cooling UI/metrics design
 ```
 
 ---
 
 # Long-term direction
 
-BrewAssistant is evolving from:
-
-```text
-Home Assistant YAML package collection
-```
-
-into:
-
-```text
-Modular brewing platform for Home Assistant
-```
+BrewAssistant is evolving from a Home Assistant YAML package collection into a modular brewing platform for Home Assistant.
