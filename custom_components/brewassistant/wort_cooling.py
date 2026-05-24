@@ -19,6 +19,7 @@ DOMAIN_DATA_KEY = "wort_cooling"
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
 STAGE_SENSOR = "sensor.brewassistant_brewday_stage"
+STAGE_GROUP_SENSOR = "sensor.brewassistant_brewday_stage_group"
 CONTROL_HINT_SENSOR = "sensor.brewassistant_brewday_stage_control_hint"
 KETTLE_TEMP_SENSOR = "sensor.brewassistant_brewzilla_current_temperature"
 BREWZILLA_TARGET_SENSOR = "sensor.brewassistant_brewzilla_target_temperature"
@@ -53,6 +54,7 @@ HEATER_ALLOWED = False
 HEATER_REQUIRED_STATE = "off"
 PUMP_REQUIRED = True
 PUMP_REQUIRED_STATE = "on"
+COOLING_STAGE_KEYWORDS = ("cool", "chill", "pitch")
 
 
 @dataclass(slots=True)
@@ -155,14 +157,24 @@ def _cooling_delta(reference_temp: float | None, target_temp: float | None) -> f
     return reference_temp - target_temp
 
 
+def _is_cooling_active(*, stage: str | None, stage_group: str | None) -> bool:
+    """Return if the brewday stage currently represents wort cooling/pitch readiness."""
+    text = f"{stage or ''} {stage_group or ''}".lower()
+    return any(keyword in text for keyword in COOLING_STAGE_KEYWORDS)
+
+
 def _cooling_guard(
     *,
+    cooling_active: bool,
     heater_state: str | None,
     pump_state: str | None,
     reference_temp: float | None,
     target_temp: float | None,
 ) -> str:
     """Return cooling guard state."""
+    if not cooling_active:
+        return "standby"
+
     if heater_state == "on":
         return "heater_off_required"
 
@@ -175,13 +187,15 @@ def _cooling_guard(
 
 def _cooling_status(
     *,
+    cooling_active: bool,
     reference_temp: float | None,
     target_temp: float | None,
     rate_c_per_h: float | None,
-    stage: str | None,
     pump_state: str | None,
     heater_state: str | None,
 ) -> str:
+    if not cooling_active:
+        return "standby"
     if heater_state == "on":
         return "heater_off_required"
     if reference_temp is None:
@@ -252,12 +266,16 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             eta_minutes = round((delta / rate) * 60, 1)
 
     stage = _state(hass, STAGE_SENSOR, "Idle")
+    stage_group = _state(hass, STAGE_GROUP_SENSOR, "idle")
     control_hint = _state(hass, CONTROL_HINT_SENSOR, "observe_only")
     pump_state = _state(hass, PUMP_SWITCH, "off")
     heater_state = _state(hass, HEATER_SWITCH, "off")
     power_state = _state(hass, POWER_SWITCH, "off")
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
+    cooling_active = _is_cooling_active(stage=stage, stage_group=stage_group)
+
     guard = _cooling_guard(
+        cooling_active=cooling_active,
         heater_state=heater_state,
         pump_state=pump_state,
         reference_temp=reference_temp,
@@ -265,10 +283,10 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     )
 
     status = _cooling_status(
+        cooling_active=cooling_active,
         reference_temp=reference_temp,
         target_temp=target_temp,
         rate_c_per_h=rate,
-        stage=stage,
         pump_state=pump_state,
         heater_state=heater_state,
     )
@@ -278,7 +296,9 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     rate_text = "—" if rate is None else f"{rate:.1f} °C/h"
     eta_text = "—" if eta_minutes is None else f"{eta_minutes:.0f} min"
 
-    if guard == "heater_off_required":
+    if not cooling_active:
+        summary = f"Cooling standby · waiting for Wort Cooling stage · {reference_label} {temp_text} · target {target_text}"
+    elif guard == "heater_off_required":
         summary = f"Cooling blocked · heater must be OFF · {reference_label} {temp_text} · target {target_text}"
     elif guard == "pump_on_required":
         summary = f"Cooling blocked · pump must be ON · {reference_label} {temp_text} → {target_text}"
@@ -297,6 +317,7 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "status": status,
         "summary": summary,
+        "cooling_active": cooling_active,
         "reference_temperature": round(reference_temp, 2) if reference_temp is not None else None,
         "reference_source": reference_source,
         "reference_label": reference_label,
@@ -312,6 +333,7 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "pitch_ready": pitch_ready,
         "ready_tolerance_c": READY_TOLERANCE_C,
         "stage": stage,
+        "stage_group": stage_group,
         "control_hint": control_hint,
         "pump_state": pump_state,
         "pump_required": PUMP_REQUIRED,
