@@ -31,6 +31,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 _ON_STATES = {"on", "true", "yes", "active"}
+_ACTIVE_FERMENTATION_STAGES = {"fermentation", "cold_crash"}
 
 
 @dataclass(slots=True)
@@ -197,6 +198,32 @@ def _temperature_context(
     }
 
 
+def _standby_temperature_context(
+    context: dict[str, str],
+    process: dict[str, str],
+    liquid_temp: float | None,
+    target_temp: float | None,
+    delta: float | None,
+) -> dict[str, str]:
+    """Return neutral fermentation context when fermentation is out of scope."""
+    temp_part = ""
+    if liquid_temp is not None and target_temp is not None and delta is not None:
+        temp_part = f" · {_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C · Δ {delta:+.2f} °C"
+    elif liquid_temp is not None:
+        temp_part = f" · {_format_temp(liquid_temp)} °C"
+
+    status = "Completed" if process["status"] == "Finished / transferred to keg" else "Standby"
+    return {
+        **context,
+        "status": status,
+        "severity": "ok",
+        "icon_hint": "sleep",
+        "color_hint": "blue",
+        "problem_level": "ok",
+        "status_summary": f"Fermentation {status.lower()} · {process['reason']}{temp_part}",
+    }
+
+
 def _process_context(
     *,
     cold_crash_active: bool,
@@ -233,7 +260,7 @@ def _process_context(
         next_step = "Monitor active runtime"
         current_stage = "runtime"
         next_stage = "none"
-        reason = "Runtime status is available"
+        reason = "Runtime status is available but not fermentation-scoped"
     else:
         status = "Idle"
         next_step = "Start or select an active batch"
@@ -359,6 +386,9 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             target_temp=rounded_target,
             gravity=rounded_gravity,
         )
+
+        if process["current_stage"] not in _ACTIVE_FERMENTATION_STAGES:
+            context = _standby_temperature_context(context, process, rounded_liquid, rounded_target, delta)
 
         if rounded_gravity is not None:
             status_summary = f"{context['status_summary']} · SG {_format_gravity(rounded_gravity)}"
