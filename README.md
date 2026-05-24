@@ -32,7 +32,8 @@ BrewAssistant v4 separates the brewing system into clear layers:
 | Runtime | Normalize Brewfather Brew Tracker, Manual Brewday and sensor data. |
 | Stage Engine | Interpret planned/runtime state plus hardware telemetry into a current brewday stage. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
-| Carbonation Runtime | Provide carbonation calculations and serving guidance. |
+| Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
+| Fermentation Scope Guard | Keep fermentation warnings scoped to active fermentation/cold-crash context. |
 | Orchestration Safety | Decide whether a user-requested hardware action is safe to apply. |
 | Hardware Layer | Normalize BrewZilla/RAPT hardware state before any future control. |
 | Notifications | Alert when attention is needed. |
@@ -62,6 +63,8 @@ Recent cleanup:
 ✅ YAML process attributes were removed from Python process sensors
 ✅ Legacy yaml_process_status field was removed from the coordinator data model
 ✅ Stage Engine is Python-owned and exposed through canonical BrewAssistant sensors
+✅ Carbonation Runtime is Python-owned and no longer uses legacy helper pressure as fallback
+✅ Fermentation Cockpit scope guard ignores stale cold-crash helper state when no batch/fermentation context is active
 ```
 
 `services.yaml` remains intentionally because Home Assistant uses it as service metadata for the custom integration. It is not workflow/business logic.
@@ -176,24 +179,6 @@ Cleaning
 Completed
 ```
 
-Stage Engine v2 exposes:
-
-```text
-sensor.brewassistant_brewday_stage
-sensor.brewassistant_brewday_stage_reason
-sensor.brewassistant_brewday_stage_status_line
-sensor.brewassistant_brewday_stage_icon
-sensor.brewassistant_brewday_stage_group
-sensor.brewassistant_brewday_stage_priority
-sensor.brewassistant_brewday_stage_suggested_action
-sensor.brewassistant_brewday_stage_control_hint
-sensor.brewassistant_brewday_stage_remaining_minutes
-sensor.brewassistant_brewday_stage_progress
-sensor.brewassistant_brewday_stage_temperature
-sensor.brewassistant_brewday_stage_target_temperature
-sensor.brewassistant_brewday_stage_power
-```
-
 Important current behavior:
 
 ```text
@@ -256,7 +241,7 @@ Hardware automation only after separate design, validation and safety review.
 
 ## Counterflow Wort Cooling
 
-Counterflow wort cooling is now modeled as a dedicated post-boil cockpit.
+Counterflow wort cooling is modeled as a dedicated post-boil cockpit.
 
 Current status:
 
@@ -271,45 +256,69 @@ Current status:
 ✅ Counterflow Cooling UI v3
 ```
 
-Key cooling behavior:
-
-```text
-Stage is not cooling/pitch
-→ status: standby
-→ cooling_guard: standby
-
-Heater ON during cooling
-→ status: heater_off_required
-→ cooling_guard: heater_off_required
-
-Pump OFF and wort above target
-→ status: pump_on_required
-→ cooling_guard: pump_on_required
-
-Pump ON and wort above target
-→ status: cooling_needed or cooling
-
-Within pitch tolerance
-→ status: pitch_ready
-```
-
 ---
 
 ## Carbonation Cockpit
 
-Carbonation calculations and sensors still exist and the clean dashboard now has a dedicated read-only Carbonation Cockpit card.
+Carbonation now has a Python-owned runtime/session plus dashboard controls.
 
 Current status:
 
 ```text
-✅ Carbonation calculation module exists
-✅ Carbonation sensors are registered
-✅ Carbonation Cockpit UI restored in clean dashboard
-⚠️ Carbonation backend is still legacy-helper backed
-🔜 Python-owned Carbonation Runtime/session services
+✅ Python-owned carbonation runtime in hass.data
+✅ Carbonation start/update/pause/reset services
+✅ Carbonation method select entity
+✅ Carbonation pressure/target/start number entities
+✅ Cooler/kegerator temperature defaults to sensor.kyl_temperatur_4
+✅ Legacy helper pressure is not used as backend fallback
+✅ Carbonation Cockpit v3.1 UI with inputs, controls and estimated/equilibrium/recommended values
 ```
 
-Current known limitation: carbonation process state still reads local helper-style entities in `carbonation.py`. That is planned as the next backend cleanup after the current brewday/cooling validation pass.
+Current model:
+
+```text
+Target vol + current cooler temp
+→ recommended pressure
+
+Actual pressure + current cooler temp
+→ equilibrium volumes
+
+Start volumes + time toward equilibrium
+→ estimated volumes
+```
+
+Open validation item:
+
+```text
+Decide whether progress_percent should represent carbonation level percent or be split into level/process progress.
+```
+
+---
+
+## Fermentation Cockpit
+
+Fermentation currently uses the normalized coordinator/process sensors and older smart recommendation sensors while a future Timed Fermentation Runtime matures.
+
+Current status:
+
+```text
+✅ Fermentation Cockpit scope guard
+✅ Stale cold-crash helper cannot keep cockpit in warning state by itself
+✅ Idle/none process shows Standby + ok severity/problem
+✅ Fermentation Cockpit v2.1 UI hides stale delta/SG from the alert view
+✅ Smart recommendation card is hidden/neutral when fermentation is out of scope
+```
+
+Current behavior:
+
+```text
+No active fermentation/batch context
+→ Process: Idle
+→ Stage: none
+→ Temp status: Standby
+→ Severity: ok
+→ Problem: ok
+```
 
 ---
 
@@ -333,6 +342,9 @@ manual_brewday_store.py
 wort_cooling.py
 wort_cooling_sensor.py
 carbonation.py
+carbonation_runtime.py
+number.py
+select.py
 switch.py
 ```
 
@@ -345,7 +357,7 @@ BrewAssistant v4 is actively evolving.
 Current Python Core status:
 
 ```text
-v1.3 Python Core · Manual Runtime shortcuts + Stage Engine v2 + Counterflow Cooling Cockpit
+v1.3 Python Core · Manual Runtime shortcuts + Stage Engine v2 + Counterflow Cooling + Carbonation Runtime + Fermentation Cockpit Scope Guard
 ```
 
 Current near-term focus:
@@ -357,9 +369,9 @@ Current near-term focus:
 ✅ BrewZilla runtime card with Stage Engine intelligence
 ✅ Counterflow wort cooling backend and UI
 ✅ Brewday Actions stage shortcut UI
-✅ Carbonation Cockpit UI restored
-🔜 Fermentation Cockpit scope guard
-🔜 Python-owned Carbonation Runtime/session backend
+✅ Carbonation runtime backend and UI
+✅ Fermentation Cockpit scope guard and UI polish
+🔜 BrewZilla/Brewday top-card polish
 🔜 Manual timed-step auto-advance
 🔜 Manual session persistence across HA restart
 🔜 Timed Fermentation Runtime
