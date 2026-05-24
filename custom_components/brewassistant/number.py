@@ -25,6 +25,7 @@ CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
         "min": 0.0,
         "max": 4.0,
         "step": 0.05,
+        "default": 0.0,
         "runtime_key": "pressure_bar",
     },
     "carbonation_target_volumes_control": {
@@ -35,6 +36,7 @@ CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
         "min": 1.5,
         "max": 4.0,
         "step": 0.05,
+        "default": 2.4,
         "runtime_key": "target_volumes",
     },
     "carbonation_start_volumes_control": {
@@ -45,6 +47,7 @@ CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
         "min": 0.3,
         "max": 2.5,
         "step": 0.05,
+        "default": 0.85,
         "runtime_key": "start_volumes",
     },
 }
@@ -94,10 +97,12 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
 
     @property
     def native_value(self) -> float | None:
-        """Return current value."""
+        """Return current value with a UI-friendly fallback."""
         runtime = get_carbonation_runtime(self.coordinator.hass)
         value = getattr(runtime, str(self._config["runtime_key"]), None)
-        return float(value) if value is not None else None
+        if value is not None:
+            return float(value)
+        return float(self._config.get("default", self._config["min"]))
 
     async def async_set_native_value(self, value: float) -> None:
         """Set current value."""
@@ -107,4 +112,8 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return diagnostic attributes."""
-        return {"source": "python_runtime_control", "runtime_key": self._config["runtime_key"]}
+        return {
+            "source": "python_runtime_control",
+            "runtime_key": self._config["runtime_key"],
+            "display_default": self._config.get("default"),
+        }
