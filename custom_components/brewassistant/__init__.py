@@ -7,6 +7,7 @@ maintained in the Python-only branch.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,7 @@ from .brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
+from .manual_brewday_runtime import ManualRuntimeState
 from .manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
 SERVICE_MANUAL_NEXT = "manual_brewday_next"
+SERVICE_MANUAL_START_COOLING = "manual_brewday_start_cooling"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
 
@@ -53,11 +56,27 @@ def _register_services(hass: HomeAssistant) -> None:
             {"entity_id": [
                 "sensor.brewassistant_brewday_runtime_summary",
                 "sensor.brewassistant_brewday_runtime_state",
+                "sensor.brewassistant_brewday_runtime_stage",
                 "sensor.brewassistant_brewday_runtime_step",
                 "sensor.brewassistant_brewday_runtime_next_step",
                 "sensor.brewassistant_brewday_live_time_remaining_minutes",
+                "sensor.brewassistant_brewday_live_progress",
                 "sensor.brewassistant_brewday_stage",
+                "sensor.brewassistant_brewday_stage_reason",
                 "sensor.brewassistant_brewday_stage_status_line",
+                "sensor.brewassistant_brewday_stage_icon",
+                "sensor.brewassistant_brewday_stage_group",
+                "sensor.brewassistant_brewday_stage_priority",
+                "sensor.brewassistant_brewday_stage_suggested_action",
+                "sensor.brewassistant_brewday_stage_control_hint",
+                "sensor.brewassistant_wort_cooling_status",
+                "sensor.brewassistant_wort_cooling_summary",
+                "sensor.brewassistant_wort_cooling_reference_temperature",
+                "sensor.brewassistant_wort_cooling_target_temperature",
+                "sensor.brewassistant_wort_cooling_delta",
+                "sensor.brewassistant_wort_cooling_rate",
+                "sensor.brewassistant_wort_cooling_eta_minutes",
+                "sensor.brewassistant_wort_pitch_ready",
                 "sensor.brewassistant_brewzilla_orchestration_mode",
                 "sensor.brewassistant_brewzilla_control_reason",
                 "sensor.brewassistant_brewzilla_requested_target",
@@ -113,6 +132,26 @@ def _register_services(hass: HomeAssistant) -> None:
         session.next()
         await _refresh_runtime_sensors()
 
+    async def _handle_manual_start_cooling(call: ServiceCall) -> None:
+        session = get_manual_brewday_session(hass)
+        cooling_stage_index = None
+        for index, stage in enumerate(session.plan.stages):
+            stage_name = stage.name.lower()
+            if any(keyword in stage_name for keyword in ("chill", "cool", "kyl")):
+                cooling_stage_index = index
+                break
+
+        if cooling_stage_index is None:
+            cooling_stage_index = max(0, len(session.plan.stages) - 1)
+
+        session.active_stage_index = cooling_stage_index
+        session.active_step_index = 0
+        session.step_started_at = datetime.now(timezone.utc)
+        session.paused_at = None
+        session.remaining_when_paused = None
+        session.state = ManualRuntimeState.RUNNING
+        await _refresh_runtime_sensors()
+
     async def _handle_manual_finish(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.finish()
@@ -128,6 +167,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_NEXT, _handle_manual_next)
+    hass.services.async_register(DOMAIN, SERVICE_MANUAL_START_COOLING, _handle_manual_start_cooling)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_FINISH, _handle_manual_finish)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_RESET, _handle_manual_reset)
 
