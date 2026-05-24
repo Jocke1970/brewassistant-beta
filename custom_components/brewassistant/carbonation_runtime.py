@@ -114,6 +114,14 @@ def _method_days_to_full(method: str) -> float:
     }.get(method, 14.0)
 
 
+def _target_progress_percent(estimated: float | None, start: float, target: float) -> float | None:
+    """Return carbonation progress from start volumes to target volumes."""
+    if estimated is None or target <= start:
+        return None
+    progress = ((estimated - start) / (target - start)) * 100
+    return round(max(0.0, min(100.0, progress)), 1)
+
+
 def update_carbonation_runtime(hass: HomeAssistant, data: dict[str, Any] | None = None) -> CarbonationRuntime:
     """Update carbonation runtime values."""
     runtime = get_carbonation_runtime(hass)
@@ -202,10 +210,10 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     if equilibrium is not None:
         progress = min(1.0, (age_days or 0) / _method_days_to_full(runtime.method))
         estimated = round(runtime.start_volumes + ((equilibrium - runtime.start_volumes) * progress), 2)
-        progress_percent = round(min(100.0, (estimated / runtime.target_volumes) * 100), 1)
+        progress_percent = _target_progress_percent(estimated, runtime.start_volumes, runtime.target_volumes)
     elif runtime.active:
         estimated = runtime.start_volumes
-        progress_percent = round(min(100.0, (estimated / runtime.target_volumes) * 100), 1)
+        progress_percent = _target_progress_percent(estimated, runtime.start_volumes, runtime.target_volumes)
 
     status = "Inactive"
     ready = False
