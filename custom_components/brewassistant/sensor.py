@@ -52,6 +52,7 @@ from .source_health import (
     build_source_health,
     source_health_attrs,
 )
+from .wort_cooling_sensor import create_wort_cooling_sensors
 
 BREWFATHER_FERMENTATION_START_ENTITY = "sensor.brewfather_fermentation_start"
 BATCH_STARTED_AT_ENTITY = "input_datetime.brew_batch_started_at"
@@ -514,6 +515,7 @@ async def async_setup_entry(
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
         + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
         + create_brewday_runtime_sensors(coordinator)
+        + create_wort_cooling_sensors(coordinator)
         + [BrewAssistantCoreVersionSensor(coordinator)]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
