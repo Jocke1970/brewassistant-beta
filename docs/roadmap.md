@@ -35,6 +35,8 @@ YAML/dashboard as presentation layer only
 [x] Manual Brewday persistent session in hass.data
 [x] Manual Brewday Python services
 [x] Manual Brewday stage shortcut services
+[x] Manual Brewday restart after completed state
+[x] Brewday Stage Engine explicit Prepare stage
 [x] BrewZilla runtime sensors
 [x] BrewZilla orchestration safety switches
 [x] BrewZilla Apply Target service
@@ -48,6 +50,8 @@ YAML/dashboard as presentation layer only
 [x] Carbonation Cockpit v3.1 UI
 [x] Fermentation Cockpit scope guard
 [x] Fermentation Cockpit v2.1 UI
+[x] BrewZilla/Brewday top-section polish v2.2
+[x] Brewday Actions / Runtime Controls polish v2.2
 ```
 
 ### Current phase
@@ -99,12 +103,14 @@ Completed:
 [x] Manual Brewday Control / Brewday Actions UI
 [x] Stop syncing Manual Brewday services to older YAML/input-helper mirrors
 [x] Remove old manual source selection from Brewday Runtime Core
+[x] Allow clean new run after completed state
 ```
 
 Remaining:
 
 ```text
 [ ] Validate Manual Brewday service flow in a real BrewZilla brewday
+[ ] Validate Finish → Reset → Prepare/Start after Home Assistant reload
 [ ] Add Manual timed-step auto-advance
 [ ] Add Manual timed-step awaiting-confirm behavior at 0 seconds
 [ ] Add Manual session persistence across Home Assistant restart
@@ -134,7 +140,8 @@ Current status:
 [x] Integrate Stage Engine data into BrewZilla top card
 [x] Add Mash target quick-select UI
 [x] Add Brewday Actions UI with stage shortcut buttons
-[ ] Polish BrewZilla top-card power button state colors
+[x] Polish BrewZilla/Brewday top-section v2.2
+[x] Polish Brewday Actions / Runtime Controls v2.2
 [ ] Add Apply Target Now card/button gated by safety state
 [ ] Confirm all runtime values against real brewday data
 [ ] Add diagnostics for stale/disconnected RAPT/BrewZilla values
@@ -161,8 +168,9 @@ Completed:
 [x] Wire Stage Engine sensors into Brewday runtime factory
 [x] Interpret active runtime stage/step text
 [x] Keep next_step from triggering current stage
+[x] Add explicit Prepare stage before Strike Water
 [x] Interpret BrewZilla temperature/target/delta/power/pump context
-[x] Support Idle, Strike Water, Heating Strike, Mash In, Mash, Mash Out
+[x] Support Idle, Prepare, Strike Water, Heating Strike, Mash In, Mash, Mash Out
 [x] Support Heating To Boil, Boiling and Hop Addition
 [x] Support Whirlpool and Hop Stand
 [x] Support Wort Cooling / counterflow cooling detection
@@ -176,6 +184,7 @@ Completed:
 Remaining:
 
 ```text
+[ ] Validate Prepare → Start → Mash transition after reload
 [ ] Validate stage transitions during real BrewZilla brewday
 [ ] Tune thresholds for Heating Strike / Mash / Boil / Cooling
 [ ] Add estimated time-to-target where possible
@@ -322,12 +331,12 @@ Adapter priorities:
 # Next session checklist
 
 ```text
-[ ] Polish BrewZilla/Brewday top cards
-[ ] Validate Fermentation Cockpit v2.1 standby/completed UI
-[ ] Validate Carbonation Cockpit v3.1 with real carbonation inputs
-[ ] Verify Whirlpool shortcut: Stage = Whirlpool and Cooling = standby
-[ ] Verify Cooling shortcut: Stage = Wort Cooling and Cooling = pump_on_required when pump is off
-[ ] Add Apply Target Now button/card gated by safety switches and control_hint
+[ ] Update/reload HA with latest manual_brewday_runtime.py and brewday_stage_engine.py
+[ ] Verify Prepare stage: prepared/setup should show Stage = Prepare and Group = prep
+[ ] Verify Finish → Reset → Prepare/Start
+[ ] Verify Finish → Start begins at Setup / Prepare equipment
+[ ] Validate Brewday Actions v2.2 button highlights after Prepare, Start, Mash, Boil, Whirlpool, Cooling, Finish
+[ ] Decide whether to add Apply Target Now UI next or continue validation
 ```
 
 ---
