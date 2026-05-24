@@ -102,6 +102,7 @@ def _contains(value: str | None, *needles: str) -> bool:
 def _stage_icon(stage: str) -> str:
     return {
         "Idle": "mdi:kettle-outline",
+        "Prepare": "mdi:clipboard-check-outline",
         "Strike Water": "mdi:water-thermometer",
         "Heating Strike": "mdi:fire",
         "Mash In": "mdi:grain",
@@ -120,6 +121,8 @@ def _stage_icon(stage: str) -> str:
 
 
 def _stage_group(stage: str) -> str:
+    if stage == "Prepare":
+        return "prep"
     if stage in {"Strike Water", "Heating Strike", "Mash In", "Mash", "Mash Out"}:
         return "mash"
     if stage in {"Heating To Boil", "Boiling", "Hop Addition"}:
@@ -140,7 +143,7 @@ def _stage_priority(stage: str) -> str:
         return "active"
     if stage in {"Heating Strike", "Heating To Boil", "Mash Out"}:
         return "warming"
-    if stage in {"Mash", "Whirlpool", "Strike Water", "Mash In"}:
+    if stage in {"Mash", "Whirlpool", "Strike Water", "Mash In", "Prepare"}:
         return "monitor"
     if stage == "Completed":
         return "done"
@@ -153,6 +156,8 @@ def _suggested_action(stage: str, remaining_min: float | None, delta: float | No
 
     if stage == "Idle":
         return "Prepare brewday or connect Brew Tracker"
+    if stage == "Prepare":
+        return "Prepare equipment and verify brewday setup"
     if stage == "Strike Water":
         return "Verify strike temperature before mash in"
     if stage == "Heating Strike":
@@ -195,7 +200,7 @@ def _control_hint(stage: str, bz_state: str | None, power: float | None, pump_ut
     pump_value = pump_util if pump_util is not None else 0
     bz = bz_state or "unknown"
 
-    if stage in {"Idle", "Completed"}:
+    if stage in {"Idle", "Prepare", "Completed"}:
         return "observe_only"
     if stage in {"Heating Strike", "Mash Out", "Heating To Boil"}:
         return "target_sync_candidate"
@@ -242,6 +247,11 @@ def _resolve_stage(
     power_value = power if power is not None else 0
     pump_value = pump_util if pump_util is not None else 0
     delta_value = delta if delta is not None else None
+
+    if runtime_state == "prepared":
+        return "Prepare", "Manual brewday prepared; waiting to start"
+    if _contains(current_blob, "setup", "prepare equipment", "prepare brewday"):
+        return "Prepare", "Runtime text indicates brewday preparation"
 
     if _contains(current_blob, "clean"):
         return "Cleaning", "Runtime text indicates cleaning"
