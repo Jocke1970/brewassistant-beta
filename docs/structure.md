@@ -30,7 +30,10 @@ brewassistant/
 │       ├── brewzilla_orchestration_sensor.py
 │       ├── manual_brewday_runtime.py
 │       ├── manual_brewday_adapter.py
-│       └── manual_brewday_store.py
+│       ├── manual_brewday_store.py
+│       ├── wort_cooling.py
+│       ├── wort_cooling_sensor.py
+│       └── carbonation.py
 ├── dashboards/
 │   └── optional dashboard/card examples
 └── docs/
@@ -61,6 +64,8 @@ Responsibilities:
 - Normalize Brewfather Brew Tracker and Manual Brewday runtime data.
 - Interpret brewday stages.
 - Normalize BrewZilla/RAPT hardware telemetry.
+- Track counterflow wort cooling state.
+- Calculate carbonation recommendations and estimates.
 - Expose dashboard-safe sensors.
 - Expose explicit services.
 - Keep safety/orchestration checks outside the dashboard.
@@ -75,7 +80,7 @@ Brewday Runtime normalizes planned/runtime brewday data.
 Sources may include:
 
 - Brewfather Brew Tracker.
-- Manual Brewday runtime.
+- Python Manual Brewday runtime.
 - Future local/manual plans.
 
 The runtime layer should answer:
@@ -87,6 +92,24 @@ The runtime layer should answer:
 - How much time remains?
 - How old is the last Brewfather snapshot?
 
+`brewday_runtime_core.py` resolves Brewfather Brew Tracker or None. Python Manual Brewday is handled through `manual_brewday_runtime.py` and `manual_brewday_adapter.py`, then selected by `brewday_runtime.py` when active.
+
+---
+
+### `manual_brewday_*`
+
+Manual Brewday Runtime is Python-owned.
+
+Responsibilities:
+
+- Hold a Manual BIAB-style brewday plan.
+- Track active stage and active step.
+- Expose a normalized runtime snapshot.
+- Support prepare/start/pause/next/finish/reset.
+- Support shortcut services for Mash, Boil, Whirlpool and Cooling.
+
+Manual Brewday services do not sync old YAML/input-helper mirrors.
+
 ---
 
 ### `brewday_stage_engine.py`
@@ -96,7 +119,7 @@ The Stage Engine interprets what is actually happening.
 Inputs:
 
 - Brewday Runtime state.
-- Brewday Runtime stage/step/next step.
+- Active Brewday Runtime stage and step.
 - BrewZilla runtime state.
 - BrewZilla current temperature.
 - BrewZilla target temperature.
@@ -114,7 +137,62 @@ Outputs:
 - Control hint for future explicit-action cards.
 - Progress, remaining time and BrewZilla telemetry context.
 
+Important rule:
+
+```text
+The active stage/step determines current stage.
+next_step must not wake a future stage early.
+```
+
+Example:
+
+```text
+Current: Whirlpool / hop stand
+Next: Chill wort
+→ Stage Engine stays in Whirlpool
+→ Cooling Cockpit remains standby
+```
+
 The Stage Engine is read-only.
+
+---
+
+### `wort_cooling.py`
+
+Counterflow Wort Cooling models the post-boil chilling process.
+
+Responsibilities:
+
+- Stay in standby until the Stage Engine enters cooling/pitch stage.
+- Track reference temperature from BrewZilla/kettle or optional output sensor.
+- Compare wort temperature to pitch target.
+- Require BrewZilla pump when wort is above target.
+- Require heater off during cooling.
+- Estimate cooling rate and ETA when trend data exists.
+- Expose pitch-ready state.
+
+This module is read-only guidance. It does not control cooling water flow and does not automatically control BrewZilla hardware.
+
+---
+
+### `carbonation.py`
+
+Carbonation currently provides read-only carbonation calculations and dashboard sensors.
+
+Current status:
+
+```text
+Carbonation Cockpit UI exists.
+carbonation.py still uses helper-style entities for process state and input values.
+```
+
+Planned direction:
+
+```text
+Python-owned Carbonation Runtime/session
+explicit start/update/pause/reset services
+optional pressure and temperature source mapping
+```
 
 ---
 
@@ -194,8 +272,9 @@ Recommended v4 naming direction:
 brewassistant_*                 Python-owned normalized entities
 brewassistant_brewday_*         Brewday Runtime and Stage Engine
 brewassistant_brewzilla_*       BrewZilla runtime/orchestration
-brewassistant_fermentation_*    Future fermentation runtime
+brewassistant_wort_*            Wort cooling and pitch-readiness
 brewassistant_carbonation_*     Carbonation calculations
+brewassistant_fermentation_*    Future fermentation runtime
 brewassistant_source_*          Source diagnostics
 ```
 
@@ -220,20 +299,6 @@ Numeric suffixes are only acceptable when the number is part of the actual brewi
 brew_gravity_check_day_2_done
 brew_step_2_status
 brew_mash_step_2_temperature
-```
-
-Do not normalize accidental duplicate entity names such as:
-
-```text
-sensor.yellow_pill_gravity_2
-sensor.some_entity_3
-```
-
-Prefer clean source or adapter names instead:
-
-```text
-sensor.yellow_pill_gravity
-sensor.brewassistant_gravity
 ```
 
 If old YAML/template entities block canonical Python entity IDs locally, rename the old entities with a `_yaml` suffix and let Python keep the canonical entity ID.
