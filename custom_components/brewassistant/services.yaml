@@ -45,3 +45,69 @@ manual_brewday_finish:
 manual_brewday_reset:
   name: Manual Brewday reset
   description: Reset the BrewAssistant manual brewday runtime session.
+
+carbonation_start:
+  name: Carbonation start
+  description: Start the Python-owned BrewAssistant carbonation runtime.
+  fields:
+    method:
+      name: Method
+      description: Carbonation method name.
+      example: Set-and-forget
+    target_volumes:
+      name: Target volumes
+      description: Target CO2 volumes.
+      example: 2.4
+    start_volumes:
+      name: Start volumes
+      description: Estimated starting CO2 volumes.
+      example: 0.85
+    pressure_bar:
+      name: Pressure bar
+      description: Current keg/regulator pressure in bar.
+      example: 0.8
+    temperature_c:
+      name: Temperature C
+      description: Current beer temperature in Celsius.
+      example: 4.0
+    started_at:
+      name: Started at
+      description: Optional carbonation start datetime.
+      example: "2026-05-24 15:00:00"
+
+carbonation_update:
+  name: Carbonation update
+  description: Update the Python-owned BrewAssistant carbonation runtime values.
+  fields:
+    method:
+      name: Method
+      description: Carbonation method name.
+      example: Set-and-forget
+    target_volumes:
+      name: Target volumes
+      description: Target CO2 volumes.
+      example: 2.4
+    start_volumes:
+      name: Start volumes
+      description: Estimated starting CO2 volumes.
+      example: 0.85
+    pressure_bar:
+      name: Pressure bar
+      description: Current keg/regulator pressure in bar.
+      example: 0.8
+    temperature_c:
+      name: Temperature C
+      description: Current beer temperature in Celsius.
+      example: 4.0
+    started_at:
+      name: Started at
+      description: Optional carbonation start datetime.
+      example: "2026-05-24 15:00:00"
+
+carbonation_pause:
+  name: Carbonation pause
+  description: Pause carbonation monitoring without clearing runtime values.
+
+carbonation_reset:
+  name: Carbonation reset
+  description: Reset the Python-owned BrewAssistant carbonation runtime.
