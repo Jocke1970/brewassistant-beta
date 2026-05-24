@@ -19,6 +19,8 @@ brewassistant/
 │       ├── sensor.py
 │       ├── binary_sensor.py
 │       ├── switch.py
+│       ├── number.py
+│       ├── select.py
 │       ├── brewday_runtime_core.py
 │       ├── brewday_runtime.py
 │       ├── brewday_runtime_sensor.py
@@ -33,7 +35,8 @@ brewassistant/
 │       ├── manual_brewday_store.py
 │       ├── wort_cooling.py
 │       ├── wort_cooling_sensor.py
-│       └── carbonation.py
+│       ├── carbonation.py
+│       └── carbonation_runtime.py
 ├── dashboards/
 │   └── optional dashboard/card examples
 └── docs/
@@ -66,6 +69,8 @@ Responsibilities:
 - Normalize BrewZilla/RAPT hardware telemetry.
 - Track counterflow wort cooling state.
 - Calculate carbonation recommendations and estimates.
+- Own carbonation runtime/session state and explicit controls.
+- Scope fermentation warnings to active fermentation/cold-crash context.
 - Expose dashboard-safe sensors.
 - Expose explicit services.
 - Keep safety/orchestration checks outside the dashboard.
@@ -144,15 +149,6 @@ The active stage/step determines current stage.
 next_step must not wake a future stage early.
 ```
 
-Example:
-
-```text
-Current: Whirlpool / hop stand
-Next: Chill wort
-→ Stage Engine stays in Whirlpool
-→ Cooling Cockpit remains standby
-```
-
 The Stage Engine is read-only.
 
 ---
@@ -175,24 +171,55 @@ This module is read-only guidance. It does not control cooling water flow and do
 
 ---
 
-### `carbonation.py`
+### `carbonation_runtime.py` and `carbonation.py`
 
-Carbonation currently provides read-only carbonation calculations and dashboard sensors.
+Carbonation now has Python-owned runtime/session state.
 
-Current status:
+Responsibilities:
+
+- Hold active/paused/reset carbonation runtime state in `hass.data`.
+- Track method, target volumes, start volumes, actual pressure and start time.
+- Resolve carbonation temperature from cooler/kegerator temperature, currently `sensor.kyl_temperatur_4`, with fallback to liquid temperature.
+- Calculate recommended pressure from target volumes and current temperature.
+- Calculate equilibrium volumes from actual pressure and current temperature.
+- Estimate current carbonation volumes over time toward equilibrium.
+
+`carbonation.py` remains a compatibility wrapper around the runtime snapshot builder.
+
+---
+
+### `number.py` and `select.py`
+
+These platforms expose Python-owned local controls.
+
+Current carbonation controls:
 
 ```text
-Carbonation Cockpit UI exists.
-carbonation.py still uses helper-style entities for process state and input values.
+number.brewassistant_carbonation_pressure_bar
+number.brewassistant_carbonation_target_volumes
+number.brewassistant_carbonation_start_volumes
+select.brewassistant_carbonation_method
 ```
 
-Planned direction:
+These are integration entities, not old helper-backed workflow state.
+
+---
+
+### Fermentation coordinator scope guard
+
+The coordinator exposes fermentation/process sensors while Timed Fermentation Runtime is still future work.
+
+Current guard behavior:
 
 ```text
-Python-owned Carbonation Runtime/session
-explicit start/update/pause/reset services
-optional pressure and temperature source mapping
+No active fermentation/batch context
+→ process: Idle
+→ stage: none
+→ temperature status: Standby
+→ severity/problem: ok
 ```
+
+A stale cold-crash helper cannot keep Fermentation Cockpit in warning state by itself. Cold crash only counts when there is an active fermentation/batch context.
 
 ---
 
@@ -232,6 +259,15 @@ Dashboard cards should:
 - Avoid duplicating backend workflow logic.
 
 A card may contain display-only formatting, but the real process state should come from Python sensors.
+
+Current dashboard milestones:
+
+```text
+Counterflow Cooling Cockpit
+Carbonation Cockpit v3.1
+Fermentation Cockpit v2.1
+BrewZilla/Brewday cockpit cards
+```
 
 ---
 
@@ -273,7 +309,7 @@ brewassistant_*                 Python-owned normalized entities
 brewassistant_brewday_*         Brewday Runtime and Stage Engine
 brewassistant_brewzilla_*       BrewZilla runtime/orchestration
 brewassistant_wort_*            Wort cooling and pitch-readiness
-brewassistant_carbonation_*     Carbonation calculations
+brewassistant_carbonation_*     Carbonation calculations/runtime
 brewassistant_fermentation_*    Future fermentation runtime
 brewassistant_source_*          Source diagnostics
 ```
@@ -285,6 +321,7 @@ fwk_*                           old Fresh Wort Kit specific namespace
 brew_process_*                  older process namespace
 brew_batch_*                    older batch namespace
 brew_recipe_*                   older recipe/runtime namespace
+input_boolean/input_number      old workflow helpers where not explicitly provided by integration platforms
 ```
 
 New development should avoid adding new `fwk_*` entities.
