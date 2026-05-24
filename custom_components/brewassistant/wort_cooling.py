@@ -178,8 +178,8 @@ def _cooling_status(
         return "pump_off"
     if rate_c_per_h is not None and rate_c_per_h > MIN_MEANINGFUL_RATE_C_PER_H:
         return "cooling"
-    if (stage or "") == "Wort Cooling":
-        return "cooling_waiting_for_trend"
+    if delta > READY_TOLERANCE_C:
+        return "cooling_needed"
     return "monitoring"
 
 
@@ -257,8 +257,11 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         summary = f"Cooling blocked · heater must be OFF · {reference_label} {temp_text} · target {target_text}"
     elif pitch_ready:
         summary = f"Pitch ready · {reference_label} {temp_text} · target {target_text}"
-    elif delta is not None and delta > 0:
-        summary = f"Cooling · {reference_label} {temp_text} → {target_text} · {rate_text} · ETA {eta_text}"
+    elif delta is not None and delta > READY_TOLERANCE_C:
+        if rate is not None and rate > MIN_MEANINGFUL_RATE_C_PER_H:
+            summary = f"Cooling · {reference_label} {temp_text} → {target_text} · {rate_text} · ETA {eta_text}"
+        else:
+            summary = f"Cooling needed · {reference_label} {temp_text} → {target_text} · waiting for trend"
     elif delta is not None:
         summary = f"Below target · {reference_label} {temp_text} · target {target_text}"
     else:
