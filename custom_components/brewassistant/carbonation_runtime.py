@@ -11,7 +11,8 @@ from homeassistant.util import dt as dt_util
 
 DATA_KEY = "carbonation_runtime"
 LOCAL_PRESSURE_BAR_ENTITY = "input_number.brewassistant_carbonation_pressure_bar"
-LOCAL_TEMPERATURE_ENTITY = "sensor.brewassistant_liquid_temperature"
+LOCAL_TEMPERATURE_ENTITY = "sensor.kyl_temperatur_4"
+FALLBACK_TEMPERATURE_ENTITY = "sensor.brewassistant_liquid_temperature"
 
 DEFAULT_METHOD = "Set-and-forget"
 DEFAULT_TARGET_VOLUMES = 2.4
@@ -178,6 +179,9 @@ def _resolved_temperature_c(hass: HomeAssistant, runtime: CarbonationRuntime) ->
     local = _float_state(hass, LOCAL_TEMPERATURE_ENTITY)
     if local is not None:
         return local, LOCAL_TEMPERATURE_ENTITY
+    fallback = _float_state(hass, FALLBACK_TEMPERATURE_ENTITY)
+    if fallback is not None:
+        return fallback, FALLBACK_TEMPERATURE_ENTITY
     return None, None
 
 
@@ -245,5 +249,6 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "temperature_source": temp_source,
         "local_pressure_entity": LOCAL_PRESSURE_BAR_ENTITY,
         "local_temperature_entity": LOCAL_TEMPERATURE_ENTITY,
+        "fallback_temperature_entity": FALLBACK_TEMPERATURE_ENTITY,
         "mode": "read_only",
     }
