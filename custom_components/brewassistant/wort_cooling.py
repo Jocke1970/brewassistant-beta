@@ -23,10 +23,18 @@ CONTROL_HINT_SENSOR = "sensor.brewassistant_brewday_stage_control_hint"
 KETTLE_TEMP_SENSOR = "sensor.brewassistant_brewzilla_current_temperature"
 BREWZILLA_TARGET_SENSOR = "sensor.brewassistant_brewzilla_target_temperature"
 BREWZILLA_POWER_SENSOR = "sensor.brewassistant_brewzilla_power"
-PITCH_TARGET_NUMBER = "number.brewzilla_target_temperature"
+BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 PUMP_SWITCH = "switch.brewzilla_pump"
 HEATER_SWITCH = "switch.brewzilla_heater"
 POWER_SWITCH = "switch.brewzilla"
+
+# Dedicated cooling/pitch targets. These should win over the BrewZilla mash target.
+COOLING_TARGET_ENTITIES = (
+    "input_number.brewassistant_wort_cooling_target_temp_c",
+    "input_number.brewassistant_biab_cooling_target_temp_c",
+    "input_number.brewassistant_pitch_target_temp_c",
+    "number.brewassistant_wort_cooling_target_temperature",
+)
 
 # Optional sensors. The first available source is used as the cooling reference.
 OPTIONAL_OUTPUT_TEMP_SENSORS = (
@@ -181,10 +189,22 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reference_source = kettle_source
         reference_label = "kettle"
 
-    pitch_target = _float(hass, PITCH_TARGET_NUMBER)
+    cooling_target, cooling_target_source = _first_float_source(hass, COOLING_TARGET_ENTITIES)
+    brewzilla_number_target = _float(hass, BREWZILLA_TARGET_NUMBER)
     brewzilla_target = _float(hass, BREWZILLA_TARGET_SENSOR)
-    target_temp = pitch_target if pitch_target is not None else brewzilla_target
-    target_source = PITCH_TARGET_NUMBER if pitch_target is not None else BREWZILLA_TARGET_SENSOR
+
+    if cooling_target is not None:
+        target_temp = cooling_target
+        target_source = cooling_target_source
+        target_label = "cooling"
+    elif brewzilla_number_target is not None:
+        target_temp = brewzilla_number_target
+        target_source = BREWZILLA_TARGET_NUMBER
+        target_label = "brewzilla_number_fallback"
+    else:
+        target_temp = brewzilla_target
+        target_source = BREWZILLA_TARGET_SENSOR
+        target_label = "brewzilla_runtime_fallback"
 
     previous, latest = _update_trend(
         hass,
@@ -243,6 +263,7 @@ def build_wort_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "kettle_temperature": round(kettle_temp, 2) if kettle_temp is not None else None,
         "target_temperature": round(target_temp, 2) if target_temp is not None else None,
         "target_source": target_source,
+        "target_label": target_label,
         "delta": delta,
         "cooling_rate_c_per_h": rate,
         "eta_minutes": eta_minutes,
