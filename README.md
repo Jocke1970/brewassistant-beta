@@ -379,6 +379,16 @@ Current near-term focus:
 
 ---
 
+## Acknowledgements
+
+BrewAssistant's Brewfather-aware runtime builds on the Home Assistant Brewfather ecosystem and treats the upstream Brewfather integration as a read-only source of recipe, batch and Brew Tracker data.
+
+Special thanks to **mvddonk**, creator/maintainer of the Brewfather Integration for Home Assistant, for the upstream integration that makes Brewfather data available inside Home Assistant.
+
+BrewAssistant is a separate companion/orchestration project and is not affiliated with Brewfather.
+
+---
+
 ## Disclaimer
 
 This project is intended for hobby brewing automation and process tracking. Always verify sanitation, pressure limits, electrical safety, hot-side safety, electrical switching, CO2 pressure, and fermentation decisions manually when needed.
