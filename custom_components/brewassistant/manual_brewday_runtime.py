@@ -99,11 +99,7 @@ class ManualPlan:
 
     @staticmethod
     def default_biab_plan() -> "ManualPlan":
-        """Return a safe default BIAB-style manual plan.
-
-        This is deliberately generic. It can later be replaced by a UI-created
-        or recipe-derived plan without changing the runtime contract.
-        """
+        """Return a safe default BIAB-style manual plan."""
         return ManualPlan(
             name="Manual BIAB Brewday",
             stages=(
@@ -258,6 +254,14 @@ class ManualRuntimeSession:
     def start(self, now: datetime | None = None) -> None:
         """Start or resume current manual step."""
         now = now or datetime.now(timezone.utc)
+        if self.state == ManualRuntimeState.COMPLETED:
+            self.active_stage_index = 0
+            self.active_step_index = 0
+            self.step_started_at = None
+            self.paused_at = None
+            self.remaining_when_paused = None
+            self.state = ManualRuntimeState.IDLE
+
         if self.state in {ManualRuntimeState.IDLE, ManualRuntimeState.PREPARED, ManualRuntimeState.AWAITING_CONFIRM}:
             self.step_started_at = now
             self.remaining_when_paused = None
