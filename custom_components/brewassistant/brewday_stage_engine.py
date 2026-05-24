@@ -29,6 +29,53 @@ BREWZILLA_POWER = "sensor.brewassistant_brewzilla_power"
 BREWZILLA_HEAT_UTIL = "sensor.brewassistant_brewzilla_heat_utilization"
 BREWZILLA_PUMP_UTIL = "sensor.brewassistant_brewzilla_pump_utilization"
 
+COOLING_KEYWORDS = (
+    "cool",
+    "cooling",
+    "chill",
+    "chilling",
+    "counterflow",
+    "counter-flow",
+    "counter flow",
+    "counterflow chiller",
+    "motström",
+    "motstrom",
+    "motströmskyl",
+    "motstromskyl",
+    "kyl",
+    "kyla",
+    "kylning",
+    "kyl vört",
+    "kyl vort",
+    "wort cooling",
+    "wort chilling",
+    "cool wort",
+    "chill wort",
+)
+
+PITCH_READY_KEYWORDS = (
+    "pitch ready",
+    "ready to pitch",
+    "pitch yeast",
+    "pitching",
+    "jäst",
+    "jasta",
+    "tillsätt jäst",
+    "tillsatt jast",
+    "pitch",
+)
+
+TRANSFER_TO_FERMENTER_KEYWORDS = (
+    "transfer to fermenter",
+    "transfer wort",
+    "move to fermenter",
+    "fermenter transfer",
+    "överför till jäskärl",
+    "overfor till jaskarl",
+    "för över till jäskärl",
+    "for over till jaskarl",
+)
+
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
     entity_state = hass.states.get(entity_id)
@@ -77,7 +124,9 @@ def _stage_group(stage: str) -> str:
         return "mash"
     if stage in {"Heating To Boil", "Boiling", "Hop Addition"}:
         return "boil"
-    if stage in {"Whirlpool", "Wort Cooling", "Pitch Ready", "Transfer"}:
+    if stage in {"Wort Cooling", "Pitch Ready"}:
+        return "cooling"
+    if stage in {"Whirlpool", "Transfer"}:
         return "post_boil"
     if stage in {"Cleaning", "Completed"}:
         return "wrap_up"
@@ -192,10 +241,12 @@ def _resolve_stage(
 
     if _contains(stage_blob, "clean"):
         return "Cleaning", "Runtime text indicates cleaning"
-    if _contains(stage_blob, "cool", "chill", "counterflow", "motström"):
-        return "Wort Cooling", "Runtime text indicates cooling"
-    if _contains(stage_blob, "pitch") and temp_value <= 25:
+    if _contains(stage_blob, *COOLING_KEYWORDS):
+        return "Wort Cooling", "Runtime text indicates wort cooling/chilling"
+    if _contains(stage_blob, *PITCH_READY_KEYWORDS) and temp_value <= 25:
         return "Pitch Ready", "Runtime text and temperature indicate pitch readiness"
+    if _contains(stage_blob, *TRANSFER_TO_FERMENTER_KEYWORDS) and temp_value <= 25:
+        return "Pitch Ready", "Runtime text indicates transfer-to-fermenter and temperature is pitch-safe"
     if _contains(stage_blob, "transfer"):
         return "Transfer", "Runtime text indicates transfer"
     if _contains(stage_blob, "whirlpool", "hop stand", "hopstand"):
