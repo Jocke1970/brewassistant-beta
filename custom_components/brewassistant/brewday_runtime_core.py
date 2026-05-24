@@ -1,4 +1,9 @@
-"""Core Brewday Runtime resolver."""
+"""Core Brewday Runtime resolver.
+
+This module resolves external Brewfather Brew Tracker data only. Python-owned
+Manual Brewday runtime is handled by manual_brewday_runtime.py through the
+manual adapter, not by YAML/input-helper compatibility state.
+"""
 
 from __future__ import annotations
 
@@ -17,17 +22,6 @@ BF_NEXT = "sensor.brewfather_brew_tracker_next_step"
 BF_PROGRESS = "sensor.brewfather_brew_tracker_progress"
 BF_REMAINING = "sensor.brewfather_brew_tracker_time_remaining"
 BF_RAW = "sensor.brewfather_brew_tracker_raw"
-
-MANUAL_MODE = "input_select.brewassistant_brewday_mode"
-MANUAL_ACTIVE = "input_boolean.brewassistant_brewday_manual_active"
-MANUAL_STATUS = "input_select.brewassistant_brewday_manual_status"
-MANUAL_STAGE = "input_select.brewassistant_brewday_manual_stage"
-MANUAL_STEP = "input_text.brewassistant_brewday_manual_step"
-MANUAL_NEXT = "input_text.brewassistant_brewday_manual_next_step"
-MANUAL_PROGRESS = "input_number.brewassistant_brewday_manual_progress"
-MANUAL_REMAINING_MIN = "input_number.brewassistant_brewday_manual_time_remaining_min"
-MANUAL_TARGET = "input_number.brewassistant_brewday_manual_target_temp"
-MANUAL_ACTUAL = "input_number.brewassistant_brewday_manual_actual_temp"
 
 
 def state(hass: HomeAssistant, entity_id: str, default: str = "") -> str:
@@ -254,16 +248,10 @@ def timeline(hass: HomeAssistant) -> list[dict[str, Any]]:
 
 
 def source(hass: HomeAssistant) -> str:
-    mode = state(hass, MANUAL_MODE, "Auto")
+    """Return the external runtime source handled by this core resolver."""
     bf_status = state(hass, BF_STATUS)
-    if mode == "Brewfather Brew Tracker" and bf_status in ACTIVE:
+    if bf_status in ACTIVE:
         return "Brewfather Brew Tracker"
-    if mode == "Manual":
-        return "Manual Brewday"
-    if mode == "Auto" and bf_status in ACTIVE:
-        return "Brewfather Brew Tracker"
-    if mode == "Auto" and state(hass, MANUAL_ACTIVE) == "on":
-        return "Manual Brewday"
     return "None"
 
 
@@ -329,49 +317,6 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     }
 
 
-def manual_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    status = state(hass, MANUAL_STATUS, "inactive")
-    remaining = as_int(state(hass, MANUAL_REMAINING_MIN), 0) * 60
-    progress = round(as_float(state(hass, MANUAL_PROGRESS)) or 0, 1)
-    stage = state(hass, MANUAL_STAGE, "Setup")
-    step = state(hass, MANUAL_STEP, "Manual step")
-    runtime_state = "live" if status == "running" else "paused" if status == "paused" else "completed" if status == "completed" else "idle"
-    return {
-        "source": "Manual Brewday",
-        "status": status,
-        "runtime_state": runtime_state,
-        "stage": stage,
-        "step": step,
-        "next_step": state(hass, MANUAL_NEXT, "None"),
-        "progress": progress,
-        "time_remaining_seconds": remaining,
-        "time_remaining_minutes": round(remaining / 60),
-        "target_temperature": as_float(state(hass, MANUAL_TARGET)),
-        "actual_temperature": as_float(state(hass, MANUAL_ACTUAL)),
-        "summary": f"{runtime_state} · {stage} · {step} · {round(progress)}% · {fmt(remaining)} kvar",
-        "source_entity": MANUAL_MODE,
-        "snapshot_entity": None,
-        "snapshot_updated_at": None,
-        "snapshot_age_seconds": 0,
-        "snapshot_age_minutes": 0,
-        "raw_remaining_seconds": remaining,
-        "live_elapsed_since_snapshot_seconds": 0,
-        "live_timer_active": False,
-        "refresh_recommended": False,
-        "awaiting_snapshot": False,
-        "stage_duration_seconds": None,
-        "stage_elapsed_seconds": None,
-        "stage_remaining_seconds": remaining,
-        "stage_remaining_minutes": round(remaining / 60),
-        "stage_progress_percent": progress,
-        "current_step_remaining_seconds": remaining,
-        "current_step_remaining_minutes": round(remaining / 60),
-        "current_step_description": state(hass, "input_text.brewassistant_brewday_manual_step_description", ""),
-        "next_step_description": state(hass, "input_text.brewassistant_brewday_manual_next_step_description", ""),
-        "timeline": [],
-    }
-
-
 def inactive_snapshot() -> dict[str, Any]:
     return {
         "source": "None", "status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "next_step": "None",
@@ -389,8 +334,6 @@ def build_core_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     selected = source(hass)
     if selected == "Brewfather Brew Tracker":
         return brewfather_snapshot(hass)
-    if selected == "Manual Brewday":
-        return manual_snapshot(hass)
     return inactive_snapshot()
 
 
