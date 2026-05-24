@@ -57,12 +57,14 @@ Recent cleanup:
 ```text
 ✅ Manual Brewday services no longer sync legacy input_boolean/input_select helpers
 ✅ Manual Brewday Runtime is Python-owned and selected before external sources when active
+✅ Manual Brewday can restart cleanly after completed state
 ✅ Brewday Runtime Core now resolves Brewfather Brew Tracker or None only
 ✅ Manual Brewday Adapter no longer reads old helper mirrors
 ✅ Python process mirror no longer reads sensor.brew_process_status
 ✅ YAML process attributes were removed from Python process sensors
 ✅ Legacy yaml_process_status field was removed from the coordinator data model
 ✅ Stage Engine is Python-owned and exposed through canonical BrewAssistant sensors
+✅ Stage Engine has an explicit Prepare stage before Strike Water
 ✅ Carbonation Runtime is Python-owned and no longer uses legacy helper pressure as fallback
 ✅ Fermentation Cockpit scope guard ignores stale cold-crash helper state when no batch/fermentation context is active
 ```
@@ -98,6 +100,7 @@ The Brewfather integration is treated as a read-only recipe/timeline source. Bre
 ✅ Manual Brewday persistent session in hass.data
 ✅ Manual Brewday services
 ✅ Manual Brewday stage shortcut services
+✅ Manual Brewday restart after completed state
 ✅ Live countdown between Brewfather snapshots
 ✅ Current-step remaining timer
 ✅ Stage remaining timer
@@ -143,6 +146,16 @@ brewassistant.manual_brewday_reset
 
 These services operate on the Python Manual Brewday runtime session and replace older helper-script driven manual controls.
 
+Current restart behavior:
+
+```text
+Finish → Start
+= new run from Setup / Prepare equipment
+
+Finish → Reset → Prepare/Start
+= clean new Manual Brewday session
+```
+
 ---
 
 ## Brewday Stage Engine v2
@@ -163,6 +176,7 @@ Supported interpreted stages:
 
 ```text
 Idle
+Prepare
 Strike Water
 Heating Strike
 Mash In
@@ -182,6 +196,8 @@ Completed
 Important current behavior:
 
 ```text
+✅ Stage Engine has explicit Prepare stage for prepared/setup/manual equipment checks.
+✅ Prepare does not wake Strike Water early.
 ✅ Stage Engine recognizes wort cooling / counterflow chilling terms.
 ✅ Stage Engine recognizes Whirlpool / Hop Stand as post-boil, not cooling.
 ✅ next_step does not trigger the current stage anymore.
@@ -209,7 +225,8 @@ Current status:
 ✅ Premium BrewZilla dashboard cards
 ✅ Stage Engine data integrated into BrewZilla UI
 ✅ Mash target quick-select UI
-✅ Brewday Actions UI with stage shortcut buttons
+✅ BrewZilla/Brewday top-section polish v2.2
+✅ Brewday Actions / Runtime Controls UI v2.2
 ```
 
 Safety switches:
@@ -357,7 +374,7 @@ BrewAssistant v4 is actively evolving.
 Current Python Core status:
 
 ```text
-v1.3 Python Core · Manual Runtime shortcuts + Stage Engine v2 + Counterflow Cooling + Carbonation Runtime + Fermentation Cockpit Scope Guard
+v1.3 Python Core · Manual Runtime restart + Stage Engine Prepare + Counterflow Cooling + Carbonation Runtime + Fermentation Cockpit Scope Guard
 ```
 
 Current near-term focus:
@@ -365,13 +382,15 @@ Current near-term focus:
 ```text
 ✅ Python-only cleanup of legacy Manual Brewday helper dependencies
 ✅ Stage Engine v2 backend
+✅ Stage Engine explicit Prepare stage
 ✅ Stage Engine v2 UI
 ✅ BrewZilla runtime card with Stage Engine intelligence
 ✅ Counterflow wort cooling backend and UI
-✅ Brewday Actions stage shortcut UI
+✅ Brewday Actions / Runtime Controls v2.2
 ✅ Carbonation runtime backend and UI
 ✅ Fermentation Cockpit scope guard and UI polish
-🔜 BrewZilla/Brewday top-card polish
+🔜 Validate Manual Brewday restart/Prepare flow after Home Assistant reload
+🔜 Validate BrewZilla/Brewday top cards during real brewday
 🔜 Manual timed-step auto-advance
 🔜 Manual session persistence across HA restart
 🔜 Timed Fermentation Runtime
