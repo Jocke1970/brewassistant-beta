@@ -68,6 +68,16 @@ None
 
 Manual Brewday is Python-owned and no longer depends on old helper mirrors.
 
+Current restart semantics:
+
+```text
+Finish → Start
+= starts a new run from Setup / Prepare equipment
+
+Finish → Reset → Prepare/Start
+= clean new session
+```
+
 ---
 
 ## Brewday Stage Engine entities
@@ -96,6 +106,7 @@ Typical stage groups:
 
 ```text
 idle
+prep
 mash
 boil
 post_boil
@@ -108,6 +119,7 @@ Important behavior:
 ```text
 Current active stage/step determines current stage.
 next_step should not wake future stages early.
+prepared/setup/prepare equipment maps to Prepare, not Strike Water.
 ```
 
 ---
