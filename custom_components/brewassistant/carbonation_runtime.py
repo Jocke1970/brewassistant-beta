@@ -7,9 +7,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 DATA_KEY = "carbonation_runtime"
+STORE_DATA_KEY = "carbonation_runtime_store"
+STORAGE_KEY = "brewassistant_carbonation_runtime"
+STORAGE_VERSION = 1
+
 LOCAL_TEMPERATURE_ENTITY = "sensor.kyl_temperatur_4"
 FALLBACK_TEMPERATURE_ENTITY = "sensor.brewassistant_liquid_temperature"
 
@@ -35,23 +40,6 @@ class CarbonationRuntime:
     updated_at: datetime | None = None
 
 
-def get_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
-    """Return the Python-owned carbonation runtime."""
-    data = hass.data.setdefault("brewassistant", {})
-    runtime = data.get(DATA_KEY)
-    if not isinstance(runtime, CarbonationRuntime):
-        runtime = CarbonationRuntime()
-        data[DATA_KEY] = runtime
-    return runtime
-
-
-def reset_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
-    """Reset carbonation runtime to inactive defaults."""
-    runtime = CarbonationRuntime()
-    hass.data.setdefault("brewassistant", {})[DATA_KEY] = runtime
-    return runtime
-
-
 def _as_float(value: Any, fallback: float | None = None) -> float | None:
     try:
         if value is None or str(value).lower() in INVALID_STATES:
@@ -73,6 +61,85 @@ def _as_datetime(value: Any) -> datetime | None:
     if parsed_date is not None:
         return dt_util.as_utc(dt_util.start_of_local_day(parsed_date))
     return None
+
+
+def _runtime_to_store(runtime: CarbonationRuntime) -> dict[str, Any]:
+    """Serialize carbonation runtime to Home Assistant storage."""
+    return {
+        "active": runtime.active,
+        "method": runtime.method,
+        "target_volumes": runtime.target_volumes,
+        "start_volumes": runtime.start_volumes,
+        "pressure_bar": runtime.pressure_bar,
+        "temperature_c": runtime.temperature_c,
+        "started_at": runtime.started_at.isoformat() if runtime.started_at is not None else None,
+        "updated_at": runtime.updated_at.isoformat() if runtime.updated_at is not None else None,
+    }
+
+
+def _runtime_from_store(payload: Any) -> CarbonationRuntime:
+    """Create carbonation runtime from Home Assistant storage payload."""
+    if not isinstance(payload, dict):
+        return CarbonationRuntime()
+
+    runtime = CarbonationRuntime()
+    runtime.active = bool(payload.get("active", False))
+    runtime.method = str(payload.get("method") or DEFAULT_METHOD)
+
+    target = _as_float(payload.get("target_volumes"), DEFAULT_TARGET_VOLUMES)
+    if target is not None and target > 0:
+        runtime.target_volumes = round(target, 2)
+
+    start = _as_float(payload.get("start_volumes"), DEFAULT_START_VOLUMES)
+    if start is not None and start >= 0:
+        runtime.start_volumes = round(start, 2)
+
+    runtime.pressure_bar = _as_float(payload.get("pressure_bar"))
+    runtime.temperature_c = _as_float(payload.get("temperature_c"))
+    runtime.started_at = _as_datetime(payload.get("started_at"))
+    runtime.updated_at = _as_datetime(payload.get("updated_at"))
+    return runtime
+
+
+def _store(hass: HomeAssistant) -> Store:
+    """Return the carbonation runtime Store instance."""
+    data = hass.data.setdefault("brewassistant", {})
+    store = data.get(STORE_DATA_KEY)
+    if not isinstance(store, Store):
+        store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        data[STORE_DATA_KEY] = store
+    return store
+
+
+async def async_load_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
+    """Load persisted carbonation runtime into hass.data."""
+    payload = await _store(hass).async_load()
+    runtime = _runtime_from_store(payload)
+    hass.data.setdefault("brewassistant", {})[DATA_KEY] = runtime
+    return runtime
+
+
+async def async_save_carbonation_runtime(hass: HomeAssistant) -> None:
+    """Persist current carbonation runtime from hass.data."""
+    runtime = get_carbonation_runtime(hass)
+    await _store(hass).async_save(_runtime_to_store(runtime))
+
+
+def get_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
+    """Return the Python-owned carbonation runtime."""
+    data = hass.data.setdefault("brewassistant", {})
+    runtime = data.get(DATA_KEY)
+    if not isinstance(runtime, CarbonationRuntime):
+        runtime = CarbonationRuntime()
+        data[DATA_KEY] = runtime
+    return runtime
+
+
+def reset_carbonation_runtime(hass: HomeAssistant) -> CarbonationRuntime:
+    """Reset carbonation runtime to inactive defaults."""
+    runtime = CarbonationRuntime()
+    hass.data.setdefault("brewassistant", {})[DATA_KEY] = runtime
+    return runtime
 
 
 def _state_value(hass: HomeAssistant, entity_id: str) -> str | None:
