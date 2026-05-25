@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .carbonation_runtime import get_carbonation_runtime, update_carbonation_runtime
+from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
@@ -50,6 +50,7 @@ class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, S
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in METHOD_OPTIONS:
             update_carbonation_runtime(self.coordinator.hass, {"method": last_state.state})
+            await async_save_carbonation_runtime(self.coordinator.hass)
 
     @property
     def current_option(self) -> str | None:
@@ -61,6 +62,7 @@ class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, S
         if option not in METHOD_OPTIONS:
             return
         update_carbonation_runtime(self.coordinator.hass, {"method": option})
+        await async_save_carbonation_runtime(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
