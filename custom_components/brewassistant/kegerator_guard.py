@@ -16,8 +16,10 @@ from homeassistant.util import dt as dt_util
 
 DOMAIN_DATA = "brewassistant"
 GUARD_UNSUB_KEY = "kegerator_guard_unsub"
+GUARD_WATCHDOG_UNSUB_KEY = "kegerator_guard_watchdog_unsub"
 GUARD_ENABLED_KEY = "kegerator_guard_enabled_runtime"
 GUARD_LAST_ACTION_KEY = "kegerator_guard_last_action"
+GUARD_LAST_EVALUATION_KEY = "kegerator_guard_last_evaluation"
 
 GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 KEGERATOR_SWITCH = "switch.kegerator"
@@ -92,7 +94,7 @@ def _climate_conflicts(hass: HomeAssistant) -> list[str]:
 
 def _summary(status: str, air_temp: float | None, action: str, reason: str) -> str:
     air = "—" if air_temp is None else f"{air_temp:.1f} °C"
-    return f"{status} · air {air} °C · {action} · {reason}" if air == "—" else f"{status} · air {air} · {action} · {reason}"
+    return f"{status} · air {air} · {action} · {reason}"
 
 
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -108,7 +110,9 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     on_minutes = round(elapsed or 0, 1) if compressor_on else 0.0
     off_minutes = round(elapsed or 0, 1) if switch_available and not compressor_on else 0.0
     conflicts = _climate_conflicts(hass)
-    last_action = _runtime_data(hass).get(GUARD_LAST_ACTION_KEY)
+    runtime = _runtime_data(hass)
+    last_action = runtime.get(GUARD_LAST_ACTION_KEY)
+    last_evaluation = runtime.get(GUARD_LAST_EVALUATION_KEY)
 
     status = "disabled"
     action = "none"
@@ -180,12 +184,16 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "climate_conflicts": conflicts,
         "climate_conflict": bool(conflicts),
         "last_control_action": last_action,
+        "last_evaluation": last_evaluation,
+        "watchdog_active": runtime.get(GUARD_WATCHDOG_UNSUB_KEY) is not None,
         "mode": "serving_carbonation_air_control",
     }
 
 
 async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
     """Apply the kegerator guard once if enabled."""
+    runtime = _runtime_data(hass)
+    runtime[GUARD_LAST_EVALUATION_KEY] = dt_util.utcnow().isoformat()
     snapshot = build_kegerator_guard_snapshot(hass)
     action = snapshot.get("control_action")
 
@@ -198,7 +206,7 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
         {"entity_id": KEGERATOR_SWITCH},
         blocking=True,
     )
-    _runtime_data(hass)[GUARD_LAST_ACTION_KEY] = {
+    runtime[GUARD_LAST_ACTION_KEY] = {
         "action": action,
         "entity_id": KEGERATOR_SWITCH,
         "at": dt_util.utcnow().isoformat(),
@@ -206,6 +214,23 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
         "air_temperature": snapshot.get("air_temperature"),
     }
     return build_kegerator_guard_snapshot(hass)
+
+
+async def async_setup_kegerator_guard(hass: HomeAssistant) -> None:
+    """Install an always-on watchdog that applies the guard when the switch is on."""
+    data = _runtime_data(hass)
+    if data.get(GUARD_WATCHDOG_UNSUB_KEY) is not None:
+        return
+
+    def _tick(now: datetime) -> None:
+        hass.async_create_task(async_apply_kegerator_guard(hass))
+
+    data[GUARD_WATCHDOG_UNSUB_KEY] = async_track_time_interval(
+        hass,
+        _tick,
+        timedelta(seconds=INTERVAL_SECONDS),
+    )
+    await async_apply_kegerator_guard(hass)
 
 
 async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
@@ -223,23 +248,10 @@ async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
             blocking=True,
         )
 
-    if data.get(GUARD_UNSUB_KEY) is None:
-        def _tick(now: datetime) -> None:
-            hass.async_create_task(async_apply_kegerator_guard(hass))
-
-        data[GUARD_UNSUB_KEY] = async_track_time_interval(
-            hass,
-            _tick,
-            timedelta(seconds=INTERVAL_SECONDS),
-        )
-
+    await async_setup_kegerator_guard(hass)
     await async_apply_kegerator_guard(hass)
 
 
 def async_disable_kegerator_guard(hass: HomeAssistant) -> None:
-    """Disable periodic kegerator guard control."""
-    data = _runtime_data(hass)
-    data[GUARD_ENABLED_KEY] = False
-    unsub = data.pop(GUARD_UNSUB_KEY, None)
-    if callable(unsub):
-        unsub()
+    """Disable kegerator guard control."""
+    _runtime_data(hass)[GUARD_ENABLED_KEY] = False
