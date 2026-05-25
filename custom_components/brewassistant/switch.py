@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
 from .kegerator_guard import (
+    async_apply_kegerator_guard,
     async_disable_kegerator_guard,
     async_enable_kegerator_guard,
     build_kegerator_guard_snapshot,
@@ -85,6 +88,7 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         self._key = key
         self._config = config
         self._kind = str(config.get("kind", "safety"))
+        self._guard_tick_unsub = None
         self._attr_unique_id = f"{DOMAIN}_switch_{key}"
         self._attr_name = str(config["name"])
         self._attr_icon = str(config["icon"])
@@ -102,8 +106,34 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
-        if self._kind == "kegerator_guard" and self._attr_is_on:
-            await async_enable_kegerator_guard(self.coordinator.hass)
+        if self._kind == "kegerator_guard":
+            self._ensure_guard_tick()
+            if self._attr_is_on:
+                await async_enable_kegerator_guard(self.coordinator.hass)
+                await self._async_guard_tick()
+
+    def _ensure_guard_tick(self) -> None:
+        """Ensure the kegerator guard entity has its own periodic apply loop."""
+        if self._kind != "kegerator_guard" or self._guard_tick_unsub is not None:
+            return
+
+        def _tick(now) -> None:
+            self.coordinator.hass.async_create_task(self._async_guard_tick())
+
+        self._guard_tick_unsub = async_track_time_interval(
+            self.coordinator.hass,
+            _tick,
+            timedelta(seconds=30),
+        )
+        self.async_on_remove(self._guard_tick_unsub)
+
+    async def _async_guard_tick(self) -> None:
+        """Apply kegerator guard once and refresh this entity's attributes."""
+        if self._kind != "kegerator_guard":
+            return
+        if self._attr_is_on:
+            await async_apply_kegerator_guard(self.coordinator.hass)
+        self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
@@ -114,7 +144,11 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         """Turn switch on."""
         self._attr_is_on = True
         if self._kind == "kegerator_guard":
+            self._ensure_guard_tick()
+            self.async_write_ha_state()
             await async_enable_kegerator_guard(self.coordinator.hass)
+            await self._async_guard_tick()
+            return
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
