@@ -10,12 +10,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 DOMAIN_DATA = "brewassistant"
 GUARD_UNSUB_KEY = "kegerator_guard_unsub"
+GUARD_ENABLED_KEY = "kegerator_guard_enabled_runtime"
+GUARD_LAST_ACTION_KEY = "kegerator_guard_last_action"
 
 GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 KEGERATOR_SWITCH = "switch.kegerator"
@@ -36,6 +38,11 @@ MIN_ON_MINUTES = 10.0
 MIN_OFF_MINUTES = 6.0
 INTERVAL_SECONDS = 30
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
+
+
+def _runtime_data(hass: HomeAssistant) -> dict[str, Any]:
+    """Return BrewAssistant hass.data bucket."""
+    return hass.data.setdefault(DOMAIN_DATA, {})
 
 
 def _state(hass: HomeAssistant, entity_id: str) -> str | None:
@@ -59,6 +66,11 @@ def _is_on(hass: HomeAssistant, entity_id: str) -> bool:
     return hass.states.is_state(entity_id, "on")
 
 
+def _guard_enabled(hass: HomeAssistant) -> bool:
+    """Return guard enabled state from runtime flag or entity state."""
+    return bool(_runtime_data(hass).get(GUARD_ENABLED_KEY)) or _is_on(hass, GUARD_SWITCH)
+
+
 def _minutes_since_changed(hass: HomeAssistant, entity_id: str) -> float | None:
     state = hass.states.get(entity_id)
     if state is None:
@@ -80,12 +92,12 @@ def _climate_conflicts(hass: HomeAssistant) -> list[str]:
 
 def _summary(status: str, air_temp: float | None, action: str, reason: str) -> str:
     air = "—" if air_temp is None else f"{air_temp:.1f} °C"
-    return f"{status} · air {air} · {action} · {reason}"
+    return f"{status} · air {air} °C · {action} · {reason}" if air == "—" else f"{status} · air {air} · {action} · {reason}"
 
 
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build current kegerator guard state."""
-    enabled = _is_on(hass, GUARD_SWITCH)
+    enabled = _guard_enabled(hass)
     air_temp = _float_state(hass, AIR_TEMP_ENTITY)
     carbonation_temp = _float_state(hass, CARBONATION_TEMP_ENTITY)
     carbonation_status = _state(hass, CARBONATION_STATUS_ENTITY) or "unknown"
@@ -96,6 +108,7 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     on_minutes = round(elapsed or 0, 1) if compressor_on else 0.0
     off_minutes = round(elapsed or 0, 1) if switch_available and not compressor_on else 0.0
     conflicts = _climate_conflicts(hass)
+    last_action = _runtime_data(hass).get(GUARD_LAST_ACTION_KEY)
 
     status = "disabled"
     action = "none"
@@ -166,6 +179,7 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "carbonation_temperature": carbonation_temp,
         "climate_conflicts": conflicts,
         "climate_conflict": bool(conflicts),
+        "last_control_action": last_action,
         "mode": "serving_carbonation_air_control",
     }
 
@@ -180,16 +194,24 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
 
     await hass.services.async_call(
         "switch",
-        action,
+        str(action),
         {"entity_id": KEGERATOR_SWITCH},
-        blocking=False,
+        blocking=True,
     )
-    return snapshot
+    _runtime_data(hass)[GUARD_LAST_ACTION_KEY] = {
+        "action": action,
+        "entity_id": KEGERATOR_SWITCH,
+        "at": dt_util.utcnow().isoformat(),
+        "reason": snapshot.get("reason"),
+        "air_temperature": snapshot.get("air_temperature"),
+    }
+    return build_kegerator_guard_snapshot(hass)
 
 
 async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
     """Enable periodic kegerator guard control."""
-    data = hass.data.setdefault(DOMAIN_DATA, {})
+    data = _runtime_data(hass)
+    data[GUARD_ENABLED_KEY] = True
 
     # Prevent generic/dual thermostats from fighting direct compressor guard control.
     conflicts = _climate_conflicts(hass)
@@ -198,7 +220,7 @@ async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
             "climate",
             "turn_off",
             {"entity_id": conflicts},
-            blocking=False,
+            blocking=True,
         )
 
     if data.get(GUARD_UNSUB_KEY) is None:
@@ -216,7 +238,8 @@ async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
 
 def async_disable_kegerator_guard(hass: HomeAssistant) -> None:
     """Disable periodic kegerator guard control."""
-    data = hass.data.setdefault(DOMAIN_DATA, {})
+    data = _runtime_data(hass)
+    data[GUARD_ENABLED_KEY] = False
     unsub = data.pop(GUARD_UNSUB_KEY, None)
     if callable(unsub):
         unsub()
