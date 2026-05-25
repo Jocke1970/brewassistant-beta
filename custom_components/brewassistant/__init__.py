@@ -25,6 +25,7 @@ from .carbonation_runtime import (
 )
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
+from .kegerator_guard import async_setup_kegerator_guard
 from .manual_brewday_runtime import ManualRuntimeState
 from .manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
@@ -50,6 +51,7 @@ SERVICE_CARBONATION_RESET = "carbonation_reset"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
     await async_load_carbonation_runtime(hass)
+    await async_setup_kegerator_guard(hass)
 
     coordinator = BrewAssistantCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
