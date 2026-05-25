@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .carbonation_runtime import get_carbonation_runtime, update_carbonation_runtime
+from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
@@ -94,6 +94,7 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
         except (TypeError, ValueError):
             return
         update_carbonation_runtime(self.coordinator.hass, {str(self._config["runtime_key"]): value})
+        await async_save_carbonation_runtime(self.coordinator.hass)
 
     @property
     def native_value(self) -> float | None:
@@ -107,6 +108,7 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
     async def async_set_native_value(self, value: float) -> None:
         """Set current value."""
         update_carbonation_runtime(self.coordinator.hass, {str(self._config["runtime_key"]): float(value)})
+        await async_save_carbonation_runtime(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
