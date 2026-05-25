@@ -16,6 +16,8 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from .brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
 from .carbonation_runtime import (
+    async_load_carbonation_runtime,
+    async_save_carbonation_runtime,
     pause_carbonation_runtime,
     reset_carbonation_runtime,
     start_carbonation_runtime,
@@ -47,6 +49,8 @@ SERVICE_CARBONATION_RESET = "carbonation_reset"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
+    await async_load_carbonation_runtime(hass)
+
     coordinator = BrewAssistantCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
@@ -212,18 +216,22 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def _handle_carbonation_start(call: ServiceCall) -> None:
         start_carbonation_runtime(hass, dict(call.data))
+        await async_save_carbonation_runtime(hass)
         await _refresh_carbonation_sensors()
 
     async def _handle_carbonation_update(call: ServiceCall) -> None:
         update_carbonation_runtime(hass, dict(call.data))
+        await async_save_carbonation_runtime(hass)
         await _refresh_carbonation_sensors()
 
     async def _handle_carbonation_pause(call: ServiceCall) -> None:
         pause_carbonation_runtime(hass)
+        await async_save_carbonation_runtime(hass)
         await _refresh_carbonation_sensors()
 
     async def _handle_carbonation_reset(call: ServiceCall) -> None:
         reset_carbonation_runtime(hass)
+        await async_save_carbonation_runtime(hass)
         await _refresh_carbonation_sensors()
 
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
