@@ -7,6 +7,7 @@ meant to prevent short cycling while a keg is carbonating/serving.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -95,6 +96,14 @@ def _climate_conflicts(hass: HomeAssistant) -> list[str]:
 def _summary(status: str, air_temp: float | None, action: str, reason: str) -> str:
     air = "—" if air_temp is None else f"{air_temp:.1f} °C"
     return f"{status} · air {air} · {action} · {reason}"
+
+
+def _expected_state_for_action(action: str) -> str | None:
+    if action == "turn_on":
+        return "on"
+    if action == "turn_off":
+        return "off"
+    return None
 
 
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -200,19 +209,35 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
     if not snapshot.get("enabled") or action not in {"turn_on", "turn_off"}:
         return snapshot
 
-    await hass.services.async_call(
-        "switch",
-        str(action),
-        {"entity_id": KEGERATOR_SWITCH},
-        blocking=True,
-    )
-    runtime[GUARD_LAST_ACTION_KEY] = {
+    expected_state = _expected_state_for_action(str(action))
+    before_state = _state(hass, KEGERATOR_SWITCH)
+    attempt = {
         "action": action,
         "entity_id": KEGERATOR_SWITCH,
         "at": dt_util.utcnow().isoformat(),
         "reason": snapshot.get("reason"),
         "air_temperature": snapshot.get("air_temperature"),
+        "before_state": before_state,
+        "result": "attempting",
     }
+    runtime[GUARD_LAST_ACTION_KEY] = attempt
+
+    try:
+        await hass.services.async_call(
+            "homeassistant",
+            str(action),
+            {"entity_id": KEGERATOR_SWITCH},
+            blocking=True,
+        )
+        await asyncio.sleep(1)
+        after_state = _state(hass, KEGERATOR_SWITCH)
+        attempt["after_state"] = after_state
+        attempt["result"] = "applied" if after_state == expected_state else "attempted_no_state_change"
+    except Exception as err:  # noqa: BLE001 - expose HA service failure in diagnostics
+        attempt["result"] = "error"
+        attempt["error"] = str(err)
+
+    runtime[GUARD_LAST_ACTION_KEY] = attempt
     return build_kegerator_guard_snapshot(hass)
 
 
