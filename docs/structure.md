@@ -30,6 +30,8 @@ brewassistant/
 │       ├── brewzilla_sensor.py
 │       ├── brewzilla_orchestration.py
 │       ├── brewzilla_orchestration_sensor.py
+│       ├── climate_supervisor.py
+│       ├── kegerator_guard.py        # deprecated / parked
 │       ├── manual_brewday_runtime.py
 │       ├── manual_brewday_adapter.py
 │       ├── manual_brewday_store.py
@@ -46,6 +48,7 @@ brewassistant/
     ├── state-machine.md
     ├── manual-mode.md
     ├── dashboard.md
+    ├── climate-supervisor.md
     ├── brewfather.md
     ├── legacy-migration.md
     └── roadmap.md
@@ -71,10 +74,57 @@ Responsibilities:
 - Calculate carbonation recommendations and estimates.
 - Own carbonation runtime/session state and explicit controls.
 - Scope fermentation warnings to active fermentation/cold-crash context.
+- Calculate dynamic climate targets for serving/carbonation through Climate Supervisor.
 - Expose dashboard-safe sensors.
 - Expose explicit services.
 - Keep safety/orchestration checks outside the dashboard.
 - Avoid hidden workflow logic in Lovelace cards.
+
+---
+
+### `climate_supervisor.py`
+
+Climate Supervisor is the active serving/carbonation climate control layer.
+
+It does not switch the compressor directly.
+
+Responsibilities:
+
+- Determine whether carbonation/serving scope is active.
+- Read kegerator air temperature from `sensor.kyl_temperatur_4`.
+- Capture a base serving/carbonation target from `climate.kegerator_kylskap`.
+- Calculate a dynamic effective air target from air temperature delta.
+- Apply the target to `climate.kegerator_kylskap`.
+- Let the climate/thermostat integration control `switch.kegerator`.
+- Disable the deprecated Kegerator Guard if it is accidentally enabled.
+- Expose diagnostics through `switch.brewassistant_climate_supervisor_enabled` attributes.
+
+Current control chain:
+
+```text
+Climate Supervisor
+→ climate.kegerator_kylskap target
+→ thermostat hysteresis/min-cycle/cooldown
+→ switch.kegerator
+```
+
+This keeps compressor-cycle responsibility in the Home Assistant climate layer, not in BrewAssistant.
+
+---
+
+### `kegerator_guard.py`
+
+Kegerator Guard was an experimental direct `switch.kegerator` controller.
+
+It is now deprecated / parked.
+
+Current rule:
+
+```text
+switch.brewassistant_kegerator_guard_enabled = off
+```
+
+Do not build new UI or workflows around Kegerator Guard. Climate Supervisor is the replacement path.
 
 ---
 
@@ -199,7 +249,7 @@ Carbonation now has Python-owned runtime/session state.
 
 Responsibilities:
 
-- Hold active/paused/reset carbonation runtime state in `hass.data`.
+- Hold active/paused/reset carbonation runtime state in `hass.data` and persistent HA storage.
 - Track method, target volumes, start volumes, actual pressure and start time.
 - Resolve carbonation temperature from cooler/kegerator temperature, currently `sensor.kyl_temperatur_4`, with fallback to liquid temperature.
 - Calculate recommended pressure from target volumes and current temperature.
@@ -280,11 +330,12 @@ Dashboard cards should:
 - Show status, warnings and next steps.
 - Avoid duplicating backend workflow logic.
 
-A card may contain display-only formatting, but the real process state should come from Python sensors.
+A card may contain display-only formatting, but the real process state should come from Python sensors/attributes.
 
 Current dashboard milestones:
 
 ```text
+Climate Supervisor Card v1.0
 Counterflow Cooling Cockpit
 Carbonation Cockpit v3.1
 Fermentation Cockpit v2.1
@@ -334,6 +385,7 @@ brewassistant_brewzilla_*       BrewZilla runtime/orchestration
 brewassistant_wort_*            Wort cooling and pitch-readiness
 brewassistant_carbonation_*     Carbonation calculations/runtime
 brewassistant_fermentation_*    Future fermentation runtime
+brewassistant_climate_*         Climate Supervisor / dynamic air-target logic
 brewassistant_source_*          Source diagnostics
 ```
 
