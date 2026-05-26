@@ -28,6 +28,7 @@ brewassistant_wort_*                   Wort cooling and pitch-readiness
 brewassistant_carbonation_*            Carbonation calculations and serving guidance
 brewassistant_fermentation_*           Future fermentation runtime
 brewassistant_source_*                 Source diagnostics
+brewassistant_climate_*                Climate Supervisor and dynamic air-target logic
 ```
 
 Legacy namespaces:
@@ -39,6 +40,82 @@ brew_batch_*                           older batch namespace
 brew_recipe_*                          older recipe/runtime namespace
 input_boolean/input_number helpers     old workflow mirrors or local inputs
 ```
+
+---
+
+## Climate Supervisor entities
+
+Climate Supervisor is the active control path for carbonation/serving air-target management.
+
+Primary entity:
+
+```text
+switch.brewassistant_climate_supervisor_enabled
+```
+
+Raw/controlled entities:
+
+```text
+climate.kegerator_kylskap
+sensor.kyl_temperatur_4
+sensor.brewassistant_carbonation_status
+sensor.brewassistant_carbonation_temperature
+switch.kegerator
+```
+
+Important attributes on `switch.brewassistant_climate_supervisor_enabled`:
+
+```text
+mode
+status
+action
+reason
+base_target_temperature
+effective_air_target
+air_temperature
+air_delta
+cooling_demand
+controller_entity
+controller_state
+controller_target_temperature
+target_delta
+carbonation_active
+carbonation_status
+carbonation_temperature
+legacy_guard_enabled
+last_control_action
+last_evaluation
+summary
+```
+
+Current states/status examples:
+
+```text
+strong_cooling
+cooling
+mild_cooling
+hold
+hold_warm
+relax
+standby
+unavailable
+```
+
+Current rule:
+
+```text
+Climate Supervisor adjusts climate.kegerator_kylskap target.
+climate.kegerator_kylskap controls switch.kegerator.
+BrewAssistant does not directly control switch.kegerator during normal supervisor operation.
+```
+
+Deprecated/parked entity:
+
+```text
+switch.brewassistant_kegerator_guard_enabled
+```
+
+This should remain off during normal operation.
 
 ---
 
@@ -280,6 +357,16 @@ Important behavior:
 sensor.kyl_temperatur_4 is the default carbonation temperature source.
 Legacy input_number.brewassistant_carbonation_pressure_bar is not a backend pressure fallback.
 Actual pressure is owned by number.brewassistant_carbonation_pressure_bar / Python runtime.
+started_at and age_days are persisted across Home Assistant restarts.
+```
+
+Validated example:
+
+```text
+started_at = 2026-05-24T08:20:00+00:00
+age_days = 2.53
+estimated = 1.11 vol
+progress = 16.8 %
 ```
 
 Current open design question:
