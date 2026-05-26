@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .brewday_refresh import maybe_request_brewfather_refresh
+from .climate_supervisor import async_apply_climate_supervisor
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
     CONF_COLD_CRASH_ACTIVE_ENTITY,
@@ -324,6 +325,7 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
     async def _async_update_data(self) -> BrewAssistantData:
         """Fetch one normalized snapshot from Home Assistant state machine."""
         await maybe_request_brewfather_refresh(self.hass)
+        await async_apply_climate_supervisor(self.hass)
 
         liquid_entity = _entity_from_entry(
             self.config_entry,
