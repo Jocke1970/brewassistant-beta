@@ -45,9 +45,12 @@ YAML/dashboard as presentation layer only
 [x] Counterflow Wort Cooling backend
 [x] Counterflow Wort Cooling cockpit UI
 [x] Python-owned Carbonation Runtime/session
+[x] Carbonation runtime persistence across HA restart
 [x] Carbonation start/update/pause/reset services
 [x] Carbonation number/select controls
 [x] Carbonation Cockpit v3.1 UI
+[x] Climate Supervisor backend for dynamic kegerator targets
+[x] Climate Supervisor UI card v1.0
 [x] Fermentation Cockpit scope guard
 [x] Fermentation Cockpit v2.1 UI
 [x] BrewZilla/Brewday top-section polish v2.2
@@ -59,6 +62,10 @@ YAML/dashboard as presentation layer only
 ```text
 Python Core stabilization
 ↓
+Climate Supervisor validation
+↓
+Carbonation runtime validation
+↓
 Brewday Runtime validation
 ↓
 Stage Engine validation
@@ -66,8 +73,6 @@ Stage Engine validation
 BrewZilla/RAPT reality testing
 ↓
 Counterflow wort cooling validation
-↓
-Carbonation runtime validation
 ↓
 Fermentation cockpit validation
 ↓
@@ -104,13 +109,14 @@ Completed:
 [x] Stop syncing Manual Brewday services to older YAML/input-helper mirrors
 [x] Remove old manual source selection from Brewday Runtime Core
 [x] Allow clean new run after completed state
+[x] Validate Manual Brewday service flow across stages in UI
+[x] Validate Prepare/Idle sanity after Home Assistant reload
 ```
 
 Remaining:
 
 ```text
 [ ] Validate Manual Brewday service flow in a real BrewZilla brewday
-[ ] Validate Finish → Reset → Prepare/Start after Home Assistant reload
 [ ] Add Manual timed-step auto-advance
 [ ] Add Manual timed-step awaiting-confirm behavior at 0 seconds
 [ ] Add Manual session persistence across Home Assistant restart
@@ -179,12 +185,13 @@ Completed:
 [x] Expose stage reason/status/icon/progress/temperature/power sensors
 [x] Add v2 fields: stage_group, stage_priority, suggested_action, control_hint
 [x] Add Stage Engine v2 UI card
+[x] Validate Idle sanity after reload
+[x] Validate Manual Brewday stages and processes without unexpected behavior
 ```
 
 Remaining:
 
 ```text
-[ ] Validate Prepare → Start → Mash transition after reload
 [ ] Validate stage transitions during real BrewZilla brewday
 [ ] Tune thresholds for Heating Strike / Mash / Boil / Cooling
 [ ] Add estimated time-to-target where possible
@@ -255,12 +262,15 @@ Completed:
 [x] Carbonation calculation module exists
 [x] Carbonation sensors are registered
 [x] Python-owned carbonation runtime/session in hass.data
+[x] Carbonation runtime persisted through HA storage
+[x] Carbonation started_at / age_days survive Home Assistant restart
 [x] Carbonation start/update/pause/reset services
 [x] Carbonation pressure/target/start number controls
 [x] Carbonation method select control
 [x] Cooler/kegerator temperature source defaults to sensor.kyl_temperatur_4
 [x] Legacy helper pressure is no longer used as backend fallback
 [x] Carbonation Cockpit v3.1 UI with inputs, controls, estimated/equilibrium/recommended values
+[x] Validate started_at = 2026-05-24T08:20:00+00:00 and age_days/progress after restart
 ```
 
 Remaining:
@@ -274,7 +284,45 @@ Remaining:
 
 ---
 
-# v4.9 YAML retirement
+# v4.9 Climate Supervisor / Kegerator control
+
+Completed:
+
+```text
+[x] Identify direct switch control as wrong abstraction for kegerator compressor
+[x] Deprecate Kegerator Guard as active control path
+[x] Add Climate Supervisor backend
+[x] Add Climate Supervisor enable switch
+[x] Climate Supervisor applies dynamic target to climate.kegerator_kylskap
+[x] Coordinator update loop applies Climate Supervisor reliably
+[x] Validate cooling case: air above target → effective target 3.6 °C → climate target applied
+[x] Validate relax case: air below target → effective target 4.4 °C → thermostat releases compressor
+[x] Add Climate Supervisor UI card v1.0
+[x] Add docs/climate-supervisor.md
+```
+
+Current operating rule:
+
+```text
+switch.brewassistant_kegerator_guard_enabled = off
+switch.brewassistant_climate_supervisor_enabled = on when carbonation/serving target supervision is desired
+climate.kegerator_kylskap = cool
+climate.kegerator_kylskap owns switch.kegerator
+```
+
+Remaining:
+
+```text
+[ ] Continue one full carbonation/serving cooling-cycle validation
+[ ] Tune dynamic target offsets if needed
+[ ] Consider config/options for base target and min/max effective target
+[ ] Remove or fully hide deprecated Kegerator Guard after further validation
+[ ] Extend supervisor concept to fermentation/cold-crash liquid-aware air target later
+```
+
+---
+
+# v4.10 YAML retirement
 
 Rules:
 
@@ -294,6 +342,7 @@ Completed:
 [x] Allow old YAML stage sensor to be renamed locally while Python takes canonical stage entity
 [x] Remove carbonation pressure helper as backend dependency
 [x] Scope stale cold-crash helper so it cannot keep Fermentation Cockpit in warning state alone
+[x] Move kegerator dynamic target logic into Python Climate Supervisor instead of local dashboard/automation YAML
 ```
 
 Remaining:
@@ -310,7 +359,7 @@ Remaining:
 
 ---
 
-# v4.10 Runtime adapter architecture
+# v4.11 Runtime adapter architecture
 
 Adapter priorities:
 
@@ -320,6 +369,7 @@ Adapter priorities:
 [x] BrewZilla read-only hardware skeleton
 [x] Counterflow wort cooling runtime helper
 [x] Python-owned Carbonation Runtime adapter
+[x] Climate Supervisor adapter for kegerator/carbonation serving target
 [ ] Timed Fermentation Runtime adapter
 [ ] BrewZilla hardware capability adapter
 [ ] RAPT-specific hardware/profile adapter
@@ -331,12 +381,13 @@ Adapter priorities:
 # Next session checklist
 
 ```text
-[ ] Update/reload HA with latest manual_brewday_runtime.py and brewday_stage_engine.py
-[ ] Verify Prepare stage: prepared/setup should show Stage = Prepare and Group = prep
-[ ] Verify Finish → Reset → Prepare/Start
-[ ] Verify Finish → Start begins at Setup / Prepare equipment
-[ ] Validate Brewday Actions v2.2 button highlights after Prepare, Start, Mash, Boil, Whirlpool, Cooling, Finish
-[ ] Decide whether to add Apply Target Now UI next or continue validation
+[ ] Continue Climate Supervisor full cycle validation
+[ ] Confirm Air below/above target transitions continue to apply target changes
+[ ] Confirm switch.brewassistant_kegerator_guard_enabled remains off
+[ ] Keep climate.kegerator_kylskap as sole compressor owner
+[ ] Monitor carbonation estimated volumes/progress over time
+[ ] Decide whether to tune Climate Supervisor dynamic offsets
+[ ] Continue BrewZilla/Brewday polish only after cooling remains stable
 ```
 
 ---
