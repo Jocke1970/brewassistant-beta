@@ -1,6 +1,6 @@
 # BrewAssistant v4
 
-**BrewAssistant v4** is a modular Home Assistant brewing assistant for fermentation tracking, Brewday runtime intelligence, BrewZilla/RAPT hardware visualization, counterflow wort cooling, carbonation guidance, dashboards, notifications, and future safe orchestration.
+**BrewAssistant v4** is a modular Home Assistant brewing assistant for fermentation tracking, Brewday runtime intelligence, BrewZilla/RAPT hardware visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, dashboards, notifications, and future safe orchestration.
 
 The project is moving away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and safety checks live in `custom_components/brewassistant/`.
 
@@ -31,6 +31,7 @@ BrewAssistant v4 separates the brewing system into clear layers:
 | Python Core | Normalize source entities and expose dashboard-safe state. |
 | Runtime | Normalize Brewfather Brew Tracker, Manual Brewday and sensor data. |
 | Stage Engine | Interpret planned/runtime state plus hardware telemetry into a current brewday stage. |
+| Climate Supervisor | Calculate dynamic kegerator/serving air targets and apply them to a climate controller. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
 | Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
 | Fermentation Scope Guard | Keep fermentation warnings scoped to active fermentation/cold-crash context. |
@@ -65,7 +66,9 @@ Recent cleanup:
 ✅ Legacy yaml_process_status field was removed from the coordinator data model
 ✅ Stage Engine is Python-owned and exposed through canonical BrewAssistant sensors
 ✅ Stage Engine has an explicit Prepare stage before Strike Water
-✅ Carbonation Runtime is Python-owned and no longer uses legacy helper pressure as fallback
+✅ Carbonation Runtime is Python-owned, persistent, and no longer uses legacy helper pressure as fallback
+✅ Climate Supervisor replaces direct kegerator switch control for carbonation/serving target management
+✅ Kegerator Guard is deprecated as an active control path
 ✅ Fermentation Cockpit scope guard ignores stale cold-crash helper state when no batch/fermentation context is active
 ```
 
@@ -208,6 +211,50 @@ The Stage Engine is currently read-only. It does not control BrewZilla hardware.
 
 ---
 
+## Climate Supervisor
+
+Climate Supervisor is the active BrewAssistant path for carbonation/serving kegerator target management.
+
+It replaces the experimental direct-switch Kegerator Guard.
+
+Architecture:
+
+```text
+sensor.kyl_temperatur_4
+        ↓
+Climate Supervisor
+        ↓
+climate.kegerator_kylskap target temperature
+        ↓
+Home Assistant thermostat / climate integration
+        ↓
+switch.kegerator
+```
+
+Current status:
+
+```text
+✅ Climate Supervisor backend
+✅ switch.brewassistant_climate_supervisor_enabled
+✅ Dynamic effective air target based on air delta
+✅ Applies target to climate.kegerator_kylskap through coordinator update loop
+✅ climate.kegerator_kylskap remains sole compressor owner
+✅ switch.brewassistant_kegerator_guard_enabled deprecated/parked
+✅ Climate Supervisor UI Card v1.0
+✅ Verified cooling case: air above target → effective target 3.6 °C → applied
+✅ Verified relax case: air below target → effective target 4.4 °C → thermostat releases compressor
+```
+
+Operating rule:
+
+```text
+switch.brewassistant_climate_supervisor_enabled = on when carbonation/serving supervision is desired
+switch.brewassistant_kegerator_guard_enabled = off
+climate.kegerator_kylskap = cool
+```
+
+---
+
 ## BrewZilla runtime and orchestration safety
 
 BrewAssistant includes a BrewZilla runtime layer and guarded orchestration safety layer.
@@ -282,13 +329,15 @@ Carbonation now has a Python-owned runtime/session plus dashboard controls.
 Current status:
 
 ```text
-✅ Python-owned carbonation runtime in hass.data
+✅ Python-owned carbonation runtime in hass.data and HA storage
 ✅ Carbonation start/update/pause/reset services
 ✅ Carbonation method select entity
 ✅ Carbonation pressure/target/start number entities
+✅ Carbonation started_at and age_days persist across restart
 ✅ Cooler/kegerator temperature defaults to sensor.kyl_temperatur_4
 ✅ Legacy helper pressure is not used as backend fallback
 ✅ Carbonation Cockpit v3.1 UI with inputs, controls and estimated/equilibrium/recommended values
+✅ Validated started_at = 2026-05-24T08:20:00+00:00 and age_days/progress after restart
 ```
 
 Current model:
@@ -353,6 +402,8 @@ brewday_refresh.py
 brewzilla_sensor.py
 brewzilla_orchestration.py
 brewzilla_orchestration_sensor.py
+climate_supervisor.py
+kegerator_guard.py  # deprecated / parked
 manual_brewday_runtime.py
 manual_brewday_adapter.py
 manual_brewday_store.py
@@ -374,7 +425,7 @@ BrewAssistant v4 is actively evolving.
 Current Python Core status:
 
 ```text
-v1.3 Python Core · Manual Runtime restart + Stage Engine Prepare + Counterflow Cooling + Carbonation Runtime + Fermentation Cockpit Scope Guard
+v1.4 Python Core · Climate Supervisor + Carbonation Persistence + Manual Runtime restart + Stage Engine Prepare + Counterflow Cooling
 ```
 
 Current near-term focus:
@@ -388,8 +439,11 @@ Current near-term focus:
 ✅ Counterflow wort cooling backend and UI
 ✅ Brewday Actions / Runtime Controls v2.2
 ✅ Carbonation runtime backend and UI
+✅ Carbonation persistence validation
+✅ Climate Supervisor backend and UI
 ✅ Fermentation Cockpit scope guard and UI polish
-🔜 Validate Manual Brewday restart/Prepare flow after Home Assistant reload
+🔜 Continue Climate Supervisor full-cycle validation
+🔜 Tune Climate Supervisor offsets if needed
 🔜 Validate BrewZilla/Brewday top cards during real brewday
 🔜 Manual timed-step auto-advance
 🔜 Manual session persistence across HA restart
