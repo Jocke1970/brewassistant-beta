@@ -28,7 +28,8 @@ Fermentation Overview
 Process Details
 Chamber Control
 Manual Mode
-Kegerator
+Kegerator / Climate Supervisor
+Carbonation Cockpit
 Notifications
 Brewfather Runtime
 BrewZilla / Hot Side    # optional/future
@@ -72,6 +73,59 @@ Automation controls
 Raw runtime data
 Debug/diagnostic data
 ```
+
+---
+
+## Climate Supervisor card
+
+Climate Supervisor replaces the experimental Kegerator Guard card.
+
+Recommended placement:
+
+```text
+Near Carbonation Cockpit
+or
+At the top of the Kegerator / Serving section
+```
+
+The card should display:
+
+```text
+switch.brewassistant_climate_supervisor_enabled
+sensor.kyl_temperatur_4
+climate.kegerator_kylskap
+switch.kegerator
+base_target_temperature
+effective_air_target
+air_delta
+status
+action
+reason
+last_control_action
+legacy_guard_enabled
+```
+
+Healthy UI behavior:
+
+```text
+Air above target
+→ status: cooling / strong_cooling
+→ effective target lower than base target
+→ climate target follows effective target
+
+Air near target
+→ status: hold
+→ effective target equals base target
+
+Air below target
+→ status: relax / hold_warm
+→ effective target higher than base target
+→ thermostat lets compressor rest
+```
+
+The UI must not directly toggle `switch.kegerator` as part of normal supervisor flow. `climate.kegerator_kylskap` owns compressor control.
+
+Legacy `switch.brewassistant_kegerator_guard_enabled` should be off and removed from normal dashboards.
 
 ---
 
@@ -199,4 +253,3 @@ When changing backend entity names:
 [ ] Check unavailable entities
 [ ] Check browser dashboard errors
 ```
-
