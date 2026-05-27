@@ -52,6 +52,7 @@ from .source_health import (
     build_source_health,
     source_health_attrs,
 )
+from .temperature_stats import create_temperature_stat_sensors
 from .wort_cooling_sensor import create_wort_cooling_sensors
 
 BREWFATHER_FERMENTATION_START_ENTITY = "sensor.brewfather_fermentation_start"
@@ -516,6 +517,7 @@ async def async_setup_entry(
         + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
         + create_brewday_runtime_sensors(coordinator)
         + create_wort_cooling_sensors(coordinator)
+        + create_temperature_stat_sensors(coordinator)
         + [BrewAssistantCoreVersionSensor(coordinator)]
         + [BrewAssistantNextActionSensor(coordinator)]
     )
@@ -718,7 +720,7 @@ class BrewAssistantCoreVersionSensor(BrewAssistantEntity, SensorEntity):
             "milestone": "Read-only Core Stable",
             "hardware_control": False,
             "safe_mode": "read_only",
-            "notes": "No climate, switch, fan or heater control is performed by Python Core.",
+            "notes": "Climate Supervisor may adjust climate targets; direct compressor switching is not performed by Python Core.",
         }
 
 
