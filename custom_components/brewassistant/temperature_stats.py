@@ -25,6 +25,7 @@ DATA_KEY = "temperature_stats"
 MAX_WINDOW_MINUTES = 30
 MIN_SAMPLE_SECONDS = 20
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
+FALLBACK_LIQUID_SOURCES = {"chamber fallback", "unavailable"}
 
 KEGERATOR_AIR_SOURCE_ENTITY = "sensor.kyl_temperatur_4"
 
@@ -47,6 +48,7 @@ class TemperatureStatConfig:
     icon: str
     value_fn: Callable[[BrewAssistantCoordinator], float | None]
     source_entity_fn: Callable[[BrewAssistantCoordinator], str | None]
+    sample_allowed_fn: Callable[[BrewAssistantCoordinator], bool] | None = None
 
 
 def _as_float(value: Any) -> float | None:
@@ -86,6 +88,11 @@ def _samples_for(coordinator: BrewAssistantCoordinator, key: str) -> deque[Tempe
         samples = deque()
         bucket[key] = samples
     return samples
+
+
+def _clear_samples(coordinator: BrewAssistantCoordinator, key: str) -> None:
+    """Clear samples for a sensor when the source becomes semantically invalid."""
+    _samples_for(coordinator, key).clear()
 
 
 def _record_sample(coordinator: BrewAssistantCoordinator, key: str, value: float | None) -> None:
@@ -154,10 +161,27 @@ def _trend_label(trend: float | None) -> str:
     return "stable"
 
 
+def _sample_allowed(coordinator: BrewAssistantCoordinator, config: TemperatureStatConfig) -> bool:
+    if config.sample_allowed_fn is None:
+        return True
+    return config.sample_allowed_fn(coordinator)
+
+
+def _source_status(coordinator: BrewAssistantCoordinator, config: TemperatureStatConfig) -> str:
+    if config.sample_allowed_fn is None:
+        return "sampling"
+    return "sampling" if config.sample_allowed_fn(coordinator) else "fallback_not_sampled"
+
+
 def build_temperature_stats(coordinator: BrewAssistantCoordinator, config: TemperatureStatConfig) -> dict[str, Any]:
     """Build rolling stats for one configured temperature source."""
     current = config.value_fn(coordinator)
-    _record_sample(coordinator, config.key, current)
+    allowed = _sample_allowed(coordinator, config)
+
+    if allowed:
+        _record_sample(coordinator, config.key, current)
+    else:
+        _clear_samples(coordinator, config.key)
 
     samples = _samples_for(coordinator, config.key)
     values_5m = _window_values(samples, 5)
@@ -168,6 +192,7 @@ def build_temperature_stats(coordinator: BrewAssistantCoordinator, config: Tempe
     avg_5m = _average(values_5m)
     avg_15m = _average(values_15m)
     avg_30m = _average(values_30m)
+    source_status = _source_status(coordinator, config)
 
     return {
         "current": round(current, 2) if current is not None else None,
@@ -186,14 +211,24 @@ def build_temperature_stats(coordinator: BrewAssistantCoordinator, config: Tempe
         "source": "python_temperature_stats",
         "source_label": config.source_label,
         "source_entity": config.source_entity_fn(coordinator),
-        "summary": _summary(config.source_label, current, avg_15m, trend_30m),
+        "source_status": source_status,
+        "sample_allowed": allowed,
+        "summary": _summary(config.source_label, current, avg_15m, trend_30m, source_status),
     }
 
 
-def _summary(label: str, current: float | None, avg_15m: float | None, trend: float | None) -> str:
+def _summary(
+    label: str,
+    current: float | None,
+    avg_15m: float | None,
+    trend: float | None,
+    source_status: str,
+) -> str:
     current_text = "—" if current is None else f"{current:.1f} °C"
     average_text = "—" if avg_15m is None else f"{avg_15m:.1f} °C"
     trend_text = "collecting" if trend is None else f"{trend:+.2f} °C/h"
+    if source_status != "sampling":
+        return f"{label} · {source_status} · avg15 — · trend collecting"
     return f"{label} · now {current_text} · avg15 {average_text} · trend {trend_text}"
 
 
@@ -208,14 +243,28 @@ def _chamber_air(coordinator: BrewAssistantCoordinator) -> float | None:
     return data.chamber_temperature
 
 
-def _liquid(coordinator: BrewAssistantCoordinator) -> float | None:
+def _real_liquid_source_available(coordinator: BrewAssistantCoordinator) -> bool:
     data = coordinator.data
     if data is None:
+        return False
+    source = (data.liquid_temperature_source or "").lower()
+    if source in FALLBACK_LIQUID_SOURCES:
+        return False
+    if data.liquid_temperature_entity is None:
+        return False
+    return data.liquid_temperature is not None
+
+
+def _liquid(coordinator: BrewAssistantCoordinator) -> float | None:
+    if not _real_liquid_source_available(coordinator):
         return None
-    return data.liquid_temperature
+    data = coordinator.data
+    return data.liquid_temperature if data is not None else None
 
 
 def _air_liquid_delta(coordinator: BrewAssistantCoordinator) -> float | None:
+    if not _real_liquid_source_available(coordinator):
+        return None
     data = coordinator.data
     if data is None or data.chamber_temperature is None or data.liquid_temperature is None:
         return None
@@ -246,6 +295,7 @@ TEMPERATURE_STAT_CONFIGS: tuple[TemperatureStatConfig, ...] = (
         icon="mdi:beer-outline",
         value_fn=_liquid,
         source_entity_fn=_liquid_source_entity,
+        sample_allowed_fn=_real_liquid_source_available,
     ),
     TemperatureStatConfig(
         key="fermentation_air_liquid_delta_average",
@@ -253,7 +303,8 @@ TEMPERATURE_STAT_CONFIGS: tuple[TemperatureStatConfig, ...] = (
         source_label="Air/liquid delta",
         icon="mdi:delta",
         value_fn=_air_liquid_delta,
-        source_entity_fn=lambda coordinator: "calculated: chamber_air - liquid",
+        source_entity_fn=lambda coordinator: "calculated: chamber_air - real_liquid",
+        sample_allowed_fn=_real_liquid_source_available,
     ),
 )
 
