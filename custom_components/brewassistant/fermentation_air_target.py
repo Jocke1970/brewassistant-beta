@@ -152,14 +152,14 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     active = _scope_active(coordinator)
     real_liquid = _real_liquid_available(coordinator)
     target = data.recipe_target_temperature if data is not None else None
-    liquid = _liquid(coordinator)
+    liquid = _liquid(coordinator) if active and real_liquid else None
     chamber = _chamber(coordinator)
-    trend = _trend(coordinator)
+    trend = _trend(coordinator) if active and real_liquid else None
 
-    liquid_delta = round(liquid - target, 2) if liquid is not None and target is not None else None
-    avg_air_liquid_delta = _float_state(coordinator, DELTA_AVG_ENTITY)
+    liquid_delta = round(liquid - target, 2) if active and liquid is not None and target is not None else None
+    avg_air_liquid_delta = _float_state(coordinator, DELTA_AVG_ENTITY) if active else None
     air_liquid_delta = avg_air_liquid_delta
-    if air_liquid_delta is None and chamber is not None and liquid is not None:
+    if active and air_liquid_delta is None and chamber is not None and liquid is not None:
         air_liquid_delta = round(chamber - liquid, 2)
 
     air_target = None
@@ -194,7 +194,7 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
         "demand": demand,
         "reason": reason,
         "liquid_temperature": round(liquid, 2) if liquid is not None else None,
-        "liquid_target_temperature": round(target, 2) if target is not None else None,
+        "liquid_target_temperature": round(target, 2) if active and target is not None else None,
         "liquid_delta": liquid_delta,
         "liquid_trend_c_per_hour": trend,
         "chamber_air_temperature": round(chamber, 2) if chamber is not None else None,
