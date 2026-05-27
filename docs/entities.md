@@ -26,7 +26,7 @@ brewassistant_brewday_*                Brewday Runtime and Stage Engine
 brewassistant_brewzilla_*              BrewZilla runtime/orchestration
 brewassistant_wort_*                   Wort cooling and pitch-readiness
 brewassistant_carbonation_*            Carbonation calculations and serving guidance
-brewassistant_fermentation_*           Future fermentation runtime
+brewassistant_fermentation_*           Fermentation runtime, stats and air-target recommendations
 brewassistant_source_*                 Source diagnostics
 brewassistant_climate_*                Climate Supervisor and dynamic air-target logic
 ```
@@ -116,6 +116,140 @@ switch.brewassistant_kegerator_guard_enabled
 ```
 
 This should remain off during normal operation.
+
+---
+
+## Temperature Stats entities
+
+Temperature Stats provides rolling average/trend sensors for kegerator air, chamber air, fermentation liquid and air/liquid delta.
+
+Current entities:
+
+```text
+sensor.brewassistant_kegerator_air_temperature_average
+sensor.brewassistant_fermentation_chamber_air_temperature_average
+sensor.brewassistant_fermentation_liquid_temperature_average
+sensor.brewassistant_fermentation_air_liquid_delta_average
+```
+
+Common attributes:
+
+```text
+current
+average_5m
+average_15m
+average_30m
+minimum_30m
+maximum_30m
+trend_c_per_hour
+trend_label
+sample_count
+source_entity
+source_status
+sample_allowed
+fermentation_scope_active
+real_liquid_source_available
+summary
+```
+
+Important scope rule:
+
+```text
+Kegerator air and chamber air may always sample.
+Fermentation liquid and air/liquid delta only sample when a real liquid source exists and fermentation/cold-crash scope is active.
+Fallback chamber air is not sampled as liquid.
+```
+
+Possible source states:
+
+```text
+sampling
+fallback_not_sampled
+out_of_scope_not_sampled
+not_sampled
+```
+
+---
+
+## Fermentation Air Target entities
+
+The Fermentation Air Target Engine is read-only. It calculates a recommended chamber-air target for future fermentation/cold-crash supervision.
+
+Current entities:
+
+```text
+sensor.brewassistant_fermentation_effective_air_target
+sensor.brewassistant_fermentation_climate_demand
+sensor.brewassistant_fermentation_climate_mode
+sensor.brewassistant_fermentation_air_target_reason
+sensor.brewassistant_fermentation_liquid_delta
+sensor.brewassistant_fermentation_air_liquid_delta
+sensor.brewassistant_fermentation_air_target_summary
+```
+
+Important attributes on `sensor.brewassistant_fermentation_effective_air_target`:
+
+```text
+ready
+scope_active
+mode
+demand
+reason
+liquid_temperature
+liquid_target_temperature
+liquid_delta
+liquid_trend_c_per_hour
+chamber_air_temperature
+air_liquid_delta
+effective_air_target
+air_target_delta
+real_liquid_source_available
+liquid_source
+liquid_source_entity
+target_mode
+process_status
+process_stage
+summary
+source
+control
+```
+
+Current modes:
+
+```text
+standby
+fermentation
+cold_crash
+```
+
+Current demand examples:
+
+```text
+standby
+unavailable
+strong_cooling
+cooling
+mild_cooling
+nudge_cooling
+settle
+hold
+relax
+ease_cooling
+hold_warm
+warm_or_relax
+```
+
+Scope-safe standby behavior:
+
+```text
+mode = standby
+demand = standby
+effective_air_target = unknown
+liquid_delta = unknown
+air_liquid_delta = unknown
+ready = false
+scope_active = false
+```
 
 ---
 
@@ -379,7 +513,7 @@ progress_percent currently needs validation: level-percent vs separate level/pro
 
 ## Fermentation entities
 
-Fermentation currently has coordinator-owned process/scope sensors and older smart recommendation sensors, with a planned Python-owned Timed Fermentation Runtime later.
+Fermentation currently has coordinator-owned process/scope sensors, rolling stats, read-only air-target recommendations and older smart recommendation sensors, with a planned Python-owned Timed Fermentation Runtime later.
 
 Current examples:
 
