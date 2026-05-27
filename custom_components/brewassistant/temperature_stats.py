@@ -26,6 +26,11 @@ MAX_WINDOW_MINUTES = 30
 MIN_SAMPLE_SECONDS = 20
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
 FALLBACK_LIQUID_SOURCES = {"chamber fallback", "unavailable"}
+FERMENTATION_SCOPE_STAGES = {"fermentation", "cold_crash"}
+FERMENTATION_SCOPE_STATUSES = {
+    "primary fermentation",
+    "cold crash",
+}
 
 KEGERATOR_AIR_SOURCE_ENTITY = "sensor.kyl_temperatur_4"
 
@@ -49,6 +54,7 @@ class TemperatureStatConfig:
     value_fn: Callable[[BrewAssistantCoordinator], float | None]
     source_entity_fn: Callable[[BrewAssistantCoordinator], str | None]
     sample_allowed_fn: Callable[[BrewAssistantCoordinator], bool] | None = None
+    source_status_fn: Callable[[BrewAssistantCoordinator], str] | None = None
 
 
 def _as_float(value: Any) -> float | None:
@@ -168,9 +174,11 @@ def _sample_allowed(coordinator: BrewAssistantCoordinator, config: TemperatureSt
 
 
 def _source_status(coordinator: BrewAssistantCoordinator, config: TemperatureStatConfig) -> str:
+    if config.source_status_fn is not None:
+        return config.source_status_fn(coordinator)
     if config.sample_allowed_fn is None:
         return "sampling"
-    return "sampling" if config.sample_allowed_fn(coordinator) else "fallback_not_sampled"
+    return "sampling" if config.sample_allowed_fn(coordinator) else "not_sampled"
 
 
 def build_temperature_stats(coordinator: BrewAssistantCoordinator, config: TemperatureStatConfig) -> dict[str, Any]:
@@ -213,6 +221,8 @@ def build_temperature_stats(coordinator: BrewAssistantCoordinator, config: Tempe
         "source_entity": config.source_entity_fn(coordinator),
         "source_status": source_status,
         "sample_allowed": allowed,
+        "fermentation_scope_active": _fermentation_scope_active(coordinator),
+        "real_liquid_source_available": _real_liquid_source_available(coordinator),
         "summary": _summary(config.source_label, current, avg_15m, trend_30m, source_status),
     }
 
@@ -255,15 +265,36 @@ def _real_liquid_source_available(coordinator: BrewAssistantCoordinator) -> bool
     return data.liquid_temperature is not None
 
 
-def _liquid(coordinator: BrewAssistantCoordinator) -> float | None:
+def _fermentation_scope_active(coordinator: BrewAssistantCoordinator) -> bool:
+    data = coordinator.data
+    if data is None:
+        return False
+    stage = (data.process_current_action_stage or "").lower()
+    status = (data.process_status or "").lower()
+    return stage in FERMENTATION_SCOPE_STAGES or status in FERMENTATION_SCOPE_STATUSES
+
+
+def _fermentation_liquid_sample_allowed(coordinator: BrewAssistantCoordinator) -> bool:
+    return _real_liquid_source_available(coordinator) and _fermentation_scope_active(coordinator)
+
+
+def _fermentation_liquid_source_status(coordinator: BrewAssistantCoordinator) -> str:
     if not _real_liquid_source_available(coordinator):
+        return "fallback_not_sampled"
+    if not _fermentation_scope_active(coordinator):
+        return "out_of_scope_not_sampled"
+    return "sampling"
+
+
+def _liquid(coordinator: BrewAssistantCoordinator) -> float | None:
+    if not _fermentation_liquid_sample_allowed(coordinator):
         return None
     data = coordinator.data
     return data.liquid_temperature if data is not None else None
 
 
 def _air_liquid_delta(coordinator: BrewAssistantCoordinator) -> float | None:
-    if not _real_liquid_source_available(coordinator):
+    if not _fermentation_liquid_sample_allowed(coordinator):
         return None
     data = coordinator.data
     if data is None or data.chamber_temperature is None or data.liquid_temperature is None:
@@ -295,7 +326,8 @@ TEMPERATURE_STAT_CONFIGS: tuple[TemperatureStatConfig, ...] = (
         icon="mdi:beer-outline",
         value_fn=_liquid,
         source_entity_fn=_liquid_source_entity,
-        sample_allowed_fn=_real_liquid_source_available,
+        sample_allowed_fn=_fermentation_liquid_sample_allowed,
+        source_status_fn=_fermentation_liquid_source_status,
     ),
     TemperatureStatConfig(
         key="fermentation_air_liquid_delta_average",
@@ -304,7 +336,8 @@ TEMPERATURE_STAT_CONFIGS: tuple[TemperatureStatConfig, ...] = (
         icon="mdi:delta",
         value_fn=_air_liquid_delta,
         source_entity_fn=lambda coordinator: "calculated: chamber_air - real_liquid",
-        sample_allowed_fn=_real_liquid_source_available,
+        sample_allowed_fn=_fermentation_liquid_sample_allowed,
+        source_status_fn=_fermentation_liquid_source_status,
     ),
 )
 
