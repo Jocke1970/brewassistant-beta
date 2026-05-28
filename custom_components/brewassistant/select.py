@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -88,6 +89,7 @@ class BrewAssistantAirTargetTestModeSelect(BrewAssistantEntity, RestoreEntity, S
     _attr_has_entity_name = False
     _attr_options = AIR_TARGET_TEST_OPTIONS
     _attr_icon = "mdi:beaker-question-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "fermentation_air_target_test_mode")
@@ -97,11 +99,10 @@ class BrewAssistantAirTargetTestModeSelect(BrewAssistantEntity, RestoreEntity, S
         self._current_option = "Off"
 
     async def async_added_to_hass(self) -> None:
-        """Restore selected option."""
+        """Keep the validation selector safe after reload/restart."""
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in AIR_TARGET_TEST_OPTIONS:
-            self._current_option = last_state.state
+        self._current_option = "Off"
+        self.async_write_ha_state()
 
     @property
     def current_option(self) -> str | None:
@@ -123,4 +124,5 @@ class BrewAssistantAirTargetTestModeSelect(BrewAssistantEntity, RestoreEntity, S
             "source": "python_runtime_control",
             "runtime_key": "fermentation_air_target_test_mode",
             "read_only": True,
+            "resets_to_off_on_start": True,
         }
