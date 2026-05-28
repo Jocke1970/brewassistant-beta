@@ -1,4 +1,4 @@
-"""Monitor-only fermentation climate supervisor snapshot."""
+"""Fermentation climate supervisor snapshot and supervised apply bridge."""
 
 from __future__ import annotations
 
@@ -8,9 +8,17 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from .supervised_apply import (
+    clear_pending_action_from_source,
+    get_pending_action,
+    set_pending_action,
+    supervised_apply_enabled,
+)
+
 DOMAIN_DATA = "brewassistant"
 ENABLED_KEY = "fermentation_climate_supervisor_enabled_runtime"
 LAST_EVALUATION_KEY = "fermentation_climate_supervisor_last_evaluation"
+SOURCE = "fermentation_climate_supervisor"
 
 SUPERVISOR_SWITCH = "switch.brewassistant_fermentation_climate_supervisor_enabled"
 AIR_TARGET_SENSOR = "sensor.brewassistant_fermentation_effective_air_target"
@@ -92,8 +100,30 @@ def _recommended_target(hass: HomeAssistant) -> float | None:
     return _float_attr(hass, AIR_TARGET_SENSOR, "effective_air_target")
 
 
+def _build_pending_action(*, snapshot: dict[str, Any], recommended: float) -> dict[str, Any]:
+    return {
+        "source": SOURCE,
+        "kind": "climate_set_temperature",
+        "entity_id": FERMENTATION_CLIMATE,
+        "domain": "climate",
+        "service": "set_temperature",
+        "service_data": {
+            "entity_id": FERMENTATION_CLIMATE,
+            "temperature": float(recommended),
+        },
+        "recommended_air_target": recommended,
+        "controller_target_temperature": snapshot.get("controller_target_temperature"),
+        "target_delta": snapshot.get("target_delta"),
+        "mode": snapshot.get("mode"),
+        "status": snapshot.get("status"),
+        "demand": snapshot.get("demand"),
+        "reason": snapshot.get("reason"),
+        "summary": f"Set {FERMENTATION_CLIMATE} to {recommended:.1f} °C",
+    }
+
+
 def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build current monitor-only fermentation climate supervisor snapshot."""
+    """Build current fermentation climate supervisor snapshot."""
     runtime = _runtime_data(hass)
     enabled = _enabled(hass)
     runtime[LAST_EVALUATION_KEY] = dt_util.utcnow().isoformat()
@@ -127,17 +157,25 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
     status = "disabled"
     action = "none"
     reason = "supervisor disabled"
+    pending_action = get_pending_action(hass)
+    supervised_enabled = supervised_apply_enabled(hass)
 
     if enabled:
         if not scope_active:
             status = "standby"
             reason = "no active fermentation or cold-crash scope"
+            clear_pending_action_from_source(hass, SOURCE)
+            pending_action = get_pending_action(hass)
         elif not ready:
             status = "unavailable"
             reason = air_target_reason
+            clear_pending_action_from_source(hass, SOURCE)
+            pending_action = get_pending_action(hass)
         elif climate_state is None:
             status = "unavailable"
             reason = f"missing climate entity {FERMENTATION_CLIMATE}"
+            clear_pending_action_from_source(hass, SOURCE)
+            pending_action = get_pending_action(hass)
         else:
             status = str(demand)
             if target_delta is None:
@@ -146,13 +184,11 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
                 action = "would_apply_target"
             else:
                 action = "hold_target"
+                clear_pending_action_from_source(hass, SOURCE)
+                pending_action = get_pending_action(hass)
             reason = air_target_reason
 
-    summary = f"{status} · {reason}"
-    if recommended is not None:
-        summary = f"{status} · recommended {recommended:.1f} °C · {reason}"
-
-    return {
+    snapshot = {
         "enabled": enabled,
         "mode": mode,
         "status": status,
@@ -178,22 +214,40 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
         "liquid_temperature": liquid,
         "liquid_target_temperature": liquid_target,
         "liquid_delta": liquid_delta,
+        "supervised_apply_enabled": supervised_enabled,
+        "pending_action": pending_action,
+        "has_pending_action": pending_action is not None and pending_action.get("source") == SOURCE,
         "last_evaluation": runtime.get(LAST_EVALUATION_KEY),
-        "summary": summary,
         "source": "python_fermentation_climate_supervisor",
-        "mode_scope": "monitor_only",
+        "mode_scope": "supervised" if supervised_enabled else "monitor_only",
     }
+
+    if enabled and supervised_enabled and action == "would_apply_target" and recommended is not None:
+        pending_action = set_pending_action(hass, _build_pending_action(snapshot=snapshot, recommended=recommended))
+        snapshot["pending_action"] = pending_action
+        snapshot["has_pending_action"] = True
+        snapshot["action"] = "pending_confirmation"
+
+    summary = f"{snapshot['status']} · {snapshot['reason']}"
+    if recommended is not None:
+        summary = f"{snapshot['status']} · recommended {recommended:.1f} °C · {snapshot['reason']}"
+    if snapshot.get("has_pending_action"):
+        summary = f"pending confirmation · {summary}"
+    snapshot["summary"] = summary
+
+    return snapshot
 
 
 async def async_enable_fermentation_climate_supervisor(hass: HomeAssistant) -> None:
-    """Enable monitor-only supervisor."""
+    """Enable supervisor."""
     _runtime_data(hass)[ENABLED_KEY] = True
     build_fermentation_climate_supervisor_snapshot(hass)
 
 
 def async_disable_fermentation_climate_supervisor(hass: HomeAssistant) -> None:
-    """Disable monitor-only supervisor."""
+    """Disable supervisor."""
     _runtime_data(hass)[ENABLED_KEY] = False
+    clear_pending_action_from_source(hass, SOURCE)
 
 
 def fermentation_supervisor_interval() -> timedelta:
