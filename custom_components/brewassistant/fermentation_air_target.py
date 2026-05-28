@@ -18,6 +18,7 @@ ACTIVE_STATUSES = {"primary fermentation", "cold crash"}
 LIQUID_AVG_ENTITY = "sensor.brewassistant_fermentation_liquid_temperature_average"
 CHAMBER_AVG_ENTITY = "sensor.brewassistant_fermentation_chamber_air_temperature_average"
 DELTA_AVG_ENTITY = "sensor.brewassistant_fermentation_air_liquid_delta_average"
+TEST_MODE_ENTITY = "select.brewassistant_fermentation_air_target_test_mode"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,7 +55,18 @@ def _float_attr(coordinator: BrewAssistantCoordinator, entity_id: str, attr: str
         return None
 
 
+def _test_mode(coordinator: BrewAssistantCoordinator) -> str:
+    state = coordinator.hass.states.get(TEST_MODE_ENTITY)
+    if state is None:
+        return "off"
+    return (state.state or "off").lower()
+
+
 def _scope_active(coordinator: BrewAssistantCoordinator) -> bool:
+    test_mode = _test_mode(coordinator)
+    if test_mode in {"fermentation", "cold crash"}:
+        return True
+
     data = coordinator.data
     if data is None:
         return False
@@ -74,6 +86,12 @@ def _real_liquid_available(coordinator: BrewAssistantCoordinator) -> bool:
 
 
 def _mode(coordinator: BrewAssistantCoordinator) -> str:
+    test_mode = _test_mode(coordinator)
+    if test_mode == "fermentation":
+        return "fermentation"
+    if test_mode == "cold crash":
+        return "cold_crash"
+
     data = coordinator.data
     if data is None or not _scope_active(coordinator):
         return "standby"
@@ -150,6 +168,8 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     data = coordinator.data
     mode = _mode(coordinator)
     active = _scope_active(coordinator)
+    test_mode = _test_mode(coordinator)
+    test_mode_active = test_mode in {"fermentation", "cold crash"}
     real_liquid = _real_liquid_available(coordinator)
     target = data.recipe_target_temperature if data is not None else None
     liquid = _liquid(coordinator) if active and real_liquid else None
@@ -157,7 +177,7 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     trend = _trend(coordinator) if active and real_liquid else None
 
     liquid_delta = round(liquid - target, 2) if active and liquid is not None and target is not None else None
-    avg_air_liquid_delta = _float_state(coordinator, DELTA_AVG_ENTITY) if active else None
+    avg_air_liquid_delta = _float_state(coordinator, DELTA_AVG_ENTITY) if active and not test_mode_active else None
     air_liquid_delta = avg_air_liquid_delta
     if active and air_liquid_delta is None and chamber is not None and liquid is not None:
         air_liquid_delta = round(chamber - liquid, 2)
@@ -181,15 +201,21 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     else:
         air_target, demand, reason = _recommend(mode, liquid_delta, target, trend)
         ready = True
+        if test_mode_active:
+            reason = f"test mode: {test_mode}; {reason}"
 
     air_target_delta = round(chamber - air_target, 2) if chamber is not None and air_target is not None else None
     summary = f"{mode} · {demand} · {reason}"
     if liquid is not None and target is not None and air_target is not None:
         summary = f"{mode} · {demand} · liquid {liquid:.1f} → {target:.1f} °C · air target {air_target:.1f} °C"
+        if test_mode_active:
+            summary = f"test · {summary}"
 
     return {
         "ready": ready,
         "scope_active": active,
+        "test_mode": test_mode,
+        "test_mode_active": test_mode_active,
         "mode": mode,
         "demand": demand,
         "reason": reason,
