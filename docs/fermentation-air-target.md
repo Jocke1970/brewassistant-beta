@@ -39,13 +39,14 @@ No hardware is controlled by this engine.
 
 ---
 
-## Current module
+## Current modules
 
 ```text
 custom_components/brewassistant/fermentation_air_target.py
+custom_components/brewassistant/select.py
 ```
 
-Registered through:
+Sensors are registered through:
 
 ```text
 custom_components/brewassistant/sensor.py
@@ -67,11 +68,52 @@ sensor.brewassistant_fermentation_air_target_summary
 
 ---
 
+## Test mode selector
+
+A read-only test selector exists for validating recommendations without changing real process state.
+
+```text
+select.brewassistant_fermentation_air_target_test_mode
+```
+
+Options:
+
+```text
+Off
+Fermentation
+Cold crash
+```
+
+Behavior:
+
+```text
+Off
+→ normal process-scope rules
+
+Fermentation
+→ recommendation engine evaluates as fermentation scope
+
+Cold crash
+→ recommendation engine evaluates as cold-crash scope
+```
+
+The selector is intended for dashboard/debug validation only.
+
+It affects:
+
+```text
+Fermentation Air Target Engine recommendation sensors
+```
+
+It does not replace a real fermentation runtime and should not be used as production process state.
+
+---
+
 ## Scope safety
 
 The engine is scope-safe.
 
-When no fermentation/cold-crash is active:
+When no fermentation/cold-crash is active and test mode is Off:
 
 ```text
 mode = standby
@@ -90,6 +132,8 @@ real_liquid_source_available
 liquid_source_entity
 process_status
 process_stage
+test_mode
+test_mode_active
 ```
 
 This prevents external probe values, stale Yellow Pill data or unrelated room-temperature liquid readings from appearing as active fermentation control context.
@@ -108,7 +152,7 @@ Invalid liquid contexts:
 liquid source = Chamber fallback
 liquid source unavailable
 fallback_active = true
-no active fermentation/cold-crash scope
+no active fermentation/cold-crash scope and test mode Off
 ```
 
 ---
@@ -123,7 +167,7 @@ fermentation
 cold_crash
 ```
 
-Mode is derived from BrewAssistant process state and target mode.
+Mode is derived from BrewAssistant process state, target mode or the read-only test selector.
 
 ---
 
@@ -213,7 +257,7 @@ maximum recommended air target = 35.0 °C
 Current dashboard card:
 
 ```text
-Fermentation Air Target Card v1.0
+Fermentation Air Target Card v1.1
 ```
 
 Recommended placement:
@@ -224,6 +268,8 @@ below the fermentation overview/top card
 near Temperature Stats
 ```
 
+The test mode selector should live behind the debug expander, not in the main cockpit view.
+
 Expected standby text:
 
 ```text
@@ -233,11 +279,12 @@ Real liquid finns, men används inte förrän fermentation/cold crash är aktiv
 
 ---
 
-## Validation snapshot
+## Validation snapshots
 
 Validated standby behavior:
 
 ```text
+Test mode = Off
 Mode = standby
 Demand = standby
 Air target = unknown
@@ -250,7 +297,43 @@ Real liquid = True
 Source = sensor.yellow_pill_temperature
 ```
 
-This is correct because a real liquid source may exist while no active fermentation/cold-crash process is in scope.
+Validated cold-crash test behavior:
+
+```text
+Test mode = Cold crash
+Mode = cold_crash
+Demand = strong_cooling
+Air target = 0.5
+Reason = test mode: cold crash; liquid far above cold-crash target
+Ready = True
+Scope = True
+Test active = True
+Liquid = 22.69
+Target = 1.0
+Liquid delta = 21.69
+Air/liquid delta = -18.32
+Summary = test · cold_crash · strong_cooling · liquid 22.7 → 1.0 °C · air target 0.5 °C
+```
+
+Validated fermentation test behavior:
+
+```text
+Test mode = Fermentation
+Mode = fermentation
+Demand = cooling
+Air target = 7.0
+Reason = test mode: fermentation; liquid above fermentation target
+Ready = True
+Scope = True
+Test active = True
+Liquid = 22.69
+Target = 1.0
+Liquid delta = 21.69
+Air/liquid delta = -18.28
+Summary = test · fermentation · cooling · liquid 22.7 → 1.0 °C · air target 7.0 °C
+```
+
+This is correct because a real liquid source may exist while no active fermentation/cold-crash process is in scope. The test selector can wake the recommendation engine for validation without changing process state.
 
 ---
 
