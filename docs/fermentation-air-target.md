@@ -107,6 +107,13 @@ Fermentation Air Target Engine recommendation sensors
 
 It does not replace a real fermentation runtime and should not be used as production process state.
 
+Safety behavior:
+
+```text
+select resets to Off after reload/restart
+entity category = diagnostic
+```
+
 ---
 
 ## Scope safety
@@ -137,6 +144,56 @@ test_mode_active
 ```
 
 This prevents external probe values, stale Yellow Pill data or unrelated room-temperature liquid readings from appearing as active fermentation control context.
+
+---
+
+## Clamp diagnostics
+
+The engine exposes clamp diagnostics so dashboards can show why a recommended target was changed.
+
+Important attributes:
+
+```text
+raw_air_target
+effective_air_target
+min_air_target
+max_air_target
+clamp_applied
+clamp_reason
+target_plausible_for_mode
+```
+
+Meaning:
+
+```text
+raw_air_target
+→ unclamped recommendation calculated from the liquid delta
+
+effective_air_target
+→ final recommendation after safety clamp
+
+min_air_target / max_air_target
+→ current limits for the active mode
+
+clamp_applied
+→ true when raw_air_target was outside limits
+
+clamp_reason
+→ below_min_air_target / above_max_air_target / null
+
+target_plausible_for_mode
+→ false when the target looks unusual for the selected mode
+```
+
+Example:
+
+```text
+Cold crash target 1.0 °C, liquid 21.9 °C
+raw_air_target = -0.5 °C
+effective_air_target = 0.5 °C
+clamp_applied = true
+clamp_reason = below_min_air_target
+```
 
 ---
 
@@ -289,12 +346,21 @@ Mode = standby
 Demand = standby
 Air target = unknown
 Reason = no active fermentation or cold-crash scope
-Liquid delta = unknown
-Air/liquid delta = unknown
 Ready = False
 Scope = False
-Real liquid = True
-Source = sensor.yellow_pill_temperature
+Test active = False
+Liquid = None
+Target = None
+Target plausible = None
+Raw air target = None
+Effective air target = None
+Min air target = None
+Max air target = None
+Clamp applied = False
+Clamp reason = None
+Liquid delta = unknown
+Air/liquid delta = unknown
+Summary = standby · standby · no active fermentation or cold-crash scope
 ```
 
 Validated cold-crash test behavior:
@@ -308,11 +374,18 @@ Reason = test mode: cold crash; liquid far above cold-crash target
 Ready = True
 Scope = True
 Test active = True
-Liquid = 22.69
+Liquid = 21.87
 Target = 1.0
-Liquid delta = 21.69
-Air/liquid delta = -18.32
-Summary = test · cold_crash · strong_cooling · liquid 22.7 → 1.0 °C · air target 0.5 °C
+Target plausible = True
+Raw air target = -0.5
+Effective air target = 0.5
+Min air target = 0.5
+Max air target = 8.0
+Clamp applied = True
+Clamp reason = below_min_air_target
+Liquid delta = 20.87
+Air/liquid delta = -18.76
+Summary = test · cold_crash · strong_cooling · liquid 21.9 → 1.0 °C · air target 0.5 °C · clamp below_min_air_target
 ```
 
 Validated fermentation test behavior:
@@ -322,15 +395,22 @@ Test mode = Fermentation
 Mode = fermentation
 Demand = cooling
 Air target = 7.0
-Reason = test mode: fermentation; liquid above fermentation target
+Reason = test mode: fermentation; liquid above fermentation target; target unusual for fermentation mode
 Ready = True
 Scope = True
 Test active = True
-Liquid = 22.69
+Liquid = 21.87
 Target = 1.0
-Liquid delta = 21.69
-Air/liquid delta = -18.28
-Summary = test · fermentation · cooling · liquid 22.7 → 1.0 °C · air target 7.0 °C
+Target plausible = False
+Raw air target = -0.5
+Effective air target = 7.0
+Min air target = 7.0
+Max air target = 35.0
+Clamp applied = True
+Clamp reason = below_min_air_target
+Liquid delta = 20.87
+Air/liquid delta = -18.72
+Summary = test · fermentation · cooling · liquid 21.9 → 1.0 °C · air target 7.0 °C · clamp below_min_air_target
 ```
 
 This is correct because a real liquid source may exist while no active fermentation/cold-crash process is in scope. The test selector can wake the recommendation engine for validation without changing process state.
