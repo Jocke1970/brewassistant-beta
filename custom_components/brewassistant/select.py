@@ -20,6 +20,12 @@ METHOD_OPTIONS = [
     "Conditioning",
 ]
 
+AIR_TARGET_TEST_OPTIONS = [
+    "Off",
+    "Fermentation",
+    "Cold crash",
+]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -28,7 +34,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up BrewAssistant select controls."""
     coordinator: BrewAssistantCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([BrewAssistantCarbonationMethodSelect(coordinator)])
+    async_add_entities(
+        [
+            BrewAssistantCarbonationMethodSelect(coordinator),
+            BrewAssistantAirTargetTestModeSelect(coordinator),
+        ]
+    )
 
 
 class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
@@ -69,3 +80,47 @@ class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, S
     def extra_state_attributes(self) -> dict[str, str]:
         """Return diagnostic attributes."""
         return {"source": "python_runtime_control", "runtime_key": "method"}
+
+
+class BrewAssistantAirTargetTestModeSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Test mode selector for fermentation air target recommendations."""
+
+    _attr_has_entity_name = False
+    _attr_options = AIR_TARGET_TEST_OPTIONS
+    _attr_icon = "mdi:beaker-question-outline"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "fermentation_air_target_test_mode")
+        self._attr_unique_id = f"{DOMAIN}_select_fermentation_air_target_test_mode"
+        self._attr_name = "BrewAssistant Fermentation Air Target Test Mode"
+        self._attr_suggested_object_id = f"{DOMAIN}_fermentation_air_target_test_mode"
+        self._current_option = "Off"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore selected option."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in AIR_TARGET_TEST_OPTIONS:
+            self._current_option = last_state.state
+
+    @property
+    def current_option(self) -> str | None:
+        """Return selected option."""
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Set selected option."""
+        if option not in AIR_TARGET_TEST_OPTIONS:
+            return
+        self._current_option = option
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | bool]:
+        """Return diagnostic attributes."""
+        return {
+            "source": "python_runtime_control",
+            "runtime_key": "fermentation_air_target_test_mode",
+            "read_only": True,
+        }
