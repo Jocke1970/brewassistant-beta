@@ -16,6 +16,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.SELECT,
+    Platform.BUTTON,
 ]
 
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
