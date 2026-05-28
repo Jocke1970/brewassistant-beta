@@ -19,6 +19,12 @@ from .climate_supervisor import (
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
+from .fermentation_climate_supervisor import (
+    async_disable_fermentation_climate_supervisor,
+    async_enable_fermentation_climate_supervisor,
+    build_fermentation_climate_supervisor_snapshot,
+    fermentation_supervisor_interval,
+)
 from .kegerator_guard import (
     async_apply_kegerator_guard,
     async_disable_kegerator_guard,
@@ -73,6 +79,13 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "default": False,
         "kind": "climate_supervisor",
     },
+    "fermentation_climate_supervisor_enabled": {
+        "name": "BrewAssistant Fermentation Climate Supervisor Enabled",
+        "object_id": "brewassistant_fermentation_climate_supervisor_enabled",
+        "icon": "mdi:thermostat-auto",
+        "default": False,
+        "kind": "fermentation_climate_supervisor",
+    },
 }
 
 
@@ -120,21 +133,28 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
-        if self._kind in {"kegerator_guard", "climate_supervisor"}:
+        if self._kind in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor"}:
             self._ensure_tick()
             if self._attr_is_on:
                 if self._kind == "kegerator_guard":
                     await async_enable_kegerator_guard(self.coordinator.hass)
                 if self._kind == "climate_supervisor":
                     await async_enable_climate_supervisor(self.coordinator.hass)
+                if self._kind == "fermentation_climate_supervisor":
+                    await async_enable_fermentation_climate_supervisor(self.coordinator.hass)
                 await self._async_tick()
 
     def _ensure_tick(self) -> None:
-        """Ensure periodic apply loop for active control switches."""
-        if self._kind not in {"kegerator_guard", "climate_supervisor"} or self._tick_unsub is not None:
+        """Ensure periodic apply/monitor loop for active switches."""
+        if self._kind not in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor"} or self._tick_unsub is not None:
             return
 
-        interval = supervisor_interval() if self._kind == "climate_supervisor" else timedelta(seconds=30)
+        if self._kind == "climate_supervisor":
+            interval = supervisor_interval()
+        elif self._kind == "fermentation_climate_supervisor":
+            interval = fermentation_supervisor_interval()
+        else:
+            interval = timedelta(seconds=30)
 
         def _tick(now) -> None:
             self.coordinator.hass.async_create_task(self._async_tick())
@@ -147,11 +167,13 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         self.async_on_remove(self._tick_unsub)
 
     async def _async_tick(self) -> None:
-        """Apply active controller once and refresh this entity's attributes."""
+        """Apply/monitor active controller once and refresh this entity's attributes."""
         if self._attr_is_on and self._kind == "kegerator_guard":
             await async_apply_kegerator_guard(self.coordinator.hass)
         if self._attr_is_on and self._kind == "climate_supervisor":
             await async_apply_climate_supervisor(self.coordinator.hass)
+        if self._attr_is_on and self._kind == "fermentation_climate_supervisor":
+            build_fermentation_climate_supervisor_snapshot(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
@@ -174,6 +196,12 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             await async_enable_climate_supervisor(self.coordinator.hass)
             await self._async_tick()
             return
+        if self._kind == "fermentation_climate_supervisor":
+            self._ensure_tick()
+            self.async_write_ha_state()
+            await async_enable_fermentation_climate_supervisor(self.coordinator.hass)
+            await self._async_tick()
+            return
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -183,6 +211,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             async_disable_kegerator_guard(self.coordinator.hass)
         if self._kind == "climate_supervisor":
             async_disable_climate_supervisor(self.coordinator.hass)
+        if self._kind == "fermentation_climate_supervisor":
+            async_disable_fermentation_climate_supervisor(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
@@ -192,6 +222,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             return build_kegerator_guard_snapshot(self.coordinator.hass)
         if self._kind == "climate_supervisor":
             return build_climate_supervisor_snapshot(self.coordinator.hass)
+        if self._kind == "fermentation_climate_supervisor":
+            return build_fermentation_climate_supervisor_snapshot(self.coordinator.hass)
         return {
             "source": "python_runtime_control",
             "kind": self._kind,
