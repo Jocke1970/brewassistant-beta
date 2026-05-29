@@ -7,11 +7,32 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .brewday_runtime_core import BF_REMAINING, BF_STATUS, build_core_snapshot
+from .brewday_refresh_policy import (
+    build_refresh_policy_snapshot,
+    mark_refresh_performed,
+    mark_refresh_skipped,
+)
+from .brewday_runtime_core import (
+    BF_NEXT,
+    BF_PROGRESS,
+    BF_RAW,
+    BF_REMAINING,
+    BF_STAGE,
+    BF_STATUS,
+    BF_STEP,
+)
 
-COOLDOWN_SECONDS = 90
-MANUAL_COOLDOWN_SECONDS = 15 * 60
-MAX_RETRIES = 3
+MANUAL_COOLDOWN_SECONDS = 60
+
+BREWFATHER_TRACKER_ENTITIES = [
+    BF_STATUS,
+    BF_STAGE,
+    BF_STEP,
+    BF_NEXT,
+    BF_PROGRESS,
+    BF_REMAINING,
+    BF_RAW,
+]
 
 
 def _state_store(hass: HomeAssistant) -> dict[str, Any]:
@@ -24,53 +45,27 @@ async def _update_brewfather_tracker_entities(hass: HomeAssistant) -> None:
     await hass.services.async_call(
         "homeassistant",
         "update_entity",
-        {"entity_id": [BF_STATUS, BF_REMAINING]},
+        {"entity_id": BREWFATHER_TRACKER_ENTITIES},
         blocking=False,
     )
 
 
-async def maybe_request_brewfather_refresh(hass: HomeAssistant) -> None:
-    """Refresh Brewfather tracker entities when live runtime reaches zero.
+async def maybe_request_brewfather_refresh(hass: HomeAssistant) -> dict[str, Any]:
+    """Refresh Brewfather tracker entities when the policy says it is useful."""
+    policy = build_refresh_policy_snapshot(hass)
 
-    The runtime itself decides when a refresh is useful. This hook only adds
-    conservative cooldown and retry protection.
-    """
-    snapshot = build_core_snapshot(hass)
-    store = _state_store(hass)
+    if not policy.get("due"):
+        mark_refresh_skipped(hass, reason=str(policy.get("reason") or "not_due"))
+        return {**policy, "refreshed": False}
 
-    if snapshot.get("source") != "Brewfather Brew Tracker":
-        store["retry_count"] = 0
-        store["last_refresh_ts"] = None
-        return
-
-    if snapshot.get("time_remaining_seconds", 0) > 0:
-        store["retry_count"] = 0
-        return
-
-    if snapshot.get("status") != "running" or not snapshot.get("refresh_recommended"):
-        return
-
-    now = dt_util.utcnow().timestamp()
-    retry_count = int(store.get("retry_count") or 0)
-    last_refresh_ts = store.get("last_refresh_ts")
-
-    if retry_count >= MAX_RETRIES:
-        return
-    if last_refresh_ts is not None and now - float(last_refresh_ts) < COOLDOWN_SECONDS:
-        return
-
-    store["retry_count"] = retry_count + 1
-    store["last_refresh_ts"] = now
-
+    reason = str(policy.get("reason") or "policy_due")
+    mark_refresh_performed(hass, reason=reason)
     await _update_brewfather_tracker_entities(hass)
+    return {**policy, "refreshed": True}
 
 
 async def request_manual_brewfather_refresh(hass: HomeAssistant) -> dict[str, Any]:
-    """Manually refresh Brewfather tracker entities with a 15 minute cooldown.
-
-    Returns a small result dict so service handlers can log or expose why a
-    refresh was skipped.
-    """
+    """Manually refresh Brewfather tracker entities with a short cooldown."""
     store = _state_store(hass)
     now = dt_util.utcnow().timestamp()
     last_manual_refresh_ts = store.get("last_manual_refresh_ts")
@@ -82,12 +77,15 @@ async def request_manual_brewfather_refresh(hass: HomeAssistant) -> dict[str, An
                 "refreshed": False,
                 "reason": "cooldown",
                 "cooldown_remaining_seconds": int(MANUAL_COOLDOWN_SECONDS - elapsed),
+                "policy": build_refresh_policy_snapshot(hass),
             }
 
     store["last_manual_refresh_ts"] = now
+    mark_refresh_performed(hass, reason="manual")
     await _update_brewfather_tracker_entities(hass)
     return {
         "refreshed": True,
         "reason": "manual",
         "cooldown_remaining_seconds": MANUAL_COOLDOWN_SECONDS,
+        "policy": build_refresh_policy_snapshot(hass),
     }
