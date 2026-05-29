@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .brewday_refresh import maybe_request_brewfather_refresh
+from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
 from .climate_supervisor import async_apply_climate_supervisor
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
@@ -324,7 +325,13 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
 
     async def _async_update_data(self) -> BrewAssistantData:
         """Fetch one normalized snapshot from Home Assistant state machine."""
-        await maybe_request_brewfather_refresh(self.hass)
+        refresh_result = await maybe_request_brewfather_refresh(self.hass)
+        brewzilla_result = await async_apply_brewzilla_target_if_allowed(self.hass)
+        if refresh_result.get("refreshed") or brewzilla_result.get("applied"):
+            self.hass.data.setdefault(DOMAIN, {})["last_brewday_tick"] = {
+                "refresh": refresh_result,
+                "brewzilla": brewzilla_result,
+            }
         await async_apply_climate_supervisor(self.hass)
 
         liquid_entity = _entity_from_entry(
