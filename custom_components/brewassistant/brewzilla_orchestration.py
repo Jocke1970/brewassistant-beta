@@ -17,6 +17,7 @@ BREWDAY_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
 BREWDAY_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
 BREWDAY_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
 BREWDAY_AWAITING_SNAPSHOT = "sensor.brewassistant_brewday_awaiting_snapshot"
+BREWDAY_SNAPSHOT_AGE_MINUTES = "sensor.brewassistant_brewday_snapshot_age_minutes"
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
@@ -27,6 +28,7 @@ SOURCE = "brewzilla_orchestration"
 MIN_TARGET_TEMP = 0.0
 MAX_TARGET_TEMP = 110.0
 TARGET_SYNC_TOLERANCE = 0.1
+MAX_SNAPSHOT_AGE_MINUTES = 15.0
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
@@ -77,6 +79,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     connection = _state(hass, BREWZILLA_CONNECTION_SENSOR, "unknown")
     connected = connection == "Connected"
     awaiting_snapshot = _bool_state(hass, BREWDAY_AWAITING_SNAPSHOT)
+    snapshot_age_minutes = _float(hass, BREWDAY_SNAPSHOT_AGE_MINUTES) or 0.0
 
     target_delta = None
     if requested_target is not None and applied_target is not None:
@@ -92,8 +95,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         hard_block = "BrewZilla disconnected"
     elif not _runtime_active(runtime_state):
         hard_block = f"Brewday runtime {runtime_state}"
-    elif awaiting_snapshot:
-        hard_block = "Waiting for fresh Brew Tracker snapshot"
+    elif snapshot_age_minutes > MAX_SNAPSHOT_AGE_MINUTES:
+        hard_block = "Brew Tracker snapshot too old"
     elif not _target_valid(requested_target):
         hard_block = "Missing or invalid Brew Tracker target"
 
@@ -101,6 +104,10 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     mode = "direct-control" if can_control and target_sync_needed else "monitor"
     if hard_block is not None:
         mode = "blocked"
+
+    reason = hard_block or "Direct production flow active"
+    if awaiting_snapshot and hard_block is None:
+        reason = "Awaiting fresh snapshot, using current valid Brew Tracker target"
 
     return {
         "source": SOURCE,
@@ -118,9 +125,10 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "heating_needed": heating_needed,
         "pump_recommended": _stage_recommends_pump(hass),
         "awaiting_snapshot": awaiting_snapshot,
+        "snapshot_age_minutes": snapshot_age_minutes,
         "orchestration_mode": mode,
         "safety_state": "operator-supervised",
-        "control_reason": hard_block or "Direct production flow active",
+        "control_reason": reason,
         "has_pending_action": False,
         "pending_action": None,
         "pending_summary": None,
@@ -150,12 +158,7 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Apply Brew Tracker runtime target directly to BrewZilla.
-
-    This is the intended final flow for the low-temperature supervised test:
-    Brew Tracker drives the target, BrewAssistant applies it, and the operator can
-    abort immediately if anything looks wrong.
-    """
+    """Apply Brew Tracker runtime target directly to BrewZilla."""
     snapshot = build_orchestration_snapshot(hass)
     if not snapshot["can_apply_target"]:
         return {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
