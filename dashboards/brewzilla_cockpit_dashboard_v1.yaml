@@ -1,0 +1,753 @@
+# BrewAssistant BrewZilla Cockpit Dashboard v1
+# Requires: custom:button-card, custom:vertical-stack-in-card, custom:mushroom-* cards
+# Backend expected from BrewAssistant BrewZilla section-scoped policy package.
+
+type: custom:vertical-stack-in-card
+cards:
+  ###########################################################################
+  # TOP CARD
+  ###########################################################################
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_runtime_state
+    name: BrewZilla Cockpit
+    icon: mdi:kettle-steam
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const connected = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? 'unknown';
+        const state = states['sensor.brewassistant_brewzilla_runtime_state']?.state ?? 'unknown';
+        const temp = Number(states['sensor.brewassistant_brewzilla_current_temperature']?.state);
+        const target = Number(states['sensor.brewassistant_brewzilla_target_temperature']?.state);
+        const delta = Number(states['sensor.brewassistant_brewzilla_temperature_delta']?.state);
+        const power = Number(states['sensor.brewassistant_brewzilla_power']?.state);
+        const heater = states['switch.brewzilla_heater']?.state ?? 'unknown';
+        const pump = states['switch.brewzilla_pump']?.state ?? 'unknown';
+        const pending = states['input_boolean.brewassistant_brewzilla_has_pending_action']?.state === 'on';
+        const reason = states['input_text.brewassistant_brewzilla_pending_reason']?.state ?? '';
+
+        const tempLine =
+          `${isNaN(temp) ? '–' : temp.toFixed(1)}°C → ${isNaN(target) ? '–' : target.toFixed(1)}°C` +
+          ` · Δ ${isNaN(delta) ? '–' : delta.toFixed(1)}°C`;
+
+        const hwLine =
+          `${isNaN(power) ? '–' : power.toFixed(0)} W · Heater ${heater.toUpperCase()} · Pump ${pump.toUpperCase()}`;
+
+        const pendingLine = pending
+          ? `<div style="margin-top:8px; padding:7px 9px; border-radius:12px; background:rgba(255,193,7,.16); border:1px solid rgba(255,193,7,.32); color:#ffe9a3; font-weight:900;">Kvittens väntar · ${reason}</div>`
+          : `<div style="margin-top:8px; opacity:.78;">${connected} · ${state}</div>`;
+
+        return `
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <div style="font-size:18px; font-weight:950;">${tempLine}</div>
+            <div style="font-size:13px; opacity:.78;">${hwLine}</div>
+            ${pendingLine}
+          </div>
+        `;
+      ]]]
+    custom_fields:
+      policy: |
+        [[[
+          const target = states['input_select.brewassistant_brewzilla_target_policy']?.state ?? '–';
+          const heater = states['input_select.brewassistant_brewzilla_heater_policy']?.state ?? '–';
+          const pump = states['input_select.brewassistant_brewzilla_pump_policy']?.state ?? '–';
+
+          const short = (v) => {
+            if (v === 'Read-only') return 'RO';
+            if (v === 'Apply with confirm') return 'CONF';
+            if (v === 'Direct action') return 'DIR';
+            return '–';
+          };
+
+          return `
+            <div style="
+              padding:6px 9px;
+              border-radius:999px;
+              background:rgba(255,255,255,.10);
+              border:1px solid rgba(255,255,255,.12);
+              font-size:11px;
+              font-weight:900;
+              letter-spacing:.3px;
+            ">
+              T:${short(target)} · H:${short(heater)} · P:${short(pump)}
+            </div>
+          `;
+        ]]]
+    styles:
+      card:
+        - border-radius: 22px
+        - padding: 18px
+        - min-height: 142px
+        - overflow: hidden
+        - border: 1px solid rgba(255,255,255,.10)
+        - box-shadow: 0 10px 30px rgba(0,0,0,.38)
+        - background: |
+            [[[
+              const connected = states['sensor.brewassistant_brewzilla_connection_state']?.state === 'Connected';
+              const pending = states['input_boolean.brewassistant_brewzilla_has_pending_action']?.state === 'on';
+              const heater = states['switch.brewzilla_heater']?.state === 'on';
+              const state = states['sensor.brewassistant_brewzilla_runtime_state']?.state ?? '';
+
+              if (!connected) return 'linear-gradient(135deg, rgba(70,70,70,.96), rgba(20,20,20,.96))';
+              if (pending) return 'linear-gradient(135deg, rgba(95,67,15,.98), rgba(24,19,10,.98))';
+              if (heater) return 'linear-gradient(135deg, rgba(115,38,22,.98), rgba(29,11,8,.98))';
+              if (state === 'heating_needed') return 'linear-gradient(135deg, rgba(76,48,15,.98), rgba(19,14,8,.98))';
+              return 'linear-gradient(135deg, rgba(17,37,56,.98), rgba(8,12,20,.98))';
+            ]]]
+      grid:
+        - grid-template-areas: '"i policy" "n n" "l l"'
+        - grid-template-columns: 58px 1fr
+        - grid-template-rows: 42px min-content 1fr
+      icon:
+        - width: 34px
+        - color: |
+            [[[
+              if (states['input_boolean.brewassistant_brewzilla_has_pending_action']?.state === 'on') return '#ffc107';
+              if (states['switch.brewzilla_heater']?.state === 'on') return '#ff7043';
+              return '#64b5f6';
+            ]]]
+      img_cell:
+        - width: 48px
+        - height: 48px
+        - border-radius: 50%
+        - background: rgba(255,255,255,.10)
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 22px
+        - font-weight: 950
+        - letter-spacing: .2px
+        - margin-top: 14px
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - white-space: normal
+        - margin-top: 8px
+      custom_fields:
+        policy:
+          - justify-self: end
+          - align-self: start
+
+  ###########################################################################
+  # SUPERVISED APPLY
+  ###########################################################################
+  - type: conditional
+    conditions:
+      - entity: input_boolean.brewassistant_brewzilla_has_pending_action
+        state: "on"
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: custom:button-card
+          entity: sensor.brewassistant_brewzilla_supervised_apply_status
+          name: Kvittens väntar
+          icon: mdi:gesture-tap-button
+          show_state: false
+          show_label: true
+          label: |
+            [[[
+              const section = states['input_text.brewassistant_brewzilla_pending_section']?.state ?? '';
+              const command = states['input_text.brewassistant_brewzilla_pending_command']?.state ?? '';
+              const reason = states['input_text.brewassistant_brewzilla_pending_reason']?.state ?? '';
+              return `
+                <div style="font-size:14px; font-weight:900; margin-bottom:3px;">${reason}</div>
+                <div style="font-size:12px; opacity:.72;">Section: ${section} · Command: ${command}</div>
+              `;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 14px
+              - background: rgba(255,193,7,.10)
+              - border: 1px solid rgba(255,193,7,.25)
+            grid:
+              - grid-template-areas: '"i n" "i l"'
+              - grid-template-columns: 46px 1fr
+            icon:
+              - color: '#ffc107'
+              - width: 30px
+            name:
+              - justify-self: start
+              - font-weight: 950
+              - font-size: 17px
+            label:
+              - justify-self: stretch
+              - text-align: left
+              - white-space: normal
+
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              name: Confirm
+              icon: mdi:check-bold
+              tap_action:
+                action: call-service
+                service: script.brewassistant_brewzilla_confirm_pending_action
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 14px
+                  - background: rgba(76,175,80,.20)
+                  - border: 1px solid rgba(76,175,80,.35)
+                icon:
+                  - color: '#81c784'
+                name:
+                  - font-weight: 950
+
+            - type: custom:button-card
+              name: Cancel
+              icon: mdi:close-thick
+              tap_action:
+                action: call-service
+                service: script.brewassistant_brewzilla_cancel_pending_action
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 14px
+                  - background: rgba(244,67,54,.16)
+                  - border: 1px solid rgba(244,67,54,.30)
+                icon:
+                  - color: '#ef9a9a'
+                name:
+                  - font-weight: 950
+
+  ###########################################################################
+  # POLICY CONTROLS
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Control Policy
+        icon: mdi:tune-variant
+        show_label: true
+        label: "Välj hur varje sektion får agera: read-only, kvittens eller direkt."
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#90caf9'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_target_policy
+            name: Target temp
+            icon: mdi:target
+            layout: vertical
+
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_heater_policy
+            name: Heater
+            icon: mdi:fire
+            layout: vertical
+
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_pump_policy
+            name: Pump
+            icon: mdi:pump
+            layout: vertical
+
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_boil_policy
+            name: Boil
+            icon: mdi:kettle-steam
+            layout: vertical
+
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_stage_policy
+            name: Stage
+            icon: mdi:debug-step-over
+            layout: vertical
+
+          - type: custom:mushroom-select-card
+            entity: input_select.brewassistant_brewzilla_cleaning_policy
+            name: Cleaning
+            icon: mdi:spray-bottle
+            layout: vertical
+
+  ###########################################################################
+  # QUICK TARGETS
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Mash Target Quick Select
+        icon: mdi:thermometer-plus
+        show_label: true
+        label: |
+          [[[
+            const p = states['input_select.brewassistant_brewzilla_target_policy']?.state ?? 'unknown';
+            const pending = states['input_boolean.brewassistant_brewzilla_has_pending_action']?.state === 'on';
+            return pending
+              ? 'Ny target väntar redan på kvittens.'
+              : `Target policy: ${p}`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#ffcc80'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            name: Protein
+            label: "50°C"
+            icon: mdi:barley
+            show_label: true
+            tap_action:
+              action: call-service
+              service: script.brewassistant_brewzilla_request_target_50
+            styles: &quick_target_style
+              card:
+                - border-radius: 16px
+                - padding: 13px
+                - background: rgba(255,255,255,.065)
+                - border: 1px solid rgba(255,255,255,.08)
+              icon:
+                - width: 26px
+                - color: '#ffcc80'
+              name:
+                - font-weight: 950
+                - font-size: 13px
+              label:
+                - font-weight: 900
+                - font-size: 16px
+                - color: '#fff3e0'
+
+          - type: custom:button-card
+            name: Beta
+            label: "62°C"
+            icon: mdi:grain
+            show_label: true
+            tap_action:
+              action: call-service
+              service: script.brewassistant_brewzilla_request_target_62
+            styles: *quick_target_style
+
+          - type: custom:button-card
+            name: Sacch
+            label: "66°C"
+            icon: mdi:beer
+            show_label: true
+            tap_action:
+              action: call-service
+              service: script.brewassistant_brewzilla_request_target_66
+            styles: *quick_target_style
+
+          - type: custom:button-card
+            name: Alpha
+            label: "70°C"
+            icon: mdi:molecule
+            show_label: true
+            tap_action:
+              action: call-service
+              service: script.brewassistant_brewzilla_request_target_70
+            styles: *quick_target_style
+
+          - type: custom:button-card
+            name: Mash out
+            label: "78°C"
+            icon: mdi:thermometer-chevron-up
+            show_label: true
+            tap_action:
+              action: call-service
+              service: script.brewassistant_brewzilla_request_target_78
+            styles: *quick_target_style
+
+          - type: custom:button-card
+            name: Current
+            icon: mdi:gauge
+            show_label: true
+            label: |
+              [[[
+                const t = Number(states['sensor.brewassistant_brewzilla_current_temperature']?.state);
+                const target = Number(states['number.brewzilla_target_temperature']?.state);
+                return `${isNaN(t) ? '–' : t.toFixed(1)} → ${isNaN(target) ? '–' : target.toFixed(1)}°C`;
+              ]]]
+            tap_action:
+              action: more-info
+              entity: sensor.brewassistant_brewzilla_runtime_summary
+            styles: *quick_target_style
+
+  ###########################################################################
+  # HARDWARE ACTIONS VIA POLICY ROUTER
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Hardware Actions
+        icon: mdi:power-plug-outline
+        show_label: true
+        label: "Alla knappar går via policy-router. Direct action sker bara om sektionens policy tillåter det."
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#ce93d8'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: switch.brewzilla_heater
+            name: Heater
+            icon: mdi:fire
+            show_label: true
+            label: |
+              [[[
+                const state = states['switch.brewzilla_heater']?.state ?? 'unknown';
+                const pol = states['input_select.brewassistant_brewzilla_heater_policy']?.state ?? 'unknown';
+                return `${state.toUpperCase()} · ${pol}`;
+              ]]]
+            tap_action:
+              action: call-service
+              service: |
+                [[[
+                  return states['switch.brewzilla_heater']?.state === 'on'
+                    ? 'script.brewassistant_brewzilla_request_heater_off'
+                    : 'script.brewassistant_brewzilla_request_heater_on';
+                ]]]
+            styles: &action_card_style
+              card:
+                - border-radius: 16px
+                - padding: 14px
+                - background: |
+                    [[[
+                      const on = entity?.state === 'on';
+                      return on ? 'rgba(255,112,67,.20)' : 'rgba(255,255,255,.065)';
+                    ]]]
+                - border: 1px solid rgba(255,255,255,.09)
+              icon:
+                - color: |
+                    [[[
+                      return entity?.state === 'on' ? '#ff7043' : '#b0bec5';
+                    ]]]
+              name:
+                - font-weight: 950
+              label:
+                - font-size: 12px
+                - opacity: .78
+
+          - type: custom:button-card
+            entity: switch.brewzilla_pump
+            name: Pump
+            icon: mdi:pump
+            show_label: true
+            label: |
+              [[[
+                const state = states['switch.brewzilla_pump']?.state ?? 'unknown';
+                const pol = states['input_select.brewassistant_brewzilla_pump_policy']?.state ?? 'unknown';
+                return `${state.toUpperCase()} · ${pol}`;
+              ]]]
+            tap_action:
+              action: call-service
+              service: |
+                [[[
+                  return states['switch.brewzilla_pump']?.state === 'on'
+                    ? 'script.brewassistant_brewzilla_request_pump_off'
+                    : 'script.brewassistant_brewzilla_request_pump_on';
+                ]]]
+            styles: *action_card_style
+
+  ###########################################################################
+  # LIVE TELEMETRY
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Live Telemetry
+        icon: mdi:chart-line
+        show_label: true
+        label: |
+          [[[
+            const summary = states['sensor.brewassistant_brewzilla_runtime_summary']?.state ?? 'unknown';
+            return summary;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#80cbc4'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_current_temperature
+            name: Current temp
+            icon: mdi:thermometer
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_target_temperature
+            name: Target temp
+            icon: mdi:thermometer-check
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_temperature_delta
+            name: Delta
+            icon: mdi:delta
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_power
+            name: Power
+            icon: mdi:flash
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_heat_utilization
+            name: Heat util.
+            icon: mdi:fire-circle
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_pump_utilization
+            name: Pump util.
+            icon: mdi:pump
+
+  ###########################################################################
+  # BREWDAY / ORCHESTRATION SNAPSHOT
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Orchestration Snapshot
+        icon: mdi:robot-outline
+        show_label: true
+        label: |
+          [[[
+            const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state ?? 'unknown';
+            const reason = states['sensor.brewassistant_brewzilla_control_reason']?.state ?? 'unknown';
+            const safe = states['sensor.brewassistant_brewzilla_safety_state']?.state ?? 'unknown';
+            return `${mode} · ${safe} · ${reason}`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#90caf9'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+            - white-space: normal
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_orchestration_mode
+            name: Mode
+            icon: mdi:robot-outline
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_safety_state
+            name: Safety
+            icon: mdi:shield-check
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_can_apply_target
+            name: Can apply target
+            icon: mdi:target
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewzilla_target_sync_needed
+            name: Target sync
+            icon: mdi:sync-alert
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewday_stage
+            name: Brewday stage
+            icon: mdi:clipboard-list
+          - type: custom:mushroom-entity-card
+            entity: sensor.brewassistant_brewday_stage_suggested_action
+            name: Suggested
+            icon: mdi:lightbulb-outline
+
+  ###########################################################################
+  # SAFETY SWITCHES / LEGACY FLAGS
+  ###########################################################################
+  - type: custom:vertical-stack-in-card
+    cards:
+      - type: custom:button-card
+        name: Safety Flags
+        icon: mdi:shield-lock-outline
+        show_label: true
+        label: "Legacy/backend-flaggor. Behåll heater/pump/boil restriktivt tills allt är verifierat."
+        styles:
+          card:
+            - border-radius: 18px 18px 8px 8px
+            - padding: 14px
+            - background: rgba(255,255,255,.055)
+            - border: 1px solid rgba(255,255,255,.08)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 42px 1fr
+          icon:
+            - color: '#ef9a9a'
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - font-size: 12px
+            - opacity: .72
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_orchestration_enabled
+            name: Orchestration
+            icon: mdi:robot-outline
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_apply_target_temp
+            name: Apply target
+            icon: mdi:target
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_allow_heater_control
+            name: Allow heater
+            icon: mdi:fire-alert
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_allow_pump_control
+            name: Allow pump
+            icon: mdi:pump
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_allow_boil_mode
+            name: Allow boil
+            icon: mdi:kettle-steam
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: switch.brewassistant_brewzilla_safe_mode
+            name: Safe mode
+            icon: mdi:shield-check
+            tap_action:
+              action: toggle
+
+  ###########################################################################
+  # DEBUG FOOTER
+  ###########################################################################
+  - type: custom:button-card
+    name: Debug Snapshot
+    icon: mdi:bug-outline
+    show_label: true
+    label: |
+      [[[
+        const pending = states['input_boolean.brewassistant_brewzilla_has_pending_action']?.state ?? 'unknown';
+        const pendingReason = states['input_text.brewassistant_brewzilla_pending_reason']?.state ?? '';
+        const ro = states['input_text.brewassistant_brewzilla_last_readonly_action']?.state ?? '';
+        const ex = states['input_text.brewassistant_brewzilla_last_executed_action']?.state ?? '';
+        return `
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div>Pending: <b>${pending}</b> ${pendingReason ? '· ' + pendingReason : ''}</div>
+            <div>Read-only: ${ro || '–'}</div>
+            <div>Executed: ${ex || '–'}</div>
+          </div>
+        `;
+      ]]]
+    tap_action:
+      action: more-info
+      entity: sensor.brewassistant_brewzilla_supervised_apply_status
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 14px
+        - background: rgba(255,255,255,.045)
+        - border: 1px solid rgba(255,255,255,.07)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 42px 1fr
+      icon:
+        - color: '#b0bec5'
+        - width: 26px
+      name:
+        - justify-self: start
+        - font-size: 15px
+        - font-weight: 950
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - font-size: 12px
+        - opacity: .75
+        - white-space: normal
