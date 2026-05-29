@@ -11,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
+from .control_policy import POLICY_OPTIONS, SECTION_CONFIG, section_policy
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
 from .supervised_apply import READ_ONLY_MODE, SUPERVISED_MODE, cancel_pending_action
@@ -46,6 +47,10 @@ async def async_setup_entry(
             BrewAssistantCarbonationMethodSelect(coordinator),
             BrewAssistantAirTargetTestModeSelect(coordinator),
             BrewAssistantApplyModeSelect(coordinator),
+        ]
+        + [
+            BrewAssistantSectionPolicySelect(coordinator, section, config)
+            for section, config in SECTION_CONFIG.items()
         ]
     )
 
@@ -181,4 +186,70 @@ class BrewAssistantApplyModeSelect(BrewAssistantEntity, RestoreEntity, SelectEnt
             "runtime_key": "apply_mode",
             "read_only_default": True,
             "requires_confirmation": self._current_option == SUPERVISED_MODE,
+        }
+
+
+class BrewAssistantSectionPolicySelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Section-scoped BrewZilla policy selector."""
+
+    _attr_has_entity_name = False
+    _attr_options = POLICY_OPTIONS
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, section: str, config: dict) -> None:
+        key = f"{section}_policy"
+        super().__init__(coordinator, key)
+        self._section = section
+        self._config = config
+        self._attr_unique_id = f"{DOMAIN}_select_{section}_policy"
+        self._attr_name = f"BrewAssistant {config['name']} Policy"
+        self._attr_suggested_object_id = str(config["policy_entity"]).removeprefix("select.")
+        self._attr_icon = self._icon_for_section(section)
+        self._current_option = str(config.get("default_policy", POLICY_OPTIONS[0]))
+
+    @staticmethod
+    def _icon_for_section(section: str) -> str:
+        return {
+            "target": "mdi:target",
+            "heater": "mdi:fire",
+            "pump": "mdi:pump",
+            "boil": "mdi:kettle-steam",
+            "stage": "mdi:debug-step-over",
+            "cleaning": "mdi:spray-bottle",
+            "brew_tracker_feed": "mdi:cloud-sync-outline",
+        }.get(section, "mdi:tune-variant")
+
+    async def async_added_to_hass(self) -> None:
+        """Restore section policy after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in POLICY_OPTIONS:
+            self._current_option = last_state.state
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str | None:
+        """Return selected section policy."""
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Set section policy."""
+        if option not in POLICY_OPTIONS:
+            return
+        self._current_option = option
+        if option == POLICY_OPTIONS[0]:
+            pending = self.coordinator.hass.data.setdefault(DOMAIN, {}).get("supervised_apply_pending_action")
+            if isinstance(pending, dict) and pending.get("section") == self._section:
+                cancel_pending_action(self.coordinator.hass)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | bool]:
+        """Return policy diagnostics."""
+        return {
+            "source": "python_control_policy",
+            "section": self._section,
+            "effective_policy": section_policy(self.coordinator.hass, self._section),
+            "default_policy": str(self._config.get("default_policy")),
+            "direct_unlock_entity": str(self._config.get("direct_unlock_entity")),
         }
