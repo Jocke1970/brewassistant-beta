@@ -1,7 +1,8 @@
-"""Semi-automatic BrewZilla orchestration helpers.
+"""Production-style BrewZilla orchestration helpers.
 
-This layer is intentionally conservative. BrewAssistant may recommend or apply
-BrewZilla targets, but execution is routed through section-scoped policies.
+BrewAssistant treats Brewfather Brew Tracker as the real runtime source. The low
+temperature test batch is safe because the recipe is safe, not because the
+runtime is artificially limited. Abort remains available as the hard stop.
 """
 
 from __future__ import annotations
@@ -9,244 +10,196 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-
-from .control_policy import SOURCE_BREW_TRACKER, request_action
-from .supervised_apply import (
-    clear_pending_action_from_source,
-    get_pending_action,
-    supervised_apply_enabled,
-)
+from homeassistant.util import dt as dt_util
 
 BREWDAY_TARGET_SENSOR = "sensor.brewassistant_brewday_target_temperature"
 BREWDAY_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
 BREWDAY_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
 BREWDAY_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
+BREWDAY_AWAITING_SNAPSHOT = "sensor.brewassistant_brewday_awaiting_snapshot"
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
+BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
-
-ORCHESTRATION_ENABLED = "switch.brewassistant_brewzilla_orchestration_enabled"
-APPLY_TARGET_ENABLED = "switch.brewassistant_brewzilla_apply_target_temp"
-MANUAL_TARGET_OVERRIDE = "switch.brewassistant_brewzilla_manual_target_override"
-ALLOW_HEATER_CONTROL = "switch.brewassistant_brewzilla_allow_heater_control"
-ALLOW_PUMP_CONTROL = "switch.brewassistant_brewzilla_allow_pump_control"
-ALLOW_BOIL_MODE = "switch.brewassistant_brewzilla_allow_boil_mode"
-SAFE_MODE = "switch.brewassistant_brewzilla_safe_mode"
+BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
+BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
 
 SOURCE = "brewzilla_orchestration"
 MIN_TARGET_TEMP = 0.0
-MAX_NORMAL_TARGET_TEMP = 100.0
-MAX_BOIL_TARGET_TEMP = 110.0
-MAX_TARGET_STEP_DELTA = 35.0
+MAX_TARGET_TEMP = 110.0
 TARGET_SYNC_TOLERANCE = 0.1
+
+_BAD = {None, "unknown", "unavailable", "none", ""}
+_ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
+_MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
 
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
     entity_state = hass.states.get(entity_id)
-    if entity_state is None:
+    if entity_state is None or entity_state.state in _BAD:
         return default
     return entity_state.state
 
 
 def _float(hass: HomeAssistant, entity_id: str) -> float | None:
     raw = _state(hass, entity_id)
-    if raw in {None, "unknown", "unavailable", "none", ""}:
+    if raw in _BAD:
         return None
     try:
-        return float(raw)
+        return float(raw)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
 
-def _bool(hass: HomeAssistant, entity_id: str, default: bool = False) -> bool:
+def _bool_state(hass: HomeAssistant, entity_id: str, default: bool = False) -> bool:
     fallback = "on" if default else "off"
-    return (_state(hass, entity_id, fallback) or fallback).lower() == "on"
+    return str(_state(hass, entity_id, fallback)).lower() in {"on", "true", "yes"}
 
 
-def _pending_is_ours(pending: dict[str, Any] | None) -> bool:
-    if pending is None:
-        return False
-    if pending.get("source") == SOURCE:
-        return True
-    return pending.get("source") == "brewzilla_policy_router" and pending.get("request_source") == SOURCE_BREW_TRACKER
+def _runtime_active(state: str | None) -> bool:
+    return (state or "").lower() in _ACTIVE_RUNTIME_STATES
 
 
-def _build_target_reason(hass: HomeAssistant, target: float) -> str:
-    stage = _state(hass, BREWDAY_STAGE_SENSOR, "Brewday")
-    step = _state(hass, BREWDAY_STEP_SENSOR, "step")
-    return f"Brew Tracker: {stage} · {step} requests BrewZilla target {round(float(target), 1):.1f} °C"
+def _stage_recommends_pump(hass: HomeAssistant) -> bool:
+    text = f"{_state(hass, BREWDAY_STAGE_SENSOR, '')} {_state(hass, BREWDAY_STEP_SENSOR, '')}".lower()
+    return any(word in text for word in _MASH_WORDS)
 
 
-async def async_request_brewtracker_target_sync(
-    hass: HomeAssistant,
-    *,
-    snapshot: dict[str, Any],
-) -> dict[str, Any]:
-    """Request target sync through the section-scoped policy router."""
-    requested_target = snapshot.get("requested_target")
-    if requested_target is None:
-        return {**snapshot, "policy_result": {"status": "missing_target"}}
-
-    result = await request_action(
-        hass,
-        section="target",
-        command="set_target_temperature",
-        value=float(requested_target),
-        source=SOURCE_BREW_TRACKER,
-        reason=_build_target_reason(hass, float(requested_target)),
-        context={
-            "orchestration_source": SOURCE,
-            "brewday_state": snapshot.get("brewday_state"),
-            "runtime_stage": _state(hass, BREWDAY_STAGE_SENSOR),
-            "runtime_step": _state(hass, BREWDAY_STEP_SENSOR),
-            "applied_target": snapshot.get("applied_target"),
-            "target_delta": snapshot.get("target_delta"),
-        },
-    )
-    return {**snapshot, "policy_result": result}
+def _target_valid(target: float | None) -> bool:
+    return target is not None and MIN_TARGET_TEMP <= target <= MAX_TARGET_TEMP
 
 
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build orchestration state snapshot."""
-
-    orchestration_enabled = _bool(hass, ORCHESTRATION_ENABLED)
-    apply_target = _bool(hass, APPLY_TARGET_ENABLED)
-    manual_override = _bool(hass, MANUAL_TARGET_OVERRIDE)
-    allow_heater = _bool(hass, ALLOW_HEATER_CONTROL)
-    allow_pump = _bool(hass, ALLOW_PUMP_CONTROL)
-    allow_boil = _bool(hass, ALLOW_BOIL_MODE)
-    safe_mode = _bool(hass, SAFE_MODE, True)
-    supervised_enabled = supervised_apply_enabled(hass)
-
-    brewday_target = _float(hass, BREWDAY_TARGET_SENSOR)
-    brewzilla_target = _float(hass, BREWZILLA_TARGET_NUMBER)
-    brewday_state = _state(hass, BREWDAY_STATE_SENSOR, "inactive")
+    """Build a production-style BrewZilla orchestration snapshot."""
+    runtime_state = _state(hass, BREWDAY_STATE_SENSOR, "idle")
+    requested_target = _float(hass, BREWDAY_TARGET_SENSOR)
+    applied_target = _float(hass, BREWZILLA_TARGET_NUMBER)
+    current_temperature = _float(hass, BREWZILLA_TEMP_SENSOR)
     connection = _state(hass, BREWZILLA_CONNECTION_SENSOR, "unknown")
-
     connected = connection == "Connected"
-    requested_target = brewday_target
-    applied_target = brewzilla_target
+    awaiting_snapshot = _bool_state(hass, BREWDAY_AWAITING_SNAPSHOT)
+
     target_delta = None
     if requested_target is not None and applied_target is not None:
         target_delta = round(requested_target - applied_target, 2)
 
-    reason = "Observe only"
-    orchestration_mode = "observe"
-    safety_state = "safe-mode" if safe_mode else "safe"
-    can_apply_target = False
-    target_sync_needed = False
+    target_sync_needed = target_delta is not None and abs(target_delta) > TARGET_SYNC_TOLERANCE
+    heating_needed = False
+    if requested_target is not None and current_temperature is not None:
+        heating_needed = current_temperature < requested_target - TARGET_SYNC_TOLERANCE
 
-    if not orchestration_enabled:
-        reason = "Orchestration disabled"
-        clear_pending_action_from_source(hass, SOURCE)
+    hard_block = None
+    if not connected:
+        hard_block = "BrewZilla disconnected"
+    elif not _runtime_active(runtime_state):
+        hard_block = f"Brewday runtime {runtime_state}"
+    elif awaiting_snapshot:
+        hard_block = "Waiting for fresh Brew Tracker snapshot"
+    elif not _target_valid(requested_target):
+        hard_block = "Missing or invalid Brew Tracker target"
 
-    elif manual_override:
-        reason = "Manual target override active"
-        orchestration_mode = "manual-override"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif not connected:
-        reason = "BrewZilla disconnected"
-        orchestration_mode = "blocked"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif brewday_state in {"inactive", "completed", "idle"}:
-        reason = f"Brewday runtime {brewday_state}"
-        orchestration_mode = "idle"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif requested_target is None:
-        reason = "No Brewday target available"
-        orchestration_mode = "idle"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif requested_target < MIN_TARGET_TEMP:
-        reason = "Requested target below minimum"
-        orchestration_mode = "blocked"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif requested_target > MAX_NORMAL_TARGET_TEMP and not allow_boil:
-        reason = "Boil-range target blocked"
-        orchestration_mode = "blocked"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif requested_target > MAX_BOIL_TARGET_TEMP:
-        reason = "Requested target above BrewZilla maximum"
-        orchestration_mode = "blocked"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif target_delta is not None and abs(target_delta) > MAX_TARGET_STEP_DELTA:
-        reason = "Target jump too large"
-        orchestration_mode = "blocked"
-        clear_pending_action_from_source(hass, SOURCE)
-
-    elif apply_target:
-        reason = "Target sync active"
-        orchestration_mode = "target-sync"
-        can_apply_target = True
-        target_sync_needed = target_delta is not None and abs(target_delta) > TARGET_SYNC_TOLERANCE
-        if not target_sync_needed:
-            clear_pending_action_from_source(hass, SOURCE)
-
-    if allow_heater or allow_pump or allow_boil:
-        safety_state = "extra-controls-enabled"
-
-    pending_action = get_pending_action(hass)
-    has_ours = _pending_is_ours(pending_action)
-
-    if can_apply_target and target_sync_needed and requested_target is not None:
-        orchestration_mode = "pending-confirmation" if supervised_enabled else "policy-controlled"
-        reason = "Target sync routed through section policy"
+    can_control = hard_block is None
+    mode = "direct-control" if can_control and target_sync_needed else "monitor"
+    if hard_block is not None:
+        mode = "blocked"
 
     return {
+        "source": SOURCE,
         "connected": connected,
-        "orchestration_enabled": orchestration_enabled,
-        "apply_target_enabled": apply_target,
-        "manual_target_override": manual_override,
-        "allow_heater_control": allow_heater,
-        "allow_pump_control": allow_pump,
-        "allow_boil_mode": allow_boil,
-        "safe_mode": safe_mode,
+        "connection_state": connection,
+        "brewday_state": runtime_state,
+        "runtime_stage": _state(hass, BREWDAY_STAGE_SENSOR),
+        "runtime_step": _state(hass, BREWDAY_STEP_SENSOR),
         "requested_target": requested_target,
         "applied_target": applied_target,
+        "current_temperature": current_temperature,
         "target_delta": target_delta,
         "target_sync_needed": target_sync_needed,
-        "can_apply_target": can_apply_target,
-        "brewday_state": brewday_state,
-        "orchestration_mode": orchestration_mode,
-        "safety_state": safety_state,
-        "control_reason": reason,
-        "supervised_apply_enabled": supervised_enabled,
-        "pending_action": pending_action if has_ours else None,
-        "has_pending_action": has_ours,
-        "pending_summary": pending_action.get("summary") if has_ours else None,
-        "pending_section": pending_action.get("section") if has_ours else None,
-        "pending_command": pending_action.get("command") if has_ours else None,
-        "mode_scope": "section_policy",
+        "can_apply_target": can_control and target_sync_needed,
+        "heating_needed": heating_needed,
+        "pump_recommended": _stage_recommends_pump(hass),
+        "awaiting_snapshot": awaiting_snapshot,
+        "orchestration_mode": mode,
+        "safety_state": "operator-supervised",
+        "control_reason": hard_block or "Direct production flow active",
+        "has_pending_action": False,
+        "pending_action": None,
+        "pending_summary": None,
+        "mode_scope": "direct_with_abort",
     }
+
+
+async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
+    """Hard stop BrewZilla controllable outputs used by BrewAssistant."""
+    result: dict[str, Any] = {
+        "source": SOURCE,
+        "status": "aborted",
+        "aborted_at": dt_util.utcnow().isoformat(),
+        "actions": [],
+    }
+    for entity_id in (BREWZILLA_HEATER_SWITCH, BREWZILLA_PUMP_SWITCH):
+        if hass.states.get(entity_id) is not None:
+            await hass.services.async_call(
+                "switch",
+                "turn_off",
+                {"entity_id": entity_id},
+                blocking=True,
+            )
+            result["actions"].append(f"turned_off:{entity_id}")
+    hass.data.setdefault("brewassistant", {})["brewzilla_last_abort"] = result
+    return result
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Route Brewday target to BrewZilla through section-scoped policy."""
+    """Apply Brew Tracker runtime target directly to BrewZilla.
+
+    This is the intended final flow for the low-temperature supervised test:
+    Brew Tracker drives the target, BrewAssistant applies it, and the operator can
+    abort immediately if anything looks wrong.
+    """
     snapshot = build_orchestration_snapshot(hass)
-
-    if snapshot.get("manual_target_override"):
-        return {**snapshot, "applied": False, "apply_result": "manual_override_active"}
-
     if not snapshot["can_apply_target"]:
-        return {**snapshot, "applied": False, "apply_result": "blocked"}
+        return {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
 
-    if not snapshot["target_sync_needed"]:
-        return {**snapshot, "applied": False, "apply_result": "already_in_sync"}
+    target = snapshot["requested_target"]
+    if target is None:
+        return {**snapshot, "applied": False, "apply_result": "missing_target"}
 
-    if snapshot.get("has_pending_action"):
-        return {**snapshot, "applied": False, "apply_result": "pending_confirmation"}
+    rounded_target = round(float(target), 1)
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": BREWZILLA_TARGET_NUMBER, "value": rounded_target},
+        blocking=True,
+    )
 
-    routed = await async_request_brewtracker_target_sync(hass, snapshot=snapshot)
-    policy_result = routed.get("policy_result") or {}
-    status = policy_result.get("status")
+    heater_changed = False
+    if snapshot.get("heating_needed") and hass.states.get(BREWZILLA_HEATER_SWITCH) is not None:
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": BREWZILLA_HEATER_SWITCH},
+            blocking=True,
+        )
+        heater_changed = True
 
-    return {
-        **routed,
-        "applied": status == "executed",
-        "apply_result": status or "policy_routed",
+    pump_changed = False
+    if snapshot.get("pump_recommended") and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None:
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": BREWZILLA_PUMP_SWITCH},
+            blocking=True,
+        )
+        pump_changed = True
+
+    result = {
+        **snapshot,
+        "applied": True,
+        "apply_result": "direct_applied",
+        "applied_target_value": rounded_target,
+        "heater_started": heater_changed,
+        "pump_started": pump_changed,
+        "executed_at": dt_util.utcnow().isoformat(),
     }
+    hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+    return result
