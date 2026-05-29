@@ -44,6 +44,12 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "object_id": "brewassistant_brewzilla_apply_target_temp",
         "icon": "mdi:target",
     },
+    "brewzilla_manual_target_override": {
+        "name": "BrewAssistant BrewZilla Manual Target Override",
+        "object_id": "brewassistant_brewzilla_manual_target_override",
+        "icon": "mdi:hand-back-right-outline",
+        "default": False,
+    },
     "brewzilla_allow_heater_control": {
         "name": "BrewAssistant BrewZilla Allow Heater Control",
         "object_id": "brewassistant_brewzilla_allow_heater_control",
