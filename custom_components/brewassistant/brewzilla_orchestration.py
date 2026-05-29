@@ -24,6 +24,7 @@ BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
 
 ORCHESTRATION_ENABLED = "switch.brewassistant_brewzilla_orchestration_enabled"
 APPLY_TARGET_ENABLED = "switch.brewassistant_brewzilla_apply_target_temp"
+MANUAL_TARGET_OVERRIDE = "switch.brewassistant_brewzilla_manual_target_override"
 ALLOW_HEATER_CONTROL = "switch.brewassistant_brewzilla_allow_heater_control"
 ALLOW_PUMP_CONTROL = "switch.brewassistant_brewzilla_allow_pump_control"
 ALLOW_BOIL_MODE = "switch.brewassistant_brewzilla_allow_boil_mode"
@@ -86,6 +87,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     orchestration_enabled = _bool(hass, ORCHESTRATION_ENABLED)
     apply_target = _bool(hass, APPLY_TARGET_ENABLED)
+    manual_override = _bool(hass, MANUAL_TARGET_OVERRIDE)
     allow_heater = _bool(hass, ALLOW_HEATER_CONTROL)
     allow_pump = _bool(hass, ALLOW_PUMP_CONTROL)
     allow_boil = _bool(hass, ALLOW_BOIL_MODE)
@@ -112,6 +114,11 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     if not orchestration_enabled:
         reason = "Orchestration disabled"
+        clear_pending_action_from_source(hass, SOURCE)
+
+    elif manual_override:
+        reason = "Manual target override active"
+        orchestration_mode = "manual-override"
         clear_pending_action_from_source(hass, SOURCE)
 
     elif not connected:
@@ -170,6 +177,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "connected": connected,
         "orchestration_enabled": orchestration_enabled,
         "apply_target_enabled": apply_target,
+        "manual_target_override": manual_override,
         "allow_heater_control": allow_heater,
         "allow_pump_control": allow_pump,
         "allow_boil_mode": allow_boil,
@@ -203,6 +211,9 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     """Apply Brewday target to BrewZilla target number when explicitly allowed."""
 
     snapshot = build_orchestration_snapshot(hass)
+    if snapshot.get("manual_target_override"):
+        return {**snapshot, "applied": False, "apply_result": "manual_override_active"}
+
     if supervised_apply_enabled(hass):
         if snapshot.get("has_pending_action"):
             return {**snapshot, "applied": False, "apply_result": "pending_confirmation"}
