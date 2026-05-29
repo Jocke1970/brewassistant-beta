@@ -1,7 +1,7 @@
 """Semi-automatic BrewZilla orchestration helpers.
 
 This layer is intentionally conservative. BrewAssistant may recommend or apply
-BrewZilla targets, but dangerous actions are disabled unless explicitly enabled.
+BrewZilla targets, but execution is routed through section-scoped policies.
 """
 
 from __future__ import annotations
@@ -10,15 +10,17 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from .control_policy import SOURCE_BREW_TRACKER, request_action
 from .supervised_apply import (
     clear_pending_action_from_source,
     get_pending_action,
-    set_pending_action,
     supervised_apply_enabled,
 )
 
 BREWDAY_TARGET_SENSOR = "sensor.brewassistant_brewday_target_temperature"
 BREWDAY_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
+BREWDAY_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
+BREWDAY_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
 
@@ -60,26 +62,47 @@ def _bool(hass: HomeAssistant, entity_id: str, default: bool = False) -> bool:
     return (_state(hass, entity_id, fallback) or fallback).lower() == "on"
 
 
-def _build_pending_action(*, snapshot: dict[str, Any], target: float) -> dict[str, Any]:
-    rounded_target = round(float(target), 1)
-    return {
-        "source": SOURCE,
-        "kind": "number_set_value",
-        "entity_id": BREWZILLA_TARGET_NUMBER,
-        "domain": "number",
-        "service": "set_value",
-        "service_data": {
-            "entity_id": BREWZILLA_TARGET_NUMBER,
-            "value": rounded_target,
+def _pending_is_ours(pending: dict[str, Any] | None) -> bool:
+    if pending is None:
+        return False
+    if pending.get("source") == SOURCE:
+        return True
+    return pending.get("source") == "brewzilla_policy_router" and pending.get("request_source") == SOURCE_BREW_TRACKER
+
+
+def _build_target_reason(hass: HomeAssistant, target: float) -> str:
+    stage = _state(hass, BREWDAY_STAGE_SENSOR, "Brewday")
+    step = _state(hass, BREWDAY_STEP_SENSOR, "step")
+    return f"Brew Tracker: {stage} · {step} requests BrewZilla target {round(float(target), 1):.1f} °C"
+
+
+async def async_request_brewtracker_target_sync(
+    hass: HomeAssistant,
+    *,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Request target sync through the section-scoped policy router."""
+    requested_target = snapshot.get("requested_target")
+    if requested_target is None:
+        return {**snapshot, "policy_result": {"status": "missing_target"}}
+
+    result = await request_action(
+        hass,
+        section="target",
+        command="set_target_temperature",
+        value=float(requested_target),
+        source=SOURCE_BREW_TRACKER,
+        reason=_build_target_reason(hass, float(requested_target)),
+        context={
+            "orchestration_source": SOURCE,
+            "brewday_state": snapshot.get("brewday_state"),
+            "runtime_stage": _state(hass, BREWDAY_STAGE_SENSOR),
+            "runtime_step": _state(hass, BREWDAY_STEP_SENSOR),
+            "applied_target": snapshot.get("applied_target"),
+            "target_delta": snapshot.get("target_delta"),
         },
-        "requested_target": rounded_target,
-        "applied_target": snapshot.get("applied_target"),
-        "target_delta": snapshot.get("target_delta"),
-        "orchestration_mode": snapshot.get("orchestration_mode"),
-        "safety_state": snapshot.get("safety_state"),
-        "reason": snapshot.get("control_reason"),
-        "summary": f"Set {BREWZILLA_TARGET_NUMBER} to {rounded_target:.1f} °C",
-    }
+    )
+    return {**snapshot, "policy_result": result}
 
 
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -108,7 +131,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     reason = "Observe only"
     orchestration_mode = "observe"
-    safety_state = "safe"
+    safety_state = "safe-mode" if safe_mode else "safe"
     can_apply_target = False
     target_sync_needed = False
 
@@ -156,11 +179,6 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         orchestration_mode = "blocked"
         clear_pending_action_from_source(hass, SOURCE)
 
-    elif safe_mode:
-        reason = "Safe mode enabled"
-        orchestration_mode = "safe-mode"
-        clear_pending_action_from_source(hass, SOURCE)
-
     elif apply_target:
         reason = "Target sync active"
         orchestration_mode = "target-sync"
@@ -170,10 +188,16 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             clear_pending_action_from_source(hass, SOURCE)
 
     if allow_heater or allow_pump or allow_boil:
-        safety_state = "dangerous-controls-enabled"
+        safety_state = "extra-controls-enabled"
 
     pending_action = get_pending_action(hass)
-    snapshot = {
+    has_ours = _pending_is_ours(pending_action)
+
+    if can_apply_target and target_sync_needed and requested_target is not None:
+        orchestration_mode = "pending-confirmation" if supervised_enabled else "policy-controlled"
+        reason = "Target sync routed through section policy"
+
+    return {
         "connected": connected,
         "orchestration_enabled": orchestration_enabled,
         "apply_target_enabled": apply_target,
@@ -192,32 +216,21 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "safety_state": safety_state,
         "control_reason": reason,
         "supervised_apply_enabled": supervised_enabled,
-        "pending_action": pending_action if pending_action is not None and pending_action.get("source") == SOURCE else None,
-        "has_pending_action": pending_action is not None and pending_action.get("source") == SOURCE,
-        "mode_scope": "supervised" if supervised_enabled else "direct_or_read_only",
+        "pending_action": pending_action if has_ours else None,
+        "has_pending_action": has_ours,
+        "pending_summary": pending_action.get("summary") if has_ours else None,
+        "pending_section": pending_action.get("section") if has_ours else None,
+        "pending_command": pending_action.get("command") if has_ours else None,
+        "mode_scope": "section_policy",
     }
-
-    if supervised_enabled and can_apply_target and target_sync_needed and requested_target is not None:
-        pending_action = set_pending_action(hass, _build_pending_action(snapshot=snapshot, target=requested_target))
-        snapshot["pending_action"] = pending_action
-        snapshot["has_pending_action"] = True
-        snapshot["orchestration_mode"] = "pending-confirmation"
-        snapshot["control_reason"] = "Target sync pending confirmation"
-
-    return snapshot
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Apply Brewday target to BrewZilla target number when explicitly allowed."""
-
+    """Route Brewday target to BrewZilla through section-scoped policy."""
     snapshot = build_orchestration_snapshot(hass)
+
     if snapshot.get("manual_target_override"):
         return {**snapshot, "applied": False, "apply_result": "manual_override_active"}
-
-    if supervised_apply_enabled(hass):
-        if snapshot.get("has_pending_action"):
-            return {**snapshot, "applied": False, "apply_result": "pending_confirmation"}
-        return {**snapshot, "applied": False, "apply_result": "supervised_no_pending_action"}
 
     if not snapshot["can_apply_target"]:
         return {**snapshot, "applied": False, "apply_result": "blocked"}
@@ -225,15 +238,15 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     if not snapshot["target_sync_needed"]:
         return {**snapshot, "applied": False, "apply_result": "already_in_sync"}
 
-    target = snapshot["requested_target"]
-    if target is None:
-        return {**snapshot, "applied": False, "apply_result": "missing_target"}
+    if snapshot.get("has_pending_action"):
+        return {**snapshot, "applied": False, "apply_result": "pending_confirmation"}
 
-    await hass.services.async_call(
-        "number",
-        "set_value",
-        {"entity_id": BREWZILLA_TARGET_NUMBER, "value": round(float(target), 1)},
-        blocking=False,
-    )
-    clear_pending_action_from_source(hass, SOURCE)
-    return {**snapshot, "applied": True, "apply_result": "target_applied"}
+    routed = await async_request_brewtracker_target_sync(hass, snapshot=snapshot)
+    policy_result = routed.get("policy_result") or {}
+    status = policy_result.get("status")
+
+    return {
+        **routed,
+        "applied": status == "executed",
+        "apply_result": status or "policy_routed",
+    }
