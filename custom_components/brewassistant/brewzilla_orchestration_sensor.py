@@ -9,6 +9,7 @@ from homeassistant.const import UnitOfTemperature
 
 from .brewzilla_orchestration import build_orchestration_snapshot
 from .const import DOMAIN
+from .control_policy import build_control_policy_snapshot
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
 
@@ -34,6 +35,9 @@ ORCHESTRATION_SENSORS: dict[str, dict[str, Any]] = {
     },
     "brewzilla_target_sync_needed": {"field": "target_sync_needed"},
     "brewzilla_can_apply_target": {"field": "can_apply_target"},
+    "brewzilla_pending_action": {"field": "pending_summary"},
+    "brewzilla_policy_result": {"field": "last_policy_summary", "policy_sensor": True},
+    "brewzilla_policy_status": {"field": "last_policy_status", "policy_sensor": True},
 }
 
 
@@ -58,15 +62,23 @@ class BrewAssistantBrewZillaOrchestrationSensor(BrewAssistantEntity, SensorEntit
         super().__init__(coordinator, key)
         self._key = key
         self._field = str(ORCHESTRATION_SENSORS[key]["field"])
+        self._policy_sensor = bool(ORCHESTRATION_SENSORS[key].get("policy_sensor", False))
         self._attr_name = f"BrewAssistant {key.replace('_', ' ').title()}"
         self._attr_suggested_object_id = f"{DOMAIN}_{key}"
         self._attr_native_unit_of_measurement = ORCHESTRATION_SENSORS[key].get("unit")
         self._attr_state_class = ORCHESTRATION_SENSORS[key].get("state_class")
 
+    def _snapshot(self) -> dict[str, Any]:
+        if self._policy_sensor:
+            return build_control_policy_snapshot(self.coordinator.hass)
+        return build_orchestration_snapshot(self.coordinator.hass)
+
     @property
     def native_value(self) -> Any:
-        return build_orchestration_snapshot(self.coordinator.hass).get(self._field)
+        return self._snapshot().get(self._field)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return dict(build_orchestration_snapshot(self.coordinator.hass))
+        snapshot = dict(self._snapshot())
+        snapshot["control_policy"] = build_control_policy_snapshot(self.coordinator.hass)
+        return snapshot
