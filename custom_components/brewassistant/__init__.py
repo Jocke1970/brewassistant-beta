@@ -13,6 +13,14 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
+from .brewday_audit import (
+    async_clear_brewday_audit_log,
+    async_load_brewday_audit_log,
+    async_record_brewday_audit_event,
+    async_record_brewday_audit_snapshot,
+    async_start_brewday_audit_log,
+    async_stop_brewday_audit_log,
+)
 from .brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
 from .carbonation_runtime import (
@@ -33,6 +41,10 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
 SERVICE_APPLY_BREWZILLA_TARGET = "apply_brewzilla_target"
 SERVICE_ABORT_BREWZILLA = "abort_brewzilla"
+SERVICE_BREWDAY_AUDIT_START = "brewday_audit_start"
+SERVICE_BREWDAY_AUDIT_STOP = "brewday_audit_stop"
+SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
+SERVICE_BREWDAY_AUDIT_SNAPSHOT = "brewday_audit_snapshot"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -51,6 +63,7 @@ SERVICE_CARBONATION_RESET = "carbonation_reset"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
+    await async_load_brewday_audit_log(hass)
     await async_load_carbonation_runtime(hass)
     await async_setup_kegerator_guard(hass)
 
@@ -81,6 +94,11 @@ def _register_services(hass: HomeAssistant) -> None:
                 "sensor.brewassistant_brewday_runtime_next_step",
                 "sensor.brewassistant_brewday_live_time_remaining_minutes",
                 "sensor.brewassistant_brewday_live_progress",
+                "sensor.brewassistant_brewday_audit_summary",
+                "sensor.brewassistant_brewday_audit_event_count",
+                "sensor.brewassistant_brewday_audit_last_event",
+                "sensor.brewassistant_brewday_audit_last_step",
+                "sensor.brewassistant_brewday_audit_last_target",
                 "sensor.brewassistant_brewday_stage",
                 "sensor.brewassistant_brewday_stage_reason",
                 "sensor.brewassistant_brewday_stage_status_line",
@@ -156,6 +174,12 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def _handle_force_brewfather_refresh(call: ServiceCall) -> None:
         result = await request_manual_brewfather_refresh(hass)
+        await async_record_brewday_audit_event(
+            hass,
+            "manual_brewfather_refresh",
+            note=str(result),
+            always_record=False,
+        )
         if result.get("refreshed"):
             _LOGGER.info("Manual Brewfather Brew Tracker refresh requested")
         else:
@@ -179,8 +203,25 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def _handle_abort_brewzilla(call: ServiceCall) -> None:
         result = await async_abort_brewzilla(hass)
+        await async_record_brewday_audit_event(hass, "abort", brewzilla_result=result, always_record=True)
         await _refresh_runtime_sensors()
         _LOGGER.warning("BrewZilla ABORT executed: %s", result.get("actions"))
+
+    async def _handle_brewday_audit_start(call: ServiceCall) -> None:
+        await async_start_brewday_audit_log(hass, note=str(call.data.get("note") or ""))
+        await _refresh_runtime_sensors()
+
+    async def _handle_brewday_audit_stop(call: ServiceCall) -> None:
+        await async_stop_brewday_audit_log(hass, note=str(call.data.get("note") or ""))
+        await _refresh_runtime_sensors()
+
+    async def _handle_brewday_audit_clear(call: ServiceCall) -> None:
+        await async_clear_brewday_audit_log(hass)
+        await _refresh_runtime_sensors()
+
+    async def _handle_brewday_audit_snapshot(call: ServiceCall) -> None:
+        await async_record_brewday_audit_snapshot(hass, note=str(call.data.get("note") or ""))
+        await _refresh_runtime_sensors()
 
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
@@ -250,6 +291,10 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
+    hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_START, _handle_brewday_audit_start)
+    hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_STOP, _handle_brewday_audit_stop)
+    hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_CLEAR, _handle_brewday_audit_clear)
+    hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_SNAPSHOT, _handle_brewday_audit_snapshot)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
