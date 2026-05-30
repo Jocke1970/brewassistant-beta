@@ -189,6 +189,14 @@ def _event_base(
         "heater_started": result.get("heater_started"),
         "pump_started": result.get("pump_started"),
         "actions": result.get("actions"),
+        "rapt_brewzilla_poll_age_seconds": result.get("rapt_brewzilla_poll_age_seconds"),
+        "rapt_brewzilla_poll_age_minutes": result.get("rapt_brewzilla_poll_age_minutes"),
+        "rapt_brewzilla_newest_entity": result.get("rapt_brewzilla_newest_entity"),
+        "rapt_brewzilla_newest_age_seconds": result.get("rapt_brewzilla_newest_age_seconds"),
+        "rapt_brewzilla_oldest_entity": result.get("rapt_brewzilla_oldest_entity"),
+        "rapt_brewzilla_oldest_age_seconds": result.get("rapt_brewzilla_oldest_age_seconds"),
+        "rapt_brewzilla_poll_warning": result.get("rapt_brewzilla_poll_warning"),
+        "rapt_critical_refresh_recommended": result.get("rapt_critical_refresh_recommended"),
     }
     return {key: value for key, value in event.items() if value is not None}
 
@@ -304,6 +312,9 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_action_type": last_action.get("event_type") if last_action else None,
         "last_apply_result": last_action.get("apply_result") if last_action else None,
         "last_control_reason": last_event.get("control_reason") if last_event else None,
+        "last_rapt_brewzilla_poll_age_seconds": last_event.get("rapt_brewzilla_poll_age_seconds") if last_event else None,
+        "last_rapt_brewzilla_poll_age_minutes": last_event.get("rapt_brewzilla_poll_age_minutes") if last_event else None,
+        "last_rapt_critical_refresh_recommended": last_event.get("rapt_critical_refresh_recommended") if last_event else None,
         "events": list(log.events[-MAX_EVENTS:]),
         "recent_events": list(log.events[-20:]),
     }
