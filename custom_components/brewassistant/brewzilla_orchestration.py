@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .brewday_audit import async_record_brewday_audit_tick
@@ -20,16 +20,33 @@ BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
 BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
+BREWZILLA_POWER_SENSOR = "sensor.brewzilla_power"
+BREWZILLA_MAIN_SWITCH = "switch.brewzilla"
+BREWZILLA_HEAT_UTILIZATION = "number.brewzilla_heat_utilization"
+BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 
 SOURCE = "brewzilla_orchestration"
 MIN_TARGET_TEMP = 0.0
 MAX_TARGET_TEMP = 110.0
 TARGET_SYNC_TOLERANCE = 0.1
 MAX_SNAPSHOT_AGE_MINUTES = 15.0
+RAPT_OBSERVATION_WARN_AGE_SECONDS = 300
+RAPT_CRITICAL_WINDOW_SECONDS = 90
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
 _MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
+RAPT_BREWZILLA_ENTITY_IDS = (
+    BREWZILLA_TEMP_SENSOR,
+    BREWZILLA_CONNECTION_SENSOR,
+    BREWZILLA_POWER_SENSOR,
+    BREWZILLA_TARGET_NUMBER,
+    BREWZILLA_MAIN_SWITCH,
+    BREWZILLA_HEATER_SWITCH,
+    BREWZILLA_PUMP_SWITCH,
+    BREWZILLA_HEAT_UTILIZATION,
+    BREWZILLA_PUMP_UTILIZATION,
+)
 
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
@@ -37,6 +54,13 @@ def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> s
     if entity_state is None or entity_state.state in _BAD:
         return default
     return entity_state.state
+
+
+def _state_obj(hass: HomeAssistant, entity_id: str) -> State | None:
+    entity_state = hass.states.get(entity_id)
+    if entity_state is None or entity_state.state in _BAD:
+        return None
+    return entity_state
 
 
 def _float(hass: HomeAssistant, entity_id: str) -> float | None:
@@ -56,6 +80,57 @@ def _bool_state(hass: HomeAssistant, entity_id: str, default: bool = False) -> b
 
 def _runtime_active(state: str | None) -> bool:
     return (state or "").lower() in _ACTIVE_RUNTIME_STATES
+
+
+def _entity_age_seconds(entity_state: State | None) -> int | None:
+    if entity_state is None:
+        return None
+    return max(0, int((dt_util.utcnow() - dt_util.as_utc(entity_state.last_updated)).total_seconds()))
+
+
+def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
+    """Return diagnostic ages for RAPT Cloud Link BrewZilla entities.
+
+    These fields are observational only. They help determine whether perceived
+    runtime lag comes from Home Assistant polling, RAPT Cloud caching, or the
+    Brewfather/Brew Tracker layer.
+    """
+    entities: dict[str, dict[str, Any]] = {}
+    ages: list[int] = []
+    newest_age: int | None = None
+    oldest_age: int | None = None
+    newest_entity: str | None = None
+    oldest_entity: str | None = None
+
+    for entity_id in RAPT_BREWZILLA_ENTITY_IDS:
+        entity_state = _state_obj(hass, entity_id)
+        age = _entity_age_seconds(entity_state)
+        entities[entity_id] = {
+            "state": entity_state.state if entity_state is not None else None,
+            "last_updated": entity_state.last_updated.isoformat() if entity_state is not None else None,
+            "age_seconds": age,
+        }
+        if age is None:
+            continue
+        ages.append(age)
+        if newest_age is None or age < newest_age:
+            newest_age = age
+            newest_entity = entity_id
+        if oldest_age is None or age > oldest_age:
+            oldest_age = age
+            oldest_entity = entity_id
+
+    return {
+        "rapt_brewzilla_entities": entities,
+        "rapt_brewzilla_entity_count": len(entities),
+        "rapt_brewzilla_newest_entity": newest_entity,
+        "rapt_brewzilla_newest_age_seconds": newest_age,
+        "rapt_brewzilla_oldest_entity": oldest_entity,
+        "rapt_brewzilla_oldest_age_seconds": oldest_age,
+        "rapt_brewzilla_poll_age_seconds": oldest_age,
+        "rapt_brewzilla_poll_age_minutes": round(oldest_age / 60, 1) if oldest_age is not None else None,
+        "rapt_brewzilla_poll_warning": bool(oldest_age is not None and oldest_age > RAPT_OBSERVATION_WARN_AGE_SECONDS),
+    }
 
 
 def _stage_recommends_pump(runtime: dict[str, Any]) -> bool:
@@ -90,6 +165,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     connected = connection == "Connected"
     awaiting_snapshot = bool(runtime.get("awaiting_snapshot"))
     snapshot_age_minutes = float(runtime.get("snapshot_age_minutes") or 0.0)
+    step_remaining_seconds = int(runtime.get("current_step_remaining_seconds") or runtime.get("time_remaining_seconds") or 0)
     heater_on = _bool_state(hass, BREWZILLA_HEATER_SWITCH)
     pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
 
@@ -105,6 +181,18 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     pump_recommended = _stage_recommends_pump(runtime)
     heater_action_needed = heating_needed and not heater_on
     pump_action_needed = pump_recommended and not pump_on
+
+    rapt_observation = _rapt_brewzilla_observation(hass)
+    critical_refresh_recommended = bool(
+        _runtime_active(runtime_state)
+        and (
+            awaiting_snapshot
+            or target_sync_needed
+            or heater_action_needed
+            or pump_action_needed
+            or (0 < step_remaining_seconds <= RAPT_CRITICAL_WINDOW_SECONDS)
+        )
+    )
 
     hard_block = None
     if not connected:
@@ -142,6 +230,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_raw_step_name": runtime.get("raw_step_name"),
         "runtime_raw_step_index": runtime.get("raw_step_index"),
         "runtime_resolved_step_index": runtime.get("resolved_step_index"),
+        "runtime_step_remaining_seconds": step_remaining_seconds,
         "requested_target": requested_target,
         "applied_target": applied_target,
         "current_temperature": current_temperature,
@@ -156,6 +245,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "pump_action_needed": pump_action_needed,
         "awaiting_snapshot": awaiting_snapshot,
         "snapshot_age_minutes": snapshot_age_minutes,
+        "rapt_critical_refresh_recommended": critical_refresh_recommended,
         "orchestration_mode": mode,
         "safety_state": "operator-supervised",
         "control_reason": reason,
@@ -163,6 +253,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "pending_action": None,
         "pending_summary": None,
         "mode_scope": "direct_with_abort",
+        **rapt_observation,
     }
 
 
