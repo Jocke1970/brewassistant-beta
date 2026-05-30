@@ -75,6 +75,27 @@ def clean(value: Any, limit: int = 96) -> str | None:
     return text[: limit - 1].rstrip() + "…" if len(text) > limit else text
 
 
+def format_temp(value: Any) -> str | None:
+    temp = as_float(value)
+    if temp is None:
+        return None
+    if float(temp).is_integer():
+        return f"{int(temp)}°C"
+    return f"{temp:.1f}°C"
+
+
+def format_duration(value: Any) -> str | None:
+    seconds = as_float(value)
+    if seconds is None or seconds <= 0:
+        return None
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return f"{minutes} min"
+    hours = minutes // 60
+    rest = minutes % 60
+    return f"{hours} h {rest} min" if rest else f"{hours} h"
+
+
 def step_name(step: dict[str, Any] | None, fallback: str = "Unknown") -> str:
     if not isinstance(step, dict):
         return fallback
@@ -91,6 +112,32 @@ def step_desc(step: dict[str, Any] | None) -> str | None:
     if not isinstance(step, dict):
         return None
     return clean(step.get("description"), 180) or clean(step.get("tooltip"), 180)
+
+
+def step_display_name(step: dict[str, Any] | None, fallback: str = "Unknown") -> str:
+    """Return a human-friendly Brew Tracker step label.
+
+    Brewfather often creates a ramp and a hold step with the same recipe step
+    name. The runtime should expose what the step does, not just the duplicated
+    name, so dashboards can show "Ramp to 55°C" and "Hold 55°C · 2 min".
+    """
+    if not isinstance(step, dict):
+        return fallback
+
+    kind = str(step.get("type") or "").lower()
+    temp = format_temp(step.get("value"))
+    duration = format_duration(step.get("duration"))
+    base = step_name(step, fallback)
+
+    if kind == "ramp" and temp:
+        return f"Ramp to {temp}"
+    if kind == "mash" and temp:
+        return f"Hold {temp}{f' · {duration}' if duration else ''}"
+    if kind == "boil" and duration:
+        return f"Boil · {duration}"
+    if kind == "event":
+        return base
+    return base
 
 
 def raw_data(hass: HomeAssistant) -> dict[str, Any]:
@@ -113,14 +160,7 @@ def indices(hass: HomeAssistant) -> tuple[int | None, int | None]:
 
 
 def resolve_step_index_from_remaining(stage: dict[str, Any], stage_remaining: int, fallback: int | None) -> int | None:
-    """Resolve the active Brew Tracker step from stage remaining time.
-
-    Brewfather's exposed ``stage.step`` and the separate step sensor may lag the
-    web UI. The raw step list contains countdown anchors in ``time``. The active
-    step is the latest step whose anchor is still at or above the stage's
-    remaining countdown value. This makes BrewAssistant follow the raw tracker
-    timeline even when the convenience sensor lags.
-    """
+    """Resolve the active Brew Tracker step from stage remaining time."""
     step_list = stage.get("steps") if isinstance(stage.get("steps"), list) else []
     if not step_list:
         return fallback
@@ -169,20 +209,25 @@ def current_step(hass: HomeAssistant) -> dict[str, Any]:
     return fallback if isinstance(fallback, dict) else {}
 
 
-def next_step_from_index(stage: dict[str, Any], step_index: int | None, all_stages: list[dict[str, Any]] | None = None, stage_index: int | None = None) -> tuple[str, str | None, dict[str, Any] | None]:
+def next_step_from_index(
+    stage: dict[str, Any],
+    step_index: int | None,
+    all_stages: list[dict[str, Any]] | None = None,
+    stage_index: int | None = None,
+) -> tuple[str, str | None, dict[str, Any] | None]:
     step_list = stage.get("steps") if isinstance(stage.get("steps"), list) else []
     if step_index is not None:
         for pos in range(step_index + 1, len(step_list)):
             step = step_list[pos]
             if isinstance(step, dict):
-                return step_name(step, "Next step"), step_desc(step), step
+                return step_display_name(step, "Next step"), step_desc(step), step
 
     if all_stages is not None and stage_index is not None and stage_index + 1 < len(all_stages):
         next_stage = all_stages[stage_index + 1]
         first = (next_stage.get("steps") or [None])[0] if isinstance(next_stage.get("steps"), list) else None
         name = clean(next_stage.get("name")) or "Next stage"
         if isinstance(first, dict):
-            return f"{name} · {step_name(first, 'Start')}", step_desc(first), first
+            return f"{name} · {step_display_name(first, 'Start')}", step_desc(first), first
         return name, None, next_stage
 
     return "None", None, None
@@ -195,7 +240,7 @@ def next_step(hass: HomeAssistant) -> tuple[str, str | None, dict[str, Any] | No
         return next_step_from_index(all_stages[stage_index], step_index, all_stages, stage_index)
     fallback = attr(hass, BF_STATUS, "next_step")
     if isinstance(fallback, dict):
-        return step_name(fallback, state(hass, BF_NEXT, "None")), step_desc(fallback), fallback
+        return step_display_name(fallback, state(hass, BF_NEXT, "None")), step_desc(fallback), fallback
     return state(hass, BF_NEXT, "None"), None, None
 
 
@@ -226,7 +271,7 @@ def current_step_remaining(stage: dict[str, Any], step_index: int | None, stage_
 
 
 def snapshot_age(hass: HomeAssistant) -> int:
-    obj = state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
+    obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     if obj is None:
         return 0
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(obj.last_updated)).total_seconds()))
@@ -259,7 +304,8 @@ def timeline(hass: HomeAssistant, resolved_step_index: int | None = None) -> lis
             upcoming = upcoming_stage or (active_stage and step_index is not None and st_pos > step_index)
             step_rows.append({
                 "index": st_pos,
-                "name": step_name(step, f"Step {st_pos + 1}"),
+                "name": step_display_name(step, f"Step {st_pos + 1}"),
+                "raw_name": step_name(step, f"Step {st_pos + 1}"),
                 "description": step_desc(step),
                 "type": step.get("type"),
                 "time": step.get("time"),
@@ -317,8 +363,9 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     nxt_name, nxt_desc, nxt_step = next_step_from_index(stage, resolved_step_index, all_stages, stage_index)
     if nxt_name == "None":
         nxt_name, nxt_desc, nxt_step = next_step(hass)
-    step = step_name(cur_step, state(hass, BF_STEP, "Unknown"))
-    if awaiting and nxt_name in {step, "None", "Unknown"}:
+    raw_step_name = step_name(cur_step, state(hass, BF_STEP, "Unknown"))
+    step = step_display_name(cur_step, raw_step_name)
+    if awaiting and nxt_name in {step, raw_step_name, "None", "Unknown"}:
         nxt_name = "Väntar på Brewfather snapshot"
         nxt_desc = "Runtime väntar på att Brewfather publicerar nästa checkpoint."
     snap_obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
@@ -331,6 +378,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_state": runtime_state,
         "stage": stage_name,
         "step": step,
+        "raw_step_name": raw_step_name,
         "next_step": nxt_name,
         "progress": round(progress, 1),
         "time_remaining_seconds": step_remaining,
@@ -366,10 +414,11 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 def inactive_snapshot() -> dict[str, Any]:
     return {
-        "source": "None", "status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "next_step": "None",
-        "progress": 0.0, "time_remaining_seconds": 0, "time_remaining_minutes": 0, "target_temperature": None, "actual_temperature": None,
-        "summary": "idle · Idle", "source_entity": None, "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0,
-        "snapshot_age_minutes": 0, "raw_remaining_seconds": None, "raw_stage_remaining_seconds": None, "live_elapsed_since_snapshot_seconds": 0,
+        "source": "None", "status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "raw_step_name": None,
+        "next_step": "None", "progress": 0.0, "time_remaining_seconds": 0, "time_remaining_minutes": 0,
+        "target_temperature": None, "actual_temperature": None, "summary": "idle · Idle", "source_entity": None,
+        "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0, "snapshot_age_minutes": 0,
+        "raw_remaining_seconds": None, "raw_stage_remaining_seconds": None, "live_elapsed_since_snapshot_seconds": 0,
         "live_timer_active": False, "refresh_recommended": False, "awaiting_snapshot": False, "stage_duration_seconds": None,
         "stage_elapsed_seconds": None, "stage_remaining_seconds": 0, "stage_remaining_minutes": 0, "stage_progress_percent": 0,
         "raw_step_index": None, "resolved_step_index": None, "current_step_remaining_seconds": 0, "current_step_remaining_minutes": 0,
