@@ -12,12 +12,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-BREWDAY_TARGET_SENSOR = "sensor.brewassistant_brewday_target_temperature"
-BREWDAY_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
-BREWDAY_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
-BREWDAY_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
-BREWDAY_AWAITING_SNAPSHOT = "sensor.brewassistant_brewday_awaiting_snapshot"
-BREWDAY_SNAPSHOT_AGE_MINUTES = "sensor.brewassistant_brewday_snapshot_age_minutes"
+from .brewday_runtime_core import build_core_snapshot
+
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
@@ -61,8 +57,9 @@ def _runtime_active(state: str | None) -> bool:
     return (state or "").lower() in _ACTIVE_RUNTIME_STATES
 
 
-def _stage_recommends_pump(hass: HomeAssistant) -> bool:
-    text = f"{_state(hass, BREWDAY_STAGE_SENSOR, '')} {_state(hass, BREWDAY_STEP_SENSOR, '')}".lower()
+def _stage_recommends_pump(runtime: dict[str, Any]) -> bool:
+    """Return whether the current runtime stage/step should recommend pump use."""
+    text = f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('raw_step_name') or ''}".lower()
     return any(word in text for word in _MASH_WORDS)
 
 
@@ -71,15 +68,27 @@ def _target_valid(target: float | None) -> bool:
 
 
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build a production-style BrewZilla orchestration snapshot."""
-    runtime_state = _state(hass, BREWDAY_STATE_SENSOR, "idle")
-    requested_target = _float(hass, BREWDAY_TARGET_SENSOR)
+    """Build a production-style BrewZilla orchestration snapshot.
+
+    Runtime values are read directly from Brewday Runtime Core instead of the
+    rendered Home Assistant sensor entities. This avoids a one-coordinator-tick
+    lag where the audit/runtime target has already advanced but orchestration
+    still reads the previous sensor state.
+    """
+    runtime = build_core_snapshot(hass)
+    runtime_state = str(runtime.get("runtime_state") or "idle")
+    requested_target = runtime.get("target_temperature")
+    try:
+        requested_target = float(requested_target) if requested_target is not None else None
+    except (TypeError, ValueError):
+        requested_target = None
+
     applied_target = _float(hass, BREWZILLA_TARGET_NUMBER)
     current_temperature = _float(hass, BREWZILLA_TEMP_SENSOR)
     connection = _state(hass, BREWZILLA_CONNECTION_SENSOR, "unknown")
     connected = connection == "Connected"
-    awaiting_snapshot = _bool_state(hass, BREWDAY_AWAITING_SNAPSHOT)
-    snapshot_age_minutes = _float(hass, BREWDAY_SNAPSHOT_AGE_MINUTES) or 0.0
+    awaiting_snapshot = bool(runtime.get("awaiting_snapshot"))
+    snapshot_age_minutes = float(runtime.get("snapshot_age_minutes") or 0.0)
     heater_on = _bool_state(hass, BREWZILLA_HEATER_SWITCH)
     pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
 
@@ -92,7 +101,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     if requested_target is not None and current_temperature is not None:
         heating_needed = current_temperature < requested_target - TARGET_SYNC_TOLERANCE
 
-    pump_recommended = _stage_recommends_pump(hass)
+    pump_recommended = _stage_recommends_pump(runtime)
     heater_action_needed = heating_needed and not heater_on
     pump_action_needed = pump_recommended and not pump_on
 
@@ -119,14 +128,19 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reason = "Mash circulation recommended; pump should be ON"
     elif hard_block is None and awaiting_snapshot:
         reason = "Awaiting fresh snapshot, using current valid Brew Tracker target"
+    elif hard_block is None and runtime_state == "paused":
+        reason = "Brewfather paused; maintaining current valid target"
 
     return {
         "source": SOURCE,
         "connected": connected,
         "connection_state": connection,
         "brewday_state": runtime_state,
-        "runtime_stage": _state(hass, BREWDAY_STAGE_SENSOR),
-        "runtime_step": _state(hass, BREWDAY_STEP_SENSOR),
+        "runtime_stage": runtime.get("stage"),
+        "runtime_step": runtime.get("step"),
+        "runtime_raw_step_name": runtime.get("raw_step_name"),
+        "runtime_raw_step_index": runtime.get("raw_step_index"),
+        "runtime_resolved_step_index": runtime.get("resolved_step_index"),
         "requested_target": requested_target,
         "applied_target": applied_target,
         "current_temperature": current_temperature,
