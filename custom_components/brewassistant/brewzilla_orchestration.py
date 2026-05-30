@@ -80,6 +80,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     connected = connection == "Connected"
     awaiting_snapshot = _bool_state(hass, BREWDAY_AWAITING_SNAPSHOT)
     snapshot_age_minutes = _float(hass, BREWDAY_SNAPSHOT_AGE_MINUTES) or 0.0
+    heater_on = _bool_state(hass, BREWZILLA_HEATER_SWITCH)
+    pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
 
     target_delta = None
     if requested_target is not None and applied_target is not None:
@@ -89,6 +91,10 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     heating_needed = False
     if requested_target is not None and current_temperature is not None:
         heating_needed = current_temperature < requested_target - TARGET_SYNC_TOLERANCE
+
+    pump_recommended = _stage_recommends_pump(hass)
+    heater_action_needed = heating_needed and not heater_on
+    pump_action_needed = pump_recommended and not pump_on
 
     hard_block = None
     if not connected:
@@ -101,12 +107,17 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         hard_block = "Missing or invalid Brew Tracker target"
 
     can_control = hard_block is None
-    mode = "direct-control" if can_control and target_sync_needed else "monitor"
+    action_needed = target_sync_needed or heater_action_needed or pump_action_needed
+    mode = "direct-control" if can_control and action_needed else "monitor"
     if hard_block is not None:
         mode = "blocked"
 
     reason = hard_block or "Direct production flow active"
-    if awaiting_snapshot and hard_block is None:
+    if hard_block is None and heater_action_needed:
+        reason = "Heating needed; heater should be ON"
+    elif hard_block is None and pump_action_needed:
+        reason = "Mash circulation recommended; pump should be ON"
+    elif hard_block is None and awaiting_snapshot:
         reason = "Awaiting fresh snapshot, using current valid Brew Tracker target"
 
     return {
@@ -121,9 +132,13 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "current_temperature": current_temperature,
         "target_delta": target_delta,
         "target_sync_needed": target_sync_needed,
-        "can_apply_target": can_control and target_sync_needed,
+        "can_apply_target": can_control and action_needed,
         "heating_needed": heating_needed,
-        "pump_recommended": _stage_recommends_pump(hass),
+        "heater_on": heater_on,
+        "heater_action_needed": heater_action_needed,
+        "pump_recommended": pump_recommended,
+        "pump_on": pump_on,
+        "pump_action_needed": pump_action_needed,
         "awaiting_snapshot": awaiting_snapshot,
         "snapshot_age_minutes": snapshot_age_minutes,
         "orchestration_mode": mode,
@@ -158,25 +173,27 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Apply Brew Tracker runtime target directly to BrewZilla."""
+    """Apply Brew Tracker runtime target and required BrewZilla actions."""
     snapshot = build_orchestration_snapshot(hass)
     if not snapshot["can_apply_target"]:
         return {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
 
     target = snapshot["requested_target"]
-    if target is None:
-        return {**snapshot, "applied": False, "apply_result": "missing_target"}
-
-    rounded_target = round(float(target), 1)
-    await hass.services.async_call(
-        "number",
-        "set_value",
-        {"entity_id": BREWZILLA_TARGET_NUMBER, "value": rounded_target},
-        blocking=True,
-    )
+    target_changed = False
+    if snapshot.get("target_sync_needed") and target is not None:
+        rounded_target = round(float(target), 1)
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": BREWZILLA_TARGET_NUMBER, "value": rounded_target},
+            blocking=True,
+        )
+        target_changed = True
+    else:
+        rounded_target = round(float(target), 1) if target is not None else None
 
     heater_changed = False
-    if snapshot.get("heating_needed") and hass.states.get(BREWZILLA_HEATER_SWITCH) is not None:
+    if snapshot.get("heater_action_needed") and hass.states.get(BREWZILLA_HEATER_SWITCH) is not None:
         await hass.services.async_call(
             "switch",
             "turn_on",
@@ -186,7 +203,7 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
         heater_changed = True
 
     pump_changed = False
-    if snapshot.get("pump_recommended") and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None:
+    if snapshot.get("pump_action_needed") and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None:
         await hass.services.async_call(
             "switch",
             "turn_on",
@@ -197,9 +214,10 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
 
     result = {
         **snapshot,
-        "applied": True,
-        "apply_result": "direct_applied",
+        "applied": target_changed or heater_changed or pump_changed,
+        "apply_result": "direct_applied" if (target_changed or heater_changed or pump_changed) else "no_action_needed",
         "applied_target_value": rounded_target,
+        "target_changed": target_changed,
         "heater_started": heater_changed,
         "pump_started": pump_changed,
         "executed_at": dt_util.utcnow().isoformat(),
