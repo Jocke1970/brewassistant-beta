@@ -1,0 +1,225 @@
+# BrewAssistant BrewZilla Learning Card v1.0
+# Observe + suggest UI for heat-utilization learning.
+# Required custom cards: custom:button-card, custom:mushroom-entity-card, custom:vertical-stack-in-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_suggested_heat_utilization
+    name: BrewZilla Learning
+    icon: mdi:brain
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const s = (id) => states[id]?.state;
+        const n = (id) => Number(s(id));
+        const ok = (v) => Number.isFinite(v);
+        const fmt = (v, d=1) => ok(v) ? v.toFixed(d) : '–';
+
+        const phase = s('sensor.brewassistant_brewzilla_learning_phase') ?? 'standby';
+        const confidence = s('sensor.brewassistant_brewzilla_learning_confidence') ?? 'low';
+        const stageKind = s('sensor.brewassistant_brewzilla_stage_kind') ?? 'unknown';
+        const suggested = n('sensor.brewassistant_brewzilla_suggested_heat_utilization');
+        const adjustment = n('sensor.brewassistant_brewzilla_heat_adjustment');
+        const risk = s('sensor.brewassistant_brewzilla_overshoot_risk') ?? 'unknown';
+        const reason = s('sensor.brewassistant_brewzilla_heat_strategy_reason') ?? '';
+
+        const current = n('sensor.brewassistant_brewzilla_current_temperature');
+        const target = n('sensor.brewassistant_brewday_target_temperature');
+        const bzTarget = n('sensor.brewassistant_brewzilla_target_temperature');
+        const displayTarget = ok(target) ? target : bzTarget;
+        const delta = n('sensor.brewassistant_brewzilla_delta_to_target');
+        const rate = n('sensor.brewassistant_brewzilla_temp_rate');
+        const rateH = n('sensor.brewassistant_brewzilla_temp_rate_hourly');
+
+        const heatUtil = n('number.brewzilla_heat_utilization');
+        const pumpUtil = n('number.brewzilla_pump_utilization');
+        const power = n('sensor.brewzilla_power');
+        const heater = s('switch.brewzilla_heater') ?? 'unknown';
+        const pump = s('switch.brewzilla_pump') ?? 'unknown';
+        const runtime = s('sensor.brewassistant_brewday_runtime_state') ?? 'idle';
+        const step = s('sensor.brewassistant_brewday_runtime_step') ?? 'Idle';
+
+        const chip = (text, bg='rgba(255,255,255,.10)', color='rgba(255,255,255,.84)') =>
+          `<span style="padding:5px 9px;border-radius:999px;background:${bg};color:${color};font-size:11px;font-weight:950;">${text}</span>`;
+
+        const confidenceChip = confidence === 'high'
+          ? chip('HIGH CONF', 'rgba(76,175,80,.18)', '#c8e6c9')
+          : confidence === 'medium'
+            ? chip('MED CONF', 'rgba(255,202,40,.14)', '#ffe082')
+            : chip('LOW CONF', 'rgba(255,255,255,.08)', 'rgba(255,255,255,.70)');
+
+        const riskChip = risk === 'active_overshoot' || risk === 'high'
+          ? chip(`Risk ${risk}`, 'rgba(244,67,54,.16)', '#ffcdd2')
+          : risk === 'medium'
+            ? chip('Risk medium', 'rgba(255,202,40,.14)', '#ffe082')
+            : chip(`Risk ${risk}`, 'rgba(76,175,80,.13)', '#c8e6c9');
+
+        const adjText = ok(adjustment)
+          ? adjustment > 0 ? `+${adjustment.toFixed(0)}%` : `${adjustment.toFixed(0)}%`
+          : '–';
+
+        const headline = ['idle','inactive','completed','unknown','unavailable','None','none',''].includes(runtime)
+          ? 'Observe + suggest · standby'
+          : `${runtime} · ${stageKind}`;
+
+        return `
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:13px;font-weight:950;letter-spacing:.8px;opacity:.70;text-transform:uppercase;">${headline}</div>
+            <div style="font-size:24px;font-weight:950;line-height:1.14;">${ok(suggested) ? suggested.toFixed(0) + '% suggested heat' : 'Learning standby'}</div>
+            <div style="font-size:19px;font-weight:950;">
+              ${fmt(current)}°C → ${fmt(displayTarget)}°C
+              <span style="opacity:.52;">· Δ ${fmt(delta)}°C</span>
+              <span style="opacity:.52;"> · ${fmt(rate, 2)}°C/min</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${chip(phase)}
+              ${confidenceChip}
+              ${riskChip}
+              ${chip(`Heat ${ok(heatUtil) ? heatUtil.toFixed(0) + '%' : '–'}`, 'rgba(255,112,67,.13)', '#ffccbc')}
+              ${chip(`Adjust ${adjText}`, ok(adjustment) && Math.abs(adjustment) >= 20 ? 'rgba(255,202,40,.14)' : 'rgba(255,255,255,.08)', ok(adjustment) && Math.abs(adjustment) >= 20 ? '#ffe082' : 'rgba(255,255,255,.76)')}
+              ${chip(`Pump ${ok(pumpUtil) ? pumpUtil.toFixed(0) + '%' : '–'}`, 'rgba(77,208,225,.13)', '#b2ebf2')}
+              ${chip(`Heater ${heater.toUpperCase()}`, heater === 'on' ? 'rgba(255,112,67,.22)' : 'rgba(255,255,255,.08)', heater === 'on' ? '#ffccbc' : 'rgba(255,255,255,.70)')}
+              ${chip(`Pump ${pump.toUpperCase()}`, pump === 'on' ? 'rgba(77,208,225,.18)' : 'rgba(255,255,255,.08)', pump === 'on' ? '#b2ebf2' : 'rgba(255,255,255,.70)')}
+              ${ok(power) ? chip(`${power.toFixed(0)} W`) : ''}
+            </div>
+            <div style="font-size:13px;font-weight:850;opacity:.82;">${step}</div>
+            <div style="font-size:12px;opacity:.58;line-height:1.35;">Rate: ${fmt(rateH)}°C/h · Current heat: ${ok(heatUtil) ? heatUtil.toFixed(0) + '%' : '–'} · Suggested: ${ok(suggested) ? suggested.toFixed(0) + '%' : '–'}</div>
+            ${reason ? `<div style="font-size:12px;opacity:.56;line-height:1.35;">${reason}</div>` : ''}
+          </div>`;
+      ]]]
+    custom_fields:
+      badge: |
+        [[[
+          const risk = states['sensor.brewassistant_brewzilla_overshoot_risk']?.state ?? 'unknown';
+          const confidence = states['sensor.brewassistant_brewzilla_learning_confidence']?.state ?? 'low';
+          let text = confidence === 'high' ? 'LEARNED' : confidence === 'medium' ? 'SUGGEST' : 'OBSERVE';
+          let bg = confidence === 'high' ? 'rgba(76,175,80,.18)' : confidence === 'medium' ? 'rgba(255,202,40,.14)' : 'rgba(255,255,255,.08)';
+          let color = confidence === 'high' ? '#c8e6c9' : confidence === 'medium' ? '#ffe082' : 'rgba(255,255,255,.70)';
+          if (risk === 'active_overshoot' || risk === 'high') { text = 'RISK'; bg = 'rgba(244,67,54,.18)'; color = '#ffcdd2'; }
+          return `<div style="padding:7px 11px;border-radius:999px;background:${bg};color:${color};font-size:11px;font-weight:950;letter-spacing:.7px;">${text}</div>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 28px
+        - padding: 18px
+        - overflow: hidden
+        - border: 1px solid rgba(255,255,255,.10)
+        - box-shadow: 0 16px 40px rgba(0,0,0,.42)
+        - background: |
+            [[[
+              const risk = states['sensor.brewassistant_brewzilla_overshoot_risk']?.state ?? 'unknown';
+              const phase = states['sensor.brewassistant_brewzilla_learning_phase']?.state ?? 'standby';
+              if (risk === 'active_overshoot' || risk === 'high') return 'radial-gradient(circle at top right, rgba(244,67,54,.24), transparent 40%), linear-gradient(135deg, rgba(45,18,22,.98), rgba(9,12,18,.98))';
+              if (phase.includes('ramp')) return 'radial-gradient(circle at top right, rgba(255,112,67,.24), transparent 40%), linear-gradient(135deg, rgba(55,26,15,.98), rgba(9,12,18,.98))';
+              if (phase.includes('hold')) return 'radial-gradient(circle at top right, rgba(76,175,80,.18), transparent 40%), linear-gradient(135deg, rgba(17,37,24,.98), rgba(9,12,18,.98))';
+              if (phase.includes('cool')) return 'radial-gradient(circle at top right, rgba(77,208,225,.20), transparent 40%), linear-gradient(135deg, rgba(12,39,45,.98), rgba(9,12,18,.98))';
+              return 'radial-gradient(circle at top right, rgba(100,181,246,.20), transparent 40%), linear-gradient(135deg, rgba(13,31,48,.98), rgba(9,12,18,.98))';
+            ]]]
+      grid:
+        - grid-template-areas: '"i badge" "n n" "l l"'
+        - grid-template-columns: 54px 1fr
+      img_cell:
+        - width: 48px
+        - height: 48px
+        - border-radius: 18px
+        - background: rgba(255,255,255,.10)
+      icon:
+        - width: 32px
+        - color: '#90caf9'
+      name:
+        - justify-self: start
+        - align-self: end
+        - margin-top: 12px
+        - font-size: 25px
+        - font-weight: 950
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - white-space: normal
+        - margin-top: 8px
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: start
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_learning_phase
+        name: Phase
+        icon: mdi:map-marker-path
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_learning_confidence
+        name: Confidence
+        icon: mdi:shield-star-outline
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_stage_kind
+        name: Stage kind
+        icon: mdi:playlist-play
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_overshoot_risk
+        name: Overshoot risk
+        icon: mdi:thermometer-alert
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_temp_rate
+        name: Temp rate
+        icon: mdi:trending-up
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_delta_to_target
+        name: To target
+        icon: mdi:delta
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_suggested_heat_utilization
+        name: Suggested heat
+        icon: mdi:fire-circle
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_heat_adjustment
+        name: Heat adjustment
+        icon: mdi:tune-variant
+
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_heat_strategy_reason
+    name: Strategy Reason
+    icon: mdi:comment-processing-outline
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const reason = entity?.state ?? 'No strategy reason yet.';
+        const attrs = states['sensor.brewassistant_brewzilla_suggested_heat_utilization']?.attributes ?? {};
+        const prev = attrs.previous_temperature ?? '–';
+        const prevAt = attrs.previous_temperature_at ?? '–';
+        const last = attrs.last_temperature ?? '–';
+        const lastAt = attrs.last_temperature_at ?? '–';
+        const auto = attrs.auto_apply_allowed === true ? 'true' : 'false';
+        return `<div style="display:flex;flex-direction:column;gap:6px;"><div>${reason}</div><div style="opacity:.58;">Previous: ${prev} @ ${prevAt}<br>Latest: ${last} @ ${lastAt}<br>Auto apply allowed: ${auto}</div></div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 20px
+        - padding: 14px
+        - background: rgba(255,255,255,.045)
+        - border: 1px solid rgba(255,255,255,.07)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 42px 1fr
+      icon:
+        - color: '#90a4ae'
+        - width: 26px
+      name:
+        - justify-self: start
+        - font-size: 15px
+        - font-weight: 950
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - font-size: 12px
+        - opacity: .78
+        - white-space: normal
