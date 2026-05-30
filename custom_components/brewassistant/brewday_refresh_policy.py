@@ -6,7 +6,6 @@ being responsive around step changes and short low-temperature test batches.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -25,8 +24,8 @@ ENDING_SOON_INTERVAL = 15
 AWAITING_SNAPSHOT_INTERVAL = 15
 MIN_REFRESH_INTERVAL = 10
 ENDING_SOON_SECONDS = 60
-AWAITING_BURST_MAX = 5
-AWAITING_BURST_WINDOW_SECONDS = 5 * 60
+AWAITING_BURST_MAX = 20
+AWAITING_BURST_WINDOW_SECONDS = 10 * 60
 TEST_STEP_DURATION_LIMIT_SECONDS = 5 * 60
 
 STAGE_GROUP_MASH = "mash"
@@ -41,6 +40,8 @@ CHILL_WORDS = ("chill", "cool", "kyl", "cooling", "nedkyl")
 SETUP_WORDS = ("setup", "prepare", "förbered")
 TRANSFER_WORDS = ("transfer", "tapp", "rack")
 CLEAN_WORDS = ("clean", "cleanup", "rengör")
+ACTIVE_STATUSES = {"running", "paused", "live", "awaiting_snapshot", "awaiting snapshot"}
+ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot", "awaiting snapshot"}
 
 
 def _store(hass: HomeAssistant) -> dict[str, Any]:
@@ -103,19 +104,19 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     now = _now()
 
     source = snapshot.get("source")
-    status = str(snapshot.get("status") or "")
-    runtime_state = str(snapshot.get("runtime_state") or "")
-    active = source == SOURCE_NAME and status in {"running", "paused"} and runtime_state in {
-        "live",
-        "running",
-        "paused",
-        "awaiting_snapshot",
-    }
+    status = str(snapshot.get("status") or "").lower()
+    runtime_state = str(snapshot.get("runtime_state") or "").lower()
+    awaiting = bool(snapshot.get("awaiting_snapshot")) or runtime_state == "awaiting_snapshot" or status == "awaiting_snapshot"
+    has_runtime_content = bool(snapshot.get("stage") or snapshot.get("step") or snapshot.get("target_temperature"))
+    active = source == SOURCE_NAME and has_runtime_content and (
+        status in ACTIVE_STATUSES
+        or runtime_state in ACTIVE_RUNTIME_STATES
+        or awaiting
+    )
 
     group = _stage_group(str(snapshot.get("stage") or ""), str(snapshot.get("step") or ""))
     test_profile = _is_test_profile(snapshot)
     remaining = int(snapshot.get("time_remaining_seconds") or 0)
-    awaiting = bool(snapshot.get("awaiting_snapshot")) or runtime_state == "awaiting_snapshot"
     ending_soon = active and 0 <= remaining <= ENDING_SOON_SECONDS
 
     interval = _base_interval(snapshot, group, test_profile)
