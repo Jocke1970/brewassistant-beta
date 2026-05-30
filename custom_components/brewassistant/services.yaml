@@ -6,6 +6,41 @@ apply_brewzilla_target:
   name: Apply BrewZilla target
   description: Apply the current Brewday Runtime target temperature to BrewZilla when orchestration safety checks allow it.
 
+abort_brewzilla:
+  name: Abort BrewZilla
+  description: Turn off BrewAssistant-controlled BrewZilla heater and pump outputs.
+
+brewday_audit_start:
+  name: Brewday audit start
+  description: Start a Python-owned Brewday audit log and clear previous events.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the audit_started event.
+      example: Low-temp Brewfather test batch
+
+brewday_audit_stop:
+  name: Brewday audit stop
+  description: Stop recording Brewday audit events without clearing the stored log.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the audit_stopped event.
+      example: Test complete
+
+brewday_audit_clear:
+  name: Brewday audit clear
+  description: Clear the Brewday audit log and stop recording.
+
+brewday_audit_snapshot:
+  name: Brewday audit snapshot
+  description: Record a manual diagnostic Brewday audit snapshot.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the manual snapshot event.
+      example: Before next Brewfather step
+
 manual_brewday_prepare:
   name: Manual Brewday prepare
   description: Prepare the BrewAssistant manual brewday runtime session.
