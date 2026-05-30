@@ -15,7 +15,7 @@ YAML/dashboard             = presentation and explicit operator actions
 
 ```text
 v1.4 Python Core
-MVP ready for controlled real-world Brewday/BrewZilla testing
+Brewday/BrewZilla MVP validated in supervised dry-run with audit logging
 ```
 
 Validated in the active `feature/python-core-v0.1` branch:
@@ -23,13 +23,18 @@ Validated in the active `feature/python-core-v0.1` branch:
 ```text
 ✅ Brewfather RAW Brew Tracker runtime resolver
 ✅ Human-friendly Brew Tracker step labels
+✅ Paused Brewfather freeze-state handling
 ✅ BrewZilla runtime sensors
-✅ BrewZilla target sync
+✅ BrewZilla target sync from runtime core
 ✅ BrewZilla heater/pump direct actions
 ✅ ABORT service for heater + pump
+✅ Brewday audit backend, services, sensors and dashboard
 ✅ Smart Brewfather refresh policy
 ✅ Low-temperature BrewZilla water test: 30 → 35 → 40 → 45 → 50 → 55°C
-✅ BrewZilla Cockpit v3.1 dashboard example
+✅ Dry-run mash profile target validation: 45 → 55 → 65 → 72 → 78°C
+✅ BrewZilla Cockpit v3.4 collapsed dashboard example
+✅ Brewday Card v3.5 RAW/runtime dashboard example
+✅ Brewday Audit Card v1.1 dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
 ✅ Carbonation Runtime backend, persistence and UI
@@ -40,8 +45,7 @@ Validated in the active `feature/python-core-v0.1` branch:
 Still pending validation:
 
 ```text
-[ ] normal-temperature real mash profile
-[ ] Brewfather pauseBefore/event behavior in a normal recipe
+[ ] normal ingredient mash profile
 [ ] boil-stage behavior
 [ ] hop addition/event notifications
 [ ] real counterflow chilling data
@@ -59,6 +63,7 @@ Still pending validation:
 | Brewday Runtime | Resolve Brewfather RAW Brew Tracker and Manual Brewday sessions. |
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
 | BrewZilla Orchestration | Apply target/heater/pump actions when allowed by runtime state. |
+| Brewday Audit | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
 | Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
@@ -81,6 +86,8 @@ BrewAssistant brewday runtime sensors
 BrewZilla orchestration helper
         ↓
 BrewZilla target / heater / pump actions
+        ↓
+Brewday audit log
 ```
 
 BrewAssistant does **not** trust `sensor.brewfather_brew_tracker_step` as the authoritative source for active Brewday control, because it may lag behind Brewfather's web UI.
@@ -116,6 +123,7 @@ Detailed documentation:
 
 ```text
 docs/brewday-brewzilla.md
+docs/brewday-audit.md
 docs/brewfather.md
 docs/brewzilla-dashboard.md
 ```
@@ -137,6 +145,37 @@ sensor.brewassistant_brewday_target_temperature
 sensor.brewassistant_brewday_live_time_remaining_minutes
 sensor.brewassistant_brewday_live_progress
 sensor.brewassistant_brewday_snapshot_age_minutes
+sensor.brewassistant_brewday_awaiting_snapshot
+sensor.brewassistant_brewday_refresh_recommended
+```
+
+---
+
+## Brewday audit entities and services
+
+Audit sensors:
+
+```text
+sensor.brewassistant_brewday_audit_summary
+sensor.brewassistant_brewday_audit_event_count
+sensor.brewassistant_brewday_audit_last_event
+sensor.brewassistant_brewday_audit_last_step
+sensor.brewassistant_brewday_audit_last_target
+```
+
+Audit services:
+
+```text
+brewassistant.brewday_audit_start
+brewassistant.brewday_audit_stop
+brewassistant.brewday_audit_clear
+brewassistant.brewday_audit_snapshot
+```
+
+The audit log is persisted in Home Assistant storage:
+
+```text
+.storage/brewassistant_brewday_audit_log
 ```
 
 ---
@@ -202,7 +241,9 @@ dashboards/
 Current BrewZilla/Brewday examples:
 
 ```text
-dashboards/brewzilla_cockpit_v3_1.yaml
+dashboards/brewzilla_cockpit_v3_4_collapsed.yaml
+dashboards/brewday_card_v3_5_raw_runtime_polish.yaml
+dashboards/brewday_audit_card_v1_1.yaml
 dashboards/brewfather_raw_timeline_v2.yaml
 ```
 
@@ -227,6 +268,8 @@ brewday_stage_engine.py
 brewday_stage_sensor.py
 brewday_refresh.py
 brewday_refresh_policy.py
+brewday_audit.py
+brewday_audit_sensor.py
 brewzilla_sensor.py
 brewzilla_orchestration.py
 brewzilla_orchestration_sensor.py
@@ -258,23 +301,3 @@ Carbonation has a Python-owned runtime/session with persistence, start/update/pa
 ### Counterflow Wort Cooling
 
 Counterflow cooling has backend sensors, pitch-ready detection, pump/heater guidance and UI.
-
-### Fermentation Cockpit
-
-Fermentation currently uses normalized coordinator/process sensors and scope guards while a future Timed Fermentation Runtime matures.
-
----
-
-## Acknowledgements
-
-BrewAssistant's Brewfather-aware runtime builds on the Home Assistant Brewfather ecosystem and treats the upstream Brewfather integration as a read-only source of recipe, batch and Brew Tracker data.
-
-Special thanks to **mvddonk**, creator/maintainer of the Brewfather Integration for Home Assistant, for the upstream integration that makes Brewfather data available inside Home Assistant.
-
-BrewAssistant is a separate companion/orchestration project and is not affiliated with Brewfather.
-
----
-
-## Disclaimer
-
-This project is intended for hobby brewing automation and process tracking. Always verify sanitation, pressure limits, electrical safety, hot-side safety, electrical switching, CO2 pressure, and fermentation decisions manually when needed.
