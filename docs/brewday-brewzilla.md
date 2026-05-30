@@ -2,7 +2,7 @@
 
 This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker → BrewAssistant → BrewZilla.
 
-Status: **MVP ready for controlled real-world testing**.
+Status: **MVP validated in supervised Brewfather/BrewZilla dry-run with audit logging**.
 
 The first verified path is BrewZilla/RAPT hardware, but the architecture should remain as hardware-profile friendly as possible. BrewAssistant should expose canonical `sensor.brewassistant_brewday_*` and `sensor.brewassistant_brewzilla_*` entities to dashboards instead of making every card parse raw Brewfather data directly.
 
@@ -10,7 +10,7 @@ The first verified path is BrewZilla/RAPT hardware, but the architecture should 
 
 ## Verified flow
 
-The low-temperature water test verified the core technical chain:
+The low-temperature water test and the follow-up dry-run mash profile verified the core technical chain:
 
 ```text
 Brewfather Brew Tracker raw timeline
@@ -22,12 +22,18 @@ BrewAssistant brewday runtime sensors
 BrewZilla orchestration helper
         ↓
 BrewZilla target / heater / pump actions
+        ↓
+Brewday audit log
 ```
 
-The verified test sequence was:
+Verified test sequences:
 
 ```text
+Low-temperature water test:
 30°C → 35°C → 40°C → 45°C → 50°C → 55°C
+
+Dry-run mash profile:
+45°C → 55°C → 65°C → 72°C → 78°C
 ```
 
 Observed result:
@@ -36,11 +42,13 @@ Observed result:
 ✅ Brewfather Brew Tracker was read
 ✅ BrewAssistant followed the RAW tracker timeline
 ✅ BrewAssistant ignored lagging convenience step sensors
-✅ BrewZilla target changed through the full sequence
-✅ Heater and pump actions were executed
+✅ BrewAssistant can resolve active step ahead of RAW index using stage timing
+✅ Paused Brewfather state remains stable as paused/freeze-state
+✅ BrewZilla target changed through the full dry-run sequence
+✅ Heater and pump actions were evaluated and logged
 ✅ ABORT remained available as a hard stop
-✅ No technical flow deviation observed
-⚠️ Only dashboard/presentation issues were observed during the test
+✅ Audit log captured runtime, target sync and orchestration events
+⚠️ Remaining issues are primarily presentation/wording and full-process validation beyond mash
 ```
 
 ---
@@ -73,6 +81,8 @@ raw_step_name
 
 Dashboard cards may show these in debug sections, but normal operator UI should use the normalized runtime step and target.
 
+`raw_step_index != resolved_step_index` is not automatically an error. It often means BrewAssistant has calculated the active step from the stage timeline while Brewfather/RAPT Cloud still exposes an older raw index.
+
 ---
 
 ## Runtime presentation
@@ -89,6 +99,21 @@ Hold 55°C · 2 min
 instead of displaying duplicated raw names as current and next step.
 
 The original Brewfather name remains available as `raw_step_name` in attributes for debug use.
+
+---
+
+## Paused Brewfather behavior
+
+When Brewfather status is paused, BrewAssistant treats the snapshot as a freeze-frame:
+
+```text
+runtime_state = paused
+awaiting_snapshot = false
+paused_freeze = true
+live_timer_active = false
+```
+
+BrewAssistant keeps the current step and target instead of advancing into `awaiting_snapshot` just because remaining time reaches zero while paused.
 
 ---
 
@@ -123,6 +148,18 @@ Implemented in:
 
 ```text
 custom_components/brewassistant/brewzilla_orchestration.py
+```
+
+`target_delta` means synchronization delta:
+
+```text
+requested_target - applied_target
+```
+
+It is not the same as temperature delta:
+
+```text
+current_temperature - target_temperature
 ```
 
 ---
@@ -160,6 +197,31 @@ Minimum cooldown:
 ```
 
 Manual refresh is still available as a service, but normal operation should not require an Apply Target button.
+
+---
+
+## Audit log
+
+Brewday audit records post-run analysis data for runtime and BrewZilla orchestration.
+
+```text
+brewassistant.brewday_audit_start
+brewassistant.brewday_audit_stop
+brewassistant.brewday_audit_clear
+brewassistant.brewday_audit_snapshot
+```
+
+Main sensor:
+
+```text
+sensor.brewassistant_brewday_audit_summary
+```
+
+Detailed documentation:
+
+```text
+docs/brewday-audit.md
+```
 
 ---
 
@@ -205,6 +267,7 @@ The dashboard ABORT button should call this service.
 ```text
 sensor.brewassistant_brewday_runtime_source
 sensor.brewassistant_brewday_runtime_state
+sensor.brewassistant_brewday_runtime_status
 sensor.brewassistant_brewday_runtime_stage
 sensor.brewassistant_brewday_runtime_step
 sensor.brewassistant_brewday_runtime_next_step
@@ -213,6 +276,8 @@ sensor.brewassistant_brewday_target_temperature
 sensor.brewassistant_brewday_live_time_remaining_minutes
 sensor.brewassistant_brewday_live_progress
 sensor.brewassistant_brewday_snapshot_age_minutes
+sensor.brewassistant_brewday_awaiting_snapshot
+sensor.brewassistant_brewday_refresh_recommended
 ```
 
 Useful runtime attributes include:
@@ -222,6 +287,7 @@ raw_step_index
 resolved_step_index
 raw_step_name
 snapshot_age_seconds
+paused_freeze
 timeline
 ```
 
@@ -258,64 +324,11 @@ number.brewzilla_pump_utilization
 
 ---
 
-## Dashboard guidance
-
-Recommended operator UI:
+## Dashboard examples
 
 ```text
-Top card:
-- current runtime state/stage
-- current human-friendly step
-- current temperature → tracker target
-- delta
-- heater/pump/power chips
-- progress
-- next step
-- ABORT
-
-Middle:
-- current/next step details
-- target / remaining / progress / snapshot age
-- BrewZilla hardware status
-
-Advanced/debug:
-- requested/applied target
-- sync needed / can act
-- RAW resolved index vs Brewfather raw index
-- raw_step_name
-- full RAW timeline checklist
+dashboards/brewzilla_cockpit_v3_4_collapsed.yaml
+dashboards/brewday_card_v3_5_raw_runtime_polish.yaml
+dashboards/brewday_audit_card_v1_1.yaml
+dashboards/brewfather_raw_timeline_v2.yaml
 ```
-
-Current dashboard file generated during test:
-
-```text
-brewzilla_cockpit_v3_production_raw_runtime.yaml
-```
-
-RAW timeline checklist/debug card:
-
-```text
-brewfather_raw_timeline_v2.yaml
-```
-
----
-
-## Current acceptance status
-
-Brewday/BrewZilla is considered:
-
-```text
-MVP ready for controlled real-world testing
-```
-
-Not yet fully proven:
-
-```text
-- full normal-temperature mash profile during a real brewday
-- Brewfather pauseBefore/event behavior in a normal recipe
-- boil-stage behavior
-- hop addition/event notification behavior
-- counterflow chilling behavior with real cooling data
-```
-
-These are validation items, not blockers for the current Brew Tracker → BrewZilla direct-flow MVP.
