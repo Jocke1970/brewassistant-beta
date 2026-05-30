@@ -1,0 +1,108 @@
+# BrewAssistant Brewfather RAW Timeline v2 - compact repo version
+# Visualizes sensor.brewfather_brew_tracker_raw directly.
+# Required custom card: custom:button-card
+
+type: custom:button-card
+entity: sensor.brewfather_brew_tracker_raw
+name: Brewfather RAW Timeline
+icon: mdi:database-search
+show_state: false
+show_label: true
+tap_action:
+  action: more-info
+label: |
+  [[[
+    const raw = entity?.attributes?.data ?? {};
+    const stages = Array.isArray(raw.stages) ? raw.stages : [];
+    const status = raw.status ?? entity?.state ?? 'unknown';
+    const recipe = entity?.attributes?.brew_tracker_recipe_name ?? raw?.recipe?.name ?? entity?.attributes?.brew_tracker_batch_name ?? 'Brew Tracker';
+    const stageIndex = Number(raw.stage ?? 0);
+    const stage = stages[stageIndex] ?? stages[0] ?? {};
+    const steps = Array.isArray(stage.steps) ? stage.steps : [];
+    const rawStepIndex = Number(stage.step ?? -1);
+    const rawStageRemaining = Number(stage.remainingSeconds ?? 0);
+    const lastUpdated = entity?.last_updated ? new Date(entity.last_updated) : null;
+    const ageSec = lastUpdated ? Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000)) : 0;
+    const running = status === 'running' || entity?.state === 'running';
+    const effectiveRemaining = Math.max(0, rawStageRemaining - (running ? ageSec : 0));
+    const clean = (txt) => {
+      if (txt === null || txt === undefined || txt === '') return '';
+      return String(txt).replace(/<br\s*\/?>/gi, ' · ').replace(/<\/br>/gi, ' · ').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    };
+    const fmtTime = (sec) => {
+      const v = Number(sec);
+      if (!Number.isFinite(v)) return '–';
+      const m = Math.max(0, Math.round(v / 60));
+      if (m < 60) return `${m} min`;
+      const h = Math.floor(m / 60); const mm = m % 60;
+      return mm ? `${h}h ${mm}m` : `${h}h`;
+    };
+    const resolveStepIndex = () => {
+      let resolved = null;
+      for (let i = 0; i < steps.length; i++) {
+        const anchor = Number(steps[i]?.time);
+        if (!Number.isFinite(anchor)) continue;
+        if (anchor >= effectiveRemaining) resolved = i;
+        else if (resolved !== null) break;
+      }
+      if (resolved !== null) return resolved;
+      if (rawStepIndex >= 0 && rawStepIndex < steps.length) return rawStepIndex;
+      return 0;
+    };
+    const activeIndex = resolveStepIndex();
+    const getTitle = (step, idx) => clean(step?.name) || clean(step?.tooltip) || clean(step?.description) || clean(step?.type) || `Step ${idx}`;
+    const getMeta = (step) => {
+      const parts = [];
+      if (step?.type) parts.push(String(step.type));
+      if (step?.value !== null && step?.value !== undefined && step?.value !== '') parts.push(`${step.value}°C`);
+      if (Number(step?.duration) > 0) parts.push(`${Math.round(Number(step.duration) / 60)} min`);
+      if (Number.isFinite(Number(step?.time))) parts.push(`anchor ${fmtTime(Number(step.time))}`);
+      if (step?.pauseBefore === true) parts.push('pause before');
+      if (step?.final === true) parts.push('final');
+      return parts.join(' · ');
+    };
+    const icon = (idx, step) => idx < activeIndex ? 'mdi:check-circle' : idx === activeIndex ? (status === 'paused' || stage.paused === true ? 'mdi:pause-circle' : 'mdi:play-circle') : step?.pauseBefore === true ? 'mdi:hand-back-right' : step?.type === 'ramp' ? 'mdi:arrow-up-bold' : 'mdi:circle-outline';
+    const color = (idx, step) => idx < activeIndex ? '#81c784' : idx === activeIndex ? (status === 'paused' || stage.paused === true ? '#ffca28' : '#64b5f6') : step?.pauseBefore === true ? '#ffb74d' : step?.type === 'ramp' ? '#ce93d8' : 'rgba(255,255,255,.38)';
+    const bg = (idx, step) => idx < activeIndex ? 'rgba(76,175,80,.095)' : idx === activeIndex ? (status === 'paused' || stage.paused === true ? 'rgba(255,202,40,.13)' : 'rgba(100,181,246,.14)') : step?.pauseBefore === true ? 'rgba(255,183,77,.08)' : 'rgba(255,255,255,.042)';
+    const rows = steps.map((step, idx) => {
+      const title = getTitle(step, idx);
+      const meta = getMeta(step);
+      const c = color(idx, step);
+      const badge = idx === activeIndex ? `<span style="font-size:10px;font-weight:950;padding:3px 7px;border-radius:999px;background:${c}22;color:${c};">RAW ACTIVE</span>` : idx < activeIndex ? `<span style="font-size:10px;font-weight:950;padding:3px 7px;border-radius:999px;background:rgba(129,199,132,.14);color:#a5d6a7;">DONE</span>` : `<span style="font-size:10px;font-weight:950;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.52);">WAITING</span>`;
+      const lag = rawStepIndex !== activeIndex && idx === activeIndex ? `<span style="font-size:10px;font-weight:950;padding:3px 7px;border-radius:999px;background:rgba(255,112,67,.14);color:#ffab91;">RAW RESOLVED</span>` : '';
+      return `<div style="display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;padding:10px 11px;border-radius:15px;border:${idx === activeIndex ? `1px solid ${c}` : '1px solid rgba(255,255,255,.065)'};background:${bg(idx, step)};"><ha-icon icon="${icon(idx, step)}" style="width:24px;height:24px;color:${c};margin-top:2px;"></ha-icon><div style="min-width:0;"><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"><span style="font-size:13px;font-weight:950;color:rgba(255,255,255,.92);">${idx}. ${title}</span>${badge}${lag}</div>${meta ? `<div style="font-size:11px;font-weight:850;opacity:.68;margin-top:3px;">${meta}</div>` : ''}</div></div>`;
+    }).join('');
+    const progress = Number(stage.progressPercent ?? 0);
+    const activeStep = steps[activeIndex] ?? {};
+    const nextStep = steps[activeIndex + 1] ?? {};
+    const rawLag = rawStepIndex !== activeIndex ? `<span style="padding:4px 8px;border-radius:999px;background:rgba(255,112,67,.14);color:#ffab91;font-size:11px;font-weight:950;">raw resolved ${activeIndex}, index ${rawStepIndex}</span>` : `<span style="padding:4px 8px;border-radius:999px;background:rgba(129,199,132,.14);color:#a5d6a7;font-size:11px;font-weight:950;">raw index OK</span>`;
+    return `<div style="display:flex;flex-direction:column;gap:10px;"><div style="padding:12px;border-radius:18px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div><div style="font-size:15px;font-weight:950;">${recipe}</div><div style="font-size:12px;opacity:.72;margin-top:3px;">${status} · ${clean(stage.name) || 'Unknown stage'}</div></div><div>${rawLag}</div></div><div style="font-size:12px;opacity:.76;margin-top:9px;">Active: <b>${activeIndex}. ${getTitle(activeStep, activeIndex)}</b></div><div style="font-size:12px;opacity:.58;margin-top:3px;">Next: ${getTitle(nextStep, activeIndex + 1)} · Stage remaining ${fmtTime(effectiveRemaining)} · Progress ${Number.isFinite(progress) ? progress.toFixed(1) : '–'}% · raw age ${fmtTime(ageSec)}</div><div style="height:8px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;margin-top:10px;"><div style="height:100%;width:${Math.min(100, Math.max(0, progress || 0))}%;background:linear-gradient(90deg,rgba(100,181,246,.85),rgba(77,208,225,.85));"></div></div></div>${rows || `<div style="opacity:.7;padding:12px;">No RAW Brew Tracker steps found.</div>`}</div>`;
+  ]]]
+styles:
+  card:
+    - border-radius: 24px
+    - padding: 16px
+    - background: radial-gradient(circle at top right, rgba(100,181,246,.16), transparent 44%), linear-gradient(135deg, rgba(15,24,36,.98), rgba(10,12,18,.98))
+    - border: 1px solid rgba(255,255,255,.10)
+    - box-shadow: 0 14px 36px rgba(0,0,0,.36)
+  grid:
+    - grid-template-areas: '"i n" "l l"'
+    - grid-template-columns: 44px 1fr
+  img_cell:
+    - width: 42px
+    - height: 42px
+    - border-radius: 16px
+    - background: rgba(100,181,246,.13)
+  icon:
+    - width: 28px
+    - color: '#90caf9'
+  name:
+    - justify-self: start
+    - align-self: center
+    - font-size: 20px
+    - font-weight: 950
+  label:
+    - justify-self: stretch
+    - text-align: left
+    - white-space: normal
+    - margin-top: 12px
