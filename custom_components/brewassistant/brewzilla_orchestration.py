@@ -12,6 +12,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from .brewday_audit import async_record_brewday_audit_tick
 from .brewday_runtime_core import build_core_snapshot
 
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
@@ -190,7 +191,9 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     """Apply Brew Tracker runtime target and required BrewZilla actions."""
     snapshot = build_orchestration_snapshot(hass)
     if not snapshot["can_apply_target"]:
-        return {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
+        result = {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
+        await async_record_brewday_audit_tick(hass, brewzilla_result=result)
+        return result
 
     target = snapshot["requested_target"]
     target_changed = False
@@ -237,4 +240,5 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
         "executed_at": dt_util.utcnow().isoformat(),
     }
     hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+    await async_record_brewday_audit_tick(hass, brewzilla_result=result)
     return result
