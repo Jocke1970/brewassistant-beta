@@ -1,0 +1,260 @@
+# BrewAssistant BrewZilla Cockpit v3.1 - compact repo version
+# Operator UI for Brewfather RAW -> BrewAssistant -> BrewZilla.
+# Full experimental variants may live outside the repo during iteration.
+# Required custom cards: custom:button-card, custom:mushroom-entity-card, custom:vertical-stack-in-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_runtime_state
+    name: BrewZilla Cockpit
+    icon: mdi:kettle-steam
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const s = (id) => states[id]?.state;
+        const n = (id) => Number(s(id));
+        const ok = (v) => Number.isFinite(v);
+        const fmt = (v, d=1) => ok(v) ? v.toFixed(d) : '–';
+        const runtime = s('sensor.brewassistant_brewday_runtime_state') ?? 'idle';
+        const stage = s('sensor.brewassistant_brewday_runtime_stage') ?? 'Idle';
+        const step = s('sensor.brewassistant_brewday_runtime_step') ?? 'Idle';
+        const next = s('sensor.brewassistant_brewday_runtime_next_step') ?? 'None';
+        const current = n('sensor.brewassistant_brewzilla_current_temperature');
+        const trackerTarget = n('sensor.brewassistant_brewday_target_temperature');
+        const deviceTarget = n('sensor.brewassistant_brewzilla_target_temperature');
+        const target = ok(trackerTarget) ? trackerTarget : deviceTarget;
+        const delta = ok(current) && ok(target) ? current - target : n('sensor.brewassistant_brewzilla_temperature_delta');
+        const watts = n('sensor.brewzilla_power');
+        const progress = n('sensor.brewassistant_brewday_live_progress');
+        const remaining = n('sensor.brewassistant_brewday_live_time_remaining_minutes');
+        const main = s('switch.brewzilla') ?? 'unknown';
+        const heater = s('switch.brewzilla_heater') ?? 'unknown';
+        const pump = s('switch.brewzilla_pump') ?? 'unknown';
+        const mode = s('sensor.brewassistant_brewzilla_orchestration_mode') ?? 'unknown';
+        const reason = s('sensor.brewassistant_brewzilla_control_reason') ?? '';
+        const attrs = states['sensor.brewassistant_brewday_runtime_state']?.attributes ?? {};
+        const rawIndex = attrs.raw_step_index ?? '–';
+        const resolvedIndex = attrs.resolved_step_index ?? '–';
+        const age = attrs.snapshot_age_seconds;
+        const chip = (text, bg='rgba(255,255,255,.10)', color='rgba(255,255,255,.84)') => `<span style="padding:5px 9px;border-radius:999px;background:${bg};color:${color};font-size:11px;font-weight:950;">${text}</span>`;
+        const progressWidth = ok(progress) ? Math.min(100, Math.max(0, progress)) : 0;
+        return `
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:13px;font-weight:950;letter-spacing:.8px;opacity:.70;text-transform:uppercase;">${runtime} · ${stage}</div>
+            <div style="font-size:24px;font-weight:950;line-height:1.14;">${step}</div>
+            <div style="font-size:20px;font-weight:950;">${fmt(current)}°C → ${fmt(target)}°C <span style="opacity:.52;">· Δ ${fmt(delta)}°C</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${chip(`Power ${main.toUpperCase()}`, main === 'on' ? 'rgba(76,175,80,.18)' : 'rgba(244,67,54,.16)', main === 'on' ? '#c8e6c9' : '#ffcdd2')}
+              ${chip(`Heater ${heater.toUpperCase()}`, heater === 'on' ? 'rgba(255,112,67,.22)' : 'rgba(255,255,255,.09)', heater === 'on' ? '#ffccbc' : 'rgba(255,255,255,.70)')}
+              ${chip(`Pump ${pump.toUpperCase()}`, pump === 'on' ? 'rgba(77,208,225,.18)' : 'rgba(255,255,255,.09)', pump === 'on' ? '#b2ebf2' : 'rgba(255,255,255,.70)')}
+              ${chip(`${ok(watts) ? watts.toFixed(1) : '–'} W`)}
+              ${chip(`Device ${ok(deviceTarget) ? deviceTarget.toFixed(1) + '°C' : '–'}`)}
+              ${chip(mode, mode === 'blocked' ? 'rgba(244,67,54,.16)' : 'rgba(100,181,246,.14)', mode === 'blocked' ? '#ffcdd2' : '#bbdefb')}
+            </div>
+            <div style="font-size:13px;font-weight:850;opacity:.82;">Next: ${next}</div>
+            <div style="font-size:12px;opacity:.58;line-height:1.35;">${ok(remaining) ? remaining.toFixed(0) : '–'} min kvar · RAW ${resolvedIndex}/${rawIndex}${age !== undefined ? ` · age ${Math.round(Number(age)/60)} min` : ''}</div>
+            <div style="height:8px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden;"><div style="height:100%;width:${progressWidth}%;background:linear-gradient(90deg,rgba(100,181,246,.90),rgba(77,208,225,.90));"></div></div>
+            <div style="font-size:12px;opacity:.50;line-height:1.35;">${reason}</div>
+          </div>`;
+      ]]]
+    custom_fields:
+      badge: |
+        [[[
+          const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'idle';
+          const heater = states['switch.brewzilla_heater']?.state === 'on';
+          const pump = states['switch.brewzilla_pump']?.state === 'on';
+          const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state ?? '';
+          let text = 'READY', bg = 'rgba(76,175,80,.18)', color = '#c8e6c9';
+          if (['idle','inactive','completed','unknown','unavailable','None','none',''].includes(runtime)) { text = 'IDLE'; bg = 'rgba(255,255,255,.08)'; color = 'rgba(255,255,255,.70)'; }
+          if (heater || pump) { text = 'LIVE'; bg = 'rgba(255,112,67,.20)'; color = '#ffccbc'; }
+          if (mode === 'blocked') { text = 'BLOCKED'; bg = 'rgba(244,67,54,.18)'; color = '#ffcdd2'; }
+          return `<div style="padding:7px 11px;border-radius:999px;background:${bg};color:${color};font-size:11px;font-weight:950;letter-spacing:.7px;">${text}</div>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 28px
+        - padding: 18px
+        - min-height: 230px
+        - overflow: hidden
+        - border: 1px solid rgba(255,255,255,.10)
+        - box-shadow: 0 16px 40px rgba(0,0,0,.42)
+        - background: |
+            [[[
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'idle';
+              const heater = states['switch.brewzilla_heater']?.state === 'on';
+              const pump = states['switch.brewzilla_pump']?.state === 'on';
+              const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state ?? '';
+              if (mode === 'blocked') return 'radial-gradient(circle at top right, rgba(244,67,54,.26), transparent 40%), linear-gradient(135deg, rgba(45,18,22,.98), rgba(9,12,18,.98))';
+              if (heater) return 'radial-gradient(circle at top right, rgba(255,112,67,.30), transparent 40%), linear-gradient(135deg, rgba(55,26,15,.98), rgba(9,12,18,.98))';
+              if (pump) return 'radial-gradient(circle at top right, rgba(77,208,225,.24), transparent 40%), linear-gradient(135deg, rgba(12,39,45,.98), rgba(9,12,18,.98))';
+              if (!['idle','inactive','completed','unknown','unavailable','None','none',''].includes(runtime)) return 'radial-gradient(circle at top right, rgba(100,181,246,.24), transparent 40%), linear-gradient(135deg, rgba(13,31,48,.98), rgba(9,12,18,.98))';
+              return 'radial-gradient(circle at top right, rgba(144,164,174,.16), transparent 40%), linear-gradient(135deg, rgba(18,24,32,.98), rgba(9,12,18,.98))';
+            ]]]
+      grid:
+        - grid-template-areas: '"i badge" "n n" "l l"'
+        - grid-template-columns: 54px 1fr
+      img_cell:
+        - width: 48px
+        - height: 48px
+        - border-radius: 18px
+        - background: rgba(255,255,255,.10)
+      icon:
+        - width: 32px
+        - color: '#64b5f6'
+      name:
+        - justify-self: start
+        - align-self: end
+        - margin-top: 12px
+        - font-size: 25px
+        - font-weight: 950
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - white-space: normal
+        - margin-top: 8px
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: start
+
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        entity: switch.brewzilla
+        name: Power
+        icon: mdi:power
+        show_state: true
+        tap_action:
+          action: toggle
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - min-height: 82px
+            - background: rgba(76,175,80,.16)
+            - border: 1px solid rgba(76,175,80,.30)
+          icon:
+            - color: '#81c784'
+          name:
+            - font-weight: 950
+      - type: custom:button-card
+        name: ABORT
+        icon: mdi:alert-octagon
+        show_label: true
+        label: Stop heater + pump
+        tap_action:
+          action: call-service
+          service: brewassistant.abort_brewzilla
+        hold_action:
+          action: call-service
+          service: switch.turn_off
+          target:
+            entity_id:
+              - switch.brewzilla_heater
+              - switch.brewzilla_pump
+        styles:
+          card:
+            - border-radius: 20px
+            - padding: 14px
+            - min-height: 82px
+            - background: linear-gradient(135deg, rgba(183,28,28,.98), rgba(74,12,12,.98))
+            - border: 1px solid rgba(255,205,210,.38)
+          icon:
+            - color: '#ffebee'
+          name:
+            - color: '#ffebee'
+            - font-size: 20px
+            - font-weight: 950
+          label:
+            - color: '#ffcdd2'
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_runtime_step
+        name: Current step
+        icon: mdi:play-circle
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_runtime_next_step
+        name: Next step
+        icon: mdi:skip-next
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_target_temperature
+        name: Tracker target
+        icon: mdi:target
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_live_time_remaining_minutes
+        name: Step remaining
+        icon: mdi:timer-sand
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_live_progress
+        name: Progress
+        icon: mdi:progress-clock
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_snapshot_age_minutes
+        name: Snapshot age
+        icon: mdi:clock-alert-outline
+
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_current_temperature
+        name: Current
+        icon: mdi:thermometer
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_target_temperature
+        name: Device target
+        icon: mdi:target
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewzilla_power
+        name: Power
+        icon: mdi:flash
+      - type: custom:mushroom-entity-card
+        entity: switch.brewzilla
+        name: Main
+        icon: mdi:power-socket-de
+      - type: custom:mushroom-entity-card
+        entity: switch.brewzilla_heater
+        name: Heater
+        icon: mdi:fire
+      - type: custom:mushroom-entity-card
+        entity: switch.brewzilla_pump
+        name: Pump
+        icon: mdi:pump
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_requested_target
+        name: Requested target
+        icon: mdi:target
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_applied_target
+        name: Applied target
+        icon: mdi:check-circle-outline
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_target_sync_needed
+        name: Sync needed
+        icon: mdi:sync-alert
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_can_apply_target
+        name: Can act
+        icon: mdi:robot
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_orchestration_mode
+        name: Mode
+        icon: mdi:robot-industrial-outline
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_control_reason
+        name: Reason
+        icon: mdi:comment-alert-outline
