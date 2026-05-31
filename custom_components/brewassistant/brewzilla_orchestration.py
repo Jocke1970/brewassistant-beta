@@ -352,6 +352,24 @@ async def _call_switch(hass: HomeAssistant, service_suffix: str, entity_id: str)
     )
 
 
+async def _set_number(hass: HomeAssistant, entity_id: str, value: float) -> bool:
+    if hass.states.get(entity_id) is None:
+        return False
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": entity_id, "value": value},
+        blocking=True,
+    )
+    return True
+
+
+async def _reset_brewzilla_utilization(hass: HomeAssistant, result: dict[str, Any]) -> None:
+    for entity_id in (BREWZILLA_HEAT_UTILIZATION, BREWZILLA_PUMP_UTILIZATION):
+        if await _set_number(hass, entity_id, 0):
+            result["actions"].append(f"set_zero:{entity_id}")
+
+
 async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
     result: dict[str, Any] = {
         "source": SOURCE,
@@ -363,6 +381,7 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
         if hass.states.get(entity_id) is not None:
             await _call_switch(hass, "off", entity_id)
             result["actions"].append(f"turned_off:{entity_id}")
+    await _reset_brewzilla_utilization(hass, result)
     hass.data.setdefault("brewassistant", {})["brewzilla_last_abort"] = result
     return result
 
@@ -378,12 +397,7 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     target_changed = False
     if snapshot.get("target_sync_needed") and target is not None:
         rounded_target = round(float(target), 1)
-        await hass.services.async_call(
-            "number",
-            "set_value",
-            {"entity_id": BREWZILLA_TARGET_NUMBER, "value": rounded_target},
-            blocking=True,
-        )
+        await _set_number(hass, BREWZILLA_TARGET_NUMBER, rounded_target)
         target_changed = True
     else:
         rounded_target = round(float(target), 1) if target is not None else None
