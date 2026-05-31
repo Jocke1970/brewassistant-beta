@@ -1,0 +1,141 @@
+# BrewAssistant BrewZilla RAPT Diagnostics Card v1.0
+# Shows refined dynamic/static RAPT Cloud Link data age and paused target rewind guard.
+# Required custom cards: custom:button-card, custom:mushroom-entity-card, custom:vertical-stack-in-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_audit_summary
+    name: BrewZilla RAPT Diagnostics
+    icon: mdi:cloud-sync-outline
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const audit = states['sensor.brewassistant_brewday_audit_summary'];
+        const a = audit?.attributes ?? {};
+        const last = Array.isArray(a.recent_events) && a.recent_events.length ? a.recent_events[a.recent_events.length - 1] : {};
+        const get = (k) => a[k] ?? last[k];
+        const n = (v) => Number(v);
+        const ok = (v) => Number.isFinite(n(v));
+        const fmt = (v, d=0) => ok(v) ? n(v).toFixed(d) : '–';
+
+        const dynAge = get('last_rapt_brewzilla_dynamic_age_seconds') ?? get('rapt_brewzilla_dynamic_age_seconds') ?? get('rapt_brewzilla_poll_age_seconds');
+        const tempAge = get('last_rapt_brewzilla_temperature_age_seconds') ?? get('rapt_brewzilla_temperature_age_seconds');
+        const powerAge = get('last_rapt_brewzilla_power_age_seconds') ?? get('rapt_brewzilla_power_age_seconds');
+        const critical = get('last_rapt_critical_refresh_recommended') ?? get('rapt_critical_refresh_recommended');
+        const pausedGuard = get('last_paused_target_rewind_blocked') ?? get('paused_target_rewind_blocked');
+        const reason = get('last_control_reason') ?? get('control_reason') ?? '';
+
+        const dynOld = last.rapt_brewzilla_dynamic_oldest_entity ?? '–';
+        const statOld = last.rapt_brewzilla_static_oldest_entity ?? '–';
+        const staticAge = last.rapt_brewzilla_static_oldest_age_seconds;
+        const targetAge = last.rapt_brewzilla_target_age_seconds;
+        const heatAge = last.rapt_brewzilla_heat_util_age_seconds;
+        const pumpAge = last.rapt_brewzilla_pump_util_age_seconds;
+
+        const chip = (text, bg='rgba(255,255,255,.10)', color='rgba(255,255,255,.84)') =>
+          `<span style="padding:5px 9px;border-radius:999px;background:${bg};color:${color};font-size:11px;font-weight:950;">${text}</span>`;
+
+        const ageChip = ok(dynAge) && n(dynAge) > 300
+          ? chip(`Dynamic ${fmt(dynAge)}s`, 'rgba(244,67,54,.16)', '#ffcdd2')
+          : ok(dynAge) && n(dynAge) > 120
+            ? chip(`Dynamic ${fmt(dynAge)}s`, 'rgba(255,202,40,.14)', '#ffe082')
+            : chip(`Dynamic ${fmt(dynAge)}s`, 'rgba(76,175,80,.14)', '#c8e6c9');
+
+        const guardChip = pausedGuard === true || pausedGuard === 'true'
+          ? chip('Paused rewind blocked', 'rgba(244,67,54,.16)', '#ffcdd2')
+          : chip('Paused guard OK', 'rgba(76,175,80,.13)', '#c8e6c9');
+
+        const criticalChip = critical === true || critical === 'true'
+          ? chip('Critical refresh', 'rgba(255,202,40,.14)', '#ffe082')
+          : chip('Normal refresh', 'rgba(255,255,255,.08)', 'rgba(255,255,255,.70)');
+
+        return `
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:13px;font-weight:950;letter-spacing:.8px;opacity:.70;text-transform:uppercase;">RAPT/BrewZilla freshness</div>
+            <div style="font-size:24px;font-weight:950;line-height:1.14;">Dynamic age ${fmt(dynAge)}s</div>
+            <div style="font-size:18px;font-weight:950;">
+              Temp ${fmt(tempAge)}s <span style="opacity:.52;">· Power ${fmt(powerAge)}s · Target ${fmt(targetAge)}s</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${ageChip}
+              ${chip(`Heat util ${fmt(heatAge)}s`)}
+              ${chip(`Pump util ${fmt(pumpAge)}s`)}
+              ${criticalChip}
+              ${guardChip}
+            </div>
+            <div style="font-size:12px;opacity:.58;line-height:1.35;">Dynamic oldest: ${dynOld}<br>Static oldest: ${statOld} · ${fmt(staticAge)}s</div>
+            ${reason ? `<div style="font-size:12px;opacity:.55;line-height:1.35;">${reason}</div>` : ''}
+          </div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 28px
+        - padding: 18px
+        - overflow: hidden
+        - border: 1px solid rgba(255,255,255,.10)
+        - box-shadow: 0 16px 40px rgba(0,0,0,.42)
+        - background: |
+            [[[
+              const a = states['sensor.brewassistant_brewday_audit_summary']?.attributes ?? {};
+              const recent = Array.isArray(a.recent_events) ? a.recent_events : [];
+              const last = recent.length ? recent[recent.length - 1] : {};
+              const dyn = Number(a.last_rapt_brewzilla_dynamic_age_seconds ?? last.rapt_brewzilla_dynamic_age_seconds ?? last.rapt_brewzilla_poll_age_seconds);
+              const pausedGuard = a.last_paused_target_rewind_blocked ?? last.paused_target_rewind_blocked;
+              if (pausedGuard === true || pausedGuard === 'true') return 'radial-gradient(circle at top right, rgba(244,67,54,.24), transparent 40%), linear-gradient(135deg, rgba(45,18,22,.98), rgba(9,12,18,.98))';
+              if (Number.isFinite(dyn) && dyn > 300) return 'radial-gradient(circle at top right, rgba(244,67,54,.20), transparent 40%), linear-gradient(135deg, rgba(45,18,22,.98), rgba(9,12,18,.98))';
+              if (Number.isFinite(dyn) && dyn > 120) return 'radial-gradient(circle at top right, rgba(255,202,40,.20), transparent 40%), linear-gradient(135deg, rgba(45,35,12,.98), rgba(9,12,18,.98))';
+              return 'radial-gradient(circle at top right, rgba(100,181,246,.20), transparent 40%), linear-gradient(135deg, rgba(13,31,48,.98), rgba(9,12,18,.98))';
+            ]]]
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 54px 1fr
+      img_cell:
+        - width: 48px
+        - height: 48px
+        - border-radius: 18px
+        - background: rgba(255,255,255,.10)
+      icon:
+        - width: 32px
+        - color: '#90caf9'
+      name:
+        - justify-self: start
+        - font-size: 24px
+        - font-weight: 950
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - white-space: normal
+        - margin-top: 8px
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_audit_summary
+        name: Audit summary
+        icon: mdi:clipboard-text-clock
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewday_audit_event_count
+        name: Audit events
+        icon: mdi:counter
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_control_reason
+        name: BZ reason
+        icon: mdi:comment-alert-outline
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_orchestration_mode
+        name: BZ mode
+        icon: mdi:robot-industrial-outline
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_target_delta
+        name: Sync delta
+        icon: mdi:delta
+      - type: custom:mushroom-entity-card
+        entity: sensor.brewassistant_brewzilla_target_sync_needed
+        name: Sync needed
+        icon: mdi:sync-alert
