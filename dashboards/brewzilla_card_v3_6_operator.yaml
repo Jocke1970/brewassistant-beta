@@ -252,6 +252,54 @@ cards:
         icon_color: purple
 
   - type: custom:button-card
+    name: Heater / Pump control
+    show_icon: false
+    show_state: false
+    styles:
+      card:
+        - padding: 12px
+        - border-radius: 20px
+        - background: rgba(15,23,42,.68)
+        - color: white
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 800
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: switch.brewzilla_heater
+        primary: Heater
+        secondary: '{{ states(entity) }}'
+        icon: mdi:fire
+        icon_color: >-
+          {% if is_state(entity, 'on') %}deep-orange{% else %}grey{% endif %}
+        tap_action:
+          action: call-service
+          service: switch.toggle
+          target:
+            entity_id: switch.brewzilla_heater
+          confirmation:
+            text: Växla BrewZilla heater?
+      - type: custom:mushroom-template-card
+        entity: switch.brewzilla_pump
+        primary: Pump
+        secondary: '{{ states(entity) }}'
+        icon: mdi:pump
+        icon_color: >-
+          {% if is_state(entity, 'on') %}cyan{% else %}grey{% endif %}
+        tap_action:
+          action: call-service
+          service: switch.toggle
+          target:
+            entity_id: switch.brewzilla_pump
+          confirmation:
+            text: Växla BrewZilla pump?
+
+  - type: custom:button-card
     name: Heat / Pump utilization
     show_icon: false
     show_state: false
