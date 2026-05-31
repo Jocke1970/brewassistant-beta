@@ -244,7 +244,7 @@ def current_step_remaining(stage: dict[str, Any], step_index: int | None, stage_
     if step_index is None or step_index < 0:
         return stage_remaining
 
-    step_list = stage.get("steps") if isinstance(stage.get("steps"), list) else []
+    step_list = stage.get("steps") if isinstance(stage.get("steps", []), list) else []
     if step_index >= len(step_list):
         return stage_remaining
 
@@ -263,6 +263,23 @@ def current_step_remaining(stage: dict[str, Any], step_index: int | None, stage_
     if duration and duration > 0:
         remaining = min(remaining, int(duration))
     return remaining
+
+
+def is_terminal_stage_step(
+    all_stages: list[dict[str, Any]],
+    stage_index: int | None,
+    stage: dict[str, Any],
+    step_index: int | None,
+) -> bool:
+    """Return true if the resolved step is the final step in the final stage."""
+    if stage_index is None or step_index is None or not all_stages:
+        return False
+    if stage_index != len(all_stages) - 1:
+        return False
+    step_list = stage.get("steps") if isinstance(stage.get("steps"), list) else []
+    if not step_list:
+        return True
+    return step_index >= len(step_list) - 1
 
 
 def snapshot_age(hass: HomeAssistant) -> int:
@@ -342,37 +359,47 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     stage = current_stage(hass)
     raw_stage_remaining = as_int(stage.get("remainingSeconds"), raw_remaining)
 
-    # Only running snapshots are locally counted down. Paused snapshots must be
-    # treated as a freeze-frame from Brewfather: keep the current step/target and
-    # do not convert the runtime into awaiting_snapshot just because remaining
-    # time is zero.
     stage_remaining = max(raw_stage_remaining - age, 0) if status == "running" else max(raw_stage_remaining, 0)
     live_timer = status == "running"
     stage_index, raw_step_index = indices(hass)
     resolved_step_index = resolve_step_index_from_remaining(stage, stage_remaining, raw_step_index)
     step_remaining = current_step_remaining(stage, resolved_step_index, stage_remaining)
     duration = as_float(stage.get("duration"))
+    all_stages = stages(hass)
+    terminal_complete = bool(
+        status == "running"
+        and stage_remaining <= 0
+        and step_remaining <= 0
+        and is_terminal_stage_step(all_stages, stage_index, stage, resolved_step_index)
+    )
     progress = as_float(stage.get("progressPercent")) or as_float(state(hass, BF_PROGRESS)) or 0.0
     if duration and duration > 0:
         progress = round(min(max(((duration - stage_remaining) / duration) * 100, 0), 100), 1)
+    if terminal_complete or status == "completed":
+        progress = 100.0
+        stage_remaining = 0
+        step_remaining = 0
 
     runtime_state = (
-        "completed" if status == "completed"
+        "completed" if status == "completed" or terminal_complete
         else "awaiting_snapshot" if step_remaining <= 0 and status == "running"
         else "live" if status == "running"
         else "paused" if status == "paused"
         else "idle"
     )
-    refresh = status == "running" and step_remaining <= 0
+    refresh = status == "running" and step_remaining <= 0 and not terminal_complete
     awaiting = runtime_state == "awaiting_snapshot"
     cur_step = current_step_from_index(stage, resolved_step_index) or current_step(hass)
-    all_stages = stages(hass)
     nxt_name, nxt_desc, nxt_step = next_step_from_index(stage, resolved_step_index, all_stages, stage_index)
     if nxt_name == "None":
         nxt_name, nxt_desc, nxt_step = next_step(hass)
     raw_step_name = step_name(cur_step, state(hass, BF_STEP, "Unknown"))
     step = step_display_name(cur_step, raw_step_name)
-    if awaiting and nxt_name in {step, raw_step_name, "None", "Unknown"}:
+    if terminal_complete:
+        nxt_name = "None"
+        nxt_desc = "BrewAssistant har tolkat sista Brew Tracker-steget som färdigt."
+        nxt_step = None
+    elif awaiting and nxt_name in {step, raw_step_name, "None", "Unknown"}:
         nxt_name = "Väntar på Brewfather snapshot"
         nxt_desc = "Runtime väntar på att Brewfather publicerar nästa checkpoint."
     if status == "paused" and nxt_desc is None:
@@ -380,10 +407,10 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     snap_obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     stage_name = clean(stage.get("name")) or state(hass, BF_STAGE, "Unknown")
     elapsed = max((duration or 0) - stage_remaining, 0) if duration else as_float(stage.get("elapsedSeconds"))
-    target = as_float(cur_step.get("value")) or as_float(nxt_step.get("value") if isinstance(nxt_step, dict) else None)
+    target = None if runtime_state == "completed" else (as_float(cur_step.get("value")) or as_float(nxt_step.get("value") if isinstance(nxt_step, dict) else None))
     return {
         "source": "Brewfather Brew Tracker",
-        "status": status,
+        "status": "completed" if terminal_complete and status == "running" else status,
         "runtime_state": runtime_state,
         "stage": stage_name,
         "step": step,
@@ -403,10 +430,11 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "raw_remaining_seconds": raw_remaining,
         "raw_stage_remaining_seconds": raw_stage_remaining,
         "live_elapsed_since_snapshot_seconds": age if status == "running" else 0,
-        "live_timer_active": live_timer,
+        "live_timer_active": live_timer and not terminal_complete,
         "refresh_recommended": refresh,
         "awaiting_snapshot": awaiting,
         "paused_freeze": status == "paused",
+        "terminal_complete_inferred": terminal_complete,
         "stage_duration_seconds": duration,
         "stage_elapsed_seconds": elapsed,
         "stage_remaining_seconds": stage_remaining,
@@ -429,7 +457,8 @@ def inactive_snapshot() -> dict[str, Any]:
         "target_temperature": None, "actual_temperature": None, "summary": "idle · Idle", "source_entity": None,
         "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0, "snapshot_age_minutes": 0,
         "raw_remaining_seconds": None, "raw_stage_remaining_seconds": None, "live_elapsed_since_snapshot_seconds": 0,
-        "live_timer_active": False, "refresh_recommended": False, "awaiting_snapshot": False, "paused_freeze": False, "stage_duration_seconds": None,
+        "live_timer_active": False, "refresh_recommended": False, "awaiting_snapshot": False, "paused_freeze": False,
+        "terminal_complete_inferred": False, "stage_duration_seconds": None,
         "stage_elapsed_seconds": None, "stage_remaining_seconds": 0, "stage_remaining_minutes": 0, "stage_progress_percent": 0,
         "raw_step_index": None, "resolved_step_index": None, "current_step_remaining_seconds": 0, "current_step_remaining_minutes": 0,
         "current_step_description": None, "next_step_description": None, "timeline": [],
