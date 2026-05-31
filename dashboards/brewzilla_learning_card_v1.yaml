@@ -1,0 +1,172 @@
+# BrewAssistant BrewZilla Learning Card v1
+# Advisory background learning with explicit APPLY / DENY recommendation flow.
+
+# Required custom cards:
+# - custom:vertical-stack-in-card
+# - custom:mushroom-template-card
+# - custom:mushroom-chips-card
+# - custom:button-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_brewzilla_learning_status
+    primary: BrewZilla Learning
+    secondary: >-
+      {% if is_state(entity, 'pending') %}
+        Recommendation pending · {{ states('sensor.brewassistant_brewzilla_learning_recommendation_kind') }}
+      {% else %}
+        Observing · {{ states('select.brewassistant_brewzilla_learning_context') }} · {{ states('sensor.brewassistant_brewzilla_learning_confidence') }} confidence
+      {% endif %}
+    icon: mdi:brain
+    icon_color: >-
+      {% if is_state(entity, 'pending') %}amber{% else %}cyan{% endif %}
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewzilla_learning_status
+        state: pending
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_learning_recommendation_state
+          primary: >-
+            Recommendation · {{ states('sensor.brewassistant_brewzilla_learning_recommendation_kind') }}
+          secondary: >-
+            {{ states('sensor.brewassistant_brewzilla_learning_recommendation_current_value') | float(0) | round(0) }}% → {{ states('sensor.brewassistant_brewzilla_learning_recommendation_recommended_value') | float(0) | round(0) }}%
+          icon: mdi:lightbulb-on-outline
+          icon_color: amber
+
+        - type: markdown
+          content: >-
+            **Reason:** {{ states('sensor.brewassistant_brewzilla_learning_recommendation_reason') }}
+
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              name: APPLY
+              label: Execute recommendation
+              icon: mdi:check-decagram
+              show_icon: true
+              show_name: true
+              show_label: true
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.brewassistant_brewzilla_learning_apply
+                confirmation:
+                  text: Apply BrewZilla Learning recommendation now?
+              styles:
+                card:
+                  - min-height: 74px
+                  - border-radius: 20px
+                  - padding: 14px
+                  - background: linear-gradient(135deg, #166534 0%, #14532d 100%)
+                  - color: white
+                  - box-shadow: 0 8px 22px rgba(22, 101, 52, .35)
+                icon:
+                  - color: '#bbf7d0'
+                  - width: 32px
+                name:
+                  - font-size: 18px
+                  - font-weight: 900
+                label:
+                  - font-size: 12px
+                  - color: '#dcfce7'
+            - type: custom:button-card
+              name: DENY
+              label: Skip and snooze
+              icon: mdi:close-octagon
+              show_icon: true
+              show_name: true
+              show_label: true
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.brewassistant_brewzilla_learning_deny
+                confirmation:
+                  text: Deny this BrewZilla Learning recommendation?
+              styles:
+                card:
+                  - min-height: 74px
+                  - border-radius: 20px
+                  - padding: 14px
+                  - background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)
+                  - color: white
+                  - box-shadow: 0 8px 22px rgba(127, 29, 29, .35)
+                icon:
+                  - color: '#fecaca'
+                  - width: 32px
+                name:
+                  - font-size: 18px
+                  - font-weight: 900
+                label:
+                  - font-size: 12px
+                  - color: '#fee2e2'
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewzilla_learning_status
+        state_not: pending
+    card:
+      type: grid
+      columns: 2
+      square: false
+      cards:
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_suggested_heat_utilization
+          primary: Heat suggestion
+          secondary: >-
+            {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+              —
+            {% else %}
+              {{ states(entity) | float(0) | round(0) }}%
+            {% endif %}
+          icon: mdi:fire
+          icon_color: deep-orange
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_heat_adjustment
+          primary: Heat adjustment
+          secondary: >-
+            {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+              —
+            {% else %}
+              {{ states(entity) | float(0) | round(0) }}%
+            {% endif %}
+          icon: mdi:tune-variant
+          icon_color: amber
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_temp_rate_hourly
+          primary: Temp rate
+          secondary: >-
+            {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+              — °C/h
+            {% else %}
+              {{ states(entity) | float(0) | round(1) }} °C/h
+            {% endif %}
+          icon: mdi:chart-line
+          icon_color: blue
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_overshoot_risk
+          primary: Overshoot risk
+          secondary: '{{ states(entity) }}'
+          icon: mdi:thermometer-alert
+          icon_color: >-
+            {% if is_state(entity, 'high') or is_state(entity, 'active_overshoot') %}red{% elif is_state(entity, 'medium') %}amber{% else %}green{% endif %}
+
+  - type: custom:mushroom-chips-card
+    chips:
+      - type: entity
+        entity: select.brewassistant_brewzilla_learning_context
+        icon: mdi:beaker-question-outline
+      - type: entity
+        entity: sensor.brewassistant_brewzilla_stage_kind
+        icon: mdi:state-machine
+      - type: entity
+        entity: sensor.brewassistant_brewzilla_learning_confidence
+        icon: mdi:signal-cellular-outline
