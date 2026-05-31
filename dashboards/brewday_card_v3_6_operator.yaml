@@ -1,0 +1,342 @@
+# BrewAssistant Brewday Card v3.6
+# Operator-focused cockpit: current phase, visual timer, prev/current/next step,
+# addition alert and post-boil chilling handoff. Debug/audit/learning/RAPT are
+# intentionally kept outside this main card.
+
+# Required custom cards:
+# - custom:button-card
+# - custom:vertical-stack-in-card
+# - custom:bar-card
+# - custom:expander-card
+# - custom:mushroom-template-card
+# - custom:mushroom-chips-card
+
+# Main operator card
+# Paste this card into the Brewday dashboard view.
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_stage
+    show_icon: true
+    show_name: false
+    show_state: false
+    icon: >
+      [[[ return states['sensor.brewassistant_brewday_stage_icon']?.state || 'mdi:kettle-steam'; ]]]
+    styles:
+      card:
+        - padding: 18px
+        - border-radius: 24px
+        - color: white
+        - box-shadow: 0 10px 30px rgba(0,0,0,.35)
+        - background: >
+            [[[ 
+              const stage = states['sensor.brewassistant_brewday_stage']?.state || 'Idle';
+              const prio = states['sensor.brewassistant_brewday_stage_priority']?.state || 'idle';
+              if (stage === 'Wort Cooling') return 'linear-gradient(135deg, #0f3b5f 0%, #0f766e 100%)';
+              if (stage === 'Boiling') return 'linear-gradient(135deg, #7c2d12 0%, #b45309 100%)';
+              if (stage === 'Hop Addition' || prio === 'attention') return 'linear-gradient(135deg, #854d0e 0%, #ca8a04 100%)';
+              if (stage.includes('Mash')) return 'linear-gradient(135deg, #3f2f16 0%, #7c5f24 100%)';
+              if (stage === 'Completed') return 'linear-gradient(135deg, #14532d 0%, #166534 100%)';
+              return 'linear-gradient(135deg, #111827 0%, #334155 100%)';
+            ]]]
+      icon:
+        - width: 42px
+        - color: rgba(255,255,255,.94)
+      grid:
+        - grid-template-areas: 'i title title' 'i timer timer' 'i meta meta' 'action action action'
+        - grid-template-columns: 52px 1fr 1fr
+        - grid-template-rows: min-content min-content min-content min-content
+      custom_fields:
+        title:
+          - align-self: start
+          - justify-self: start
+          - font-size: 22px
+          - font-weight: 800
+          - line-height: 1.1
+        timer:
+          - align-self: start
+          - justify-self: start
+          - font-size: 38px
+          - font-weight: 900
+          - letter-spacing: -1px
+          - margin-top: 4px
+        meta:
+          - align-self: start
+          - justify-self: start
+          - font-size: 13px
+          - opacity: .88
+          - margin-top: 4px
+        action:
+          - align-self: start
+          - justify-self: stretch
+          - font-size: 14px
+          - font-weight: 700
+          - margin-top: 14px
+          - padding: 10px 12px
+          - border-radius: 14px
+          - background: rgba(255,255,255,.13)
+    custom_fields:
+      title: >
+        [[[ 
+          const stage = states['sensor.brewassistant_brewday_stage']?.state || 'Idle';
+          const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state || 'idle';
+          return `${stage} · ${runtime}`;
+        ]]]
+      timer: >
+        [[[ 
+          const sec = Number(states['sensor.brewassistant_brewday_live_time_remaining']?.state);
+          const min = Number(states['sensor.brewassistant_brewday_live_time_remaining_minutes']?.state);
+          const stage = states['sensor.brewassistant_brewday_stage']?.state || '';
+          if (stage === 'Wort Cooling') return 'Kylning';
+          if (!isNaN(sec) && sec > 0) {
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = Math.floor(sec % 60);
+            if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            return `${m}:${String(s).padStart(2,'0')}`;
+          }
+          if (!isNaN(min) && min > 0) return `${Math.round(min)} min`;
+          return 'Redo';
+        ]]]
+      meta: >
+        [[[ 
+          const step = states['sensor.brewassistant_brewday_runtime_step']?.state || '—';
+          const progress = states['sensor.brewassistant_brewday_live_progress']?.state || '0';
+          const temp = states['sensor.brewassistant_brewzilla_current_temperature']?.state || '—';
+          const target = states['sensor.brewassistant_brewzilla_target_temperature']?.state || '—';
+          return `${step} · ${progress}% · BZ ${temp} → ${target} °C`;
+        ]]]
+      action: >
+        [[[ return states['sensor.brewassistant_brewday_stage_suggested_action']?.state || 'Monitor brewday'; ]]]
+
+  - type: custom:bar-card
+    entity: sensor.brewassistant_brewday_live_progress
+    name: Progress
+    height: 18px
+    min: 0
+    max: 100
+    decimal: 0
+    positions:
+      icon: 'off'
+      indicator: 'off'
+      name: inside
+      value: inside
+    severity:
+      - from: 0
+        to: 35
+        color: '#64748b'
+      - from: 36
+        to: 75
+        color: '#0ea5e9'
+      - from: 76
+        to: 100
+        color: '#22c55e'
+    card_mod:
+      style: |
+        ha-card {
+          background: rgba(15, 23, 42, .72);
+          border-radius: 18px;
+          padding: 8px 12px;
+        }
+
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewday_runtime_summary
+        show_icon: false
+        show_name: true
+        show_state: false
+        name: Föregående
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(30,41,59,.65)
+          name:
+            - font-size: 11px
+            - color: '#94a3b8'
+          custom_fields:
+            value:
+              - font-size: 13px
+              - font-weight: 700
+              - color: white
+              - white-space: normal
+        custom_fields:
+          value: >
+            [[[ 
+              const tl = states['sensor.brewassistant_brewday_runtime_summary']?.attributes?.timeline || [];
+              for (const stage of tl) {
+                const steps = stage.steps || [];
+                const idx = steps.findIndex(s => s.active);
+                if (idx > 0) return steps[idx - 1].name || '—';
+                if (idx === 0) return stage.name || '—';
+              }
+              return '—';
+            ]]]
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewday_runtime_step
+        show_icon: false
+        show_name: true
+        show_state: true
+        name: Nu
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(14,165,233,.18)
+            - border: 1px solid rgba(125,211,252,.35)
+          name:
+            - font-size: 11px
+            - color: '#bae6fd'
+          state:
+            - font-size: 13px
+            - font-weight: 800
+            - color: white
+            - white-space: normal
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewday_runtime_next_step
+        show_icon: false
+        show_name: true
+        show_state: true
+        name: Nästa
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(30,41,59,.65)
+          name:
+            - font-size: 11px
+            - color: '#94a3b8'
+          state:
+            - font-size: 13px
+            - font-weight: 700
+            - color: white
+            - white-space: normal
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewday_addition_alert_state
+        state_not: 'off'
+      - entity: sensor.brewassistant_brewday_addition_alert_state
+        state_not: 'none'
+    card:
+      type: custom:mushroom-template-card
+      entity: sensor.brewassistant_brewday_addition_alert_state
+      primary: >-
+        {% if is_state('sensor.brewassistant_brewday_addition_alert_state', 'due_now') %}
+          Humlegiva nu
+        {% elif is_state('sensor.brewassistant_brewday_addition_alert_state', 'due_soon') %}
+          Humlegiva snart
+        {% else %}
+          Nästa bryggtillsats
+        {% endif %}
+      secondary: '{{ states("sensor.brewassistant_brewday_addition_alert_message") }}'
+      icon: mdi:hop
+      icon_color: >-
+        {% if is_state('sensor.brewassistant_brewday_addition_alert_state', 'due_now') %}
+          red
+        {% elif is_state('sensor.brewassistant_brewday_addition_alert_state', 'due_soon') %}
+          amber
+        {% else %}
+          green
+        {% endif %}
+      card_mod:
+        style: |
+          ha-card {
+            border-radius: 18px;
+            background: rgba(120, 53, 15, .28);
+          }
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewday_stage
+        state: Wort Cooling
+    card:
+      type: custom:mushroom-template-card
+      entity: sensor.brewassistant_brewday_stage
+      primary: Vörtkylning
+      secondary: '{{ states("sensor.brewassistant_brewday_stage_suggested_action") }}'
+      icon: mdi:snowflake-thermometer
+      icon_color: cyan
+      card_mod:
+        style: |
+          ha-card {
+            border-radius: 18px;
+            background: rgba(14, 116, 144, .28);
+          }
+
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_brewzilla_current_temperature
+        primary: BZ Temp
+        secondary: '{{ states(entity) }} °C'
+        icon: mdi:thermometer
+        icon_color: orange
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_brewzilla_target_temperature
+        primary: Target
+        secondary: '{{ states(entity) }} °C'
+        icon: mdi:bullseye-arrow
+        icon_color: blue
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_brewzilla_power
+        primary: Power
+        secondary: '{{ states(entity) }} W'
+        icon: mdi:flash
+        icon_color: yellow
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_brewzilla_control_reason
+        primary: BA
+        secondary: '{{ states(entity) }}'
+        icon: mdi:robot
+        icon_color: green
+
+  - type: custom:mushroom-chips-card
+    chips:
+      - type: entity
+        entity: sensor.brewassistant_brewzilla_orchestration_mode
+        icon: mdi:state-machine
+      - type: entity
+        entity: sensor.brewassistant_brewzilla_energy_session
+        icon: mdi:lightning-bolt
+      - type: entity
+        entity: sensor.brewassistant_brewzilla_energy_cost_session
+        icon: mdi:cash
+      - type: action
+        icon: mdi:stop-circle-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.abort_brewzilla
+          confirmation:
+            text: Stoppa BrewZilla heater och pump?
+
+  - type: custom:expander-card
+    title: Brewfather RAW Timeline
+    padding: 0
+    clear: false
+    cards:
+      - type: markdown
+        content: >-
+          {% set tl = state_attr('sensor.brewassistant_brewday_runtime_summary', 'timeline') or [] %}
+          {% for stage in tl %}
+          **{{ stage.name }}**  
+          {% for step in stage.steps %}
+          {% if step.active %}➡️{% elif step.completed %}✅{% else %}▫️{% endif %} {{ step.name }}{% if step.duration %} · {{ (step.duration / 60) | round(0) }} min{% endif %}  
+          {% endfor %}
+          {% endfor %}
+      - type: entities
+        title: Raw/runtime snapshot
+        entities:
+          - entity: sensor.brewassistant_brewday_runtime_source
+          - entity: sensor.brewassistant_brewday_runtime_status
+          - entity: sensor.brewassistant_brewday_runtime_state
+          - entity: sensor.brewassistant_brewday_runtime_stage
+          - entity: sensor.brewassistant_brewday_runtime_step
+          - entity: sensor.brewassistant_brewday_runtime_next_step
+          - entity: sensor.brewassistant_brewday_snapshot_age_minutes
