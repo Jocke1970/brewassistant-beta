@@ -14,6 +14,20 @@ from .entity import BrewAssistantEntity
 
 
 BREWZILLA_LEARNING_SENSORS: dict[str, dict[str, Any]] = {
+    "brewzilla_learning_status": {"field": "status"},
+    "brewzilla_learning_recommendation_state": {"field": "recommendation_state"},
+    "brewzilla_learning_recommendation_kind": {"field": "recommendation_kind"},
+    "brewzilla_learning_recommendation_current_value": {
+        "field": "recommendation_current_value",
+        "unit": PERCENTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_learning_recommendation_recommended_value": {
+        "field": "recommendation_recommended_value",
+        "unit": PERCENTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_learning_recommendation_reason": {"field": "recommendation_reason"},
     "brewzilla_learning_phase": {"field": "phase"},
     "brewzilla_learning_confidence": {"field": "confidence"},
     "brewzilla_stage_kind": {"field": "stage_kind"},
