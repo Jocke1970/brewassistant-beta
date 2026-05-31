@@ -44,7 +44,8 @@ cards:
         - width: 42px
         - color: rgba(255,255,255,.94)
       grid:
-        - grid-template-areas: 'i title title' 'i timer timer' 'i meta meta' 'action action action'
+        - grid-template-areas: >-
+            "i title title" "i timer timer" "i meta meta" "action action action"
         - grid-template-columns: 52px 1fr 1fr
         - grid-template-rows: min-content min-content min-content min-content
       custom_fields:
@@ -103,8 +104,10 @@ cards:
         [[[ 
           const step = states['sensor.brewassistant_brewday_runtime_step']?.state || '—';
           const progress = states['sensor.brewassistant_brewday_live_progress']?.state || '0';
-          const temp = states['sensor.brewassistant_brewzilla_current_temperature']?.state || '—';
-          const target = states['sensor.brewassistant_brewzilla_target_temperature']?.state || '—';
+          const rawTemp = Number(states['sensor.brewassistant_brewzilla_current_temperature']?.state);
+          const rawTarget = Number(states['sensor.brewassistant_brewzilla_target_temperature']?.state);
+          const temp = isNaN(rawTemp) ? '—' : rawTemp.toFixed(1);
+          const target = isNaN(rawTarget) ? '—' : rawTarget.toFixed(1);
           return `${step} · ${progress}% · BZ ${temp} → ${target} °C`;
         ]]]
       action: >
@@ -269,25 +272,30 @@ cards:
           }
 
   - type: grid
-    columns: 4
+    columns: 2
     square: false
     cards:
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_brewzilla_current_temperature
         primary: BZ Temp
-        secondary: '{{ states(entity) }} °C'
+        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
         icon: mdi:thermometer
         icon_color: orange
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_brewzilla_target_temperature
         primary: Target
-        secondary: '{{ states(entity) }} °C'
+        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
         icon: mdi:bullseye-arrow
         icon_color: blue
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_brewzilla_power
         primary: Power
-        secondary: '{{ states(entity) }} W'
+        secondary: >-
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            — W
+          {% else %}
+            {{ states(entity) | float(0) | round(0) }} W
+          {% endif %}
         icon: mdi:flash
         icon_color: yellow
       - type: custom:mushroom-template-card
