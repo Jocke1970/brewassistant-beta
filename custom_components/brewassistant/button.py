@@ -9,6 +9,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .brewzilla_learning import (
+    async_apply_brewzilla_learning_recommendation,
+    async_deny_brewzilla_learning_recommendation,
+    build_brewzilla_learning_snapshot,
+)
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
@@ -32,6 +37,8 @@ async def async_setup_entry(
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
+            BrewAssistantBrewZillaLearningApplyButton(coordinator),
+            BrewAssistantBrewZillaLearningDenyButton(coordinator),
         ]
     )
 
@@ -109,3 +116,49 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEnti
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return CFC diagnostics."""
         return get_counterflow_chiller_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantEntity, ButtonEntity):
+    """Apply current BrewZilla Learning recommendation."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_learning_apply")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_learning_apply"
+        self._attr_name = "BrewAssistant BrewZilla Learning APPLY"
+        self._attr_icon = "mdi:check-decagram"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_apply"
+
+    async def async_press(self) -> None:
+        """Apply current recommendation."""
+        await async_apply_brewzilla_learning_recommendation(self.coordinator.hass)
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return recommendation diagnostics."""
+        return build_brewzilla_learning_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaLearningDenyButton(BrewAssistantEntity, ButtonEntity):
+    """Deny current BrewZilla Learning recommendation."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_learning_deny")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_learning_deny"
+        self._attr_name = "BrewAssistant BrewZilla Learning DENY"
+        self._attr_icon = "mdi:close-octagon"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_deny"
+
+    async def async_press(self) -> None:
+        """Deny current recommendation."""
+        await async_deny_brewzilla_learning_recommendation(self.coordinator.hass)
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return recommendation diagnostics."""
+        return build_brewzilla_learning_snapshot(self.coordinator.hass)
