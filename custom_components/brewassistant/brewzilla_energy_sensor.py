@@ -32,6 +32,21 @@ BREWZILLA_ENERGY_SENSORS: dict[str, dict[str, Any]] = {
         "device_class": SensorDeviceClass.POWER,
         "state_class": SensorStateClass.MEASUREMENT,
     },
+    "brewzilla_energy_cost_session": {
+        "field": "cost_sek",
+        "unit": "SEK",
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+    },
+    "brewzilla_energy_current_price_cost_estimate": {
+        "field": "current_price_cost_estimate_sek",
+        "unit": "SEK",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_energy_price": {
+        "field": "price_sek_per_kwh",
+        "unit": "SEK/kWh",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
     "brewzilla_energy_tracking_active": {"field": "tracking_active"},
 }
 
