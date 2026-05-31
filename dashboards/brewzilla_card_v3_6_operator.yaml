@@ -240,6 +240,114 @@ cards:
         icon: mdi:timeline-clock
         icon_color: purple
 
+  - type: custom:button-card
+    name: Heat / Pump utilization
+    show_icon: false
+    show_state: false
+    styles:
+      card:
+        - padding: 12px
+        - border-radius: 20px
+        - background: rgba(15,23,42,.68)
+        - color: white
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 800
+
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        name: Heat -5
+        icon: mdi:minus
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.brewzilla_heat_utilization
+          data:
+            value: >
+              [[[ return Math.max(0, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) - 5); ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - background: rgba(127,29,29,.28)
+            - color: white
+          name:
+            - font-size: 13px
+            - font-weight: 800
+          icon:
+            - color: '#fecaca'
+      - type: custom:button-card
+        name: Heat +5
+        icon: mdi:plus
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.brewzilla_heat_utilization
+          data:
+            value: >
+              [[[ return Math.min(100, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) + 5); ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - background: rgba(194,65,12,.30)
+            - color: white
+          name:
+            - font-size: 13px
+            - font-weight: 800
+          icon:
+            - color: '#fed7aa'
+      - type: custom:button-card
+        name: Pump -5
+        icon: mdi:minus
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.brewzilla_pump_utilization
+          data:
+            value: >
+              [[[ return Math.max(0, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) - 5); ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - background: rgba(14,116,144,.24)
+            - color: white
+          name:
+            - font-size: 13px
+            - font-weight: 800
+          icon:
+            - color: '#cffafe'
+      - type: custom:button-card
+        name: Pump +5
+        icon: mdi:plus
+        tap_action:
+          action: call-service
+          service: number.set_value
+          target:
+            entity_id: number.brewzilla_pump_utilization
+          data:
+            value: >
+              [[[ return Math.min(100, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) + 5); ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - background: rgba(8,145,178,.30)
+            - color: white
+          name:
+            - font-size: 13px
+            - font-weight: 800
+          icon:
+            - color: '#a5f3fc'
+
   - type: custom:mushroom-chips-card
     chips:
       - type: entity
