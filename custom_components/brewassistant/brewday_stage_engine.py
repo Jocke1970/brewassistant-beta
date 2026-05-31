@@ -76,6 +76,14 @@ TRANSFER_TO_FERMENTER_KEYWORDS = (
     "for over till jaskarl",
 )
 
+BOIL_KEYWORDS = (
+    "boil",
+    "boiling",
+    "kok",
+    "kokning",
+    "kokgiva",
+)
+
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
     entity_state = hass.states.get(entity_id)
@@ -137,9 +145,9 @@ def _stage_group(stage: str) -> str:
 
 
 def _stage_priority(stage: str) -> str:
-    if stage in {"Hop Addition", "Pitch Ready"}:
+    if stage in {"Hop Addition", "Pitch Ready", "Wort Cooling"}:
         return "attention"
-    if stage in {"Boiling", "Wort Cooling", "Transfer"}:
+    if stage in {"Boiling", "Transfer"}:
         return "active"
     if stage in {"Heating Strike", "Heating To Boil", "Mash Out"}:
         return "warming"
@@ -181,7 +189,7 @@ def _suggested_action(stage: str, remaining_min: float | None, delta: float | No
     if stage == "Whirlpool":
         return "Run whirlpool or hop stand schedule"
     if stage == "Wort Cooling":
-        return "Start/monitor counterflow cooling"
+        return "Start wort chilling / monitor cooling to pitch temperature"
     if stage == "Pitch Ready":
         return "Transfer and pitch when sanitation is ready"
     if stage == "Transfer":
@@ -209,7 +217,7 @@ def _control_hint(stage: str, bz_state: str | None, power: float | None, pump_ut
     if stage == "Boiling" and power_value > 0:
         return "boil_monitor"
     if stage == "Wort Cooling":
-        return "cooling_monitor"
+        return "cooling_handoff"
     if stage in {"Hop Addition", "Pitch Ready", "Transfer"}:
         return "manual_attention"
     return f"observe_{bz}"
@@ -231,16 +239,21 @@ def _resolve_stage(
     pump_util: float | None,
 ) -> tuple[str, str]:
     """Resolve interpreted brewday process stage and reason."""
+    current_blob = f"{runtime_stage or ''} {runtime_step or ''}".lower()
+
     if runtime_state in {None, "idle", "inactive"}:
         return "Idle", "Brewday runtime is idle"
 
     if runtime_state == "completed":
+        if _contains(current_blob, *BOIL_KEYWORDS):
+            return "Wort Cooling", "Brewfather ended after boil; BrewAssistant recommends wort chilling handoff"
+        if _contains(current_blob, "whirlpool", "hop stand", "hopstand"):
+            return "Wort Cooling", "Brewfather ended after whirlpool; BrewAssistant recommends wort chilling handoff"
         return "Completed", "Brewday runtime completed"
 
     # Only the active stage/step should determine the current interpreted stage.
     # next_step is intentionally kept out of this blob so an upcoming "Chill wort"
     # step does not wake the cooling cockpit while Whirlpool is still active.
-    current_blob = f"{runtime_stage or ''} {runtime_step or ''}".lower()
     next_blob = f"{next_step or ''}".lower()
     temp_value = temp if temp is not None else -999
     target_value = target if target is not None else None
