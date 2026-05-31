@@ -1,12 +1,14 @@
-"""BrewZilla learning and heat-utilization suggestion helpers.
+"""BrewZilla learning and operator-confirmed recommendations.
 
-This is intentionally advisory only. BrewAssistant observes BrewZilla behavior
-and exposes suggested heat utilization plus diagnostics, but does not auto-apply
-heat utilization changes.
+This module is intentionally advisory. BrewAssistant observes BrewZilla behavior,
+creates one pending recommendation at a time, and only executes changes after
+explicit operator APPLY. DENY marks the recommendation as skipped and snoozes the
+same recommendation for a short period.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant, State
@@ -29,9 +31,11 @@ _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot"}
 _RAMP_WORDS = ("ramp", "heat", "värm", "uppvärm", "strike", "mash in", "mash-in")
 _HOLD_WORDS = ("hold", "rest", "rast", "mash", "mäsk", "saccharification", "beta", "alpha")
-_BOIL_WORDS = ("boil", "kok")
+_BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokning", "kokgiva")
 _COOL_WORDS = ("cool", "chill", "kyl")
 _CONTEXT_OPTIONS = {"Unknown", "Water only", "Real mash"}
+MIN_RECOMMENDATION_DIFF = 5
+DENY_SNOOZE_SECONDS = 15 * 60
 
 
 def _state_obj(hass: HomeAssistant, entity_id: str) -> State | None:
@@ -67,7 +71,17 @@ def _age_seconds(state: State | None) -> int | None:
 
 
 def _learning_store(hass: HomeAssistant) -> dict[str, Any]:
-    return hass.data.setdefault("brewassistant", {}).setdefault(DATA_KEY, {})
+    return hass.data.setdefault("brewassistant", {}).setdefault(
+        DATA_KEY,
+        {
+            "enabled": True,
+            "pending": None,
+            "last_applied": None,
+            "last_denied": None,
+            "denied_until": {},
+            "observation_count": 0,
+        },
+    )
 
 
 def learning_context(hass: HomeAssistant) -> str:
@@ -152,6 +166,10 @@ def _pump_heat_bias(stage_kind: str, pump_on: bool, pump_utilization: float | No
 
 def _apply_heat_biases(suggestion: int, pump_bias: int, context_bias: int) -> int:
     return max(0, min(100, int(round(suggestion + pump_bias + context_bias))))
+
+
+def _round5(value: float) -> int:
+    return max(0, min(100, int(round(value / 5.0) * 5)))
 
 
 def _update_temperature_observation(hass: HomeAssistant, current_temperature: float | None) -> dict[str, Any]:
@@ -269,13 +287,79 @@ def _suggest_heat_utilization(
     return None, "low", "unknown", f"No suggestion available.{context_note}"
 
 
+def _denied_snoozed(hass: HomeAssistant, recommendation_id: str) -> bool:
+    raw = _learning_store(hass).get("denied_until", {}).get(recommendation_id)
+    if not raw:
+        return False
+    parsed = dt_util.parse_datetime(str(raw))
+    if parsed is None:
+        return False
+    return dt_util.utcnow() < dt_util.as_utc(parsed)
+
+
+def _make_pending_recommendation(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    """Create a pending APPLY/DENY recommendation from the observation snapshot."""
+    suggestion = snapshot.get("suggested_heat_utilization")
+    heat = snapshot.get("heat_utilization")
+    pump = snapshot.get("pump_utilization")
+    stage_kind = snapshot.get("stage_kind")
+    confidence = str(snapshot.get("confidence") or "low")
+    reason = str(snapshot.get("strategy_reason") or "")
+
+    if stage_kind == "boil" and pump is not None and float(pump) > 0:
+        return {
+            "recommendation_id": "pump_utilization:boil:to_0",
+            "kind": "pump_utilization",
+            "entity_id": BREWZILLA_PUMP_UTILIZATION,
+            "current_value": round(float(pump), 1),
+            "recommended_value": 0,
+            "confidence": "high",
+            "severity": "actionable",
+            "context": stage_kind,
+            "reason": "Boil stage detected. Pump utilization should normally be 0 during boil unless an explicit operator flow, such as CFC Ready, starts it.",
+            "action_label": "Set pump utilization to 0%",
+            "apply_service": "number.set_value",
+            "apply_entity": BREWZILLA_PUMP_UTILIZATION,
+            "apply_value": 0,
+        }
+
+    if suggestion is None or heat is None:
+        return None
+    suggested = _round5(float(suggestion))
+    current = float(heat)
+    if abs(suggested - current) < MIN_RECOMMENDATION_DIFF:
+        return None
+    if confidence not in {"medium", "high"}:
+        return None
+    direction = "increase" if suggested > current else "reduce"
+    return {
+        "recommendation_id": f"heat_utilization:{stage_kind}:{_round5(current)}_to_{suggested}",
+        "kind": "heat_utilization",
+        "entity_id": BREWZILLA_HEAT_UTILIZATION,
+        "current_value": round(current, 1),
+        "recommended_value": suggested,
+        "confidence": confidence,
+        "severity": "suggestion",
+        "context": stage_kind,
+        "reason": reason,
+        "action_label": f"{direction.title()} heat utilization to {suggested}%",
+        "apply_service": "number.set_value",
+        "apply_entity": BREWZILLA_HEAT_UTILIZATION,
+        "apply_value": suggested,
+    }
+
+
 def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build BrewZilla learning/suggestion snapshot."""
+    store = _learning_store(hass)
     runtime = build_core_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle").lower()
     stage_kind = _stage_kind(runtime)
     context = learning_context(hass)
     context_mod = _context_bias(context)
+
+    store["observation_count"] = int(store.get("observation_count") or 0) + 1
+    store["last_observed_at"] = dt_util.utcnow().isoformat()
 
     current_temperature = _float(hass, BREWZILLA_TEMP_SENSOR)
     target_temperature = runtime.get("target_temperature")
@@ -331,9 +415,9 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     if suggestion is not None and heat_utilization is not None:
         heat_adjustment = int(round(suggestion - heat_utilization))
 
-    return {
+    base_snapshot = {
         "source": "brewzilla_learning",
-        "mode": "observe_and_suggest",
+        "mode": "observe_recommend_apply_deny",
         "runtime_state": runtime_state,
         "runtime_stage": runtime.get("stage"),
         "runtime_step": runtime.get("step"),
@@ -368,4 +452,91 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "overshoot_risk": overshoot_risk,
         "strategy_reason": reason,
         "auto_apply_allowed": False,
+        "last_observed_at": store.get("last_observed_at"),
+        "observation_count": store.get("observation_count"),
     }
+
+    pending = store.get("pending")
+    candidate = _make_pending_recommendation(base_snapshot)
+    if candidate is not None and not _denied_snoozed(hass, str(candidate["recommendation_id"])):
+        if not pending or pending.get("recommendation_id") != candidate.get("recommendation_id"):
+            candidate["state"] = "pending"
+            candidate["created_at"] = dt_util.utcnow().isoformat()
+            store["pending"] = candidate
+            pending = candidate
+    elif pending is not None:
+        store["pending"] = None
+        pending = None
+
+    return {
+        **base_snapshot,
+        "status": "pending" if pending else "observing",
+        "recommendation_state": pending.get("state") if pending else "none",
+        "recommendation_id": pending.get("recommendation_id") if pending else None,
+        "recommendation_kind": pending.get("kind") if pending else None,
+        "recommendation_entity_id": pending.get("entity_id") if pending else None,
+        "recommendation_current_value": pending.get("current_value") if pending else None,
+        "recommendation_recommended_value": pending.get("recommended_value") if pending else None,
+        "recommendation_reason": pending.get("reason") if pending else "No actionable learning recommendation right now.",
+        "recommendation_action_label": pending.get("action_label") if pending else None,
+        "pending_recommendation": pending,
+        "last_applied": store.get("last_applied"),
+        "last_denied": store.get("last_denied"),
+        "deny_snooze_seconds": DENY_SNOOZE_SECONDS,
+    }
+
+
+async def async_apply_brewzilla_learning_recommendation(hass: HomeAssistant) -> dict[str, Any]:
+    """Apply the current pending BrewZilla learning recommendation."""
+    store = _learning_store(hass)
+    snapshot = build_brewzilla_learning_snapshot(hass)
+    pending = snapshot.get("pending_recommendation")
+    if not pending:
+        return {**snapshot, "applied": False, "apply_result": "no_pending_recommendation"}
+
+    entity_id = pending.get("apply_entity") or pending.get("entity_id")
+    value = pending.get("apply_value") or pending.get("recommended_value")
+    if entity_id is None or value is None or hass.states.get(str(entity_id)) is None:
+        return {**snapshot, "applied": False, "apply_result": "missing_entity_or_value"}
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": str(entity_id), "value": float(value)},
+        blocking=True,
+    )
+    result = {
+        **snapshot,
+        "applied": True,
+        "apply_result": "applied",
+        "applied_at": dt_util.utcnow().isoformat(),
+        "applied_entity": entity_id,
+        "applied_value": float(value),
+    }
+    store["last_applied"] = result
+    store["pending"] = None
+    return result
+
+
+async def async_deny_brewzilla_learning_recommendation(hass: HomeAssistant) -> dict[str, Any]:
+    """Deny the current pending BrewZilla learning recommendation."""
+    store = _learning_store(hass)
+    snapshot = build_brewzilla_learning_snapshot(hass)
+    pending = snapshot.get("pending_recommendation")
+    if not pending:
+        return {**snapshot, "denied": False, "deny_result": "no_pending_recommendation"}
+
+    denied_at = dt_util.utcnow()
+    denied_until = denied_at + timedelta(seconds=DENY_SNOOZE_SECONDS)
+    recommendation_id = str(pending.get("recommendation_id"))
+    store.setdefault("denied_until", {})[recommendation_id] = denied_until.isoformat()
+    result = {
+        **snapshot,
+        "denied": True,
+        "deny_result": "denied",
+        "denied_at": denied_at.isoformat(),
+        "denied_until": denied_until.isoformat(),
+    }
+    store["last_denied"] = result
+    store["pending"] = None
+    return result
