@@ -7,11 +7,10 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .brewday_runtime_core import as_float, build_core_snapshot, clean, indices, stages, step_desc, step_display_name
+from .counterflow_chiller import get_counterflow_chiller_snapshot
 
 DUE_SOON_SECONDS = 300
 DUE_NOW_SECONDS = 30
-COUNTERFLOW_CHILLER_ENABLED = "input_boolean.brewassistant_counterflow_chiller_enabled"
-COUNTERFLOW_CHILLER_SANITIZE_MINUTES = "input_number.brewassistant_counterflow_chiller_sanitize_minutes"
 COUNTERFLOW_CHILLER_DEFAULT_SANITIZE_SECONDS = 15 * 60
 ADDITION_WORDS = (
     "hop",
@@ -29,23 +28,6 @@ BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "ko
 
 def _text(value: Any) -> str:
     return clean(value, 240) or ""
-
-
-def _bool_state(hass: HomeAssistant, entity_id: str, default: bool = False) -> bool:
-    fallback = "on" if default else "off"
-    state = hass.states.get(entity_id)
-    raw = state.state if state is not None else fallback
-    return str(raw).lower() in {"on", "true", "yes", "enabled"}
-
-
-def _number_state(hass: HomeAssistant, entity_id: str, default: float) -> float:
-    state = hass.states.get(entity_id)
-    if state is None or state.state in {"unknown", "unavailable", "none", ""}:
-        return default
-    try:
-        return float(state.state)
-    except (TypeError, ValueError):
-        return default
 
 
 def _contains_addition_word(step: dict[str, Any]) -> bool:
@@ -97,17 +79,15 @@ def _counterflow_sanitize_candidate(
     stage_remaining: int,
 ) -> dict[str, Any] | None:
     """Return counterflow chiller sanitation reminder candidate during boil."""
-    if not _bool_state(hass, COUNTERFLOW_CHILLER_ENABLED, False):
+    cfc = get_counterflow_chiller_snapshot(hass)
+    if not cfc.get("enabled"):
+        return None
+    if cfc.get("ready"):
         return None
     if not _stage_is_boil(stage, runtime):
         return None
 
-    sanitize_minutes = _number_state(
-        hass,
-        COUNTERFLOW_CHILLER_SANITIZE_MINUTES,
-        COUNTERFLOW_CHILLER_DEFAULT_SANITIZE_SECONDS / 60,
-    )
-    sanitize_seconds = max(60, int(sanitize_minutes * 60))
+    sanitize_seconds = max(60, int(cfc.get("sanitize_seconds") or COUNTERFLOW_CHILLER_DEFAULT_SANITIZE_SECONDS))
     due = max(0, int(stage_remaining - sanitize_seconds))
     due_minutes = round(due / 60)
     return {
@@ -121,6 +101,7 @@ def _counterflow_sanitize_candidate(
         "stage": _text(stage.get("name")) or f"Stage {stage_index + 1}",
         "sanitize_seconds_before_end": sanitize_seconds,
         "sanitize_minutes_before_end": round(sanitize_seconds / 60),
+        "cfc_ready": cfc.get("ready"),
     }
 
 
@@ -170,12 +151,7 @@ def _candidates(hass: HomeAssistant, runtime: dict[str, Any]) -> list[dict[str, 
 def build_addition_alert_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime = build_core_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle")
-    counterflow_enabled = _bool_state(hass, COUNTERFLOW_CHILLER_ENABLED, False)
-    counterflow_sanitize_minutes = _number_state(
-        hass,
-        COUNTERFLOW_CHILLER_SANITIZE_MINUTES,
-        COUNTERFLOW_CHILLER_DEFAULT_SANITIZE_SECONDS / 60,
-    )
+    cfc = get_counterflow_chiller_snapshot(hass)
     candidates = _candidates(hass, runtime) if runtime_state in {"live", "running", "paused", "awaiting_snapshot"} else []
     item = candidates[0] if candidates else None
     due_seconds = item.get("due_seconds") if item else None
@@ -193,9 +169,9 @@ def build_addition_alert_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     name = item.get("name") if item else None
     due_minutes = item.get("due_minutes") if item else None
     if item_type == "counterflow_chiller_sanitize" and state == "due_now":
-        message = f"Koppla in {name} nu för sterilisering under sista {item.get('sanitize_minutes_before_end')} min av koket"
+        message = f"Koppla in {name} nu och tryck CFC Ready för att starta pumpen"
     elif item_type == "counterflow_chiller_sanitize" and state == "due_soon":
-        message = f"Förbered {name}: koppla in om ca {due_minutes} min för sterilisering"
+        message = f"Förbered {name}: koppla in om ca {due_minutes} min och tryck CFC Ready"
     elif item_type == "counterflow_chiller_sanitize" and state == "upcoming":
         message = f"{name}: sterilisering startar om ca {due_minutes} min"
     elif state == "due_now" and name:
@@ -227,10 +203,10 @@ def build_addition_alert_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_step": runtime.get("step"),
         "candidate_count": len(candidates),
         "candidates": candidates[:8],
-        "counterflow_chiller_enabled": counterflow_enabled,
-        "counterflow_chiller_enabled_entity": COUNTERFLOW_CHILLER_ENABLED,
-        "counterflow_chiller_sanitize_minutes": counterflow_sanitize_minutes,
-        "counterflow_chiller_sanitize_minutes_entity": COUNTERFLOW_CHILLER_SANITIZE_MINUTES,
+        "counterflow_chiller_enabled": cfc.get("enabled"),
+        "counterflow_chiller_ready": cfc.get("ready"),
+        "counterflow_chiller_sanitize_minutes": cfc.get("sanitize_minutes"),
+        "counterflow_chiller_pump_utilization": cfc.get("pump_utilization"),
         "due_soon_threshold_seconds": DUE_SOON_SECONDS,
         "due_now_threshold_seconds": DUE_NOW_SECONDS,
     }
