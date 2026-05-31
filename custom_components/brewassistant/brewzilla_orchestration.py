@@ -32,21 +32,25 @@ TARGET_SYNC_TOLERANCE = 0.1
 MAX_SNAPSHOT_AGE_MINUTES = 15.0
 RAPT_OBSERVATION_WARN_AGE_SECONDS = 300
 RAPT_CRITICAL_WINDOW_SECONDS = 90
+PAUSED_TARGET_REWIND_GUARD_DELTA = -2.0
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
 _MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
-RAPT_BREWZILLA_ENTITY_IDS = (
+RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS = (
     BREWZILLA_TEMP_SENSOR,
-    BREWZILLA_CONNECTION_SENSOR,
     BREWZILLA_POWER_SENSOR,
     BREWZILLA_TARGET_NUMBER,
-    BREWZILLA_MAIN_SWITCH,
-    BREWZILLA_HEATER_SWITCH,
-    BREWZILLA_PUMP_SWITCH,
     BREWZILLA_HEAT_UTILIZATION,
     BREWZILLA_PUMP_UTILIZATION,
 )
+RAPT_BREWZILLA_STATIC_ENTITY_IDS = (
+    BREWZILLA_CONNECTION_SENSOR,
+    BREWZILLA_MAIN_SWITCH,
+    BREWZILLA_HEATER_SWITCH,
+    BREWZILLA_PUMP_SWITCH,
+)
+RAPT_BREWZILLA_ENTITY_IDS = RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS + RAPT_BREWZILLA_STATIC_ENTITY_IDS
 
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
@@ -88,19 +92,40 @@ def _entity_age_seconds(entity_state: State | None) -> int | None:
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(entity_state.last_updated)).total_seconds()))
 
 
-def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
-    """Return diagnostic ages for RAPT Cloud Link BrewZilla entities.
-
-    These fields are observational only. They help determine whether perceived
-    runtime lag comes from Home Assistant polling, RAPT Cloud caching, or the
-    Brewfather/Brew Tracker layer.
-    """
-    entities: dict[str, dict[str, Any]] = {}
-    ages: list[int] = []
+def _entity_age_summary(entities: dict[str, dict[str, Any]], entity_ids: tuple[str, ...]) -> dict[str, Any]:
     newest_age: int | None = None
     oldest_age: int | None = None
     newest_entity: str | None = None
     oldest_entity: str | None = None
+
+    for entity_id in entity_ids:
+        age = entities.get(entity_id, {}).get("age_seconds")
+        if age is None:
+            continue
+        if newest_age is None or age < newest_age:
+            newest_age = age
+            newest_entity = entity_id
+        if oldest_age is None or age > oldest_age:
+            oldest_age = age
+            oldest_entity = entity_id
+
+    return {
+        "newest_entity": newest_entity,
+        "newest_age_seconds": newest_age,
+        "oldest_entity": oldest_entity,
+        "oldest_age_seconds": oldest_age,
+    }
+
+
+def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
+    """Return diagnostic ages for RAPT Cloud Link BrewZilla entities.
+
+    Dynamic data age is calculated from values that are expected to update during
+    a brewday. Static switch/connection entities are tracked separately because
+    their last_updated timestamps may legitimately be old while their state is
+    still correct.
+    """
+    entities: dict[str, dict[str, Any]] = {}
 
     for entity_id in RAPT_BREWZILLA_ENTITY_IDS:
         entity_state = _state_obj(hass, entity_id)
@@ -110,26 +135,41 @@ def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
             "last_updated": entity_state.last_updated.isoformat() if entity_state is not None else None,
             "age_seconds": age,
         }
-        if age is None:
-            continue
-        ages.append(age)
-        if newest_age is None or age < newest_age:
-            newest_age = age
-            newest_entity = entity_id
-        if oldest_age is None or age > oldest_age:
-            oldest_age = age
-            oldest_entity = entity_id
+
+    all_summary = _entity_age_summary(entities, RAPT_BREWZILLA_ENTITY_IDS)
+    dynamic_summary = _entity_age_summary(entities, RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS)
+    static_summary = _entity_age_summary(entities, RAPT_BREWZILLA_STATIC_ENTITY_IDS)
+    dynamic_age = dynamic_summary.get("oldest_age_seconds")
+
+    temperature_age = entities.get(BREWZILLA_TEMP_SENSOR, {}).get("age_seconds")
+    power_age = entities.get(BREWZILLA_POWER_SENSOR, {}).get("age_seconds")
+    target_age = entities.get(BREWZILLA_TARGET_NUMBER, {}).get("age_seconds")
+    heat_util_age = entities.get(BREWZILLA_HEAT_UTILIZATION, {}).get("age_seconds")
+    pump_util_age = entities.get(BREWZILLA_PUMP_UTILIZATION, {}).get("age_seconds")
 
     return {
         "rapt_brewzilla_entities": entities,
         "rapt_brewzilla_entity_count": len(entities),
-        "rapt_brewzilla_newest_entity": newest_entity,
-        "rapt_brewzilla_newest_age_seconds": newest_age,
-        "rapt_brewzilla_oldest_entity": oldest_entity,
-        "rapt_brewzilla_oldest_age_seconds": oldest_age,
-        "rapt_brewzilla_poll_age_seconds": oldest_age,
-        "rapt_brewzilla_poll_age_minutes": round(oldest_age / 60, 1) if oldest_age is not None else None,
-        "rapt_brewzilla_poll_warning": bool(oldest_age is not None and oldest_age > RAPT_OBSERVATION_WARN_AGE_SECONDS),
+        "rapt_brewzilla_newest_entity": all_summary.get("newest_entity"),
+        "rapt_brewzilla_newest_age_seconds": all_summary.get("newest_age_seconds"),
+        "rapt_brewzilla_oldest_entity": all_summary.get("oldest_entity"),
+        "rapt_brewzilla_oldest_age_seconds": all_summary.get("oldest_age_seconds"),
+        "rapt_brewzilla_dynamic_newest_entity": dynamic_summary.get("newest_entity"),
+        "rapt_brewzilla_dynamic_newest_age_seconds": dynamic_summary.get("newest_age_seconds"),
+        "rapt_brewzilla_dynamic_oldest_entity": dynamic_summary.get("oldest_entity"),
+        "rapt_brewzilla_dynamic_oldest_age_seconds": dynamic_summary.get("oldest_age_seconds"),
+        "rapt_brewzilla_static_oldest_entity": static_summary.get("oldest_entity"),
+        "rapt_brewzilla_static_oldest_age_seconds": static_summary.get("oldest_age_seconds"),
+        "rapt_brewzilla_dynamic_age_seconds": dynamic_age,
+        "rapt_brewzilla_dynamic_age_minutes": round(dynamic_age / 60, 1) if dynamic_age is not None else None,
+        "rapt_brewzilla_temperature_age_seconds": temperature_age,
+        "rapt_brewzilla_power_age_seconds": power_age,
+        "rapt_brewzilla_target_age_seconds": target_age,
+        "rapt_brewzilla_heat_util_age_seconds": heat_util_age,
+        "rapt_brewzilla_pump_util_age_seconds": pump_util_age,
+        "rapt_brewzilla_poll_age_seconds": dynamic_age,
+        "rapt_brewzilla_poll_age_minutes": round(dynamic_age / 60, 1) if dynamic_age is not None else None,
+        "rapt_brewzilla_poll_warning": bool(dynamic_age is not None and dynamic_age > RAPT_OBSERVATION_WARN_AGE_SECONDS),
     }
 
 
@@ -173,6 +213,11 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     if requested_target is not None and applied_target is not None:
         target_delta = round(requested_target - applied_target, 2)
 
+    paused_target_rewind_blocked = bool(
+        runtime_state == "paused"
+        and target_delta is not None
+        and target_delta < PAUSED_TARGET_REWIND_GUARD_DELTA
+    )
     target_sync_needed = target_delta is not None and abs(target_delta) > TARGET_SYNC_TOLERANCE
     heating_needed = False
     if requested_target is not None and current_temperature is not None:
@@ -203,6 +248,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         hard_block = "Brew Tracker snapshot too old"
     elif not _target_valid(requested_target):
         hard_block = "Missing or invalid Brew Tracker target"
+    elif paused_target_rewind_blocked:
+        hard_block = "Brewfather paused target rewind guard active"
 
     can_control = hard_block is None
     action_needed = target_sync_needed or heater_action_needed or pump_action_needed
@@ -236,6 +283,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "current_temperature": current_temperature,
         "target_delta": target_delta,
         "target_sync_needed": target_sync_needed,
+        "paused_target_rewind_blocked": paused_target_rewind_blocked,
         "can_apply_target": can_control and action_needed,
         "heating_needed": heating_needed,
         "heater_on": heater_on,
