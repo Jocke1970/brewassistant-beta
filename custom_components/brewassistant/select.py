@@ -34,6 +34,12 @@ APPLY_MODE_OPTIONS = [
     SUPERVISED_MODE,
 ]
 
+BREWZILLA_LEARNING_CONTEXT_OPTIONS = [
+    "Unknown",
+    "Water only",
+    "Real mash",
+]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -47,6 +53,7 @@ async def async_setup_entry(
             BrewAssistantCarbonationMethodSelect(coordinator),
             BrewAssistantAirTargetTestModeSelect(coordinator),
             BrewAssistantApplyModeSelect(coordinator),
+            BrewAssistantBrewZillaLearningContextSelect(coordinator),
         ]
         + [
             BrewAssistantSectionPolicySelect(coordinator, section, config)
@@ -186,6 +193,53 @@ class BrewAssistantApplyModeSelect(BrewAssistantEntity, RestoreEntity, SelectEnt
             "runtime_key": "apply_mode",
             "read_only_default": True,
             "requires_confirmation": self._current_option == SUPERVISED_MODE,
+        }
+
+
+class BrewAssistantBrewZillaLearningContextSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Context selector for BrewZilla learning observations."""
+
+    _attr_has_entity_name = False
+    _attr_options = BREWZILLA_LEARNING_CONTEXT_OPTIONS
+    _attr_icon = "mdi:beaker-question-outline"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_learning_context")
+        self._attr_unique_id = f"{DOMAIN}_select_brewzilla_learning_context"
+        self._attr_name = "BrewAssistant BrewZilla Learning Context"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_context"
+        self._current_option = "Unknown"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore learning context after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in BREWZILLA_LEARNING_CONTEXT_OPTIONS:
+            self._current_option = last_state.state
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str | None:
+        """Return selected option."""
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Set learning context."""
+        if option not in BREWZILLA_LEARNING_CONTEXT_OPTIONS:
+            return
+        self._current_option = option
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | bool]:
+        """Return diagnostic attributes."""
+        return {
+            "source": "brewzilla_learning",
+            "runtime_key": "learning_context",
+            "advisory_only": True,
+            "water_only_profile_weight": "0.25",
+            "real_mash_profile_weight": "1.0",
         }
 
 
