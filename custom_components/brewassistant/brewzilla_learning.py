@@ -23,6 +23,7 @@ BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
 BREWZILLA_HEAT_UTILIZATION = "number.brewzilla_heat_utilization"
 BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
+BREWZILLA_LEARNING_CONTEXT_SELECT = "select.brewassistant_brewzilla_learning_context"
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot"}
@@ -30,6 +31,7 @@ _RAMP_WORDS = ("ramp", "heat", "värm", "uppvärm", "strike", "mash in", "mash-i
 _HOLD_WORDS = ("hold", "rest", "rast", "mash", "mäsk", "saccharification", "beta", "alpha")
 _BOIL_WORDS = ("boil", "kok")
 _COOL_WORDS = ("cool", "chill", "kyl")
+_CONTEXT_OPTIONS = {"Unknown", "Water only", "Real mash"}
 
 
 def _state_obj(hass: HomeAssistant, entity_id: str) -> State | None:
@@ -68,6 +70,44 @@ def _learning_store(hass: HomeAssistant) -> dict[str, Any]:
     return hass.data.setdefault("brewassistant", {}).setdefault(DATA_KEY, {})
 
 
+def learning_context(hass: HomeAssistant) -> str:
+    """Return selected BrewZilla learning context."""
+    selected = _state(hass, BREWZILLA_LEARNING_CONTEXT_SELECT, "Unknown")
+    if selected not in _CONTEXT_OPTIONS:
+        return "Unknown"
+    return str(selected)
+
+
+def _context_bias(context: str) -> dict[str, Any]:
+    """Return learning modifiers for the selected context."""
+    if context == "Water only":
+        return {
+            "profile_weight": 0.25,
+            "confidence_cap": "medium",
+            "suggestion_bias": -5,
+            "note": " Water-only run: observations are useful for plumbing/poll/sensor sanity, but heat learning is optimistic versus a real mash.",
+        }
+    if context == "Real mash":
+        return {
+            "profile_weight": 1.0,
+            "confidence_cap": "high",
+            "suggestion_bias": 0,
+            "note": " Real mash context: observations may be used as higher-value profile data.",
+        }
+    return {
+        "profile_weight": 0.5,
+        "confidence_cap": "medium",
+        "suggestion_bias": 0,
+        "note": " Learning context is unknown; suggestions stay conservative until context is set.",
+    }
+
+
+def _cap_confidence(confidence: str, cap: str) -> str:
+    order = {"low": 0, "medium": 1, "high": 2}
+    reverse = {0: "low", 1: "medium", 2: "high"}
+    return reverse[min(order.get(confidence, 0), order.get(cap, 1))]
+
+
 def _stage_kind(runtime: dict[str, Any]) -> str:
     text = f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('raw_step_name') or ''}".lower()
     if any(word in text for word in _COOL_WORDS):
@@ -99,12 +139,7 @@ def _pump_mixing_state(stage_kind: str, pump_on: bool, pump_utilization: float |
 
 
 def _pump_heat_bias(stage_kind: str, pump_on: bool, pump_utilization: float | None) -> int:
-    """Return a conservative heat bias based on pump/mixing condition.
-
-    Low or disabled recirculation can make the kettle probe less representative
-    of the full mash and increases local hot-bottom/overshoot risk. The first
-    model therefore tapers heat earlier when pump utilization is low.
-    """
+    """Return a conservative heat bias based on pump/mixing condition."""
     mixing = _pump_mixing_state(stage_kind, pump_on, pump_utilization)
     if mixing == "off":
         return -25
@@ -115,8 +150,8 @@ def _pump_heat_bias(stage_kind: str, pump_on: bool, pump_utilization: float | No
     return 0
 
 
-def _apply_pump_bias(suggestion: int, pump_bias: int) -> int:
-    return max(0, min(100, int(round(suggestion + pump_bias))))
+def _apply_heat_biases(suggestion: int, pump_bias: int, context_bias: int) -> int:
+    return max(0, min(100, int(round(suggestion + pump_bias + context_bias))))
 
 
 def _update_temperature_observation(hass: HomeAssistant, current_temperature: float | None) -> dict[str, Any]:
@@ -165,6 +200,7 @@ def _suggest_heat_utilization(
     *,
     runtime_state: str,
     stage_kind: str,
+    context: str,
     current_temperature: float | None,
     target_temperature: float | None,
     temp_rate_c_per_min: float | None,
@@ -177,60 +213,60 @@ def _suggest_heat_utilization(
     if runtime_state not in _ACTIVE_STATES:
         return None, "low", "standby", "Brewday runtime is not active."
 
+    context_mod = _context_bias(context)
+    context_note = str(context_mod["note"])
+    context_heat_bias = int(context_mod["suggestion_bias"])
     mixing = _pump_mixing_state(stage_kind, pump_on, pump_utilization)
     pump_bias = _pump_heat_bias(stage_kind, pump_on, pump_utilization)
     pump_note = ""
     if mixing in {"off", "very_low", "low"}:
         pump_note = f" Pump mixing is {mixing}; heat suggestion is reduced for safer mash/kettle temperature interpretation."
 
+    def result(suggestion: int, confidence: str, phase: str, reason: str) -> tuple[int, str, str, str]:
+        biased = _apply_heat_biases(suggestion, pump_bias, context_heat_bias)
+        capped_confidence = _cap_confidence(confidence, str(context_mod["confidence_cap"]))
+        return biased, capped_confidence, phase, f"{reason}{pump_note}{context_note}"
+
     if stage_kind == "cooling":
-        return 0, "high", "cooling", "Cooling stage detected; heat should remain unavailable."
+        return 0, "high", "cooling", f"Cooling stage detected; heat should remain unavailable.{context_note}"
 
     if stage_kind == "boil":
-        return 100, "medium", "boil_ramp", "Boil stage detected; full heat is suggested until boil behavior has been profiled."
+        return result(100, "medium", "boil_ramp", "Boil stage detected; full heat is suggested until boil behavior has been profiled.")
 
     if current_temperature is None or target_temperature is None:
-        return None, "low", "unknown", "Missing current or target temperature."
+        return None, "low", "unknown", f"Missing current or target temperature.{context_note}"
 
     delta_to_target = target_temperature - current_temperature
     rate = temp_rate_c_per_min
 
     if delta_to_target > 5.0:
-        suggestion = _apply_pump_bias(100, pump_bias)
-        return suggestion, "medium", "ramp_far", f"More than 5°C below target; high heat is suggested for ramp efficiency.{pump_note}"
+        return result(100, "medium", "ramp_far", "More than 5°C below target; high heat is suggested for ramp efficiency.")
 
     if delta_to_target > 2.0:
         if rate is not None and rate > 1.2:
-            suggestion = _apply_pump_bias(75, pump_bias)
-            return suggestion, "medium", "ramp_approach_fast", f"Approaching target quickly; reduce heat to limit overshoot risk.{pump_note}"
-        suggestion = _apply_pump_bias(90, pump_bias)
-        return suggestion, "medium", "ramp_approach", f"2–5°C below target; keep high heat but prepare to taper.{pump_note}"
+            return result(75, "medium", "ramp_approach_fast", "Approaching target quickly; reduce heat to limit overshoot risk.")
+        return result(90, "medium", "ramp_approach", "2–5°C below target; keep high heat but prepare to taper.")
 
     if delta_to_target > 0.7:
         if rate is not None and rate > 0.8:
-            suggestion = _apply_pump_bias(55, pump_bias)
-            return suggestion, "medium", "near_target_fast", f"Within 2°C and rising quickly; taper heat early.{pump_note}"
-        suggestion = _apply_pump_bias(70, pump_bias)
-        return suggestion, "medium", "near_target", f"Within 2°C below target; moderate heat is suggested.{pump_note}"
+            return result(55, "medium", "near_target_fast", "Within 2°C and rising quickly; taper heat early.")
+        return result(70, "medium", "near_target", "Within 2°C below target; moderate heat is suggested.")
 
     if delta_to_target > 0.1:
         if rate is not None and rate > 0.4:
-            suggestion = _apply_pump_bias(35, pump_bias)
-            return suggestion, "medium", "final_approach_fast", f"Very close to target and still rising; use low heat to reduce overshoot.{pump_note}"
-        suggestion = _apply_pump_bias(50, pump_bias)
-        return suggestion, "medium", "final_approach", f"Very close to target; low-to-moderate heat is suggested.{pump_note}"
+            return result(35, "medium", "final_approach_fast", "Very close to target and still rising; use low heat to reduce overshoot.")
+        return result(50, "medium", "final_approach", "Very close to target; low-to-moderate heat is suggested.")
 
     if delta_to_target >= -0.3:
         if stage_kind == "mash_hold":
-            suggestion = _apply_pump_bias(40, pump_bias)
-            return suggestion, "medium", "mash_hold", f"At mash target; conservative heat is suggested for stability.{pump_note}"
-        suggestion = _apply_pump_bias(45, pump_bias)
-        return suggestion, "medium", "hold", f"At target; conservative heat is suggested until profiling data improves.{pump_note}"
+            return result(40, "medium", "mash_hold", "At mash target; conservative heat is suggested for stability.")
+        return result(45, "medium", "hold", "At target; conservative heat is suggested until profiling data improves.")
 
     if delta_to_target < -0.3:
-        return 0 if heater_on else min(int(heat_utilization or 0), 30), "medium", "overshoot", f"Current temperature is above target; heat should be reduced or stopped.{pump_note}"
+        base = 0 if heater_on else min(int(heat_utilization or 0), 30)
+        return result(base, "medium", "overshoot", "Current temperature is above target; heat should be reduced or stopped.")
 
-    return None, "low", "unknown", "No suggestion available."
+    return None, "low", "unknown", f"No suggestion available.{context_note}"
 
 
 def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -238,6 +274,8 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime = build_core_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle").lower()
     stage_kind = _stage_kind(runtime)
+    context = learning_context(hass)
+    context_mod = _context_bias(context)
 
     current_temperature = _float(hass, BREWZILLA_TEMP_SENSOR)
     target_temperature = runtime.get("target_temperature")
@@ -263,6 +301,7 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     suggestion, confidence, phase, reason = _suggest_heat_utilization(
         runtime_state=runtime_state,
         stage_kind=stage_kind,
+        context=context,
         current_temperature=current_temperature,
         target_temperature=target_temperature,
         temp_rate_c_per_min=rate_per_min,
@@ -285,6 +324,9 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         else:
             overshoot_risk = "low"
 
+    if context == "Water only" and overshoot_risk == "low" and delta_to_target is not None and delta_to_target < 2.0:
+        overshoot_risk = "medium"
+
     heat_adjustment = None
     if suggestion is not None and heat_utilization is not None:
         heat_adjustment = int(round(suggestion - heat_utilization))
@@ -296,6 +338,11 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_stage": runtime.get("stage"),
         "runtime_step": runtime.get("step"),
         "runtime_raw_step_name": runtime.get("raw_step_name"),
+        "learning_context": context,
+        "profile_weight": context_mod["profile_weight"],
+        "context_confidence_cap": context_mod["confidence_cap"],
+        "context_heat_bias": context_mod["suggestion_bias"],
+        "water_only_bias_active": context == "Water only",
         "stage_kind": stage_kind,
         "phase": phase,
         "confidence": confidence,
