@@ -44,16 +44,20 @@ cards:
         - color: rgba(255,255,255,.94)
       grid:
         - grid-template-areas: >-
-            "i title title power" "i temp temp power" "i meta meta power" "reason reason reason reason"
-        - grid-template-columns: 52px 1fr 1fr 44px
+            "i title title" "i temp temp" "i meta meta" "reason reason reason"
+        - grid-template-columns: 52px 1fr 1fr
         - grid-template-rows: min-content min-content min-content min-content
       custom_fields:
         title:
           - align-self: start
           - justify-self: start
-          - font-size: 22px
+          - font-size: 20px
           - font-weight: 800
           - line-height: 1.1
+          - max-width: 100%
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - white-space: nowrap
         temp:
           - align-self: start
           - justify-self: start
@@ -67,18 +71,6 @@ cards:
           - font-size: 13px
           - opacity: .88
           - margin-top: 4px
-        power:
-          - align-self: start
-          - justify-self: end
-          - width: 38px
-          - height: 38px
-          - border-radius: 999px
-          - display: flex
-          - align-items: center
-          - justify-content: center
-          - background: rgba(255,255,255,.14)
-          - border: 1px solid rgba(255,255,255,.22)
-          - font-size: 20px
         reason:
           - align-self: start
           - justify-self: stretch
@@ -116,43 +108,10 @@ cards:
           const pumpTxt = isNaN(pump) ? 'Pump —' : `Pump ${Math.round(pump)}%`;
           return `${power} · ${heatTxt} · ${pumpTxt}`;
         ]]]
-      power: >
-        [[[ return states['switch.brewzilla']?.state === 'on' ? '⏻' : '○'; ]]]
       reason: >
         [[[ return states['sensor.brewassistant_brewzilla_control_reason']?.state || 'Monitor BrewZilla'; ]]]
     tap_action:
       action: more-info
-
-  - type: custom:button-card
-    name: PANIKSTOPP · HEATER + PUMP OFF
-    icon: mdi:alert-octagon
-    show_icon: true
-    show_name: true
-    tap_action:
-      action: call-service
-      service: brewassistant.abort_brewzilla
-      confirmation:
-        text: Panikstoppa BrewZilla? Heater och pump stängs av.
-    styles:
-      card:
-        - height: 72px
-        - border-radius: 22px
-        - padding: 14px
-        - background: linear-gradient(135deg, #991b1b 0%, #450a0a 100%)
-        - color: white
-        - box-shadow: 0 8px 26px rgba(127, 29, 29, .55)
-        - border: 1px solid rgba(254, 202, 202, .35)
-      grid:
-        - grid-template-areas: 'i n'
-        - grid-template-columns: 44px 1fr
-      icon:
-        - width: 34px
-        - color: '#fecaca'
-      name:
-        - justify-self: start
-        - font-size: 17px
-        - font-weight: 900
-        - letter-spacing: .3px
 
   - type: grid
     columns: 2
@@ -179,6 +138,58 @@ cards:
         icon: mdi:wifi
         icon_color: >-
           {% if is_state(entity, 'Connected') %}green{% else %}red{% endif %}
+
+  - type: custom:button-card
+    name: PANIKSTOPP
+    label: HEATER + PUMP OFF
+    icon: mdi:alert-octagon
+    show_icon: true
+    show_name: true
+    show_label: true
+    tap_action:
+      action: call-service
+      service: brewassistant.abort_brewzilla
+      confirmation:
+        text: Panikstoppa BrewZilla? Heater och pump stängs av.
+    styles:
+      card:
+        - min-height: 88px
+        - border-radius: 22px
+        - padding: 16px
+        - background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)
+        - color: white
+        - box-shadow: 0 8px 26px rgba(127, 29, 29, .55)
+        - border: 1px solid rgba(254, 202, 202, .45)
+      grid:
+        - grid-template-areas: >-
+            "i n" "i l"
+        - grid-template-columns: 52px 1fr
+        - grid-template-rows: min-content min-content
+      icon:
+        - width: 38px
+        - color: '#fecaca'
+      name:
+        - justify-self: start
+        - font-size: 22px
+        - font-weight: 900
+        - letter-spacing: .5px
+        - white-space: normal
+        - overflow: visible
+        - text-overflow: unset
+      label:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 800
+        - color: '#fee2e2'
+        - margin-top: 2px
+        - white-space: normal
+        - overflow: visible
+        - text-overflow: unset
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_brewzilla_current_temperature
         primary: Current
