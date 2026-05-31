@@ -18,6 +18,7 @@ from .climate_supervisor import (
 )
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
+from .counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
 from .fermentation_climate_supervisor import (
     async_disable_fermentation_climate_supervisor,
@@ -70,6 +71,13 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "object_id": "brewassistant_brewzilla_safe_mode",
         "icon": "mdi:shield-check",
         "default": True,
+    },
+    "counterflow_chiller_enabled": {
+        "name": "BrewAssistant Counter Flow Chiller Enabled",
+        "object_id": "brewassistant_counterflow_chiller_enabled",
+        "icon": "mdi:snowflake-thermometer",
+        "default": False,
+        "kind": "counterflow_chiller",
     },
     "kegerator_guard_enabled": {
         "name": "BrewAssistant Kegerator Guard Enabled",
@@ -139,6 +147,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
+        if self._kind == "counterflow_chiller":
+            await async_set_counterflow_chiller(self.coordinator.hass, {"enabled": self._attr_is_on})
         if self._kind in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor"}:
             self._ensure_tick()
             if self._attr_is_on:
@@ -190,6 +200,10 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn switch on."""
         self._attr_is_on = True
+        if self._kind == "counterflow_chiller":
+            await async_set_counterflow_chiller(self.coordinator.hass, {"enabled": True})
+            self.async_write_ha_state()
+            return
         if self._kind == "kegerator_guard":
             self._ensure_tick()
             self.async_write_ha_state()
@@ -213,6 +227,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
         self._attr_is_on = False
+        if self._kind == "counterflow_chiller":
+            await async_set_counterflow_chiller(self.coordinator.hass, {"enabled": False})
         if self._kind == "kegerator_guard":
             async_disable_kegerator_guard(self.coordinator.hass)
         if self._kind == "climate_supervisor":
@@ -224,6 +240,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return switch diagnostics."""
+        if self._kind == "counterflow_chiller":
+            return get_counterflow_chiller_snapshot(self.coordinator.hass)
         if self._kind == "kegerator_guard":
             return build_kegerator_guard_snapshot(self.coordinator.hass)
         if self._kind == "climate_supervisor":
