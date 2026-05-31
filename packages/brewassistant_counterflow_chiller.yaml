@@ -1,0 +1,51 @@
+# BrewAssistant Counter Flow Chiller package
+# Optional hot-side helper package.
+
+input_boolean:
+  brewassistant_counterflow_chiller_enabled:
+    name: BrewAssistant Counter Flow Chiller Enabled
+    icon: mdi:snowflake-thermometer
+
+input_number:
+  brewassistant_counterflow_chiller_sanitize_minutes:
+    name: BrewAssistant CFC Hot-Wort Minutes
+    icon: mdi:timer-outline
+    min: 10
+    max: 25
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    initial: 15
+
+  brewassistant_counterflow_chiller_pump_utilization:
+    name: BrewAssistant CFC Pump Utilization
+    icon: mdi:pump
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: box
+    initial: 100
+
+script:
+  brewassistant_cfc_ready:
+    alias: BrewAssistant - CFC Ready
+    icon: mdi:snowflake-thermometer
+    mode: single
+    sequence:
+      - service: number.set_value
+        target:
+          entity_id: number.brewzilla_pump_utilization
+        data:
+          value: "{{ states('input_number.brewassistant_counterflow_chiller_pump_utilization') | float(100) }}"
+      - service: switch.turn_on
+        target:
+          entity_id: switch.brewzilla_pump
+      - service: persistent_notification.create
+        data:
+          title: BrewAssistant CFC Ready
+          message: >-
+            Counter Flow Chiller confirmed. Pump started at
+            {{ states('input_number.brewassistant_counterflow_chiller_pump_utilization') | float(100) | round(0) }}%.
+            Circulate hot wort through the chiller for the final
+            {{ states('input_number.brewassistant_counterflow_chiller_sanitize_minutes') | float(15) | round(0) }} minutes of boil.
