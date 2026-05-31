@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
+from .counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
 from .supervised_apply import (
     async_confirm_pending_action,
@@ -30,6 +31,7 @@ async def async_setup_entry(
         [
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
+            BrewAssistantCounterflowChillerReadyButton(coordinator),
         ]
     )
 
@@ -84,3 +86,26 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
         """Cancel pending supervised action."""
         cancel_pending_action(self.coordinator.hass)
         self.async_write_ha_state()
+
+
+class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEntity):
+    """Mark the Counter Flow Chiller as connected and start hot-wort circulation."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "counterflow_chiller_ready")
+        self._attr_unique_id = f"{DOMAIN}_button_counterflow_chiller_ready"
+        self._attr_name = "BrewAssistant CFC Ready"
+        self._attr_icon = "mdi:snowflake-thermometer"
+        self._attr_suggested_object_id = f"{DOMAIN}_counterflow_chiller_ready"
+
+    async def async_press(self) -> None:
+        """Start the configured CFC sanitation circulation."""
+        await async_counterflow_chiller_ready(self.coordinator.hass)
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return CFC diagnostics."""
+        return get_counterflow_chiller_snapshot(self.coordinator.hass)
