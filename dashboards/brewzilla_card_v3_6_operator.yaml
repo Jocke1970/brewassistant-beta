@@ -139,304 +139,311 @@ cards:
         icon_color: >-
           {% if is_state(entity, 'Connected') %}green{% else %}red{% endif %}
 
-  - type: custom:button-card
-    name: PANIKSTOPP
-    label: HEATER + PUMP OFF
-    icon: mdi:alert-octagon
-    show_icon: true
-    show_name: true
-    show_label: true
-    tap_action:
-      action: call-service
-      service: brewassistant.abort_brewzilla
-      confirmation:
-        text: Panikstoppa BrewZilla? Heater och pump stängs av.
-    styles:
-      card:
-        - min-height: 88px
-        - border-radius: 22px
-        - padding: 16px
-        - background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)
-        - color: white
-        - box-shadow: 0 8px 26px rgba(127, 29, 29, .55)
-        - border: 1px solid rgba(254, 202, 202, .45)
-      grid:
-        - grid-template-areas: >-
-            "i n" "i l"
-        - grid-template-columns: 52px 1fr
-        - grid-template-rows: min-content min-content
-      icon:
-        - width: 38px
-        - color: '#fecaca'
-      name:
-        - justify-self: start
-        - font-size: 22px
-        - font-weight: 900
-        - letter-spacing: .5px
-        - white-space: normal
-        - overflow: visible
-        - text-overflow: unset
-      label:
-        - justify-self: start
-        - font-size: 13px
-        - font-weight: 800
-        - color: '#fee2e2'
-        - margin-top: 2px
-        - white-space: normal
-        - overflow: visible
-        - text-overflow: unset
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewzilla_connection_state
+        state: Connected
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: custom:button-card
+          name: PANIKSTOPP
+          label: HEATER + PUMP OFF
+          icon: mdi:alert-octagon
+          show_icon: true
+          show_name: true
+          show_label: true
+          tap_action:
+            action: call-service
+            service: brewassistant.abort_brewzilla
+            confirmation:
+              text: Panikstoppa BrewZilla? Heater och pump stängs av.
+          styles:
+            card:
+              - min-height: 88px
+              - border-radius: 22px
+              - padding: 16px
+              - background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)
+              - color: white
+              - box-shadow: 0 8px 26px rgba(127, 29, 29, .55)
+              - border: 1px solid rgba(254, 202, 202, .45)
+            grid:
+              - grid-template-areas: >-
+                  "i n" "i l"
+              - grid-template-columns: 52px 1fr
+              - grid-template-rows: min-content min-content
+            icon:
+              - width: 38px
+              - color: '#fecaca'
+            name:
+              - justify-self: start
+              - font-size: 22px
+              - font-weight: 900
+              - letter-spacing: .5px
+              - white-space: normal
+              - overflow: visible
+              - text-overflow: unset
+            label:
+              - justify-self: start
+              - font-size: 13px
+              - font-weight: 800
+              - color: '#fee2e2'
+              - margin-top: 2px
+              - white-space: normal
+              - overflow: visible
+              - text-overflow: unset
 
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_current_temperature
-        primary: Current
-        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
-        icon: mdi:thermometer
-        icon_color: orange
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_target_temperature
-        primary: Target
-        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
-        icon: mdi:bullseye-arrow
-        icon_color: blue
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_temperature_delta
-        primary: Delta
-        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
-        icon: mdi:delta
-        icon_color: >-
-          {% set d = states(entity) | float(0) %}
-          {% if d | abs > 2 %}red{% elif d | abs > 0.5 %}amber{% else %}green{% endif %}
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_power
-        primary: Local power
-        secondary: >-
-          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
-            — W
-          {% else %}
-            {{ states(entity) | float(0) | round(0) }} W
-          {% endif %}
-        icon: mdi:flash
-        icon_color: yellow
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_current_temperature
+              primary: Current
+              secondary: '{{ states(entity) | float(0) | round(1) }} °C'
+              icon: mdi:thermometer
+              icon_color: orange
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_target_temperature
+              primary: Target
+              secondary: '{{ states(entity) | float(0) | round(1) }} °C'
+              icon: mdi:bullseye-arrow
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_temperature_delta
+              primary: Delta
+              secondary: '{{ states(entity) | float(0) | round(1) }} °C'
+              icon: mdi:delta
+              icon_color: >-
+                {% set d = states(entity) | float(0) %}
+                {% if d | abs > 2 %}red{% elif d | abs > 0.5 %}amber{% else %}green{% endif %}
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_power
+              primary: Local power
+              secondary: >-
+                {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+                  — W
+                {% else %}
+                  {{ states(entity) | float(0) | round(0) }} W
+                {% endif %}
+              icon: mdi:flash
+              icon_color: yellow
 
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_heat_utilization
-        primary: Heat utilization
-        secondary: '{{ states(entity) | float(0) | round(0) }} %'
-        icon: mdi:fire
-        icon_color: deep-orange
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_pump_utilization
-        primary: Pump utilization
-        secondary: '{{ states(entity) | float(0) | round(0) }} %'
-        icon: mdi:pump
-        icon_color: cyan
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_device_target_temperature
-        primary: Device target
-        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
-        icon: mdi:target
-        icon_color: indigo
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_brewzilla_runtime_target_temperature
-        primary: Runtime target
-        secondary: '{{ states(entity) | float(0) | round(1) }} °C'
-        icon: mdi:timeline-clock
-        icon_color: purple
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_heat_utilization
+              primary: Heat utilization
+              secondary: '{{ states(entity) | float(0) | round(0) }} %'
+              icon: mdi:fire
+              icon_color: deep-orange
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_pump_utilization
+              primary: Pump utilization
+              secondary: '{{ states(entity) | float(0) | round(0) }} %'
+              icon: mdi:pump
+              icon_color: cyan
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_device_target_temperature
+              primary: Device target
+              secondary: '{{ states(entity) | float(0) | round(1) }} °C'
+              icon: mdi:target
+              icon_color: indigo
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_runtime_target_temperature
+              primary: Runtime target
+              secondary: '{{ states(entity) | float(0) | round(1) }} °C'
+              icon: mdi:timeline-clock
+              icon_color: purple
 
-  - type: custom:button-card
-    name: Heater / Pump control
-    show_icon: false
-    show_state: false
-    styles:
-      card:
-        - padding: 12px
-        - border-radius: 20px
-        - background: rgba(15,23,42,.68)
-        - color: white
-      name:
-        - justify-self: start
-        - font-size: 14px
-        - font-weight: 800
+        - type: custom:button-card
+          name: Heater / Pump control
+          show_icon: false
+          show_state: false
+          styles:
+            card:
+              - padding: 12px
+              - border-radius: 20px
+              - background: rgba(15,23,42,.68)
+              - color: white
+            name:
+              - justify-self: start
+              - font-size: 14px
+              - font-weight: 800
 
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        entity: switch.brewzilla_heater
-        primary: Heater
-        secondary: '{{ states(entity) }}'
-        icon: mdi:fire
-        icon_color: >-
-          {% if is_state(entity, 'on') %}deep-orange{% else %}grey{% endif %}
-        tap_action:
-          action: call-service
-          service: switch.toggle
-          target:
-            entity_id: switch.brewzilla_heater
-          confirmation:
-            text: Växla BrewZilla heater?
-      - type: custom:mushroom-template-card
-        entity: switch.brewzilla_pump
-        primary: Pump
-        secondary: '{{ states(entity) }}'
-        icon: mdi:pump
-        icon_color: >-
-          {% if is_state(entity, 'on') %}cyan{% else %}grey{% endif %}
-        tap_action:
-          action: call-service
-          service: switch.toggle
-          target:
-            entity_id: switch.brewzilla_pump
-          confirmation:
-            text: Växla BrewZilla pump?
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: switch.brewzilla_heater
+              primary: Heater
+              secondary: '{{ states(entity) }}'
+              icon: mdi:fire
+              icon_color: >-
+                {% if is_state(entity, 'on') %}deep-orange{% else %}grey{% endif %}
+              tap_action:
+                action: call-service
+                service: switch.toggle
+                target:
+                  entity_id: switch.brewzilla_heater
+                confirmation:
+                  text: Växla BrewZilla heater?
+            - type: custom:mushroom-template-card
+              entity: switch.brewzilla_pump
+              primary: Pump
+              secondary: '{{ states(entity) }}'
+              icon: mdi:pump
+              icon_color: >-
+                {% if is_state(entity, 'on') %}cyan{% else %}grey{% endif %}
+              tap_action:
+                action: call-service
+                service: switch.toggle
+                target:
+                  entity_id: switch.brewzilla_pump
+                confirmation:
+                  text: Växla BrewZilla pump?
 
-  - type: custom:button-card
-    name: Heat / Pump utilization
-    show_icon: false
-    show_state: false
-    styles:
-      card:
-        - padding: 12px
-        - border-radius: 20px
-        - background: rgba(15,23,42,.68)
-        - color: white
-      name:
-        - justify-self: start
-        - font-size: 14px
-        - font-weight: 800
+        - type: custom:button-card
+          name: Heat / Pump utilization
+          show_icon: false
+          show_state: false
+          styles:
+            card:
+              - padding: 12px
+              - border-radius: 20px
+              - background: rgba(15,23,42,.68)
+              - color: white
+            name:
+              - justify-self: start
+              - font-size: 14px
+              - font-weight: 800
 
-  - type: grid
-    columns: 4
-    square: false
-    cards:
-      - type: custom:button-card
-        name: Heat -5
-        icon: mdi:minus
-        tap_action:
-          action: call-service
-          service: number.set_value
-          target:
-            entity_id: number.brewzilla_heat_utilization
-          data:
-            value: >
-              [[[ return Math.max(0, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) - 5); ]]]
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 12px
-            - background: rgba(127,29,29,.28)
-            - color: white
-          name:
-            - font-size: 13px
-            - font-weight: 800
-          icon:
-            - color: '#fecaca'
-      - type: custom:button-card
-        name: Heat +5
-        icon: mdi:plus
-        tap_action:
-          action: call-service
-          service: number.set_value
-          target:
-            entity_id: number.brewzilla_heat_utilization
-          data:
-            value: >
-              [[[ return Math.min(100, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) + 5); ]]]
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 12px
-            - background: rgba(194,65,12,.30)
-            - color: white
-          name:
-            - font-size: 13px
-            - font-weight: 800
-          icon:
-            - color: '#fed7aa'
-      - type: custom:button-card
-        name: Pump -5
-        icon: mdi:minus
-        tap_action:
-          action: call-service
-          service: number.set_value
-          target:
-            entity_id: number.brewzilla_pump_utilization
-          data:
-            value: >
-              [[[ return Math.max(0, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) - 5); ]]]
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 12px
-            - background: rgba(14,116,144,.24)
-            - color: white
-          name:
-            - font-size: 13px
-            - font-weight: 800
-          icon:
-            - color: '#cffafe'
-      - type: custom:button-card
-        name: Pump +5
-        icon: mdi:plus
-        tap_action:
-          action: call-service
-          service: number.set_value
-          target:
-            entity_id: number.brewzilla_pump_utilization
-          data:
-            value: >
-              [[[ return Math.min(100, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) + 5); ]]]
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 12px
-            - background: rgba(8,145,178,.30)
-            - color: white
-          name:
-            - font-size: 13px
-            - font-weight: 800
-          icon:
-            - color: '#a5f3fc'
+        - type: grid
+          columns: 4
+          square: false
+          cards:
+            - type: custom:button-card
+              name: Heat -5
+              icon: mdi:minus
+              tap_action:
+                action: call-service
+                service: number.set_value
+                target:
+                  entity_id: number.brewzilla_heat_utilization
+                data:
+                  value: >
+                    [[[ return Math.max(0, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) - 5); ]]]
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(127,29,29,.28)
+                  - color: white
+                name:
+                  - font-size: 13px
+                  - font-weight: 800
+                icon:
+                  - color: '#fecaca'
+            - type: custom:button-card
+              name: Heat +5
+              icon: mdi:plus
+              tap_action:
+                action: call-service
+                service: number.set_value
+                target:
+                  entity_id: number.brewzilla_heat_utilization
+                data:
+                  value: >
+                    [[[ return Math.min(100, (Number(states['number.brewzilla_heat_utilization']?.state) || 0) + 5); ]]]
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(194,65,12,.30)
+                  - color: white
+                name:
+                  - font-size: 13px
+                  - font-weight: 800
+                icon:
+                  - color: '#fed7aa'
+            - type: custom:button-card
+              name: Pump -5
+              icon: mdi:minus
+              tap_action:
+                action: call-service
+                service: number.set_value
+                target:
+                  entity_id: number.brewzilla_pump_utilization
+                data:
+                  value: >
+                    [[[ return Math.max(0, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) - 5); ]]]
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(14,116,144,.24)
+                  - color: white
+                name:
+                  - font-size: 13px
+                  - font-weight: 800
+                icon:
+                  - color: '#cffafe'
+            - type: custom:button-card
+              name: Pump +5
+              icon: mdi:plus
+              tap_action:
+                action: call-service
+                service: number.set_value
+                target:
+                  entity_id: number.brewzilla_pump_utilization
+                data:
+                  value: >
+                    [[[ return Math.min(100, (Number(states['number.brewzilla_pump_utilization']?.state) || 0) + 5); ]]]
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 12px
+                  - background: rgba(8,145,178,.30)
+                  - color: white
+                name:
+                  - font-size: 13px
+                  - font-weight: 800
+                icon:
+                  - color: '#a5f3fc'
 
-  - type: custom:mushroom-chips-card
-    chips:
-      - type: entity
-        entity: sensor.brewassistant_brewzilla_orchestration_mode
-        icon: mdi:robot
-      - type: entity
-        entity: sensor.brewassistant_brewzilla_energy_session
-        icon: mdi:lightning-bolt
-      - type: entity
-        entity: sensor.brewassistant_brewzilla_energy_cost_session
-        icon: mdi:cash
+        - type: custom:mushroom-chips-card
+          chips:
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              icon: mdi:robot
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_energy_session
+              icon: mdi:lightning-bolt
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_energy_cost_session
+              icon: mdi:cash
 
-  - type: custom:expander-card
-    title: Telemetry freshness
-    padding: 0
-    clear: false
-    cards:
-      - type: markdown
-        content: >-
-          {% set local = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_local_power_age_seconds') %}
-          {% set control = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_rapt_control_age_seconds') %}
-          {% set config = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_rapt_config_age_seconds') %}
-          **Local/Shelly power:** {{ local if local is not none else '—' }} s  
-          **RAPT control temp/target:** {{ control if control is not none else '—' }} s  
-          **RAPT config heat/pump:** {{ config if config is not none else '—' }} s
-      - type: entities
-        title: Source diagnostics
-        entities:
-          - entity: sensor.brewassistant_brewzilla_connection_state
-          - entity: sensor.brewassistant_brewzilla_runtime_summary
-          - entity: sensor.brewassistant_brewzilla_control_reason
-          - entity: sensor.brewassistant_brewzilla_power
-          - entity: sensor.brewassistant_brewzilla_energy_power
+        - type: custom:expander-card
+          title: Telemetry freshness
+          padding: 0
+          clear: false
+          cards:
+            - type: markdown
+              content: >-
+                {% set local = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_local_power_age_seconds') %}
+                {% set control = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_rapt_control_age_seconds') %}
+                {% set config = state_attr('sensor.brewassistant_brewzilla_orchestration_mode', 'brewzilla_rapt_config_age_seconds') %}
+                **Local/Shelly power:** {{ local if local is not none else '—' }} s  
+                **RAPT control temp/target:** {{ control if control is not none else '—' }} s  
+                **RAPT config heat/pump:** {{ config if config is not none else '—' }} s
+            - type: entities
+              title: Source diagnostics
+              entities:
+                - entity: sensor.brewassistant_brewzilla_connection_state
+                - entity: sensor.brewassistant_brewzilla_runtime_summary
+                - entity: sensor.brewassistant_brewzilla_control_reason
+                - entity: sensor.brewassistant_brewzilla_power
+                - entity: sensor.brewassistant_brewzilla_energy_power
