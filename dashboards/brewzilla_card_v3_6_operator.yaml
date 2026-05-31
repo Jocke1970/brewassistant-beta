@@ -30,8 +30,9 @@ cards:
             [[[ 
               const state = states['sensor.brewassistant_brewzilla_runtime_state']?.state || 'unknown';
               const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || 'monitor';
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state || 'idle';
               const power = Number(states['sensor.brewassistant_brewzilla_power']?.state);
-              if (mode === 'blocked') return 'linear-gradient(135deg, #3f0d12 0%, #111827 100%)';
+              if (mode === 'blocked' && runtime !== 'idle') return 'linear-gradient(135deg, #3f0d12 0%, #111827 100%)';
               if (state === 'disconnected') return 'linear-gradient(135deg, #1f2937 0%, #020617 100%)';
               if (state === 'heating' || state === 'heating_pumping' || (!isNaN(power) && power > 1000)) return 'linear-gradient(135deg, #7c2d12 0%, #451a03 100%)';
               if (state === 'pumping') return 'linear-gradient(135deg, #075985 0%, #0f172a 100%)';
@@ -93,7 +94,9 @@ cards:
         [[[ 
           const state = states['sensor.brewassistant_brewzilla_runtime_state']?.state || 'unknown';
           const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || 'monitor';
-          return `BrewZilla · ${state} · ${mode}`;
+          const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state || 'idle';
+          const displayMode = (mode === 'blocked' && runtime === 'idle') ? 'idle/safe' : mode;
+          return `BrewZilla · ${state} · ${displayMode}`;
         ]]]
       temp: >
         [[[ 
@@ -119,14 +122,37 @@ cards:
         [[[ return states['sensor.brewassistant_brewzilla_control_reason']?.state || 'Monitor BrewZilla'; ]]]
     tap_action:
       action: more-info
-    custom_fields_actions:
-      power:
-        action: call-service
-        service: switch.toggle
-        target:
-          entity_id: switch.brewzilla
-        confirmation:
-          text: Växla BrewZilla main power?
+
+  - type: custom:button-card
+    name: PANIKSTOPP · HEATER + PUMP OFF
+    icon: mdi:alert-octagon
+    show_icon: true
+    show_name: true
+    tap_action:
+      action: call-service
+      service: brewassistant.abort_brewzilla
+      confirmation:
+        text: Panikstoppa BrewZilla? Heater och pump stängs av.
+    styles:
+      card:
+        - height: 72px
+        - border-radius: 22px
+        - padding: 14px
+        - background: linear-gradient(135deg, #991b1b 0%, #450a0a 100%)
+        - color: white
+        - box-shadow: 0 8px 26px rgba(127, 29, 29, .55)
+        - border: 1px solid rgba(254, 202, 202, .35)
+      grid:
+        - grid-template-areas: 'i n'
+        - grid-template-columns: 44px 1fr
+      icon:
+        - width: 34px
+        - color: '#fecaca'
+      name:
+        - justify-self: start
+        - font-size: 17px
+        - font-weight: 900
+        - letter-spacing: .3px
 
   - type: grid
     columns: 2
@@ -225,13 +251,6 @@ cards:
       - type: entity
         entity: sensor.brewassistant_brewzilla_energy_cost_session
         icon: mdi:cash
-      - type: action
-        icon: mdi:stop-circle-outline
-        tap_action:
-          action: call-service
-          service: brewassistant.abort_brewzilla
-          confirmation:
-            text: Stoppa BrewZilla heater och pump?
 
   - type: custom:expander-card
     title: Telemetry freshness
