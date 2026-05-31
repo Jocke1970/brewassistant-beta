@@ -7,6 +7,7 @@ The project is moving away from YAML-heavy Home Assistant packages toward a Pyth
 ```text
 Python custom integration = logic, normalization, stage engine, calculations, control decisions
 YAML/dashboard             = presentation and explicit operator actions
+Legacy packages            = temporary compatibility only
 ```
 
 ---
@@ -39,13 +40,14 @@ Validated in the active `feature/python-core-v0.1` branch:
 ✅ Heater/pump stop handling when runtime completes
 ✅ BrewZilla local Shelly power vs RAPT Cloud telemetry age separation
 ✅ BrewZilla energy and SEK cost estimate sensors
-✅ BrewZilla Cockpit v3.4 collapsed dashboard example
-✅ Brewday Card v3.5 RAW/runtime dashboard example
+✅ BrewZilla Cockpit v3.6 operator hardware card
+✅ Brewday Card v3.6 operator cockpit
 ✅ Brewday Audit Card v1.1 dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
 ✅ Carbonation Runtime backend, persistence and UI
 ✅ Counterflow Wort Cooling backend and UI
+✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and UI polish
 ```
 
@@ -57,6 +59,7 @@ Beta limitations / still pending validation:
 [ ] real counterflow chilling data
 [ ] active fermentation and cold-crash validation
 [ ] full carbonation/serving cooling-cycle validation
+[ ] package cleanup validation in a real HA install
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
 [ ] external RAPT BLE Thermometer is not locally consumed by BrewAssistant
@@ -88,6 +91,7 @@ BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, b
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
 | BrewZilla Orchestration | Apply target/heater/pump actions when allowed by runtime state. |
 | Brewday Audit | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
+| CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
 | Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
@@ -115,10 +119,21 @@ Key beta behavior:
 - Brewfather paused state freezes current step/target.
 - Mash steps can sync BrewZilla target from Brew Tracker.
 - Boil stages fall back to 100°C when Brew Tracker omits a temperature target.
-- Pump is stopped during boil.
+- Pump is stopped during boil unless an explicit operator action, such as CFC Ready, starts it.
 - Runtime completion can be inferred when the final Brew Tracker step reaches zero.
 - Heater and pump are stopped when the runtime is completed.
 - Shelly power is treated as local live telemetry.
 - RAPT temperature/target are treated as cloud/control telemetry.
 - RAPT heat/pump utilization are treated as slower config telemetry.
+```
+
+---
+
+## Documentation index
+
+```text
+docs/counterflow-chiller.md      Python CFC sanitation backend and CFC Ready flow
+docs/legacy-package-cleanup.md   Checklist for deleting old package YAML safely
+docs/legacy-migration.md         Namespace and legacy migration notes
+docs/structure.md                Project structure and module responsibilities
 ```
