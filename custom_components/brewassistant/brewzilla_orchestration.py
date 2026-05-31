@@ -34,19 +34,16 @@ _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
 _MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
 _BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokgiva")
-RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS = (
-    BREWZILLA_TEMP_SENSOR,
-    BREWZILLA_POWER_SENSOR,
-    BREWZILLA_TARGET_NUMBER,
-    BREWZILLA_HEAT_UTILIZATION,
-    BREWZILLA_PUMP_UTILIZATION,
-)
+LOCAL_LIVE_ENTITY_IDS = (BREWZILLA_POWER_SENSOR,)
+RAPT_CONTROL_ENTITY_IDS = (BREWZILLA_TEMP_SENSOR, BREWZILLA_TARGET_NUMBER)
+RAPT_CONFIG_ENTITY_IDS = (BREWZILLA_HEAT_UTILIZATION, BREWZILLA_PUMP_UTILIZATION)
 RAPT_BREWZILLA_STATIC_ENTITY_IDS = (
     BREWZILLA_CONNECTION_SENSOR,
     BREWZILLA_MAIN_SWITCH,
     BREWZILLA_HEATER_SWITCH,
     BREWZILLA_PUMP_SWITCH,
 )
+RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS = LOCAL_LIVE_ENTITY_IDS + RAPT_CONTROL_ENTITY_IDS + RAPT_CONFIG_ENTITY_IDS
 RAPT_BREWZILLA_ENTITY_IDS = RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS + RAPT_BREWZILLA_STATIC_ENTITY_IDS
 
 
@@ -124,8 +121,14 @@ def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
         }
     all_summary = _entity_age_summary(entities, RAPT_BREWZILLA_ENTITY_IDS)
     dynamic_summary = _entity_age_summary(entities, RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS)
+    local_summary = _entity_age_summary(entities, LOCAL_LIVE_ENTITY_IDS)
+    control_summary = _entity_age_summary(entities, RAPT_CONTROL_ENTITY_IDS)
+    config_summary = _entity_age_summary(entities, RAPT_CONFIG_ENTITY_IDS)
     static_summary = _entity_age_summary(entities, RAPT_BREWZILLA_STATIC_ENTITY_IDS)
     dynamic_age = dynamic_summary.get("oldest_age_seconds")
+    local_age = local_summary.get("oldest_age_seconds")
+    control_age = control_summary.get("oldest_age_seconds")
+    config_age = config_summary.get("oldest_age_seconds")
     temperature_age = entities.get(BREWZILLA_TEMP_SENSOR, {}).get("age_seconds")
     power_age = entities.get(BREWZILLA_POWER_SENSOR, {}).get("age_seconds")
     target_age = entities.get(BREWZILLA_TARGET_NUMBER, {}).get("age_seconds")
@@ -142,6 +145,15 @@ def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
         "rapt_brewzilla_dynamic_newest_age_seconds": dynamic_summary.get("newest_age_seconds"),
         "rapt_brewzilla_dynamic_oldest_entity": dynamic_summary.get("oldest_entity"),
         "rapt_brewzilla_dynamic_oldest_age_seconds": dynamic_summary.get("oldest_age_seconds"),
+        "brewzilla_local_live_oldest_entity": local_summary.get("oldest_entity"),
+        "brewzilla_local_live_age_seconds": local_age,
+        "brewzilla_local_power_age_seconds": power_age,
+        "brewzilla_rapt_control_oldest_entity": control_summary.get("oldest_entity"),
+        "brewzilla_rapt_control_age_seconds": control_age,
+        "brewzilla_rapt_config_oldest_entity": config_summary.get("oldest_entity"),
+        "brewzilla_rapt_config_age_seconds": config_age,
+        "brewzilla_rapt_static_oldest_entity": static_summary.get("oldest_entity"),
+        "brewzilla_rapt_static_age_seconds": static_summary.get("oldest_age_seconds"),
         "rapt_brewzilla_static_oldest_entity": static_summary.get("oldest_entity"),
         "rapt_brewzilla_static_oldest_age_seconds": static_summary.get("oldest_age_seconds"),
         "rapt_brewzilla_dynamic_age_seconds": dynamic_age,
@@ -151,9 +163,9 @@ def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
         "rapt_brewzilla_target_age_seconds": target_age,
         "rapt_brewzilla_heat_util_age_seconds": heat_util_age,
         "rapt_brewzilla_pump_util_age_seconds": pump_util_age,
-        "rapt_brewzilla_poll_age_seconds": dynamic_age,
-        "rapt_brewzilla_poll_age_minutes": round(dynamic_age / 60, 1) if dynamic_age is not None else None,
-        "rapt_brewzilla_poll_warning": bool(dynamic_age is not None and dynamic_age > RAPT_OBSERVATION_WARN_AGE_SECONDS),
+        "rapt_brewzilla_poll_age_seconds": control_age,
+        "rapt_brewzilla_poll_age_minutes": round(control_age / 60, 1) if control_age is not None else None,
+        "rapt_brewzilla_poll_warning": bool(control_age is not None and control_age > RAPT_OBSERVATION_WARN_AGE_SECONDS),
     }
 
 
@@ -178,6 +190,7 @@ def _target_valid(target: float | None) -> bool:
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime = build_core_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle")
+    completed_runtime = runtime_state == "completed"
     requested_target = runtime.get("target_temperature")
     try:
         requested_target = float(requested_target) if requested_target is not None else None
@@ -220,8 +233,12 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     heater_action_needed = heating_needed and not heater_on
     pump_action_needed = pump_recommended and not pump_on
     pump_stop_needed = boil_stage and pump_on
+    completion_stop_needed = completed_runtime and (heater_on or pump_on)
+    heater_stop_needed = completed_runtime and heater_on
+    completion_pump_stop_needed = completed_runtime and pump_on
 
     rapt_observation = _rapt_brewzilla_observation(hass)
+    control_age = rapt_observation.get("brewzilla_rapt_control_age_seconds")
     critical_refresh_recommended = bool(
         _runtime_active(runtime_state)
         and (
@@ -231,12 +248,15 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             or pump_action_needed
             or pump_stop_needed
             or (0 < step_remaining_seconds <= RAPT_CRITICAL_WINDOW_SECONDS)
+            or (control_age is not None and control_age > RAPT_OBSERVATION_WARN_AGE_SECONDS)
         )
     )
 
     hard_block = None
     if not connected:
         hard_block = "BrewZilla disconnected"
+    elif completed_runtime:
+        hard_block = None
     elif not _runtime_active(runtime_state):
         hard_block = f"Brewday runtime {runtime_state}"
     elif snapshot_age_minutes > MAX_SNAPSHOT_AGE_MINUTES:
@@ -247,24 +267,34 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         hard_block = "Brewfather paused target rewind guard active"
 
     can_control = hard_block is None
-    action_needed = target_sync_needed or heater_action_needed or pump_action_needed or pump_stop_needed
+    action_needed = target_sync_needed or heater_action_needed or pump_action_needed or pump_stop_needed or completion_stop_needed
     mode = "direct-control" if can_control and action_needed else "monitor"
     if hard_block is not None:
         mode = "blocked"
 
     reason = hard_block or "Direct production flow active"
-    if hard_block is None and boil_target_fallback_active:
+    if completed_runtime and completion_stop_needed:
+        reason = "Brewday runtime completed; heater/pump should be OFF"
+    elif completed_runtime:
+        reason = "Brewday runtime completed"
+    elif hard_block is None and boil_target_fallback_active:
         reason = "Boil stage detected without Brew Tracker target; using 100°C boil fallback"
-    if hard_block is None and pump_stop_needed:
+    if not completed_runtime and hard_block is None and pump_stop_needed:
         reason = "Boil stage active; pump should be OFF"
-    elif hard_block is None and heater_action_needed:
+    elif not completed_runtime and hard_block is None and heater_action_needed:
         reason = "Heating needed; heater should be ON"
-    elif hard_block is None and pump_action_needed:
+    elif not completed_runtime and hard_block is None and pump_action_needed:
         reason = "Mash circulation recommended; pump should be ON"
-    elif hard_block is None and awaiting_snapshot:
+    elif not completed_runtime and hard_block is None and awaiting_snapshot:
         reason = "Awaiting fresh snapshot, using current valid Brew Tracker target"
-    elif hard_block is None and runtime_state == "paused":
+    elif not completed_runtime and hard_block is None and runtime_state == "paused":
         reason = "Brewfather paused; maintaining current valid target"
+
+    if completed_runtime:
+        target_sync_needed = False
+        heating_needed = False
+        heater_action_needed = False
+        pump_action_needed = False
 
     return {
         "source": SOURCE,
@@ -281,6 +311,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "requested_target_source": requested_target_source,
         "boil_stage": boil_stage,
         "boil_target_fallback_active": boil_target_fallback_active,
+        "completed_runtime": completed_runtime,
+        "terminal_complete_inferred": runtime.get("terminal_complete_inferred"),
         "applied_target": applied_target,
         "current_temperature": current_temperature,
         "target_delta": target_delta,
@@ -290,10 +322,13 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "heating_needed": heating_needed,
         "heater_on": heater_on,
         "heater_action_needed": heater_action_needed,
+        "heater_stop_needed": heater_stop_needed,
         "pump_recommended": pump_recommended,
         "pump_on": pump_on,
         "pump_action_needed": pump_action_needed,
         "pump_stop_needed": pump_stop_needed,
+        "completion_stop_needed": completion_stop_needed,
+        "completion_pump_stop_needed": completion_pump_stop_needed,
         "awaiting_snapshot": awaiting_snapshot,
         "snapshot_age_minutes": snapshot_age_minutes,
         "rapt_critical_refresh_recommended": critical_refresh_recommended,
@@ -358,23 +393,33 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
         await _call_switch(hass, "on", BREWZILLA_HEATER_SWITCH)
         heater_changed = True
 
+    heater_stopped = False
+    if snapshot.get("heater_stop_needed") and hass.states.get(BREWZILLA_HEATER_SWITCH) is not None:
+        await _call_switch(hass, "off", BREWZILLA_HEATER_SWITCH)
+        heater_stopped = True
+
     pump_started = False
     if snapshot.get("pump_action_needed") and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None:
         await _call_switch(hass, "on", BREWZILLA_PUMP_SWITCH)
         pump_started = True
 
     pump_stopped = False
-    if snapshot.get("pump_stop_needed") and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None:
+    if (
+        (snapshot.get("pump_stop_needed") or snapshot.get("completion_pump_stop_needed"))
+        and hass.states.get(BREWZILLA_PUMP_SWITCH) is not None
+    ):
         await _call_switch(hass, "off", BREWZILLA_PUMP_SWITCH)
         pump_stopped = True
 
+    applied = target_changed or heater_changed or heater_stopped or pump_started or pump_stopped
     result = {
         **snapshot,
-        "applied": target_changed or heater_changed or pump_started or pump_stopped,
-        "apply_result": "direct_applied" if (target_changed or heater_changed or pump_started or pump_stopped) else "no_action_needed",
+        "applied": applied,
+        "apply_result": "direct_applied" if applied else "no_action_needed",
         "applied_target_value": rounded_target,
         "target_changed": target_changed,
         "heater_started": heater_changed,
+        "heater_stopped": heater_stopped,
         "pump_started": pump_started,
         "pump_stopped": pump_stopped,
         "executed_at": dt_util.utcnow().isoformat(),
