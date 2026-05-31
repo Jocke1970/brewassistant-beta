@@ -43,8 +43,8 @@ cards:
         - color: rgba(255,255,255,.94)
       grid:
         - grid-template-areas: >-
-            "i title title" "i temp temp" "i meta meta" "reason reason reason"
-        - grid-template-columns: 52px 1fr 1fr
+            "i title title power" "i temp temp power" "i meta meta power" "reason reason reason reason"
+        - grid-template-columns: 52px 1fr 1fr 44px
         - grid-template-rows: min-content min-content min-content min-content
       custom_fields:
         title:
@@ -66,6 +66,18 @@ cards:
           - font-size: 13px
           - opacity: .88
           - margin-top: 4px
+        power:
+          - align-self: start
+          - justify-self: end
+          - width: 38px
+          - height: 38px
+          - border-radius: 999px
+          - display: flex
+          - align-items: center
+          - justify-content: center
+          - background: rgba(255,255,255,.14)
+          - border: 1px solid rgba(255,255,255,.22)
+          - font-size: 20px
         reason:
           - align-self: start
           - justify-self: stretch
@@ -87,10 +99,8 @@ cards:
         [[[ 
           const rawTemp = Number(states['sensor.brewassistant_brewzilla_current_temperature']?.state);
           const rawTarget = Number(states['sensor.brewassistant_brewzilla_target_temperature']?.state);
-          const rawDelta = Number(states['sensor.brewassistant_brewzilla_temperature_delta']?.state);
           const temp = isNaN(rawTemp) ? '—' : rawTemp.toFixed(1);
           const target = isNaN(rawTarget) ? '—' : rawTarget.toFixed(1);
-          const delta = isNaN(rawDelta) ? '—' : rawDelta.toFixed(1);
           return `${temp} → ${target} °C`;
         ]]]
       meta: >
@@ -103,13 +113,46 @@ cards:
           const pumpTxt = isNaN(pump) ? 'Pump —' : `Pump ${Math.round(pump)}%`;
           return `${power} · ${heatTxt} · ${pumpTxt}`;
         ]]]
+      power: >
+        [[[ return states['switch.brewzilla']?.state === 'on' ? '⏻' : '○'; ]]]
       reason: >
         [[[ return states['sensor.brewassistant_brewzilla_control_reason']?.state || 'Monitor BrewZilla'; ]]]
+    tap_action:
+      action: more-info
+    custom_fields_actions:
+      power:
+        action: call-service
+        service: switch.toggle
+        target:
+          entity_id: switch.brewzilla
+        confirmation:
+          text: Växla BrewZilla main power?
 
   - type: grid
     columns: 2
     square: false
     cards:
+      - type: custom:mushroom-template-card
+        entity: switch.brewzilla
+        primary: Main power
+        secondary: '{{ states(entity) }}'
+        icon: mdi:power
+        icon_color: >-
+          {% if is_state(entity, 'on') %}green{% else %}grey{% endif %}
+        tap_action:
+          action: call-service
+          service: switch.toggle
+          target:
+            entity_id: switch.brewzilla
+          confirmation:
+            text: Växla BrewZilla main power?
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_brewzilla_connection_state
+        primary: Connection
+        secondary: '{{ states(entity) }}'
+        icon: mdi:wifi
+        icon_color: >-
+          {% if is_state(entity, 'Connected') %}green{% else %}red{% endif %}
       - type: custom:mushroom-template-card
         entity: sensor.brewassistant_brewzilla_current_temperature
         primary: Current
@@ -173,9 +216,6 @@ cards:
 
   - type: custom:mushroom-chips-card
     chips:
-      - type: entity
-        entity: sensor.brewassistant_brewzilla_connection_state
-        icon: mdi:wifi
       - type: entity
         entity: sensor.brewassistant_brewzilla_orchestration_mode
         icon: mdi:robot
