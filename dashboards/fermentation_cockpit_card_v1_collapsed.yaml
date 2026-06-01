@@ -1,0 +1,89 @@
+# BrewAssistant Fermentation Cockpit Card v1 collapsed
+# Top card always visible. Details appear only when the process card is enabled.
+
+# Required custom cards:
+# - custom:vertical-stack-in-card
+# - custom:mushroom-template-card
+# - custom:mushroom-entity-card
+# - custom:mushroom-chips-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brew_process_status
+    primary: Fermentation Cockpit
+    secondary: >-
+      {% set enabled = is_state('input_boolean.brew_process_card_enabled', 'on') %}
+      {% if enabled %}
+        {{ states(entity) }} · {{ states('sensor.recipe_runtime_name') }}
+      {% else %}
+        Idle/standby · details hidden
+      {% endif %}
+    icon: mdi:beer-outline
+    icon_color: >-
+      {% if is_state('input_boolean.brew_process_card_enabled', 'on') %}amber{% else %}grey{% endif %}
+    tap_action:
+      action: more-info
+
+  - type: conditional
+    conditions:
+      - entity: input_boolean.brew_process_card_enabled
+        state: 'on'
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: sensor.recipe_runtime_name
+              primary: Batch
+              secondary: '{{ states(entity) }}'
+              icon: mdi:beer-outline
+              icon_color: amber
+            - type: custom:mushroom-template-card
+              entity: sensor.brew_process_next_step
+              primary: Next step
+              secondary: '{{ states(entity) }}'
+              icon: mdi:progress-clock
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              entity: sensor.brew_fermentation_attenuation
+              primary: Attenuation
+              secondary: >-
+                {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}— %{% else %}{{ states(entity) | float(0) | round(0) }} %{% endif %}
+              icon: mdi:chart-line
+              icon_color: green
+            - type: custom:mushroom-template-card
+              entity: sensor.recipe_runtime_fermenting_days_left
+              primary: Days left
+              secondary: >-
+                {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}— d{% else %}{{ states(entity) | float(0) | round(1) }} d{% endif %}
+              icon: mdi:calendar-clock
+              icon_color: purple
+
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-entity-card
+              entity: sensor.yellow_pill_temperature
+              name: Pill temp
+              icon: mdi:thermometer
+            - type: custom:mushroom-entity-card
+              entity: sensor.yellow_pill_gravity_2
+              name: Gravity
+              icon: mdi:gauge
+
+        - type: custom:mushroom-chips-card
+          chips:
+            - type: entity
+              entity: input_boolean.brew_process_card_enabled
+              icon: mdi:power
+            - type: entity
+              entity: sensor.brew_process_status
+              icon: mdi:state-machine
+            - type: entity
+              entity: sensor.brew_process_next_step
+              icon: mdi:debug-step-over
