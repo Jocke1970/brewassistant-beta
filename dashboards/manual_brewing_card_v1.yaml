@@ -1,0 +1,266 @@
+# BrewAssistant Manual Brewing Card v1
+# Fallback/operator runtime card for manual BrewZilla brewday control.
+# Visibility rule:
+# - Show only when BrewZilla is connected
+# - Hide when Brewfather Brew Tracker is the active runtime source
+
+# Required custom cards:
+# - custom:vertical-stack-in-card
+# - custom:mushroom-template-card
+# - custom:mushroom-chips-card
+# - custom:button-card
+# - custom:bar-card
+
+type: conditional
+conditions:
+  - entity: sensor.brewassistant_brewzilla_connection_state
+    state: Connected
+  - entity: sensor.brewassistant_brewday_runtime_source
+    state_not: Brewfather Brew Tracker
+card:
+  type: custom:vertical-stack-in-card
+  cards:
+    - type: custom:mushroom-template-card
+      entity: sensor.brewassistant_brewday_runtime_source
+      primary: Manual Brewing
+      secondary: >-
+        {% if is_state('sensor.brewassistant_brewday_runtime_source', 'Manual Brewday') %}
+          {{ states('sensor.brewassistant_brewday_runtime_state') }} · {{ states('sensor.brewassistant_brewday_runtime_stage') }} · {{ states('sensor.brewassistant_brewday_runtime_step') }}
+        {% else %}
+          BrewZilla connected · Brewfather/Brew Tracker inactive
+        {% endif %}
+      icon: mdi:hand-back-right-outline
+      icon_color: >-
+        {% if is_state('sensor.brewassistant_brewday_runtime_source', 'Manual Brewday') %}amber{% else %}cyan{% endif %}
+
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+        - type: custom:button-card
+          name: PREPARE
+          label: Load manual BIAB plan
+          icon: mdi:playlist-check
+          show_icon: true
+          show_name: true
+          show_label: true
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_prepare
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(14, 165, 233, .18)
+            name:
+              - font-size: 14px
+              - font-weight: 900
+            label:
+              - font-size: 11px
+              - opacity: .75
+        - type: custom:button-card
+          name: START / RESUME
+          label: Start current step
+          icon: mdi:play-circle
+          show_icon: true
+          show_name: true
+          show_label: true
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_start
+            confirmation:
+              text: Starta eller återuppta Manual Brewing?
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(22, 101, 52, .22)
+            name:
+              - font-size: 14px
+              - font-weight: 900
+            label:
+              - font-size: 11px
+              - opacity: .75
+        - type: custom:button-card
+          name: PAUSE
+          label: Pause timer
+          icon: mdi:pause-circle
+          show_icon: true
+          show_name: true
+          show_label: true
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_pause
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(202, 138, 4, .22)
+            name:
+              - font-size: 14px
+              - font-weight: 900
+            label:
+              - font-size: 11px
+              - opacity: .75
+        - type: custom:button-card
+          name: NEXT
+          label: Advance step
+          icon: mdi:debug-step-over
+          show_icon: true
+          show_name: true
+          show_label: true
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_next
+            confirmation:
+              text: Gå vidare till nästa manuella steg?
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(99, 102, 241, .20)
+            name:
+              - font-size: 14px
+              - font-weight: 900
+            label:
+              - font-size: 11px
+              - opacity: .75
+
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_runtime_source
+          state: Manual Brewday
+      card:
+        type: custom:vertical-stack-in-card
+        cards:
+          - type: custom:bar-card
+            entity: sensor.brewassistant_brewday_live_progress
+            name: Manual progress
+            height: 18px
+            min: 0
+            max: 100
+            decimal: 0
+            positions:
+              icon: 'off'
+              indicator: 'off'
+              name: inside
+              value: inside
+            severity:
+              - from: 0
+                to: 35
+                color: '#64748b'
+              - from: 36
+                to: 75
+                color: '#0ea5e9'
+              - from: 76
+                to: 100
+                color: '#22c55e'
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.brewassistant_brewday_runtime_stage
+                primary: Stage
+                secondary: '{{ states(entity) }}'
+                icon: mdi:format-list-bulleted
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.brewassistant_brewday_runtime_step
+                primary: Step
+                secondary: '{{ states(entity) }}'
+                icon: mdi:debug-step-into
+                icon_color: amber
+              - type: custom:mushroom-template-card
+                entity: sensor.brewassistant_brewday_runtime_next_step
+                primary: Next
+                secondary: '{{ states(entity) }}'
+                icon: mdi:debug-step-over
+                icon_color: purple
+              - type: custom:mushroom-template-card
+                entity: sensor.brewassistant_brewday_live_time_remaining_minutes
+                primary: Remaining
+                secondary: >-
+                  {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+                    — min
+                  {% else %}
+                    {{ states(entity) | float(0) | round(0) }} min
+                  {% endif %}
+                icon: mdi:timer-outline
+                icon_color: green
+
+    - type: grid
+      columns: 4
+      square: false
+      cards:
+        - type: custom:button-card
+          name: MASH
+          icon: mdi:grain
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_start_mash
+            confirmation:
+              text: Hoppa till Mash i Manual Brewing?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+        - type: custom:button-card
+          name: BOIL
+          icon: mdi:kettle-steam
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_start_boil
+            confirmation:
+              text: Hoppa till Boil i Manual Brewing?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+        - type: custom:button-card
+          name: WP
+          icon: mdi:weather-hurricane
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_start_whirlpool
+            confirmation:
+              text: Hoppa till Whirlpool i Manual Brewing?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+        - type: custom:button-card
+          name: CHILL
+          icon: mdi:snowflake-thermometer
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_start_cooling
+            confirmation:
+              text: Hoppa till Cooling i Manual Brewing?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+
+    - type: custom:mushroom-chips-card
+      chips:
+        - type: entity
+          entity: sensor.brewassistant_brewday_runtime_source
+          icon: mdi:source-branch
+        - type: entity
+          entity: sensor.brewassistant_brewzilla_connection_state
+          icon: mdi:wifi
+        - type: action
+          icon: mdi:flag-checkered
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_finish
+            confirmation:
+              text: Markera Manual Brewing som färdig?
+        - type: action
+          icon: mdi:restart-alert
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_reset
+            confirmation:
+              text: Reset Manual Brewing session?
