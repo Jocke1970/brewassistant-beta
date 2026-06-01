@@ -1,0 +1,137 @@
+# BrewAssistant Brewday Audit Card v1.2
+# Compact top card always visible. Details appear only while brewday runtime is active.
+
+# Required custom cards:
+# - custom:vertical-stack-in-card
+# - custom:mushroom-template-card
+# - custom:mushroom-entity-card
+# - custom:button-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_brewday_audit_summary
+    primary: Brewday Audit
+    secondary: >-
+      {% set runtime = states('sensor.brewassistant_brewday_runtime_state') %}
+      {% set count = state_attr(entity, 'event_count') or 0 %}
+      {% set last = state_attr(entity, 'last_event_type') or '—' %}
+      {% if runtime in ['idle', 'off', 'unknown', 'unavailable', 'none', ''] %}
+        Idle · {{ count }} events · details hidden
+      {% else %}
+        {{ states(entity) }} · {{ count }} events · last {{ last }}
+      {% endif %}
+    icon: mdi:clipboard-clock-outline
+    icon_color: >-
+      {% if is_state(entity, 'recording') %}green{% elif is_state(entity, 'stopped') %}amber{% else %}grey{% endif %}
+    tap_action:
+      action: more-info
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: idle
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: 'off'
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: unknown
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: unavailable
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: grid
+          columns: 4
+          square: false
+          cards:
+            - type: custom:button-card
+              name: Start
+              icon: mdi:record-rec
+              tap_action:
+                action: call-service
+                service: brewassistant.brewday_audit_start
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - background: rgba(76,175,80,.16)
+                icon:
+                  - color: '#a5d6a7'
+            - type: custom:button-card
+              name: Snapshot
+              icon: mdi:camera-outline
+              tap_action:
+                action: call-service
+                service: brewassistant.brewday_audit_snapshot
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - background: rgba(100,181,246,.14)
+                icon:
+                  - color: '#bbdefb'
+            - type: custom:button-card
+              name: Stop
+              icon: mdi:stop-circle-outline
+              tap_action:
+                action: call-service
+                service: brewassistant.brewday_audit_stop
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - background: rgba(255,202,40,.13)
+                icon:
+                  - color: '#ffe082'
+            - type: custom:button-card
+              name: Clear
+              icon: mdi:trash-can-outline
+              tap_action:
+                action: call-service
+                service: brewassistant.brewday_audit_clear
+                confirmation:
+                  text: Clear Brewday audit log?
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - background: rgba(244,67,54,.13)
+                icon:
+                  - color: '#ffcdd2'
+
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-entity-card
+              entity: sensor.brewassistant_brewday_audit_summary
+              name: Status
+              icon: mdi:clipboard-text-clock
+            - type: custom:mushroom-entity-card
+              entity: sensor.brewassistant_brewday_audit_event_count
+              name: Events
+              icon: mdi:counter
+            - type: custom:mushroom-entity-card
+              entity: sensor.brewassistant_brewday_audit_last_event
+              name: Last event
+              icon: mdi:history
+            - type: custom:mushroom-entity-card
+              entity: sensor.brewassistant_brewday_audit_last_step
+              name: Last step
+              icon: mdi:playlist-check
+            - type: custom:mushroom-entity-card
+              entity: sensor.brewassistant_brewday_audit_last_target
+              name: Last target
+              icon: mdi:target
+
+        - type: markdown
+          content: >-
+            {% set a = state_attr('sensor.brewassistant_brewday_audit_summary', 'recent_events') or [] %}
+            {% if a | count == 0 %}
+            **Recent events:** none yet
+            {% else %}
+            **Recent events**
+            {% for ev in a[-6:] | reverse %}
+            - {{ ev.timestamp | default('—') }} · {{ ev.event_type | default('event') }} · {{ ev.step | default('—') }}
+            {% endfor %}
+            {% endif %}
