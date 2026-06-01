@@ -1,0 +1,155 @@
+# BrewAssistant RAPT Diagnostics Card v1
+# Compact top card always visible. Detailed telemetry appears only when BrewZilla
+# is connected. A warning row appears if runtime is active while BrewZilla is not connected.
+
+# Required custom cards:
+# - custom:vertical-stack-in-card
+# - custom:mushroom-template-card
+# - custom:mushroom-entity-card
+# - custom:mushroom-chips-card
+
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_brewzilla_connection_state
+    primary: RAPT Diagnostics
+    secondary: >-
+      {% set runtime = states('sensor.brewassistant_brewday_runtime_state') %}
+      {% set conn = states(entity) %}
+      {% set mode = states('sensor.brewassistant_brewzilla_orchestration_mode') %}
+      {% if conn == 'Connected' %}
+        Connected · {{ mode }} · runtime {{ runtime }}
+      {% else %}
+        {{ conn }} · details hidden · runtime {{ runtime }}
+      {% endif %}
+    icon: mdi:cloud-sync-outline
+    icon_color: >-
+      {% if is_state(entity, 'Connected') %}green{% elif states('sensor.brewassistant_brewday_runtime_state') not in ['idle', 'off', 'unknown', 'unavailable', 'none', ''] %}red{% else %}grey{% endif %}
+    tap_action:
+      action: more-info
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewzilla_connection_state
+        state_not: Connected
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: idle
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: 'off'
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: unknown
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: unavailable
+    card:
+      type: custom:mushroom-template-card
+      entity: sensor.brewassistant_brewzilla_connection_state
+      primary: Runtime active but BrewZilla is not connected
+      secondary: '{{ states("sensor.brewassistant_brewzilla_control_reason") }}'
+      icon: mdi:alert-circle-outline
+      icon_color: red
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_brewzilla_connection_state
+        state: Connected
+    card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_current_temperature
+              primary: RAPT/BZ temp
+              secondary: >-
+                {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+                  — °C
+                {% else %}
+                  {{ states(entity) | float(0) | round(1) }} °C
+                {% endif %}
+              icon: mdi:thermometer
+              icon_color: orange
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_target_temperature
+              primary: RAPT/BZ target
+              secondary: >-
+                {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+                  — °C
+                {% else %}
+                  {{ states(entity) | float(0) | round(1) }} °C
+                {% endif %}
+              icon: mdi:target
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_heat_utilization
+              primary: Heat utilization
+              secondary: '{{ states(entity) | float(0) | round(0) }} %'
+              icon: mdi:fire
+              icon_color: deep-orange
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_pump_utilization
+              primary: Pump utilization
+              secondary: '{{ states(entity) | float(0) | round(0) }} %'
+              icon: mdi:pump
+              icon_color: cyan
+
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              primary: Local power age
+              secondary: >-
+                {% set age = state_attr(entity, 'brewzilla_local_power_age_seconds') %}
+                {{ age if age is not none else '—' }} s
+              icon: mdi:power-plug-outline
+              icon_color: yellow
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              primary: RAPT control age
+              secondary: >-
+                {% set age = state_attr(entity, 'brewzilla_rapt_control_age_seconds') %}
+                {{ age if age is not none else '—' }} s
+              icon: mdi:cloud-clock-outline
+              icon_color: blue
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              primary: RAPT config age
+              secondary: >-
+                {% set age = state_attr(entity, 'brewzilla_rapt_config_age_seconds') %}
+                {{ age if age is not none else '—' }} s
+              icon: mdi:tune-clock
+              icon_color: purple
+            - type: custom:mushroom-template-card
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              primary: Poll warning
+              secondary: >-
+                {% if state_attr(entity, 'rapt_brewzilla_poll_warning') %}
+                  Warning
+                {% else %}
+                  OK
+                {% endif %}
+              icon: mdi:cloud-alert-outline
+              icon_color: >-
+                {% if state_attr(entity, 'rapt_brewzilla_poll_warning') %}red{% else %}green{% endif %}
+
+        - type: custom:mushroom-template-card
+          entity: sensor.brewassistant_brewzilla_control_reason
+          primary: Control reason
+          secondary: '{{ states(entity) }}'
+          icon: mdi:robot-outline
+          icon_color: green
+
+        - type: custom:mushroom-chips-card
+          chips:
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              icon: mdi:state-machine
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_power
+              icon: mdi:flash
+            - type: entity
+              entity: sensor.brewassistant_brewzilla_energy_power
+              icon: mdi:lightning-bolt
