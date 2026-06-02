@@ -18,7 +18,12 @@ from .brewday_runtime_core import build_core_snapshot
 
 DATA_KEY = "brewzilla_learning"
 
-BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
+BREWZILLA_INTERNAL_TEMP_SENSOR = "sensor.brewzilla_temperature"
+BREWZILLA_MASH_TEMP_SENSOR = "sensor.brewzilla_ble_thermometer_temperature"
+BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR = "sensor.brewzilla_control_device_temperature"
+
+# Backwards compatibility name. This now means internal/wort/kettle temperature.
+BREWZILLA_TEMP_SENSOR = BREWZILLA_INTERNAL_TEMP_SENSOR
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_POWER_SENSOR = "sensor.brewzilla_power"
 BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
@@ -172,10 +177,80 @@ def _round5(value: float) -> int:
     return max(0, min(100, int(round(value / 5.0) * 5)))
 
 
-def _update_temperature_observation(hass: HomeAssistant, current_temperature: float | None) -> dict[str, Any]:
+
+def _temperature_source_snapshot(hass: HomeAssistant, stage_kind: str) -> dict[str, Any]:
+    """Resolve mash, wort and effective learning temperatures."""
+    mash_temp = _float(hass, BREWZILLA_MASH_TEMP_SENSOR)
+    control_temp = _float(hass, BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR)
+    wort_temp = _float(hass, BREWZILLA_INTERNAL_TEMP_SENSOR)
+
+    mash_entity = BREWZILLA_MASH_TEMP_SENSOR if mash_temp is not None else None
+    mash_source = "RAPT BLE Thermometer" if mash_temp is not None else None
+
+    if mash_temp is None and control_temp is not None:
+        mash_temp = control_temp
+        mash_entity = BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR
+        mash_source = "BrewZilla control device"
+
+    wort_entity = BREWZILLA_INTERNAL_TEMP_SENSOR if wort_temp is not None else None
+    wort_source = "BrewZilla internal" if wort_temp is not None else None
+
+    prefer_mash = stage_kind in {"ramp", "mash_hold"}
+
+    if prefer_mash and mash_temp is not None:
+        learning_temp = mash_temp
+        learning_entity = mash_entity
+        learning_source = mash_source
+        learning_role = "mash_temperature"
+    elif wort_temp is not None:
+        learning_temp = wort_temp
+        learning_entity = wort_entity
+        learning_source = wort_source
+        learning_role = "wort_or_kettle_temperature"
+    elif mash_temp is not None:
+        learning_temp = mash_temp
+        learning_entity = mash_entity
+        learning_source = mash_source
+        learning_role = "mash_temperature_fallback"
+    else:
+        learning_temp = None
+        learning_entity = None
+        learning_source = "Unavailable"
+        learning_role = "unavailable"
+
+    delta_mash_wort = None
+    if mash_temp is not None and wort_temp is not None:
+        delta_mash_wort = round(mash_temp - wort_temp, 2)
+
+    source_state = hass.states.get(str(learning_entity)) if learning_entity else None
+    source_attrs = dict(source_state.attributes) if source_state is not None else {}
+
+    return {
+        "mash_temperature": round(mash_temp, 2) if mash_temp is not None else None,
+        "mash_temperature_entity": mash_entity,
+        "mash_temperature_source": mash_source,
+        "wort_temperature": round(wort_temp, 2) if wort_temp is not None else None,
+        "wort_temperature_entity": wort_entity,
+        "wort_temperature_source": wort_source,
+        "temperature_delta_mash_wort": delta_mash_wort,
+        "learning_temperature": round(learning_temp, 2) if learning_temp is not None else None,
+        "learning_temperature_entity": learning_entity,
+        "learning_temperature_source": learning_source,
+        "learning_temperature_role": learning_role,
+        "use_internal_sensor": source_attrs.get("use_internal_sensor"),
+        "control_device_type": source_attrs.get("control_device_type"),
+        "control_device_mac_address": source_attrs.get("control_device_mac_address"),
+    }
+
+def _update_temperature_observation(
+    hass: HomeAssistant,
+    current_temperature: float | None,
+    source_entity: str | None = None,
+) -> dict[str, Any]:
     """Update in-memory temperature observations and return trend diagnostics."""
     store = _learning_store(hass)
-    temp_state = _state_obj(hass, BREWZILLA_TEMP_SENSOR)
+    effective_source = source_entity or BREWZILLA_TEMP_SENSOR
+    temp_state = _state_obj(hass, effective_source)
     if temp_state is None or current_temperature is None:
         return {
             "temp_rate_c_per_min": None,
@@ -187,6 +262,25 @@ def _update_temperature_observation(hass: HomeAssistant, current_temperature: fl
 
     observed_at = dt_util.as_utc(temp_state.last_updated)
     observed_at_iso = observed_at.isoformat()
+
+    if store.get("last_temperature_source_entity") != effective_source:
+        store["previous_temperature"] = None
+        store["previous_temperature_at"] = None
+        store["last_temperature"] = current_temperature
+        store["last_temperature_at"] = observed_at_iso
+        store["last_temperature_source_entity"] = effective_source
+        store["temp_rate_c_per_min"] = None
+        return {
+            "temp_rate_c_per_min": None,
+            "temp_rate_c_per_hour": None,
+            "temp_observation_age_seconds": _age_seconds(temp_state),
+            "previous_temperature": None,
+            "previous_temperature_at": None,
+            "last_temperature": current_temperature,
+            "last_temperature_at": observed_at_iso,
+            "last_temperature_source_entity": effective_source,
+        }
+
     previous_at = store.get("last_temperature_at")
     previous_temp = store.get("last_temperature")
     rate_per_min = store.get("temp_rate_c_per_min")
@@ -211,6 +305,7 @@ def _update_temperature_observation(hass: HomeAssistant, current_temperature: fl
         "previous_temperature_at": store.get("previous_temperature_at"),
         "last_temperature": store.get("last_temperature"),
         "last_temperature_at": store.get("last_temperature_at"),
+        "last_temperature_source_entity": store.get("last_temperature_source_entity"),
     }
 
 
@@ -361,7 +456,8 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     store["observation_count"] = int(store.get("observation_count") or 0) + 1
     store["last_observed_at"] = dt_util.utcnow().isoformat()
 
-    current_temperature = _float(hass, BREWZILLA_TEMP_SENSOR)
+    temperature_sources = _temperature_source_snapshot(hass, stage_kind)
+    current_temperature = temperature_sources["learning_temperature"]
     target_temperature = runtime.get("target_temperature")
     try:
         target_temperature = float(target_temperature) if target_temperature is not None else _float(hass, BREWZILLA_TARGET_NUMBER)
@@ -373,7 +469,11 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
     heater_on = _bool_state(hass, BREWZILLA_HEATER_SWITCH)
     pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
-    trend = _update_temperature_observation(hass, current_temperature)
+    trend = _update_temperature_observation(
+        hass,
+        current_temperature,
+        temperature_sources.get("learning_temperature_entity"),
+    )
     rate_per_min = trend.get("temp_rate_c_per_min")
     pump_mixing_state = _pump_mixing_state(stage_kind, pump_on, pump_utilization)
     pump_heat_bias = _pump_heat_bias(stage_kind, pump_on, pump_utilization)
@@ -431,6 +531,20 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "phase": phase,
         "confidence": confidence,
         "current_temperature": current_temperature,
+        "mash_temperature": temperature_sources["mash_temperature"],
+        "mash_temperature_entity": temperature_sources["mash_temperature_entity"],
+        "mash_temperature_source": temperature_sources["mash_temperature_source"],
+        "wort_temperature": temperature_sources["wort_temperature"],
+        "wort_temperature_entity": temperature_sources["wort_temperature_entity"],
+        "wort_temperature_source": temperature_sources["wort_temperature_source"],
+        "temperature_delta_mash_wort": temperature_sources["temperature_delta_mash_wort"],
+        "learning_temperature": temperature_sources["learning_temperature"],
+        "learning_temperature_entity": temperature_sources["learning_temperature_entity"],
+        "learning_temperature_source": temperature_sources["learning_temperature_source"],
+        "learning_temperature_role": temperature_sources["learning_temperature_role"],
+        "use_internal_sensor": temperature_sources["use_internal_sensor"],
+        "control_device_type": temperature_sources["control_device_type"],
+        "control_device_mac_address": temperature_sources["control_device_mac_address"],
         "target_temperature": target_temperature,
         "delta_to_target": delta_to_target,
         "temp_rate_c_per_min": rate_per_min,
