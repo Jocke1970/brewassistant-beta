@@ -29,6 +29,32 @@ BREWZILLA_LEARNING_SENSORS: dict[str, dict[str, Any]] = {
     },
     "brewzilla_learning_recommendation_reason": {"field": "recommendation_reason"},
     "brewzilla_learning_phase": {"field": "phase"},
+    "brewzilla_mash_temperature": {
+        "field": "mash_temperature",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_wort_temperature": {
+        "field": "wort_temperature",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_temperature_delta_mash_wort": {
+        "field": "temperature_delta_mash_wort",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_learning_temperature": {
+        "field": "learning_temperature",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_learning_temperature_source": {"field": "learning_temperature_source"},
+    "brewzilla_learning_temperature_role": {"field": "learning_temperature_role"},
     "brewzilla_learning_confidence": {"field": "confidence"},
     "brewzilla_stage_kind": {"field": "stage_kind"},
     "brewzilla_temp_rate": {
