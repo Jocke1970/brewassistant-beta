@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .brewday_runtime_sensor import create_brewday_runtime_sensors
+from .brewzilla_temperature import brewzilla_temperature_snapshot
 from .carbonation import build_carbonation_snapshot
 from .const import (
     ATTR_COLOR_HINT,
@@ -503,6 +504,30 @@ CARBONATION_SENSORS = {
 }
 
 
+BREWZILLA_TEMPERATURE_SENSORS = {
+    "brewzilla_mash_temperature": {
+        "field": "mash_temperature",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_wort_temperature": {
+        "field": "wort_temperature",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_temperature_delta_mash_wort": {
+        "field": "temperature_delta_mash_wort",
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_mash_temperature_source": {"field": "mash_temperature_source"},
+    "brewzilla_mash_temperature_source_entity": {"field": "mash_temperature_entity"},
+}
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -516,6 +541,7 @@ async def async_setup_entry(
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
         + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
+        + [BrewAssistantBrewZillaTemperatureSensor(coordinator, key) for key in BREWZILLA_TEMPERATURE_SENSORS]
         + create_brewday_runtime_sensors(coordinator)
         + create_wort_cooling_sensors(coordinator)
         + create_temperature_stat_sensors(coordinator)
@@ -583,6 +609,33 @@ class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return smart recommendation attributes."""
         return _smart_attrs(_smart_data(self.coordinator))
+
+
+class BrewAssistantBrewZillaTemperatureSensor(BrewAssistantEntity, SensorEntity):
+    """Read-only BrewZilla temperature resolver sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        super().__init__(coordinator, key)
+        config = BREWZILLA_TEMPERATURE_SENSORS[key]
+        self._key = key
+        self._field = str(config["field"])
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        self._attr_native_unit_of_measurement = config.get("unit")
+        self._attr_device_class = config.get("device_class")
+        self._attr_state_class = config.get("state_class")
+
+    @property
+    def native_value(self) -> Any:
+        """Return resolved BrewZilla temperature value."""
+        return brewzilla_temperature_snapshot(self.coordinator.hass).get(self._field)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return resolver diagnostics."""
+        return brewzilla_temperature_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantSourceSensor(BrewAssistantEntity, SensorEntity):

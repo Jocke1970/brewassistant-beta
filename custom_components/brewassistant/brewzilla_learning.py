@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .brewday_runtime_core import build_core_snapshot
+from .brewzilla_temperature import brewzilla_temperature_snapshot
 
 DATA_KEY = "brewzilla_learning"
 
@@ -180,67 +181,41 @@ def _round5(value: float) -> int:
 
 def _temperature_source_snapshot(hass: HomeAssistant, stage_kind: str) -> dict[str, Any]:
     """Resolve mash, wort and effective learning temperatures."""
-    mash_temp = _float(hass, BREWZILLA_MASH_TEMP_SENSOR)
-    control_temp = _float(hass, BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR)
-    wort_temp = _float(hass, BREWZILLA_INTERNAL_TEMP_SENSOR)
+    snapshot = brewzilla_temperature_snapshot(hass)
+    learning_temperature = snapshot.get("mash_temperature")
+    learning_entity = snapshot.get("mash_temperature_entity")
+    learning_source = snapshot.get("mash_temperature_source")
+    learning_role = "mash_temperature"
 
-    mash_entity = BREWZILLA_MASH_TEMP_SENSOR if mash_temp is not None else None
-    mash_source = "RAPT BLE Thermometer" if mash_temp is not None else None
-
-    if mash_temp is None and control_temp is not None:
-        mash_temp = control_temp
-        mash_entity = BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR
-        mash_source = "BrewZilla control device"
-
-    wort_entity = BREWZILLA_INTERNAL_TEMP_SENSOR if wort_temp is not None else None
-    wort_source = "BrewZilla internal" if wort_temp is not None else None
-
-    prefer_mash = stage_kind in {"ramp", "mash_hold"}
-
-    if prefer_mash and mash_temp is not None:
-        learning_temp = mash_temp
-        learning_entity = mash_entity
-        learning_source = mash_source
-        learning_role = "mash_temperature"
-    elif wort_temp is not None:
-        learning_temp = wort_temp
-        learning_entity = wort_entity
-        learning_source = wort_source
+    if stage_kind not in {"ramp", "mash_hold"}:
+        learning_temperature = snapshot.get("wort_temperature")
+        learning_entity = snapshot.get("wort_temperature_entity")
+        learning_source = snapshot.get("wort_temperature_source")
         learning_role = "wort_or_kettle_temperature"
-    elif mash_temp is not None:
-        learning_temp = mash_temp
-        learning_entity = mash_entity
-        learning_source = mash_source
-        learning_role = "mash_temperature_fallback"
-    else:
-        learning_temp = None
-        learning_entity = None
-        learning_source = "Unavailable"
-        learning_role = "unavailable"
 
-    delta_mash_wort = None
-    if mash_temp is not None and wort_temp is not None:
-        delta_mash_wort = round(mash_temp - wort_temp, 2)
-
-    source_state = hass.states.get(str(learning_entity)) if learning_entity else None
-    source_attrs = dict(source_state.attributes) if source_state is not None else {}
+    if learning_temperature is None:
+        learning_temperature = snapshot.get("mash_temperature") or snapshot.get("wort_temperature")
+        learning_entity = snapshot.get("mash_temperature_entity") or snapshot.get("wort_temperature_entity")
+        learning_source = snapshot.get("mash_temperature_source") or snapshot.get("wort_temperature_source")
+        learning_role = "fallback_temperature"
 
     return {
-        "mash_temperature": round(mash_temp, 2) if mash_temp is not None else None,
-        "mash_temperature_entity": mash_entity,
-        "mash_temperature_source": mash_source,
-        "wort_temperature": round(wort_temp, 2) if wort_temp is not None else None,
-        "wort_temperature_entity": wort_entity,
-        "wort_temperature_source": wort_source,
-        "temperature_delta_mash_wort": delta_mash_wort,
-        "learning_temperature": round(learning_temp, 2) if learning_temp is not None else None,
+        "mash_temperature": snapshot.get("mash_temperature"),
+        "mash_temperature_entity": snapshot.get("mash_temperature_entity"),
+        "mash_temperature_source": snapshot.get("mash_temperature_source"),
+        "wort_temperature": snapshot.get("wort_temperature"),
+        "wort_temperature_entity": snapshot.get("wort_temperature_entity"),
+        "wort_temperature_source": snapshot.get("wort_temperature_source"),
+        "temperature_delta_mash_wort": snapshot.get("temperature_delta_mash_wort"),
+        "learning_temperature": learning_temperature,
         "learning_temperature_entity": learning_entity,
         "learning_temperature_source": learning_source,
         "learning_temperature_role": learning_role,
-        "use_internal_sensor": source_attrs.get("use_internal_sensor"),
-        "control_device_type": source_attrs.get("control_device_type"),
-        "control_device_mac_address": source_attrs.get("control_device_mac_address"),
+        "use_internal_sensor": None,
+        "control_device_type": None,
+        "control_device_mac_address": None,
     }
+
 
 def _update_temperature_observation(
     hass: HomeAssistant,

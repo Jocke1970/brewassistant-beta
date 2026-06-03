@@ -11,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
+from .brewzilla_temperature import MASH_SOURCE_OPTIONS
 from .control_policy import POLICY_OPTIONS, SECTION_CONFIG, section_policy
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
@@ -54,6 +55,7 @@ async def async_setup_entry(
             BrewAssistantAirTargetTestModeSelect(coordinator),
             BrewAssistantApplyModeSelect(coordinator),
             BrewAssistantBrewZillaLearningContextSelect(coordinator),
+            BrewAssistantBrewZillaMashTemperatureSourceSelect(coordinator),
         ]
         + [
             BrewAssistantSectionPolicySelect(coordinator, section, config)
@@ -240,6 +242,53 @@ class BrewAssistantBrewZillaLearningContextSelect(BrewAssistantEntity, RestoreEn
             "advisory_only": True,
             "water_only_profile_weight": "0.25",
             "real_mash_profile_weight": "1.0",
+        }
+
+
+class BrewAssistantBrewZillaMashTemperatureSourceSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Mash temperature source selector for BrewZilla."""
+
+    _attr_has_entity_name = False
+    _attr_options = MASH_SOURCE_OPTIONS
+    _attr_icon = "mdi:thermometer-lines"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_mash_temperature_source_select")
+        self._attr_unique_id = f"{DOMAIN}_select_brewzilla_mash_temperature_source"
+        self._attr_name = "BrewAssistant BrewZilla Mash Temperature Source"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_mash_temperature_source"
+        self._current_option = "Auto"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore mash temperature source after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in MASH_SOURCE_OPTIONS:
+            self._current_option = last_state.state
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str | None:
+        """Return selected option."""
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Set mash temperature source."""
+        if option not in MASH_SOURCE_OPTIONS:
+            return
+        self._current_option = option
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | bool]:
+        """Return diagnostic attributes."""
+        return {
+            "source": "brewzilla_temperature_resolver",
+            "runtime_key": "mash_temperature_source",
+            "default": "Auto",
+            "auto_priority": "BLE > Control Device > Internal",
+            "wort_temperature_source": "BrewZilla Internal",
         }
 
 
