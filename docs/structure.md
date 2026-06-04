@@ -28,6 +28,9 @@ brewassistant/
 │       ├── brewday_stage_sensor.py
 │       ├── brewday_refresh.py
 │       ├── brewzilla_sensor.py
+│       ├── brewzilla_temperature.py
+│       ├── brewzilla_learning.py
+│       ├── brewzilla_learning_sensor.py
 │       ├── brewzilla_orchestration.py
 │       ├── brewzilla_orchestration_sensor.py
 │       ├── climate_supervisor.py
@@ -40,6 +43,8 @@ brewassistant/
 │       ├── carbonation.py
 │       └── carbonation_runtime.py
 ├── dashboards/
+│   ├── brewzilla-cockpit.yaml        # optional Lovelace operator card
+│   ├── fermentation-cockpit.yaml     # optional Lovelace fermentation card
 │   └── optional dashboard/card examples
 └── docs/
     ├── setup.md
@@ -48,6 +53,7 @@ brewassistant/
     ├── state-machine.md
     ├── manual-mode.md
     ├── dashboard.md
+    ├── brewzilla-temperature-sources.md
     ├── climate-supervisor.md
     ├── brewfather.md
     ├── legacy-migration.md
@@ -70,6 +76,7 @@ Responsibilities:
 - Normalize Brewfather Brew Tracker and Manual Brewday runtime data.
 - Interpret brewday stages.
 - Normalize BrewZilla/RAPT hardware telemetry.
+- Resolve BrewZilla mash, wort/kettle and mash-wort delta temperature roles.
 - Track counterflow wort cooling state.
 - Calculate carbonation recommendations and estimates.
 - Own carbonation runtime/session state and explicit controls.
@@ -225,6 +232,50 @@ The Stage Engine is read-only.
 
 ---
 
+### `brewzilla_temperature.py`
+
+BrewZilla Temperature Resolver is Python-owned and separates process temperature roles from raw RAPT/BrewZilla source entities.
+
+Responsibilities:
+
+- Treat BrewZilla internal temperature as wort/kettle temperature.
+- Resolve mash temperature from an operator-selected source.
+- Default mash source mode to `Auto`.
+- In Auto mode prefer BLE/control-device data, then fall back to internal temperature.
+- Expose mash temperature, wort temperature, active mash source, active source entity and mash-wort delta.
+- Keep dashboard cards from implementing their own source/fallback logic.
+
+Main operator-facing entities:
+
+```text
+select.brewassistant_brewzilla_mash_temperature_source
+sensor.brewassistant_brewzilla_mash_temperature
+sensor.brewassistant_brewzilla_wort_temperature
+sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+sensor.brewassistant_brewzilla_mash_temperature_source
+sensor.brewassistant_brewzilla_mash_temperature_source_entity
+```
+
+See `docs/brewzilla-temperature-sources.md` for the full resolver policy.
+
+---
+
+### `brewzilla_learning.py` and `brewzilla_learning_sensor.py`
+
+BrewZilla Learning is advisory/diagnostic.
+
+Responsibilities:
+
+- Observe BrewZilla heat behavior and temperature trends.
+- Use resolved mash temperature during ramp/mash-hold context.
+- Use internal wort/kettle temperature during boil/cooling/kettle context.
+- Expose learning temperatures, sources, trend and context sensors.
+- Avoid making unattended/autopilot decisions.
+
+Learning should use the same temperature resolver that the dashboard displays, so operator-facing UI and advisory calculations stay aligned.
+
+---
+
 ### `wort_cooling.py`
 
 Counterflow Wort Cooling models the post-boil chilling process.
@@ -273,6 +324,12 @@ number.brewassistant_carbonation_start_volumes
 select.brewassistant_carbonation_method
 ```
 
+Current BrewZilla temperature control:
+
+```text
+select.brewassistant_brewzilla_mash_temperature_source
+```
+
 These are integration entities, not old helper-backed workflow state.
 
 ---
@@ -292,6 +349,14 @@ No active fermentation/batch context
 ```
 
 A stale cold-crash helper cannot keep Fermentation Cockpit in warning state by itself. Cold crash only counts when there is an active fermentation/batch context.
+
+Dashboard implication:
+
+```text
+Idle fermentation context
+→ compact Fermentation Cockpit top section
+→ heavy climate/debug panels behind expanders or hidden conditionals
+```
 
 ---
 
@@ -328,20 +393,25 @@ Dashboard cards should:
 - Display current state.
 - Provide explicit buttons for user actions.
 - Show status, warnings and next steps.
+- Expose operator selects/buttons where appropriate.
 - Avoid duplicating backend workflow logic.
 
 A card may contain display-only formatting, but the real process state should come from Python sensors/attributes.
 
-Current dashboard milestones:
+Current dashboard milestones/examples:
 
 ```text
 Climate Supervisor Card v1.0
 Counterflow Cooling Cockpit
 Carbonation Cockpit v3.1
-Fermentation Cockpit v2.1
-BrewZilla/Brewday top-section v2.2
-Brewday Actions / Runtime Controls v2.2
+Fermentation Cockpit v3.1 compact idle card
+BrewZilla Cockpit v3.7 mash/wort temperature card
+Brewday Card operator cockpit
+Brewday Audit Card dashboard example
+Brewfather RAW Timeline debug card
 ```
+
+Optional dashboard examples live under `dashboards/` when available. They are not the source of truth for process logic.
 
 ---
 
@@ -359,6 +429,7 @@ Allowed YAML use:
 - Lovelace/dashboard layout.
 - Card styling.
 - Display-only formatting.
+- Explicit operator actions that call Python services/entities.
 - Temporary local testing.
 
 Avoid new YAML use for:
@@ -367,7 +438,7 @@ Avoid new YAML use for:
 - Stage detection.
 - Brewday timing logic.
 - BrewZilla safety logic.
-- Target selection logic.
+- Target/source selection logic.
 - Hidden automations that duplicate Python services.
 
 `services.yaml` inside the custom integration is allowed and required by Home Assistant as service metadata. It is not workflow logic.
@@ -381,7 +452,7 @@ Recommended v4 naming direction:
 ```text
 brewassistant_*                 Python-owned normalized entities
 brewassistant_brewday_*         Brewday Runtime and Stage Engine
-brewassistant_brewzilla_*       BrewZilla runtime/orchestration
+brewassistant_brewzilla_*       BrewZilla runtime/orchestration/temperature
 brewassistant_wort_*            Wort cooling and pitch-readiness
 brewassistant_carbonation_*     Carbonation calculations/runtime
 brewassistant_fermentation_*    Future fermentation runtime
