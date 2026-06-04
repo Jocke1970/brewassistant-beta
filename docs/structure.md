@@ -43,8 +43,8 @@ brewassistant/
 │       ├── carbonation.py
 │       └── carbonation_runtime.py
 ├── dashboards/
-│   ├── brewzilla-cockpit.yaml        # optional Lovelace operator card
-│   ├── fermentation-cockpit.yaml     # optional Lovelace fermentation card
+│   ├── brewzilla_card_v3_6_operator.yaml              # optional Lovelace operator card
+│   ├── fermentation_cockpit_card_v1_collapsed.yaml    # optional Lovelace fermentation card
 │   └── optional dashboard/card examples
 └── docs/
     ├── setup.md
@@ -404,8 +404,8 @@ Current dashboard milestones/examples:
 Climate Supervisor Card v1.0
 Counterflow Cooling Cockpit
 Carbonation Cockpit v3.1
-Fermentation Cockpit v3.1 compact idle card
-BrewZilla Cockpit v3.7 mash/wort temperature card
+Fermentation Cockpit v3.1 compact idle card: dashboards/fermentation_cockpit_card_v1_collapsed.yaml
+BrewZilla Cockpit v3.7 mash/wort temperature card: dashboards/brewzilla_card_v3_6_operator.yaml
 Brewday Card operator cockpit
 Brewday Audit Card dashboard example
 Brewfather RAW Timeline debug card
