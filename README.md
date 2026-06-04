@@ -19,7 +19,7 @@ v0.2.0-beta.1
 Supervised BrewZilla Brewday Beta
 ```
 
-Validated in the active `feature/python-core-v0.1` branch:
+Validated in the active beta branch:
 
 ```text
 ✅ Brewfather RAW Brew Tracker runtime resolver
@@ -40,15 +40,18 @@ Validated in the active `feature/python-core-v0.1` branch:
 ✅ Heater/pump stop handling when runtime completes
 ✅ BrewZilla local Shelly power vs RAPT Cloud telemetry age separation
 ✅ BrewZilla energy and SEK cost estimate sensors
-✅ BrewZilla Cockpit v3.6 operator hardware card
-✅ Brewday Card v3.6 operator cockpit
-✅ Brewday Audit Card v1.1 dashboard example
+✅ BrewZilla selectable mash temperature source resolver
+✅ BrewZilla mash/wort/delta dashboard-safe sensors
+✅ BrewZilla Learning uses the shared mash/wort resolver
+✅ BrewZilla Cockpit operator hardware card with mash/wort source display
+✅ Brewday Card operator cockpit
+✅ Brewday Audit Card dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
 ✅ Carbonation Runtime backend, persistence and UI
 ✅ Counterflow Wort Cooling backend and UI
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
-✅ Fermentation Cockpit scope guard and UI polish
+✅ Fermentation Cockpit scope guard and compact idle UI
 ```
 
 Beta limitations / still pending validation:
@@ -62,7 +65,7 @@ Beta limitations / still pending validation:
 [ ] package cleanup validation in a real HA install
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
-[ ] external RAPT BLE Thermometer is not locally consumed by BrewAssistant
+[ ] external RAPT BLE Thermometer depends on RAPT Cloud Link control-device telemetry
 ```
 
 ---
@@ -90,6 +93,8 @@ BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, b
 | Brewday Runtime | Resolve Brewfather RAW Brew Tracker and Manual Brewday sessions. |
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
 | BrewZilla Orchestration | Apply target/heater/pump actions when allowed by runtime state. |
+| BrewZilla Temperature Resolver | Separate mash, wort/kettle and mash-wort delta temperature roles. |
+| BrewZilla Learning | Advisory recommendations using the shared temperature resolver. |
 | Brewday Audit | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
@@ -125,6 +130,9 @@ Key beta behavior:
 - Shelly power is treated as local live telemetry.
 - RAPT temperature/target are treated as cloud/control telemetry.
 - RAPT heat/pump utilization are treated as slower config telemetry.
+- Mash temperature is operator-selectable, defaulting to Auto.
+- Wort/kettle temperature is BrewZilla internal thermometer.
+- Mash/Wort delta is exposed as dashboard-safe context.
 ```
 
 ---
@@ -132,8 +140,9 @@ Key beta behavior:
 ## Documentation index
 
 ```text
-docs/counterflow-chiller.md      Python CFC sanitation backend and CFC Ready flow
-docs/legacy-package-cleanup.md   Checklist for deleting old package YAML safely
-docs/legacy-migration.md         Namespace and legacy migration notes
-docs/structure.md                Project structure and module responsibilities
+docs/brewzilla-temperature-sources.md  Mash/Wort temperature resolver and dashboard policy
+docs/counterflow-chiller.md            Python CFC sanitation backend and CFC Ready flow
+docs/legacy-package-cleanup.md         Checklist for deleting old package YAML safely
+docs/legacy-migration.md               Namespace and legacy migration notes
+docs/structure.md                      Project structure and module responsibilities
 ```
