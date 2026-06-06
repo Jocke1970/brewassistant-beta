@@ -20,6 +20,7 @@ BREWDAY_STEP = "sensor.brewassistant_brewday_runtime_step"
 BREWDAY_NEXT_STEP = "sensor.brewassistant_brewday_runtime_next_step"
 BREWDAY_REMAINING_MIN = "sensor.brewassistant_brewday_live_time_remaining_minutes"
 BREWDAY_PROGRESS = "sensor.brewassistant_brewday_live_progress"
+BREWDAY_TARGET_TEMP = "sensor.brewassistant_brewday_target_temperature"
 
 BREWZILLA_STATE = "sensor.brewassistant_brewzilla_runtime_state"
 BREWZILLA_TEMP = "sensor.brewassistant_brewzilla_current_temperature"
@@ -82,6 +83,25 @@ BOIL_KEYWORDS = (
     "kok",
     "kokning",
     "kokgiva",
+)
+
+STRIKE_HEAT_KEYWORDS = (
+    "heat strike",
+    "strike water",
+    "heat water",
+    "heat mash water",
+    "värm strike",
+    "värm vatten",
+    "varm strike",
+    "varm vatten",
+)
+
+PREPARE_KEYWORDS = (
+    "prepare equipment",
+    "prepare brewday",
+    "setup",
+    "förbered",
+    "forbered",
 )
 
 
@@ -210,7 +230,7 @@ def _control_hint(stage: str, bz_state: str | None, power: float | None, pump_ut
 
     if stage in {"Idle", "Prepare", "Completed"}:
         return "observe_only"
-    if stage in {"Heating Strike", "Mash Out", "Heating To Boil"}:
+    if stage in {"Strike Water", "Heating Strike", "Mash Out", "Heating To Boil"}:
         return "target_sync_candidate"
     if stage in {"Mash", "Whirlpool"} and pump_value > 0:
         return "circulation_active"
@@ -251,9 +271,6 @@ def _resolve_stage(
             return "Wort Cooling", "Brewfather ended after whirlpool; BrewAssistant recommends wort chilling handoff"
         return "Completed", "Brewday runtime completed"
 
-    # Only the active stage/step should determine the current interpreted stage.
-    # next_step is intentionally kept out of this blob so an upcoming "Chill wort"
-    # step does not wake the cooling cockpit while Whirlpool is still active.
     next_blob = f"{next_step or ''}".lower()
     temp_value = temp if temp is not None else -999
     target_value = target if target is not None else None
@@ -263,8 +280,17 @@ def _resolve_stage(
 
     if runtime_state == "prepared":
         return "Prepare", "Manual brewday prepared; waiting to start"
-    if _contains(current_blob, "setup", "prepare equipment", "prepare brewday"):
-        return "Prepare", "Runtime text indicates brewday preparation"
+
+    # Specific active step checks must run before generic Setup/Prepare checks.
+    if _contains(current_blob, *STRIKE_HEAT_KEYWORDS):
+        if target_value is not None and temp_value < target_value - 1.0:
+            return "Heating Strike", "Runtime step is heat strike water and temperature is below target"
+        return "Strike Water", "Runtime step is heat strike water"
+
+    if _contains(current_blob, "mash in", "inmäsk", "inmask"):
+        if target_value is not None and temp_value < target_value - 2:
+            return "Heating Strike", "Mash-in step active and temperature below target"
+        return "Mash In", "Runtime text indicates mash in"
 
     if _contains(current_blob, "clean"):
         return "Cleaning", "Runtime text indicates cleaning"
@@ -299,6 +325,9 @@ def _resolve_stage(
             return "Heating Strike", "Mash stage active and BrewZilla below target"
         return "Mash", "Runtime stage indicates mash"
 
+    if _contains(current_blob, *PREPARE_KEYWORDS):
+        return "Prepare", "Runtime text indicates brewday preparation"
+
     # If the active text is generic but the upcoming step is a cooling/pitch action,
     # keep the current stage post-boil instead of prematurely entering cooling.
     if _contains(next_blob, *COOLING_KEYWORDS, *PITCH_READY_KEYWORDS):
@@ -326,8 +355,14 @@ def build_brewday_stage_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     progress = _float(hass, BREWDAY_PROGRESS)
     bz_state = _state(hass, BREWZILLA_STATE, "unknown")
     temp = _float(hass, BREWZILLA_TEMP)
-    target = _float(hass, BREWZILLA_TARGET)
-    delta = _float(hass, BREWZILLA_DELTA)
+    runtime_target = _float(hass, BREWDAY_TARGET_TEMP)
+    brewzilla_target = _float(hass, BREWZILLA_TARGET)
+    target = runtime_target if runtime_target is not None else brewzilla_target
+    delta = None
+    if temp is not None and target is not None:
+        delta = round(temp - target, 2)
+    elif brewzilla_target is not None:
+        delta = _float(hass, BREWZILLA_DELTA)
     power = _float(hass, BREWZILLA_POWER)
     heat_util = _float(hass, BREWZILLA_HEAT_UTIL)
     pump_util = _float(hass, BREWZILLA_PUMP_UTIL)
@@ -371,6 +406,9 @@ def build_brewday_stage_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "brewzilla_state": bz_state,
         "brewzilla_temperature": temp,
         "brewzilla_target": target,
+        "brewzilla_device_target": brewzilla_target,
+        "runtime_target": runtime_target,
+        "target_source": "runtime" if runtime_target is not None else "brewzilla_device",
         "brewzilla_delta": delta,
         "brewzilla_power": power,
         "brewzilla_heat_utilization": heat_util,
