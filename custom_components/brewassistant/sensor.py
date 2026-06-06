@@ -18,8 +18,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .brewday_runtime_sensor import create_brewday_runtime_sensors
-from .brewzilla_temperature import brewzilla_temperature_snapshot
+from .brewday.brewday_runtime_sensor import create_brewday_runtime_sensors
+from .brewzilla.brewzilla_temperature import brewzilla_temperature_snapshot
 from .carbonation import build_carbonation_snapshot
 from .const import (
     ATTR_COLOR_HINT,
@@ -45,7 +45,7 @@ from .const import (
 )
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
-from .fermentation_air_target import create_fermentation_air_target_sensors
+from .fermentation.fermentation_air_target import create_fermentation_air_target_sensors
 from .next_action import build_next_action
 from .runtime import build_runtime_snapshot, runtime_attrs
 from .smart_recommendations import SmartRecommendationData, build_smart_recommendations
@@ -54,8 +54,8 @@ from .source_health import (
     build_source_health,
     source_health_attrs,
 )
-from .temperature_stats import create_temperature_stat_sensors
-from .wort_cooling_sensor import create_wort_cooling_sensors
+from .shared.temperature_stats import create_temperature_stat_sensors
+from .cooling.wort_cooling_sensor import create_wort_cooling_sensors
 
 BREWFATHER_FERMENTATION_START_ENTITY = "sensor.brewfather_fermentation_start"
 BATCH_STARTED_AT_ENTITY = "input_datetime.brew_batch_started_at"

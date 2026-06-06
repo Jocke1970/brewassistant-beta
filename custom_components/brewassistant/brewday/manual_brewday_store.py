@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from ..const import DOMAIN
 from .manual_brewday_runtime import ManualRuntimeSession
 
 KEY = "manual_brewday_session"

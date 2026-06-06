@@ -9,14 +9,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .brewzilla_learning import (
+from .brewzilla.brewzilla_learning import (
     async_apply_brewzilla_learning_recommendation,
     async_deny_brewzilla_learning_recommendation,
     build_brewzilla_learning_snapshot,
 )
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
-from .counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
+from .cooling.counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
 from .supervised_apply import (
     async_confirm_pending_action,

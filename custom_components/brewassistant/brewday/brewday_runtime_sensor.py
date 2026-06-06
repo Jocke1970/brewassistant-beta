@@ -11,13 +11,13 @@ from .brewday_addition_alert_sensor import create_brewday_addition_alert_sensors
 from .brewday_audit_sensor import create_brewday_audit_sensors
 from .brewday_runtime import build_brewday_runtime_snapshot, brewday_runtime_attrs
 from .brewday_stage_sensor import create_brewday_stage_sensors
-from .brewzilla_energy_sensor import create_brewzilla_energy_sensors
-from .brewzilla_learning_sensor import create_brewzilla_learning_sensors
-from .brewzilla_orchestration_sensor import BrewAssistantBrewZillaOrchestrationSensor, ORCHESTRATION_SENSORS
-from .brewzilla_sensor import create_brewzilla_sensors
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..brewzilla.brewzilla_energy_sensor import create_brewzilla_energy_sensors
+from ..brewzilla.brewzilla_learning_sensor import create_brewzilla_learning_sensors
+from ..brewzilla.brewzilla_orchestration_sensor import BrewAssistantBrewZillaOrchestrationSensor, ORCHESTRATION_SENSORS
+from ..brewzilla.brewzilla_sensor import create_brewzilla_sensors
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 BREWDAY_RUNTIME_SENSORS: dict[str, dict[str, Any]] = {

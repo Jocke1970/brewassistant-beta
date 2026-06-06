@@ -8,9 +8,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from .brewzilla_learning import build_brewzilla_learning_snapshot
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 BREWZILLA_LEARNING_SENSORS: dict[str, dict[str, Any]] = {

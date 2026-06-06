@@ -7,9 +7,9 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 
 from .brewday_audit import build_brewday_audit_snapshot
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 AUDIT_SENSORS: dict[str, dict[str, Any]] = {

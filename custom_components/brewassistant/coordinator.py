@@ -10,9 +10,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .brewday_refresh import maybe_request_brewfather_refresh
-from .brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
-from .climate_supervisor import async_apply_climate_supervisor
+from .brewday.brewday_refresh import maybe_request_brewfather_refresh
+from .brewzilla.brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
+from .climate_backend.climate_supervisor import async_apply_climate_supervisor
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
     CONF_COLD_CRASH_ACTIVE_ENTITY,

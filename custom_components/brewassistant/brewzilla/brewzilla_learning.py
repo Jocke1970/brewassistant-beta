@@ -14,7 +14,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from .brewday_runtime_core import build_core_snapshot
+from ..brewday.brewday_runtime_core import build_core_snapshot
 from .brewzilla_temperature import brewzilla_temperature_snapshot
 
 DATA_KEY = "brewzilla_learning"

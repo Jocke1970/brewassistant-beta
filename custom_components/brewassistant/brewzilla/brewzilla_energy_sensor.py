@@ -8,9 +8,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 
 from .brewzilla_energy import build_brewzilla_energy_snapshot
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 BREWZILLA_ENERGY_SENSORS: dict[str, dict[str, Any]] = {

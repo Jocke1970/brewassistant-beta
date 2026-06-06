@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .brewday_runtime_core import as_float, build_core_snapshot, clean, indices, stages, step_desc, step_display_name
-from .counterflow_chiller import get_counterflow_chiller_snapshot
+from ..cooling.counterflow_chiller import get_counterflow_chiller_snapshot
 
 DUE_SOON_SECONDS = 300
 DUE_NOW_SECONDS = 30

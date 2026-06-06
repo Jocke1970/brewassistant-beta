@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .supervised_apply import (
+from ..supervised_apply import (
     clear_pending_action_from_source,
     get_pending_action,
     set_pending_action,
