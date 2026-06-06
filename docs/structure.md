@@ -1,6 +1,6 @@
 # Project Structure
 
-BrewAssistant v4 is structured around a Home Assistant custom integration with optional dashboard/card YAML.
+BrewAssistant is structured around a Home Assistant custom integration with optional dashboard/card YAML.
 
 The main goal is to keep brewing decisions, runtime interpretation, calculations and safety checks in Python, while dashboards focus on presentation and explicit user actions.
 
@@ -14,53 +14,42 @@ brewassistant/
 ├── custom_components/
 │   └── brewassistant/
 │       ├── __init__.py
+│       ├── manifest.json
+│       ├── config_flow.py
 │       ├── const.py
 │       ├── coordinator.py
+│       ├── entity.py
 │       ├── sensor.py
 │       ├── binary_sensor.py
 │       ├── switch.py
-│       ├── number.py
+│       ├── button.py
 │       ├── select.py
-│       ├── brewday_runtime_core.py
-│       ├── brewday_runtime.py
-│       ├── brewday_runtime_sensor.py
-│       ├── brewday_stage_engine.py
-│       ├── brewday_stage_sensor.py
-│       ├── brewday_refresh.py
-│       ├── brewzilla_sensor.py
-│       ├── brewzilla_temperature.py
-│       ├── brewzilla_learning.py
-│       ├── brewzilla_learning_sensor.py
-│       ├── brewzilla_orchestration.py
-│       ├── brewzilla_orchestration_sensor.py
-│       ├── climate_supervisor.py
-│       ├── kegerator_guard.py        # deprecated / parked
-│       ├── manual_brewday_runtime.py
-│       ├── manual_brewday_adapter.py
-│       ├── manual_brewday_store.py
-│       ├── wort_cooling.py
-│       ├── wort_cooling_sensor.py
+│       ├── number.py
+│       ├── services.yaml
 │       ├── carbonation.py
-│       └── carbonation_runtime.py
+│       ├── brewday/
+│       ├── brewzilla/
+│       ├── carbonation_backend/
+│       ├── climate_backend/
+│       ├── cooling/
+│       ├── fermentation/
+│       ├── shared/
+│       └── translations/
 ├── dashboards/
-│   ├── brewzilla_card_v3_6_operator.yaml              # optional Lovelace operator card
-│   ├── fermentation_cockpit_card_v1_collapsed.yaml    # optional Lovelace fermentation card
-│   └── optional dashboard/card examples
+│   └── optional Lovelace dashboard/card examples
 └── docs/
-    ├── setup.md
-    ├── structure.md
-    ├── entities.md
-    ├── state-machine.md
-    ├── manual-mode.md
-    ├── dashboard.md
+    ├── backend-domain-layout.md
+    ├── manual-brewday.md
     ├── brewzilla-temperature-sources.md
-    ├── climate-supervisor.md
-    ├── brewfather.md
+    ├── counterflow-chiller.md
+    ├── legacy-package-cleanup.md
     ├── legacy-migration.md
-    └── roadmap.md
+    └── structure.md
 ```
 
 Legacy `packages/*.yaml` may still exist in older local Home Assistant installs, but they should not be the source of truth for new BrewAssistant logic.
+
+Detailed backend package responsibilities are documented in `docs/backend-domain-layout.md`.
 
 ---
 
@@ -89,53 +78,24 @@ Responsibilities:
 
 ---
 
-### `climate_supervisor.py`
+### Platform files
 
-Climate Supervisor is the active serving/carbonation climate control layer.
-
-It does not switch the compressor directly.
-
-Responsibilities:
-
-- Determine whether carbonation/serving scope is active.
-- Read kegerator air temperature from `sensor.kyl_temperatur_4`.
-- Capture a base serving/carbonation target from `climate.kegerator_kylskap`.
-- Calculate a dynamic effective air target from air temperature delta.
-- Apply the target to `climate.kegerator_kylskap`.
-- Let the climate/thermostat integration control `switch.kegerator`.
-- Disable the deprecated Kegerator Guard if it is accidentally enabled.
-- Expose diagnostics through `switch.brewassistant_climate_supervisor_enabled` attributes.
-
-Current control chain:
+Home Assistant platform files remain in `custom_components/brewassistant/`:
 
 ```text
-Climate Supervisor
-→ climate.kegerator_kylskap target
-→ thermostat hysteresis/min-cycle/cooldown
-→ switch.kegerator
+sensor.py
+binary_sensor.py
+switch.py
+button.py
+select.py
+number.py
 ```
 
-This keeps compressor-cycle responsibility in the Home Assistant climate layer, not in BrewAssistant.
+These files should act as routers/registrars and import backend entities from the domain packages.
 
 ---
 
-### `kegerator_guard.py`
-
-Kegerator Guard was an experimental direct `switch.kegerator` controller.
-
-It is now deprecated / parked.
-
-Current rule:
-
-```text
-switch.brewassistant_kegerator_guard_enabled = off
-```
-
-Do not build new UI or workflows around Kegerator Guard. Climate Supervisor is the replacement path.
-
----
-
-### `brewday_runtime_*`
+### `brewday/`
 
 Brewday Runtime normalizes planned/runtime brewday data.
 
@@ -148,13 +108,13 @@ Sources may include:
 The runtime layer should answer:
 
 - What source is active?
-- Is the brewday idle, prepared, running, live, paused or completed?
+- Is the brewday idle, prepared, running, live, awaiting confirm, paused or completed?
 - What is the current stage/step?
 - What is the next step?
 - How much time remains?
 - How old is the last Brewfather snapshot?
 
-`brewday_runtime_core.py` resolves Brewfather Brew Tracker or None. Python Manual Brewday is handled through `manual_brewday_runtime.py` and `manual_brewday_adapter.py`, then selected by `brewday_runtime.py` when active.
+`brewday/brewday_runtime_core.py` resolves Brewfather Brew Tracker or None. Python Manual Brewday is handled through `brewday/manual_brewday_runtime.py` and `brewday/manual_brewday_adapter.py`, then selected by `brewday/brewday_runtime.py` when active.
 
 Manual Brewday supports clean restart semantics after a completed state:
 
@@ -165,10 +125,6 @@ Finish → Start
 Finish → Reset → Prepare/Start
 = clean new Manual Brewday session
 ```
-
----
-
-### `manual_brewday_*`
 
 Manual Brewday Runtime is Python-owned.
 
@@ -185,7 +141,7 @@ Manual Brewday services do not sync old YAML/input-helper mirrors.
 
 ---
 
-### `brewday_stage_engine.py`
+### `brewday/brewday_stage_engine.py`
 
 The Stage Engine interprets what is actually happening.
 
@@ -232,7 +188,24 @@ The Stage Engine is read-only.
 
 ---
 
-### `brewzilla_temperature.py`
+### `brewzilla/`
+
+BrewZilla modules own hot-side runtime, temperature roles, learning, energy and orchestration.
+
+BrewZilla Orchestration must read the normalized Brewday Runtime, not only the Brewfather/core runtime, so both Brewfather and Manual Brewday can drive target intent.
+
+Safety rules:
+
+```text
+- BrewZilla disconnected blocks orchestration actions.
+- Section-specific control policy decides read-only/apply-with-confirm/direct behavior.
+- Runtime target may be monitored even when no action is pending.
+- RAPT Pill is not used as a hot-side brew temperature source.
+```
+
+---
+
+### `brewzilla/brewzilla_temperature.py`
 
 BrewZilla Temperature Resolver is Python-owned and separates process temperature roles from raw RAPT/BrewZilla source entities.
 
@@ -260,236 +233,71 @@ See `docs/brewzilla-temperature-sources.md` for the full resolver policy.
 
 ---
 
-### `brewzilla_learning.py` and `brewzilla_learning_sensor.py`
+### `climate_backend/`
 
-BrewZilla Learning is advisory/diagnostic.
+Climate Supervisor is the active serving/carbonation climate control layer.
 
-Responsibilities:
-
-- Observe BrewZilla heat behavior and temperature trends.
-- Use resolved mash temperature during ramp/mash-hold context.
-- Use internal wort/kettle temperature during boil/cooling/kettle context.
-- Expose learning temperatures, sources, trend and context sensors.
-- Avoid making unattended/autopilot decisions.
-
-Learning should use the same temperature resolver that the dashboard displays, so operator-facing UI and advisory calculations stay aligned.
-
----
-
-### `wort_cooling.py`
-
-Counterflow Wort Cooling models the post-boil chilling process.
+It does not switch the compressor directly.
 
 Responsibilities:
 
-- Stay in standby until the Stage Engine enters cooling/pitch stage.
-- Track reference temperature from BrewZilla/kettle or optional output sensor.
-- Compare wort temperature to pitch target.
-- Require BrewZilla pump when wort is above target.
-- Require heater off during cooling.
-- Estimate cooling rate and ETA when trend data exists.
-- Expose pitch-ready state.
+- Determine whether carbonation/serving scope is active.
+- Read kegerator air temperature from `sensor.kyl_temperatur_4`.
+- Capture a base serving/carbonation target from `climate.kegerator_kylskap`.
+- Calculate a dynamic effective air target from air temperature delta.
+- Apply the target to `climate.kegerator_kylskap`.
+- Let the climate/thermostat integration control `switch.kegerator`.
+- Disable the deprecated Kegerator Guard if it is accidentally enabled.
+- Expose diagnostics through `switch.brewassistant_climate_supervisor_enabled` attributes.
 
-This module is read-only guidance. It does not control cooling water flow and does not automatically control BrewZilla hardware.
+Current control chain:
+
+```text
+Climate Supervisor
+→ climate.kegerator_kylskap target
+→ thermostat hysteresis/min-cycle/cooldown
+→ switch.kegerator
+```
+
+This keeps compressor-cycle responsibility in the Home Assistant climate layer, not in BrewAssistant.
 
 ---
 
-### `carbonation_runtime.py` and `carbonation.py`
+### `carbonation_backend/`
 
-Carbonation now has Python-owned runtime/session state.
+Carbonation Runtime owns carbonation session state, persistence and operator-facing calculations.
 
-Responsibilities:
-
-- Hold active/paused/reset carbonation runtime state in `hass.data` and persistent HA storage.
-- Track method, target volumes, start volumes, actual pressure and start time.
-- Resolve carbonation temperature from cooler/kegerator temperature, currently `sensor.kyl_temperatur_4`, with fallback to liquid temperature.
-- Calculate recommended pressure from target volumes and current temperature.
-- Calculate equilibrium volumes from actual pressure and current temperature.
-- Estimate current carbonation volumes over time toward equilibrium.
-
-`carbonation.py` remains a compatibility wrapper around the runtime snapshot builder.
+The top-level `carbonation.py` file is kept at the integration root as a Home Assistant-facing module, while the backend runtime lives in `carbonation_backend/` to avoid package/module import collisions.
 
 ---
 
-### `number.py` and `select.py`
+### `cooling/`
 
-These platforms expose Python-owned local controls.
-
-Current carbonation controls:
-
-```text
-number.brewassistant_carbonation_pressure_bar
-number.brewassistant_carbonation_target_volumes
-number.brewassistant_carbonation_start_volumes
-select.brewassistant_carbonation_method
-```
-
-Current BrewZilla temperature control:
-
-```text
-select.brewassistant_brewzilla_mash_temperature_source
-```
-
-These are integration entities, not old helper-backed workflow state.
+Cooling modules own counterflow/wort-cooling runtime, CFC sanitation support, pump requirement, heater guard, ETA and pitch-readiness context.
 
 ---
 
-### Fermentation coordinator scope guard
+### `fermentation/`
 
-The coordinator exposes fermentation/process sensors while Timed Fermentation Runtime is still future work.
-
-Current guard behavior:
-
-```text
-No active fermentation/batch context
-→ process: Idle
-→ stage: none
-→ temperature status: Standby
-→ severity/problem: ok
-```
-
-A stale cold-crash helper cannot keep Fermentation Cockpit in warning state by itself. Cold crash only counts when there is an active fermentation/batch context.
-
-Dashboard implication:
-
-```text
-Idle fermentation context
-→ compact Fermentation Cockpit top section
-→ heavy climate/debug panels behind expanders or hidden conditionals
-```
+Fermentation modules own fermentation scope logic, fermentation climate helpers and related runtime/safety support.
 
 ---
 
-### BrewZilla runtime and orchestration modules
+### `shared/`
 
-BrewZilla runtime normalizes hardware telemetry.
-
-BrewZilla orchestration safety modules decide whether an explicit user-requested action may run.
-
-Current safety switch pattern:
-
-```text
-switch.brewassistant_brewzilla_orchestration_enabled
-switch.brewassistant_brewzilla_apply_target_temp
-switch.brewassistant_brewzilla_allow_heater_control
-switch.brewassistant_brewzilla_allow_pump_control
-switch.brewassistant_brewzilla_allow_boil_mode
-switch.brewassistant_brewzilla_safe_mode
-```
-
-Important rule:
-
-```text
-Dashboard buttons may request actions.
-Python safety decides whether actions are allowed.
-```
+Shared modules contain utilities that should not be owned by a single domain, such as temperature statistics.
 
 ---
 
-### Dashboard responsibilities
+## Naming rules
 
-Dashboard cards should:
+Do not create backend packages that collide with top-level Home Assistant platform/module names.
 
-- Display current state.
-- Provide explicit buttons for user actions.
-- Show status, warnings and next steps.
-- Expose operator selects/buttons where appropriate.
-- Avoid duplicating backend workflow logic.
-
-A card may contain display-only formatting, but the real process state should come from Python sensors/attributes.
-
-Current dashboard milestones/examples:
+Known avoided collisions:
 
 ```text
-Climate Supervisor Card v1.0
-Counterflow Cooling Cockpit
-Carbonation Cockpit v3.1
-Fermentation Cockpit v3.1 compact idle card: dashboards/fermentation_cockpit_card_v1_collapsed.yaml
-BrewZilla Cockpit v3.7 mash/wort temperature card: dashboards/brewzilla_card_v3_6_operator.yaml
-Brewday Card operator cockpit
-Brewday Audit Card dashboard example
-Brewfather RAW Timeline debug card
+carbonation.py          + carbonation_backend/
+climate platform/module + climate_backend/
 ```
 
-Optional dashboard examples live under `dashboards/` when available. They are not the source of truth for process logic.
-
----
-
-## YAML policy
-
-Current policy:
-
-```text
-YAML may render.
-Python should decide.
-```
-
-Allowed YAML use:
-
-- Lovelace/dashboard layout.
-- Card styling.
-- Display-only formatting.
-- Explicit operator actions that call Python services/entities.
-- Temporary local testing.
-
-Avoid new YAML use for:
-
-- Process state machines.
-- Stage detection.
-- Brewday timing logic.
-- BrewZilla safety logic.
-- Target/source selection logic.
-- Hidden automations that duplicate Python services.
-
-`services.yaml` inside the custom integration is allowed and required by Home Assistant as service metadata. It is not workflow logic.
-
----
-
-## Naming conventions
-
-Recommended v4 naming direction:
-
-```text
-brewassistant_*                 Python-owned normalized entities
-brewassistant_brewday_*         Brewday Runtime and Stage Engine
-brewassistant_brewzilla_*       BrewZilla runtime/orchestration/temperature
-brewassistant_wort_*            Wort cooling and pitch-readiness
-brewassistant_carbonation_*     Carbonation calculations/runtime
-brewassistant_fermentation_*    Future fermentation runtime
-brewassistant_climate_*         Climate Supervisor / dynamic air-target logic
-brewassistant_source_*          Source diagnostics
-```
-
-Legacy names:
-
-```text
-fwk_*                           old Fresh Wort Kit specific namespace
-brew_process_*                  older process namespace
-brew_batch_*                    older batch namespace
-brew_recipe_*                   older recipe/runtime namespace
-input_boolean/input_number      old workflow helpers where not explicitly provided by integration platforms
-```
-
-New development should avoid adding new `fwk_*` entities.
-
-### Numeric suffixes
-
-Avoid Home Assistant-generated numeric suffixes such as `_2`, `_3`, etc. in BrewAssistant source code, normalized entities and documentation.
-
-Numeric suffixes are only acceptable when the number is part of the actual brewing concept, for example:
-
-```text
-brew_gravity_check_day_2_done
-brew_step_2_status
-brew_mash_step_2_temperature
-```
-
-If old YAML/template entities block canonical Python entity IDs locally, rename the old entities with a `_yaml` suffix and let Python keep the canonical entity ID.
-
----
-
-## Design rule
-
-If a piece of logic affects brewing decisions, place it in Python.
-
-If it only affects how something looks, place it in the dashboard card.
+This avoids Python importing a package instead of the intended top-level module.
