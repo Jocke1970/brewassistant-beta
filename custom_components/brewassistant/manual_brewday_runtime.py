@@ -132,6 +132,7 @@ class ManualPlan:
                             description="Hold mash temperature.",
                             duration_seconds=3600,
                             target_temperature=66.0,
+                            pause_before=True,
                             auto_advance=False,
                         ),
                         ManualStep(
