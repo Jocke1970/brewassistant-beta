@@ -23,10 +23,13 @@ Validated in the active beta branch:
 
 ```text
 ✅ Brewfather RAW Brew Tracker runtime resolver
+✅ Python Manual Brewday runtime and services
+✅ Normalized Brewday Runtime selects Brewfather or Manual Brewday source
 ✅ Human-friendly Brew Tracker step labels
 ✅ Paused Brewfather freeze-state handling
 ✅ BrewZilla runtime sensors
-✅ BrewZilla target sync from runtime core
+✅ BrewZilla target sync from normalized Brewday Runtime
+✅ BrewZilla Orchestration bridge for Manual Brewday target
 ✅ BrewZilla heater/pump direct actions
 ✅ ABORT service for heater + pump
 ✅ Brewday audit backend, services, sensors and dashboard
@@ -45,6 +48,7 @@ Validated in the active beta branch:
 ✅ BrewZilla Learning uses the shared mash/wort resolver
 ✅ BrewZilla Cockpit operator hardware card with mash/wort source display
 ✅ Brewday Card operator cockpit
+✅ Manual Brewday operator card
 ✅ Brewday Audit Card dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
@@ -52,6 +56,7 @@ Validated in the active beta branch:
 ✅ Counterflow Wort Cooling backend and UI
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and compact idle UI
+✅ Backend domain layout refactor
 ```
 
 Beta limitations / still pending validation:
@@ -74,7 +79,7 @@ Beta limitations / still pending validation:
 
 ```text
 Status: beta
-Scope: supervised BrewZilla/Brewfather brewday runtime
+Scope: supervised BrewZilla/Brewfather/manual brewday runtime
 Control policy: operator-supervised direct actions with abort available
 Not stable
 Not unattended autopilot
@@ -110,10 +115,11 @@ BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, b
 Current verified beta flow:
 
 ```text
-Brewfather RAW Brew Tracker
-→ BrewAssistant Runtime Core
+Brewfather RAW Brew Tracker or Manual Brewday
+→ Normalized BrewAssistant Brewday Runtime
+→ BrewAssistant Stage Engine
 → BrewAssistant BrewZilla Orchestration
-→ BrewZilla target/heater/pump actions
+→ BrewZilla target/heater/pump actions when allowed
 → Brewday Audit log
 → Dashboard verification
 ```
@@ -122,7 +128,9 @@ Key beta behavior:
 
 ```text
 - Brewfather paused state freezes current step/target.
-- Mash steps can sync BrewZilla target from Brew Tracker.
+- Manual Brewday can own prepare/start/pause/next/reset/finish runtime.
+- Manual Brewday can jump directly to Mash, Boil, Whirlpool/Hopstand and Cooling.
+- Mash steps can sync BrewZilla target from normalized runtime.
 - Boil stages fall back to 100°C when Brew Tracker omits a temperature target.
 - Pump is stopped during boil unless an explicit operator action, such as CFC Ready, starts it.
 - Runtime completion can be inferred when the final Brew Tracker step reaches zero.
@@ -133,6 +141,7 @@ Key beta behavior:
 - Mash temperature is operator-selectable, defaulting to Auto.
 - Wort/kettle temperature is BrewZilla internal thermometer.
 - Mash/Wort delta is exposed as dashboard-safe context.
+- RAPT Pill is not used as a hot-side brew temperature source.
 ```
 
 ---
@@ -140,6 +149,8 @@ Key beta behavior:
 ## Documentation index
 
 ```text
+docs/manual-brewday.md                 Python Manual Brewday runtime, services and safety model
+docs/backend-domain-layout.md          Backend package layout after domain refactor
 docs/brewzilla-temperature-sources.md  Mash/Wort temperature resolver and dashboard policy
 docs/counterflow-chiller.md            Python CFC sanitation backend and CFC Ready flow
 docs/legacy-package-cleanup.md         Checklist for deleting old package YAML safely
