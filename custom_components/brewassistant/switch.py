@@ -9,7 +9,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .climate_supervisor import (
+from .climate.climate_supervisor import (
     async_apply_climate_supervisor,
     async_disable_climate_supervisor,
     async_enable_climate_supervisor,
@@ -18,9 +18,9 @@ from .climate_supervisor import (
 )
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
-from .counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
+from .cooling.counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
-from .fermentation_climate_supervisor import (
+from .fermentation.fermentation_climate_supervisor import (
     async_disable_fermentation_climate_supervisor,
     async_enable_fermentation_climate_supervisor,
     build_fermentation_climate_supervisor_snapshot,

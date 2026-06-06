@@ -7,10 +7,10 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
 
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
-from .wort_cooling import build_wort_cooling_snapshot, wort_cooling_attrs
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
+from ..wort_cooling import build_wort_cooling_snapshot, wort_cooling_attrs
 
 
 WORT_COOLING_SENSORS: dict[str, dict[str, Any]] = {

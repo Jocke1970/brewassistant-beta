@@ -10,10 +10,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
+from .carbonation.carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
-from .counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
+from .cooling.counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
 
 

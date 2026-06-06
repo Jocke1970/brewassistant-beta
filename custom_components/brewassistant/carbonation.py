@@ -9,7 +9,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .carbonation_runtime import build_carbonation_snapshot as build_runtime_snapshot
+from .carbonation.carbonation_runtime import build_carbonation_snapshot as build_runtime_snapshot
 
 
 def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:

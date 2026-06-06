@@ -7,8 +7,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from .brewday_audit import async_record_brewday_audit_tick
-from .brewday_runtime import build_brewday_runtime_snapshot
+from ..brewday.brewday_audit import async_record_brewday_audit_tick
+from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
 
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"

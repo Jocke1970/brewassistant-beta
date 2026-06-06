@@ -9,9 +9,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
+from .carbonation.carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
 from .const import DOMAIN
-from .brewzilla_temperature import MASH_SOURCE_OPTIONS
+from .brewzilla.brewzilla_temperature import MASH_SOURCE_OPTIONS
 from .control_policy import POLICY_OPTIONS, SECTION_CONFIG, section_policy
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity

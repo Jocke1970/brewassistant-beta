@@ -17,9 +17,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_CHAMBER_TEMP_ENTITY, DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import CONF_CHAMBER_TEMP_ENTITY, DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 DATA_KEY = "temperature_stats"
 MAX_WINDOW_MINUTES = 30

@@ -8,10 +8,10 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
 
 from .brewzilla_orchestration import build_orchestration_snapshot
-from .const import DOMAIN
-from .control_policy import build_control_policy_snapshot
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import DOMAIN
+from ..control_policy import build_control_policy_snapshot
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 ORCHESTRATION_SENSORS: dict[str, dict[str, Any]] = {

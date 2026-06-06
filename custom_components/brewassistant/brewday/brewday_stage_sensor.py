@@ -8,9 +8,9 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTemperature
 
 from .brewday_stage_engine import build_brewday_stage_snapshot, brewday_stage_attrs
-from .const import DOMAIN
-from .coordinator import BrewAssistantCoordinator
-from .entity import BrewAssistantEntity
+from ..const import DOMAIN
+from ..coordinator import BrewAssistantCoordinator
+from ..entity import BrewAssistantEntity
 
 
 BREWDAY_STAGE_SENSORS: dict[str, dict[str, Any]] = {
