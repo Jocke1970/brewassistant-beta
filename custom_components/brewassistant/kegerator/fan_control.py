@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -25,6 +26,7 @@ FAN_W = 2.0
 TOO_WARM_C = 0.8
 TOO_COLD_C = -0.8
 WARMING_C_H = 0.20
+MAX_REASONABLE_WARMING_C_H = 5.0
 AFTER_RUN_MIN = 10.0
 INTERVAL_SECONDS = 30
 
@@ -87,6 +89,9 @@ def _climate_enabled(state: str | None) -> bool:
 
 
 def _remember_compressor(hass: HomeAssistant, active: bool) -> tuple[str | None, float | None, bool, float]:
+    if action != "none":
+        await asyncio.sleep(0)
+
     data = _bucket(hass)
     now = dt_util.utcnow()
 
@@ -145,7 +150,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     climate_on = _climate_enabled(climate_state)
     too_warm = delta is not None and delta >= TOO_WARM_C
     too_cold = delta is not None and delta <= TOO_COLD_C
-    warming = trend is not None and trend >= WARMING_C_H
+    warming = trend is not None and WARMING_C_H <= trend <= MAX_REASONABLE_WARMING_C_H
     cooling_requested = hvac_action == "cooling"
 
     should_run = False
@@ -253,6 +258,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "fermentation_chamber_entity": CHAMBER,
         "fermentation_chamber_state": _state(hass, CHAMBER),
         "control_interval_seconds": INTERVAL_SECONDS,
+        "max_reasonable_warming_c_per_hour": MAX_REASONABLE_WARMING_C_H,
     }
 
 
@@ -261,9 +267,12 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
     action = snapshot.get("fan_action")
 
     if action == "turn_on_fan":
-        await hass.services.async_call("switch", "turn_on", {"entity_id": FAN}, blocking=False)
+        await hass.services.async_call("switch", "turn_on", {"entity_id": FAN}, blocking=True)
     elif action == "turn_off_fan":
-        await hass.services.async_call("switch", "turn_off", {"entity_id": FAN}, blocking=False)
+        await hass.services.async_call("switch", "turn_off", {"entity_id": FAN}, blocking=True)
+
+    if action != "none":
+        await asyncio.sleep(0)
 
     data = _bucket(hass)
     data["last_apply_action"] = action
@@ -278,6 +287,9 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def async_disable_kegerator_fan_auto(hass: HomeAssistant) -> None:
+    if action != "none":
+        await asyncio.sleep(0)
+
     data = _bucket(hass)
     data["disabled_at"] = dt_util.utcnow().isoformat()
     data["last_apply_action"] = "disabled"
