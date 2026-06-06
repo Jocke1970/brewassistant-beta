@@ -26,6 +26,12 @@ from .fermentation.fermentation_climate_supervisor import (
     build_fermentation_climate_supervisor_snapshot,
     fermentation_supervisor_interval,
 )
+from .kegerator.fan_control import (
+    async_apply_kegerator_fan_auto,
+    async_disable_kegerator_fan_auto,
+    build_kegerator_fan_snapshot,
+    kegerator_fan_auto_interval,
+)
 from .kegerator_guard import (
     async_apply_kegerator_guard,
     async_disable_kegerator_guard,
@@ -85,6 +91,13 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "icon": "mdi:snowflake-alert",
         "default": False,
         "kind": "kegerator_guard",
+    },
+    "kegerator_fan_auto_enabled": {
+        "name": "BrewAssistant Kegerator Fan Auto Enabled",
+        "object_id": "brewassistant_kegerator_fan_auto_enabled",
+        "icon": "mdi:fan-auto",
+        "default": False,
+        "kind": "kegerator_fan_auto",
     },
     "climate_supervisor_enabled": {
         "name": "BrewAssistant Climate Supervisor Enabled",
@@ -149,7 +162,7 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             self._attr_is_on = last_state.state == "on"
         if self._kind == "counterflow_chiller":
             await async_set_counterflow_chiller(self.coordinator.hass, {"enabled": self._attr_is_on})
-        if self._kind in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor"}:
+        if self._kind in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor", "kegerator_fan_auto"}:
             self._ensure_tick()
             if self._attr_is_on:
                 if self._kind == "kegerator_guard":
@@ -162,13 +175,15 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
 
     def _ensure_tick(self) -> None:
         """Ensure periodic apply/monitor loop for active switches."""
-        if self._kind not in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor"} or self._tick_unsub is not None:
+        if self._kind not in {"kegerator_guard", "climate_supervisor", "fermentation_climate_supervisor", "kegerator_fan_auto"} or self._tick_unsub is not None:
             return
 
         if self._kind == "climate_supervisor":
             interval = supervisor_interval()
         elif self._kind == "fermentation_climate_supervisor":
             interval = fermentation_supervisor_interval()
+        elif self._kind == "kegerator_fan_auto":
+            interval = kegerator_fan_auto_interval()
         else:
             interval = timedelta(seconds=30)
 
@@ -190,6 +205,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             await async_apply_climate_supervisor(self.coordinator.hass)
         if self._attr_is_on and self._kind == "fermentation_climate_supervisor":
             build_fermentation_climate_supervisor_snapshot(self.coordinator.hass)
+        if self._attr_is_on and self._kind == "kegerator_fan_auto":
+            await async_apply_kegerator_fan_auto(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
@@ -208,6 +225,11 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             self._ensure_tick()
             self.async_write_ha_state()
             await async_enable_kegerator_guard(self.coordinator.hass)
+            await self._async_tick()
+            return
+        if self._kind == "kegerator_fan_auto":
+            self._ensure_tick()
+            self.async_write_ha_state()
             await self._async_tick()
             return
         if self._kind == "climate_supervisor":
@@ -231,6 +253,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             await async_set_counterflow_chiller(self.coordinator.hass, {"enabled": False})
         if self._kind == "kegerator_guard":
             async_disable_kegerator_guard(self.coordinator.hass)
+        if self._kind == "kegerator_fan_auto":
+            async_disable_kegerator_fan_auto(self.coordinator.hass)
         if self._kind == "climate_supervisor":
             async_disable_climate_supervisor(self.coordinator.hass)
         if self._kind == "fermentation_climate_supervisor":
@@ -244,6 +268,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             return get_counterflow_chiller_snapshot(self.coordinator.hass)
         if self._kind == "kegerator_guard":
             return build_kegerator_guard_snapshot(self.coordinator.hass)
+        if self._kind == "kegerator_fan_auto":
+            return build_kegerator_fan_snapshot(self.coordinator.hass)
         if self._kind == "climate_supervisor":
             return build_climate_supervisor_snapshot(self.coordinator.hass)
         if self._kind == "fermentation_climate_supervisor":
