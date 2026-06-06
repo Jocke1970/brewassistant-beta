@@ -28,6 +28,7 @@ custom_components/brewassistant/
 ├── climate_backend/
 ├── cooling/
 ├── fermentation/
+├── kegerator/
 ├── shared/
 └── translations/
 ```
@@ -53,9 +54,33 @@ cooling/
 fermentation/
   Fermentation and fermentation climate support.
 
+kegerator/
+  Kegerator fan/compressor inference and fan-auto backend.
+  The climate integration owns the cooling target and compressor behavior.
+  The fan backend manages circulation fan decisions and diagnostics.
+
 shared/
   Shared utilities such as temperature statistics.
 ```
+
+## Kegerator responsibility split
+
+The kegerator backend is intentionally narrow:
+
+```text
+climate.kegerator_kylskap
+  cooling target and compressor behavior
+
+kegerator/fan_control.py
+  compressor inference from sensor.kegerator_power
+  fan-auto runtime diagnostics
+  fan circulation decisions
+
+switch.kegerator_fan
+  circulation fan entity used by the fan backend
+```
+
+This keeps compressor-cycle responsibility in the climate layer rather than in fan automation.
 
 ## Naming rule
 
