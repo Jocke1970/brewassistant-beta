@@ -23,7 +23,7 @@ from .brewday.brewday_audit import (
 )
 from .brewday.brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
-from .carbonation.carbonation_runtime import (
+from .carbonation_backend.carbonation_runtime import (
     async_load_carbonation_runtime,
     async_save_carbonation_runtime,
     pause_carbonation_runtime,

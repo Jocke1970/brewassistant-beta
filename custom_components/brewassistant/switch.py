@@ -9,7 +9,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .climate.climate_supervisor import (
+from .climate_backend.climate_supervisor import (
     async_apply_climate_supervisor,
     async_disable_climate_supervisor,
     async_enable_climate_supervisor,
