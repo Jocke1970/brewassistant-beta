@@ -27,6 +27,15 @@ RUNTIME_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
 RUNTIME_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
 RUNTIME_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
 
+ACTIVE_RUNTIME_STATES = {
+    "prepared",
+    "running",
+    "paused",
+    "awaiting_confirm",
+    "live",
+    "awaiting_snapshot",
+}
+
 
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
     entity_state = hass.states.get(entity_id)
@@ -62,6 +71,36 @@ def _connection_ok(hass: HomeAssistant) -> bool:
     if raw is None:
         return _available(hass, BREWZILLA_TEMP_SENSOR) or _available(hass, BREWZILLA_POWER_SENSOR)
     return raw.lower() == "connected"
+
+
+def _runtime_active(runtime_state: str | None) -> bool:
+    return (runtime_state or "").lower() in ACTIVE_RUNTIME_STATES
+
+
+def _valid_target(value: float | None) -> bool:
+    return value is not None and 0 <= value <= 110
+
+
+def _effective_target(
+    *,
+    runtime_state: str | None,
+    runtime_target: float | None,
+    device_target: float | None,
+) -> float | None:
+    """Prefer active Brewday Runtime target over stale device target.
+
+    Manual Brewday and Brew Tracker both expose their active step target through
+    sensor.brewassistant_brewday_target_temperature. The physical BrewZilla target
+    is still reported separately as device_target_temperature.
+    """
+
+    if _runtime_active(runtime_state) and _valid_target(runtime_target):
+        return runtime_target
+    if _valid_target(device_target):
+        return device_target
+    if _valid_target(runtime_target):
+        return runtime_target
+    return None
 
 
 def _hardware_state(
@@ -124,6 +163,7 @@ def _brew_mode(
                 return "Heating + circulation"
             if heater_on:
                 return "Heating"
+            return "Heating needed"
 
         if 1 < delta <= 5:
             return "Approaching target"
@@ -168,7 +208,7 @@ def _summary(
 def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build a normalized BrewZilla hardware snapshot."""
     connected = _connection_ok(hass)
-    connection_state = _state(hass, BREWZILLA_CONNECTION_SENSOR, "unknown")
+    connection_state = _state(hass, BREWZILLA_CONNECTION_SENSOR, "Connected" if connected else "unknown")
     power_on = _bool_on(hass, BREWZILLA_POWER_SWITCH)
     pump_on = _bool_on(hass, BREWZILLA_PUMP_SWITCH)
     heater_on = _bool_on(hass, BREWZILLA_HEATER_SWITCH)
@@ -182,7 +222,11 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime_stage = _state(hass, RUNTIME_STAGE_SENSOR, "Idle")
     runtime_step = _state(hass, RUNTIME_STEP_SENSOR, "Idle")
 
-    effective_target = device_target if device_target is not None and device_target >= 0 else runtime_target
+    effective_target = _effective_target(
+        runtime_state=runtime_state,
+        runtime_target=runtime_target,
+        device_target=device_target,
+    )
     temp_delta = None
     if current_temp is not None and effective_target is not None:
         temp_delta = round(current_temp - effective_target, 2)
@@ -219,6 +263,7 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "target_temperature": effective_target,
         "device_target_temperature": device_target,
         "runtime_target_temperature": runtime_target,
+        "effective_target_source": "runtime" if _runtime_active(runtime_state) and _valid_target(runtime_target) else "device",
         "temperature_delta": temp_delta,
         "pump_on": pump_on,
         "heater_on": heater_on,
@@ -242,6 +287,7 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             "connection_sensor": BREWZILLA_CONNECTION_SENSOR,
             "temperature_sensor": BREWZILLA_TEMP_SENSOR,
             "target_number": BREWZILLA_TARGET_NUMBER,
+            "runtime_target_sensor": RUNTIME_TARGET_SENSOR,
             "pump_switch": BREWZILLA_PUMP_SWITCH,
             "heater_switch": BREWZILLA_HEATER_SWITCH,
             "heat_utilization": BREWZILLA_HEAT_UTILIZATION,
