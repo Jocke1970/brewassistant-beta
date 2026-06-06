@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from .brewday_audit import async_record_brewday_audit_tick
-from .brewday_runtime_core import build_core_snapshot
+from .brewday_runtime import build_brewday_runtime_snapshot
 
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
@@ -31,7 +31,14 @@ PAUSED_TARGET_REWIND_GUARD_DELTA = -2.0
 BOIL_TARGET_FALLBACK = 100.0
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
-_ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot"}
+_ACTIVE_RUNTIME_STATES = {
+    "live",
+    "running",
+    "paused",
+    "awaiting_snapshot",
+    "prepared",
+    "awaiting_confirm",
+}
 _MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
 _BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokgiva")
 LOCAL_LIVE_ENTITY_IDS = (BREWZILLA_POWER_SENSOR,)
@@ -188,7 +195,7 @@ def _target_valid(target: float | None) -> bool:
 
 
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    runtime = build_core_snapshot(hass)
+    runtime = build_brewday_runtime_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle")
     completed_runtime = runtime_state == "completed"
     requested_target = runtime.get("target_temperature")
@@ -208,7 +215,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
     boil_stage = _stage_is_boil(runtime)
     boil_target_fallback_active = False
-    requested_target_source = "brew_tracker"
+    runtime_source = str(runtime.get("source") or "")
+    requested_target_source = "manual_brewday" if runtime_source == "Manual Brewday" else "brew_tracker"
 
     if requested_target is None and boil_stage and _runtime_active(runtime_state):
         requested_target = BOIL_TARGET_FALLBACK
@@ -260,11 +268,11 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     elif not _runtime_active(runtime_state):
         hard_block = f"Brewday runtime {runtime_state}"
     elif snapshot_age_minutes > MAX_SNAPSHOT_AGE_MINUTES:
-        hard_block = "Brew Tracker snapshot too old"
+        hard_block = "Brewday Runtime snapshot too old"
     elif not _target_valid(requested_target):
-        hard_block = "Missing or invalid Brew Tracker target"
+        hard_block = "Missing or invalid Brewday Runtime target"
     elif paused_target_rewind_blocked:
-        hard_block = "Brewfather paused target rewind guard active"
+        hard_block = "Paused target rewind guard active"
 
     can_control = hard_block is None
     action_needed = target_sync_needed or heater_action_needed or pump_action_needed or pump_stop_needed or completion_stop_needed
@@ -278,7 +286,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     elif completed_runtime:
         reason = "Brewday runtime completed"
     elif hard_block is None and boil_target_fallback_active:
-        reason = "Boil stage detected without Brew Tracker target; using 100°C boil fallback"
+        reason = "Boil stage detected without Brewday Runtime target; using 100°C boil fallback"
     if not completed_runtime and hard_block is None and pump_stop_needed:
         reason = "Boil stage active; pump should be OFF"
     elif not completed_runtime and hard_block is None and heater_action_needed:
@@ -286,9 +294,9 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     elif not completed_runtime and hard_block is None and pump_action_needed:
         reason = "Mash circulation recommended; pump should be ON"
     elif not completed_runtime and hard_block is None and awaiting_snapshot:
-        reason = "Awaiting fresh snapshot, using current valid Brew Tracker target"
+        reason = "Awaiting fresh snapshot, using current valid Brewday Runtime target"
     elif not completed_runtime and hard_block is None and runtime_state == "paused":
-        reason = "Brewfather paused; maintaining current valid target"
+        reason = "Brewday paused; maintaining current valid target"
 
     if completed_runtime:
         target_sync_needed = False
@@ -301,6 +309,7 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "connected": connected,
         "connection_state": connection,
         "brewday_state": runtime_state,
+        "runtime_source": runtime_source,
         "runtime_stage": runtime.get("stage"),
         "runtime_step": runtime.get("step"),
         "runtime_raw_step_name": runtime.get("raw_step_name"),
