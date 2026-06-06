@@ -89,9 +89,6 @@ def _climate_enabled(state: str | None) -> bool:
 
 
 def _remember_compressor(hass: HomeAssistant, active: bool) -> tuple[str | None, float | None, bool, float]:
-    if action != "none":
-        await asyncio.sleep(0)
-
     data = _bucket(hass)
     now = dt_util.utcnow()
 
@@ -200,7 +197,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         warning = "sensor_issue"
     elif delta is not None and abs(delta) >= 2.0:
         warning = "warning"
-    elif trend is not None and trend >= 1.5:
+    elif trend is not None and 1.5 <= trend <= MAX_REASONABLE_WARMING_C_H:
         warning = "warning"
     else:
         warning = "ok"
@@ -287,9 +284,6 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def async_disable_kegerator_fan_auto(hass: HomeAssistant) -> None:
-    if action != "none":
-        await asyncio.sleep(0)
-
     data = _bucket(hass)
     data["disabled_at"] = dt_util.utcnow().isoformat()
     data["last_apply_action"] = "disabled"
