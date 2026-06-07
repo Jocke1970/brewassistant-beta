@@ -1,92 +1,121 @@
 # Installation Guide
 
-## Path
+BrewAssistant is installed as a Home Assistant custom integration.
 
-Place package files here:
-
-```text
-/config/packages/brewassistant/
-```
-
-Make sure packages are enabled in `configuration.yaml`:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
-```
-
-If using nested folders:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages/brewassistant
-```
-
-Use the structure that matches your current Home Assistant setup.
-
-## Safe install order
-
-Recommended install order:
+The active repository setup is Python-first:
 
 ```text
-1. brewassistant_fermentation_module.yaml
-2. brewassistant_chamber_module.yaml
-3. brewassistant_kegerator_module.yaml
-4. brewassistant_brewfather_adapter.yaml
-5. brewassistant_hot_side_module.yaml
-6. brewassistant_health_module.yaml
-7. brewassistant_notifications_module.yaml
-8. brewassistant_cleaning_module.yaml
+custom_components/brewassistant/ = integration/backend logic
+Dashboards                    = optional presentation layer
+Legacy local packages          = not part of mainline install
 ```
 
-Restart Home Assistant between modules when testing.
+---
 
-## Legacy files
+## Install path
 
-Do not keep old package files active together with the v4 split. Duplicate entities may occur.
-
-Legacy files replaced by v4 include:
+Place the integration here in Home Assistant:
 
 ```text
-brewassistant_helpers_total.yaml
-BREWASSISTANT WORKFLOW.yaml
-BREWASSISTANT RUNTIME.yaml
-BREWASSISTANT CHAMBER.yaml
-BREWASSISTANT NOTIFICATIONS.yaml
-BREWASSISTANT SMART AUTOMATION LAYER V2.yaml
-BREWASSISTANT - SMART FERMENTATION CONTROL v1_0,yaml
-BREWASSISTANT BULLETPROOF FERMENTATION CONTROL v1_1.yaml
-brewassistant_kegerator_fan_control.yaml
-BrewAssistant Hot Side Workflow v1_0.yaml
-BrewAssistant Hot Side Workflow v1_1 Patch.yaml
-BrewAssistant Brewfather Mapping Patch v1_0.yaml
-BrewAssistant Brewfather Events Mapping Patch v1_0.yaml
-rewassistant_health_backend_v2.yaml
+/config/custom_components/brewassistant/
 ```
+
+The repository path to sync is:
+
+```text
+custom_components/brewassistant/
+```
+
+---
+
+## Manual install / update
+
+From a temporary clone of the repository:
+
+```bash
+rm -rf /tmp/brewassistant-beta
+git clone --depth 1 --branch main https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta
+
+cp -a /config/custom_components/brewassistant /config/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M) 2>/dev/null || true
+
+rsync -a --delete \
+  /tmp/brewassistant-beta/custom_components/brewassistant/ \
+  /config/custom_components/brewassistant/
+```
+
+Restart Home Assistant after syncing.
+
+---
 
 ## First checks after restart
 
-Check Developer Tools → States for:
+Check Developer Tools → States for core entities such as:
 
 ```text
-input_boolean.brewassistant_fermentation_enabled
-input_boolean.brewassistant_chamber_enabled
-input_boolean.brewassistant_kegerator_enabled
-input_boolean.brewassistant_hot_side_enabled
-sensor.fwk_process_status
-sensor.recipe_runtime_name
-binary_sensor.kegerator_compressor_active
+sensor.brewassistant_core_version
+sensor.brewassistant_next_action
+sensor.brewassistant_brewday_runtime_status
+sensor.brewassistant_brewday_stage
+sensor.brewassistant_brewzilla_wort_temperature
+sensor.brewassistant_carbonation_status
+switch.brewassistant_kegerator_fan_auto_enabled
 ```
 
-## Expected startup states
+Some entity IDs may be prefixed by Home Assistant, depending on the integration/device/area naming.
 
-When nothing is active yet:
+---
+
+## Dashboard setup
+
+Dashboard YAML is optional. It should display state and expose explicit operator actions, not contain hidden workflow logic.
+
+Current dashboard baseline notes:
 
 ```text
-Fermentation card disabled → Off / Standby
-Fermentation enabled but no batch → Idle
-Chamber off → Off / Chamber off
-Kegerator → active if fridge entity exists
-Brewfather adapter without active recipe → manual_fallback
-Health → OK if installed modules are healthy
+docs/dashboard-baselines.md
+```
+
+Install required Lovelace frontend cards through HACS before using dashboard examples.
+
+Common cards used by current dashboard baselines:
+
+```text
+custom:button-card
+custom:vertical-stack-in-card
+custom:mushroom-*
+custom:expander-card
+custom:gauge-card-pro
+```
+
+---
+
+## Legacy package warning
+
+Do not install old BrewAssistant YAML packages as the main setup path.
+
+Older local Home Assistant installs may still contain BrewAssistant YAML packages under `/config/packages/` or `/config/packages_disabled/`. They are legacy/local compatibility files, not the current repository source of truth.
+
+Running old packages together with the Python integration may create duplicate helpers, stale unavailable entities or dashboard drift.
+
+Recommended policy:
+
+```text
+1. Keep old packages disabled unless intentionally testing migration behavior.
+2. Verify dashboards use current Python-backed entities.
+3. Remove orphaned unavailable entities through Home Assistant UI only.
+4. Never edit .storage files manually.
+```
+
+---
+
+## Safety scope
+
+BrewAssistant beta is intended for supervised use.
+
+```text
+- BrewZilla orchestration is not unattended autopilot.
+- Operator supervision is expected during brewday actions.
+- Kegerator fan-auto only controls the circulation fan, not compressor safety.
+- Compressor cycling remains owned by the Home Assistant climate/thermostat layer.
+- Pressure equipment must be used within rated limits.
 ```
