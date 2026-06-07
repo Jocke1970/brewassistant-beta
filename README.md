@@ -184,6 +184,25 @@ Key beta behavior:
 
 ---
 
+## Credits / Acknowledgements
+
+BrewAssistant is an independent Home Assistant custom integration and is not affiliated with Brewfather, KegLand/RAPT or RAPT Cloud.
+
+Thanks to:
+
+- **Brewfather Home Assistant integration** by `MvdDonk`  
+  Community integration used as one possible source for Brewfather recipe, batch and brewing data in Home Assistant.  
+  https://github.com/MvdDonk/brewfather
+
+- **RAPT Cloud Link for Home Assistant** by `berra200`  
+  Community integration used to expose RAPT/BrewZilla telemetry to Home Assistant.  
+  https://github.com/berra200/home-assistant-rapt-cloud-link
+
+- **Home Assistant and the brewing automation community**  
+  For the ecosystem, frontend cards, integrations and testing inspiration.
+
+---
+
 ## Documentation index
 
 ```text
