@@ -1,196 +1,225 @@
 # Setup
 
-This guide describes a recommended BrewAssistant v4 installation in Home Assistant.
+This guide describes the current BrewAssistant beta setup in Home Assistant.
+
+BrewAssistant is now centered on the Python custom integration in `custom_components/brewassistant/`. Old YAML package files are no longer the source of truth for mainline setup.
 
 ---
 
-## 1. Enable Home Assistant packages
+## 1. Install the custom integration
 
-In `configuration.yaml`, make sure packages are enabled:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
-```
-
-Create the folder if it does not already exist:
+Copy the integration folder into Home Assistant:
 
 ```text
-/config/packages/
+/config/custom_components/brewassistant/
 ```
 
----
-
-## 2. Copy package files
-
-Copy the BrewAssistant package files into `/config/packages/`.
-
-Recommended core files:
+The folder should contain files such as:
 
 ```text
-/config/packages/brewassistant_helpers.yaml
-/config/packages/brewassistant_runtime.yaml
-/config/packages/brewassistant_workflow.yaml
-/config/packages/brewassistant_chamber.yaml
-/config/packages/brewassistant_notifications.yaml
-/config/packages/brewassistant_manual_mode.yaml
+__init__.py
+manifest.json
+sensor.py
+binary_sensor.py
+switch.py
+button.py
+select.py
+number.py
+services.yaml
+brewday/
+brewzilla/
+carbonation_backend/
+climate_backend/
+cooling/
+fermentation/
+kegerator/
+shared/
 ```
 
-Optional/future files:
+Recommended update pattern from a clone of this repository:
+
+```bash
+rsync -a --delete \
+  /tmp/brewassistant-beta/custom_components/brewassistant/ \
+  /config/custom_components/brewassistant/
+```
+
+Always back up the currently installed integration before replacing it.
+
+---
+
+## 2. Restart Home Assistant
+
+After installing or updating the custom integration:
 
 ```text
-/config/packages/brewassistant_hot_side_workflow.yaml
-/config/packages/brewassistant_brewzilla.yaml
-/config/packages/brewassistant_shopper.yaml
+1. Restart Home Assistant.
+2. Check Home Assistant logs for BrewAssistant import/setup errors.
+3. Confirm that BrewAssistant entities are created.
 ```
 
----
-
-## 3. Restart Home Assistant
-
-After adding or changing package files:
-
-1. Check configuration.
-2. Restart Home Assistant.
-3. Confirm that helpers and template sensors are created.
+If Home Assistant keeps old entity IDs from the entity registry, verify the actual entity IDs in Developer Tools → States before editing dashboards.
 
 ---
 
-## 4. Add dashboard cards
+## 3. Add dashboard cards
 
-Dashboard YAML should be kept separately from backend package logic.
+Dashboard YAML is optional and should be treated as presentation only.
 
-Recommended folder:
+Current baseline/dashboard policy is documented in:
 
 ```text
-/dashboards/
+docs/dashboard-baselines.md
 ```
 
-Suggested dashboard files:
+Dashboard cards may use custom Lovelace cards such as:
 
 ```text
-dashboards/fermentation.yaml
-dashboards/manual-mode.yaml
-dashboards/chamber.yaml
-dashboards/kegerator.yaml
-dashboards/brewzilla.yaml
+custom:button-card
+custom:vertical-stack-in-card
+custom:mushroom-*
+custom:expander-card
+custom:gauge-card-pro
+custom:bar-card
+custom:apexcharts-card
 ```
 
-Cards may use custom Lovelace cards such as:
-
-- `custom:button-card`
-- `custom:mushroom-*`
-- `custom:vertical-stack-in-card`
-- `custom:stack-in-card`
-- `custom:bar-card`
-- `custom:apexcharts-card`
-- `custom:expander-card`
-
-Install required cards through HACS before using the dashboards.
+Install required frontend cards through HACS before using dashboard examples.
 
 ---
 
-## 5. Recommended integrations
+## 4. Recommended integrations and source entities
 
-BrewAssistant v4 can work with different levels of automation.
+BrewAssistant can run with different levels of connected hardware and data.
 
-### Basic/manual mode
+### Brewday / BrewZilla
 
-No external brewing integration is required.
-
-Useful entities:
-
-- Manual batch name.
-- Manual SG readings.
-- Manual target FG.
-- Batch active/packaged toggles.
-
-### Fermentation automation
-
-Useful integrations/entities:
-
-- RAPT Pill or other gravity/temperature sensor.
-- Fermentation chamber climate entity.
-- Fridge/kegerator temperature sensor.
-- Heating mat switch.
-- Cooling/fridge switch.
-
-### Brewfather-assisted mode
-
-Useful Brewfather-derived data:
-
-- Recipe name.
-- Batch status.
-- Fermentation start.
-- Target temperature.
-- Fermentation steps.
-- OG/FG values.
-
-### Future hot-side mode
-
-Potential integrations:
-
-- BrewZilla RAPT.
-- RAPT Cloud.
-- Brewfather BrewTracker or brew-day data.
-
----
-
-## 6. Verify core entities
-
-After restart, confirm that the main sensors/helpers exist.
-
-Examples:
+Useful sources:
 
 ```text
-sensor.recipe_runtime_name
-sensor.recipe_runtime_status
-sensor.recipe_runtime_primary_temp
-sensor.recipe_runtime_cold_crash_temp
-sensor.brew_process_status
-sensor.brew_process_next_step
-input_boolean.manual_batch_active
-input_text.manual_batch_name
+BrewZilla / RAPT Cloud Link telemetry
+Brewfather Brew Tracker runtime data
+Shelly/local power telemetry
+Manual Brewday runtime services
 ```
 
-Exact names may vary during migration. See `entities.md` and `legacy-migration.md`.
+Main BrewAssistant areas:
+
+```text
+sensor.brewassistant_brewday_*
+sensor.brewassistant_brewzilla_*
+select.brewassistant_brewzilla_mash_temperature_source
+```
+
+### Kegerator / serving
+
+Useful sources:
+
+```text
+climate.kegerator_kylskap
+sensor.kyl_temperatur_4
+sensor.kegerator_power
+switch.kegerator_fan
+sensor.kegerator_fan_power
+```
+
+Main BrewAssistant entity:
+
+```text
+switch.brewassistant_kegerator_fan_auto_enabled
+```
+
+Home Assistant may prefix the final entity ID with the integration/device area name.
+
+### Fermentation
+
+Useful sources:
+
+```text
+climate.fermentation_chamber
+RAPT Pill or other gravity/temperature source
+switch.fermentation_heat_mat
+sensor.fermentation_heat_mat_power
+```
+
+Main BrewAssistant areas:
+
+```text
+sensor.brewassistant_fermentation_*
+sensor.brewassistant_smart_*
+sensor.brewassistant_gravity
+```
+
+### Carbonation
+
+Main control entities:
+
+```text
+select.brewassistant_carbonation_method
+number.brewassistant_carbonation_target_volumes
+number.brewassistant_carbonation_start_volumes
+number.brewassistant_carbonation_pressure_bar
+```
+
+Main display sensors:
+
+```text
+sensor.brewassistant_carbonation_status
+sensor.brewassistant_carbonation_method
+sensor.brewassistant_carbonation_target_volumes
+sensor.brewassistant_carbonation_temperature
+sensor.brewassistant_carbonation_recommended_pressure_bar
+```
 
 ---
 
-## 7. Restart-safe workflow state
+## 5. Legacy local packages
 
-If using restart-persistent workflow state, install and configure a persistence method such as the Home Assistant Saver integration.
+The `packages/` directory is no longer part of the main repository setup.
 
-Recommended persisted values:
+Older Home Assistant installs may still have local BrewAssistant YAML packages under `/config/packages/` or `/config/packages_disabled/`. Treat those as legacy/local files only.
 
-- Current brewing phase.
-- Workflow status.
-- Batch active state.
-- Manual batch data.
-- Manual SG readings.
+Recommended cleanup policy:
 
----
-
-## 8. Safety checks
-
-Before relying on automation:
-
-- Confirm all entity names.
-- Confirm climate setpoints are correct.
-- Confirm cooling and heating switches behave as expected.
-- Confirm pressure equipment is used within rated limits.
-- Confirm notifications are enabled only after testing.
+```text
+- Do not enable old package helpers together with the Python integration unless deliberately testing migration behavior.
+- Disable old kegerator/fermentation/carbonation package helpers after verifying dashboards no longer depend on them.
+- Use Developer Tools → States and the Entity Registry UI to remove orphaned unavailable entities.
+- Never edit Home Assistant .storage files manually for cleanup.
+```
 
 ---
 
-## 9. Updating
+## 6. Basic verification after restart
 
-When updating BrewAssistant:
+Useful checks:
 
-1. Back up current package files.
-2. Apply backend package changes.
-3. Apply matching dashboard card changes.
+```text
+sensor.brewassistant_core_version
+sensor.brewassistant_next_action
+sensor.brewassistant_brewday_runtime_status
+sensor.brewassistant_brewday_stage
+sensor.brewassistant_brewzilla_wort_temperature
+switch.brewassistant_kegerator_fan_auto_enabled
+sensor.brewassistant_carbonation_status
+sensor.brewassistant_fermentation_chamber_air_temperature_average
+```
+
+Exact entity IDs may vary if Home Assistant adds an area/device prefix.
+
+---
+
+## 7. Updating
+
+Recommended update flow:
+
+```text
+1. Back up /config/custom_components/brewassistant/.
+2. Pull latest main from this repository.
+3. Sync custom_components/brewassistant/ into Home Assistant.
 4. Restart Home Assistant.
-5. Check logs for template errors.
-6. Verify dashboards no longer reference removed entities.
+5. Check logs.
+6. Verify key entities and dashboards.
+```
 
+Dashboard cards should be updated separately from backend installation.
