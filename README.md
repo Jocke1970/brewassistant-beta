@@ -209,6 +209,8 @@ Thanks to:
 docs/INSTALLATION.md                  Current Home Assistant custom integration install guide
 docs/setup.md                         Current setup, update and verification guide
 docs/dashboard-baselines.md           Current dashboard/card baseline policy
+docs/architecture-target.md            Long-term process-first architecture target
+docs/module-capability-model.md        Module defaults, capabilities and policy model
 docs/manual-brewday.md                Python Manual Brewday runtime, services and safety model
 docs/backend-domain-layout.md          Backend package layout after domain refactor
 docs/kegerator-fan-backend.md          Kegerator fan/compressor inference and fan-auto policy
