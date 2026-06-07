@@ -1,6 +1,6 @@
 # BrewAssistant v0.2.0-beta.1
 
-**BrewAssistant v0.2.0-beta.1** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, fermentation tracking, dashboards and notifications.
+**BrewAssistant v0.2.0-beta.1** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
 
 The project is moving away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and hardware orchestration live in `custom_components/brewassistant/`.
 
@@ -52,6 +52,7 @@ Validated in the active beta branch:
 ✅ Brewday Audit Card dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
+✅ Kegerator Fan Backend initial compressor/afterrun/fan-auto validation
 ✅ Carbonation Runtime backend, persistence and UI
 ✅ Counterflow Wort Cooling backend and UI
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
@@ -67,6 +68,7 @@ Beta limitations / still pending validation:
 [ ] real counterflow chilling data
 [ ] active fermentation and cold-crash validation
 [ ] full carbonation/serving cooling-cycle validation
+[ ] full kegerator fan-auto turn-off validation after afterrun expiry
 [ ] package cleanup validation in a real HA install
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
@@ -88,6 +90,8 @@ Not recommended without active operator supervision
 
 BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, but the intended operating model is still supervised. The operator should remain present, verify BrewZilla behavior, and keep abort/manual controls available.
 
+Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan actions through its fan-auto switch. Compressor/cooling target behavior remains owned by `climate.kegerator_kylskap` and its Home Assistant climate/thermostat layer.
+
 ---
 
 ## Architecture layers
@@ -103,6 +107,7 @@ BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, b
 | Brewday Audit | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
+| Kegerator Fan Backend | Infer compressor/fan state and optionally manage fan circulation/afterrun. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
 | Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
 | Fermentation Scope Guard | Keep fermentation warnings scoped to active fermentation/cold-crash context. |
@@ -146,11 +151,43 @@ Key beta behavior:
 
 ---
 
+## Kegerator fan-auto flow
+
+Current kegerator fan backend flow:
+
+```text
+climate.kegerator_kylskap
++ sensor.kyl_temperatur_4
++ sensor.brewassistant_kegerator_air_temperature_average
++ sensor.kegerator_power
++ switch.kegerator_fan
++ sensor.kegerator_fan_power
+→ Kegerator Fan Backend
+→ switch.brewassistant_kegerator_fan_auto_enabled attributes
+→ optional switch.kegerator_fan on/off actions when fan-auto is enabled
+```
+
+Key beta behavior:
+
+```text
+- Compressor activity is inferred from sensor.kegerator_power > 20 W.
+- Fan running state is inferred from switch.kegerator_fan or fan power > 2 W.
+- Fan-auto is off by default.
+- Fan runs while compressor is active.
+- Fan afterrun continues after compressor stop.
+- Restart/statistics trend spikes are ignored above +5.00 °C/h.
+- Fan service calls are blocking.
+- Compressor/cooling target control remains in climate.kegerator_kylskap.
+```
+
+---
+
 ## Documentation index
 
 ```text
 docs/manual-brewday.md                 Python Manual Brewday runtime, services and safety model
 docs/backend-domain-layout.md          Backend package layout after domain refactor
+docs/kegerator-fan-backend.md          Kegerator fan/compressor inference and fan-auto policy
 docs/brewzilla-temperature-sources.md  Mash/Wort temperature resolver and dashboard policy
 docs/counterflow-chiller.md            Python CFC sanitation backend and CFC Ready flow
 docs/legacy-package-cleanup.md         Checklist for deleting old package YAML safely

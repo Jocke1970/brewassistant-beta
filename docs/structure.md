@@ -33,6 +33,7 @@ brewassistant/
 │       ├── climate_backend/
 │       ├── cooling/
 │       ├── fermentation/
+│       ├── kegerator/
 │       ├── shared/
 │       └── translations/
 ├── dashboards/
@@ -40,6 +41,7 @@ brewassistant/
 └── docs/
     ├── backend-domain-layout.md
     ├── manual-brewday.md
+    ├── kegerator-fan-backend.md
     ├── brewzilla-temperature-sources.md
     ├── counterflow-chiller.md
     ├── legacy-package-cleanup.md
@@ -71,7 +73,8 @@ Responsibilities:
 - Own carbonation runtime/session state and explicit controls.
 - Scope fermentation warnings to active fermentation/cold-crash context.
 - Calculate dynamic climate targets for serving/carbonation through Climate Supervisor.
-- Expose dashboard-safe sensors.
+- Infer kegerator compressor/fan state and manage optional fan-auto circulation.
+- Expose dashboard-safe sensors and switch diagnostics.
 - Expose explicit services.
 - Keep safety/orchestration checks outside the dashboard.
 - Avoid hidden workflow logic in Lovelace cards.
@@ -260,6 +263,35 @@ Climate Supervisor
 ```
 
 This keeps compressor-cycle responsibility in the Home Assistant climate layer, not in BrewAssistant.
+
+---
+
+### `kegerator/`
+
+Kegerator modules own fan/compressor inference and optional fan-auto circulation support.
+
+`kegerator/fan_control.py` is Python-owned and uses live kegerator entities to expose a fan-auto switch with diagnostics.
+
+Responsibilities:
+
+- Infer compressor activity from `sensor.kegerator_power`.
+- Infer fan running state from `switch.kegerator_fan` and `sensor.kegerator_fan_power`.
+- Keep fan-auto disabled by default.
+- Run fan while compressor is active.
+- Continue fan after compressor stop for a short afterrun period.
+- Ignore impossible restart/statistics warming spikes.
+- Use blocking Home Assistant service calls when applying fan on/off actions.
+- Leave compressor/cooling target behavior to `climate.kegerator_kylskap`.
+
+Main operator-facing entity:
+
+```text
+switch.brewassistant_kegerator_fan_auto_enabled
+```
+
+Home Assistant may prefix the final entity id with the integration/device area name.
+
+See `docs/kegerator-fan-backend.md` for full thresholds and validation notes.
 
 ---
 
