@@ -2,12 +2,12 @@
 
 **BrewAssistant v0.2.0-beta.1** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
 
-The project is moving away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and hardware orchestration live in `custom_components/brewassistant/`.
+The project has moved away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and hardware orchestration live in `custom_components/brewassistant/`.
 
 ```text
 Python custom integration = logic, normalization, stage engine, calculations, control decisions
 YAML/dashboard             = presentation and explicit operator actions
-Legacy packages            = temporary compatibility only
+Legacy local packages      = local compatibility/cleanup only, not mainline repo setup
 ```
 
 ---
@@ -54,10 +54,12 @@ Validated in the active beta branch:
 ✅ Climate Supervisor backend and UI
 ✅ Kegerator Fan Backend initial compressor/afterrun/fan-auto validation
 ✅ Carbonation Runtime backend, persistence and UI
+✅ Carbonation control entity naming aligned with existing HA entity IDs
 ✅ Counterflow Wort Cooling backend and UI
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and compact idle UI
 ✅ Backend domain layout refactor
+✅ Main repo pruned of legacy packages, patch notes and obsolete migration docs
 ```
 
 Beta limitations / still pending validation:
@@ -69,7 +71,7 @@ Beta limitations / still pending validation:
 [ ] active fermentation and cold-crash validation
 [ ] full carbonation/serving cooling-cycle validation
 [ ] full kegerator fan-auto turn-off validation after afterrun expiry
-[ ] package cleanup validation in a real HA install
+[ ] legacy package cleanup validation in existing local HA installs
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
 [ ] external RAPT BLE Thermometer depends on RAPT Cloud Link control-device telemetry
@@ -185,12 +187,14 @@ Key beta behavior:
 ## Documentation index
 
 ```text
-docs/manual-brewday.md                 Python Manual Brewday runtime, services and safety model
+docs/INSTALLATION.md                  Current Home Assistant custom integration install guide
+docs/setup.md                         Current setup, update and verification guide
+docs/dashboard-baselines.md           Current dashboard/card baseline policy
+docs/manual-brewday.md                Python Manual Brewday runtime, services and safety model
 docs/backend-domain-layout.md          Backend package layout after domain refactor
 docs/kegerator-fan-backend.md          Kegerator fan/compressor inference and fan-auto policy
 docs/brewzilla-temperature-sources.md  Mash/Wort temperature resolver and dashboard policy
 docs/counterflow-chiller.md            Python CFC sanitation backend and CFC Ready flow
-docs/legacy-package-cleanup.md         Checklist for deleting old package YAML safely
-docs/legacy-migration.md               Namespace and legacy migration notes
+docs/legacy-package-cleanup.md        Local HA legacy package cleanup checklist
 docs/structure.md                      Project structure and module responsibilities
 ```
