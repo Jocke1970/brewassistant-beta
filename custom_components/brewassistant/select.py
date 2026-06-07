@@ -75,7 +75,7 @@ class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, S
         super().__init__(coordinator, "carbonation_method_control")
         self._attr_unique_id = f"{DOMAIN}_select_carbonation_method_control"
         self._attr_name = "BrewAssistant Carbonation Method"
-        self._attr_suggested_object_id = f"{DOMAIN}_carbonation_method_control"
+        self._attr_suggested_object_id = f"{DOMAIN}_carbonation_method"
 
     async def async_added_to_hass(self) -> None:
         """Restore the selected method into the runtime."""

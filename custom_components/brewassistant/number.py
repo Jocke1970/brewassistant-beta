@@ -20,7 +20,7 @@ from .entity import BrewAssistantEntity
 CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
     "carbonation_pressure_bar_control": {
         "name": "BrewAssistant Carbonation Pressure Bar",
-        "object_id": "brewassistant_carbonation_pressure_bar_control",
+        "object_id": "brewassistant_carbonation_pressure_bar",
         "icon": "mdi:gauge",
         "unit": "bar",
         "min": 0.0,
@@ -31,7 +31,7 @@ CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
     },
     "carbonation_target_volumes_control": {
         "name": "BrewAssistant Carbonation Target Volumes",
-        "object_id": "brewassistant_carbonation_target_volumes_control",
+        "object_id": "brewassistant_carbonation_target_volumes",
         "icon": "mdi:target",
         "unit": "vol",
         "min": 1.5,
@@ -42,7 +42,7 @@ CARBONATION_NUMBERS: dict[str, dict[str, Any]] = {
     },
     "carbonation_start_volumes_control": {
         "name": "BrewAssistant Carbonation Start Volumes",
-        "object_id": "brewassistant_carbonation_start_volumes_control",
+        "object_id": "brewassistant_carbonation_start_volumes",
         "icon": "mdi:beer-outline",
         "unit": "vol",
         "min": 0.3,
