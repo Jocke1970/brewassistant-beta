@@ -14,7 +14,10 @@ from ..const import DOMAIN
 CLIMATE = "climate.kegerator_kylskap"
 AIR_TEMP = "sensor.kyl_temperatur_4"
 AIR_STATS = "sensor.brewassistant_kegerator_air_temperature_average"
-POWER = "sensor.kegerator_power"
+POWER_CANDIDATES = (
+    "sensor.brewassistant_kegerator_power_w",
+    "sensor.kegerator_power",
+)
 FAN = "switch.kegerator_fan"
 FAN_POWER = "sensor.kegerator_fan_power"
 CHAMBER = "climate.fermentation_chamber"
@@ -51,6 +54,10 @@ def _available(hass: HomeAssistant, entity: str) -> bool:
     return s is not None and s.state not in _BAD
 
 
+def _any_available(hass: HomeAssistant, entities: tuple[str, ...]) -> bool:
+    return any(_available(hass, entity) for entity in entities)
+
+
 def _num_state(hass: HomeAssistant, entity: str) -> float | None:
     s = hass.states.get(entity)
     if s is None or s.state in _BAD:
@@ -59,6 +66,15 @@ def _num_state(hass: HomeAssistant, entity: str) -> float | None:
         return float(str(s.state).replace(",", "."))
     except (TypeError, ValueError):
         return None
+
+
+def _first_num_state(hass: HomeAssistant, entities: tuple[str, ...]) -> tuple[float | None, str | None]:
+    """Return the first available numeric state and the entity that supplied it."""
+    for entity in entities:
+        value = _num_state(hass, entity)
+        if value is not None:
+            return value, entity
+    return None, None
 
 
 def _attr(hass: HomeAssistant, entity: str, attr: str) -> Any:
@@ -135,7 +151,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     avg15 = _num_attr(hass, AIR_STATS, "average_15m")
     temp_summary = _attr(hass, AIR_STATS, "summary")
 
-    power = _num_state(hass, POWER)
+    power, power_entity = _first_num_state(hass, POWER_CANDIDATES)
     compressor = _compressor_active(power)
 
     last_at, last_age, afterrun, afterrun_left = _remember_compressor(hass, compressor)
@@ -193,7 +209,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     else:
         status = "standby"
 
-    if not _available(hass, CLIMATE) or not _available(hass, AIR_TEMP) or not _available(hass, POWER):
+    if not _available(hass, CLIMATE) or not _available(hass, AIR_TEMP) or power_entity is None:
         warning = "sensor_issue"
     elif delta is not None and abs(delta) >= 2.0:
         warning = "warning"
@@ -229,7 +245,8 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "trend_c_per_hour": trend,
         "trend_label": trend_label,
         "temperature_summary": temp_summary,
-        "power_entity": POWER,
+        "power_entity": power_entity,
+        "power_entity_candidates": POWER_CANDIDATES,
         "power_w": round(power, 2) if power is not None else None,
         "compressor_active": compressor,
         "compressor_threshold_w": COMPRESSOR_W,
@@ -250,7 +267,8 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "fan_reason": reason,
         "fan_switch_ok": _available(hass, FAN),
         "temperature_sensor_ok": _available(hass, AIR_TEMP),
-        "power_sensor_ok": _available(hass, POWER),
+        "power_sensor_ok": power_entity is not None,
+        "power_sensor_candidates_ok": _any_available(hass, POWER_CANDIDATES),
         "fan_power_sensor_ok": _available(hass, FAN_POWER),
         "fermentation_chamber_entity": CHAMBER,
         "fermentation_chamber_state": _state(hass, CHAMBER),
