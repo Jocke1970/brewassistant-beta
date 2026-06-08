@@ -1,0 +1,240 @@
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: switch.brewassistant_kegerator_fan_auto_enabled
+    name: Kegerator Fan Auto
+    icon: mdi:fan-auto
+    show_state: true
+    show_label: true
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    triggers_update:
+      - switch.brewassistant_kegerator_fan_auto_enabled
+      - switch.kegerator_fan
+      - sensor.kegerator_fan_power
+      - sensor.kegerator_power
+      - sensor.brewassistant_kegerator_power_w
+      - sensor.kyl_temperatur_4
+      - climate.kegerator_kylskap
+    label: |
+      [[[
+        const sw = states['switch.brewassistant_kegerator_fan_auto_enabled'];
+        const a = sw?.attributes ?? {};
+        const enabled = sw?.state === 'on';
+        const status = a.status ?? 'unknown';
+        const reason = a.fan_reason ?? '-';
+        const should = a.fan_should_run === true;
+        const action = a.fan_action ?? 'none';
+        const fanState = a.fan_state ?? states['switch.kegerator_fan']?.state ?? '-';
+        const fanPower = Number(a.fan_power_w ?? states['sensor.kegerator_fan_power']?.state ?? 0);
+        const compressor = a.compressor_active === true;
+        const power = a.power_w !== undefined && a.power_w !== null ? `${Number(a.power_w).toFixed(0)} W` : '-';
+        const temp = a.current_temperature !== undefined && a.current_temperature !== null ? `${Number(a.current_temperature).toFixed(1)} °C` : '-';
+        const target = a.target_temperature !== undefined && a.target_temperature !== null ? `${Number(a.target_temperature).toFixed(1)} °C` : '-';
+        const delta = a.temperature_delta !== undefined && a.temperature_delta !== null ? `${Number(a.temperature_delta) > 0 ? '+' : ''}${Number(a.temperature_delta).toFixed(1)} °C` : '-';
+        const after = a.afterrun_active === true ? `Afterrun ${Number(a.afterrun_remaining_minutes ?? 0).toFixed(1)} min kvar` : 'Ingen afterrun';
+        const rec = should ? 'Kör fläkt' : 'Stoppa fläkt';
+        const fanTxt = fanPower > 2 ? `på · ${fanPower.toFixed(1)} W` : fanState === 'on' ? 'på · väntar på effekt' : fanState === 'off' ? 'av' : fanState;
+        const applyTxt = action !== 'none' ? `Åtgärd väntar: ${action}` : 'Ingen åtgärd behövs';
+        const enabledTxt = enabled ? 'Auto aktiv' : 'Auto avstängd';
+        return `
+          <div style="line-height:1.45;">
+            <div>${enabledTxt} · ${status} · ${rec}</div>
+            <div>Fläkt: ${fanTxt} · Kompressor: ${compressor ? 'aktiv' : 'idle'} · ${power}</div>
+            <div>Temp: ${temp} → ${target} · Δ ${delta} · ${after}</div>
+            <div>Reason: ${reason} · ${applyTxt}</div>
+          </div>
+        `;
+      ]]]
+    extra_styles: |
+      @keyframes brewassistant-fan-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    styles:
+      card:
+        - border-radius: 22px
+        - padding: 16px
+        - min-height: 142px
+        - color: white
+        - box-shadow: 0 10px 26px rgba(0,0,0,0.26)
+        - border: 1px solid rgba(255,255,255,0.08)
+        - background: |
+            [[[
+              const sw = states['switch.brewassistant_kegerator_fan_auto_enabled'];
+              const a = sw?.attributes ?? {};
+              const enabled = sw?.state === 'on';
+              const fanRunning = a.fan_running === true;
+              const should = a.fan_should_run === true;
+              const actionNeeded = a.fan_action_needed === true;
+              const compressor = a.compressor_active === true;
+              const warning = a.warning_level ?? 'ok';
+              if (!enabled) return 'linear-gradient(135deg, #3a3434, #231f22)';
+              if (warning !== 'ok') return 'linear-gradient(135deg, #6d4c00, #2b1d00)';
+              if (actionNeeded) return 'linear-gradient(135deg, #7b3f00, #2b1600)';
+              if (compressor || should || fanRunning) return 'linear-gradient(135deg, #0d47a1, #182f4a)';
+              return 'linear-gradient(135deg, #005739, #063324)';
+            ]]]
+      grid:
+        - grid-template-areas: '"i n" "i s" "i l"'
+        - grid-template-columns: 58px 1fr
+        - grid-template-rows: min-content min-content 1fr
+      img_cell:
+        - width: 46px
+        - height: 46px
+        - border-radius: 50%
+        - background: rgba(255,255,255,0.14)
+      icon:
+        - width: 28px
+        - color: white
+        - animation: |
+            [[[
+              const running = states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.fan_running === true;
+              return running ? 'brewassistant-fan-spin 1.2s linear infinite' : 'none';
+            ]]]
+      name:
+        - justify-self: start
+        - font-size: 17px
+        - font-weight: 900
+        - color: white
+      state:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 800
+        - color: rgba(255,255,255,0.88)
+      label:
+        - justify-self: start
+        - text-align: left
+        - font-size: 12px
+        - font-weight: 650
+        - line-height: 1.45
+        - white-space: normal
+        - color: rgba(255,255,255,0.94)
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        primary: Auto-loop
+        secondary: >
+          {% if is_state('switch.brewassistant_kegerator_fan_auto_enabled', 'on') %}
+            Aktiv · var {{ state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'control_interval_seconds') | default(30, true) }} s
+          {% else %}
+            Avstängd
+          {% endif %}
+        icon: mdi:fan-auto
+        icon_color: >
+          {% if is_state('switch.brewassistant_kegerator_fan_auto_enabled', 'on') %}blue{% else %}disabled{% endif %}
+        tap_action:
+          action: toggle
+        card_mod:
+          style: |
+            ha-card { border-radius: 18px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); }
+
+      - type: custom:mushroom-template-card
+        entity: switch.kegerator_fan
+        primary: Fysisk fläkt
+        secondary: >
+          {% set p = state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_power_w') | float(0) %}
+          {% if p > 2 %}På · {{ p | round(1) }} W{% elif is_state('switch.kegerator_fan', 'on') %}På · väntar på effekt{% elif is_state('switch.kegerator_fan', 'off') %}Av{% else %}Otillgänglig{% endif %}
+        icon: >
+          {% set running = state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_running') %}
+          {% if running == true %}mdi:fan{% else %}mdi:fan-off{% endif %}
+        icon_color: >
+          {% if state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_running') == true %}blue{% else %}disabled{% endif %}
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card { border-radius: 18px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); }
+            {% if state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_running') == true %}
+            ha-state-icon { animation: fan-spin 1.2s linear infinite; }
+            @keyframes fan-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            {% endif %}
+
+      - type: custom:mushroom-template-card
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        primary: Backend-beslut
+        secondary: >
+          {% set should = state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_should_run') %}
+          {% set action = state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_action') %}
+          {% set reason = state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_reason') %}
+          {% if should == true %}Kör{% else %}Stoppa{% endif %} · {{ reason }} · {{ action }}
+        icon: mdi:brain
+        icon_color: >
+          {% if state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_action_needed') == true %}amber{% elif state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'fan_should_run') == true %}blue{% else %}green{% endif %}
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card { border-radius: 18px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); }
+
+      - type: custom:mushroom-template-card
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        primary: Afterrun
+        secondary: >
+          {% if state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'afterrun_active') == true %}
+            {{ state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'afterrun_remaining_minutes') | float(0) | round(1) }} min kvar
+          {% else %}
+            Ej aktiv · {{ state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'afterrun_minutes') | default(10, true) }} min inställt
+          {% endif %}
+        icon: mdi:fan-clock
+        icon_color: >
+          {% if state_attr('switch.brewassistant_kegerator_fan_auto_enabled', 'afterrun_active') == true %}blue{% else %}disabled{% endif %}
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            ha-card { border-radius: 18px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); }
+
+  - type: entities
+    title: Fan Auto Diagnostics
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_kegerator_fan_auto_enabled
+        name: Fan Auto Enabled
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: summary
+        name: Summary
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: warning_level
+        name: Warning
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: power_entity
+        name: Power source
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: power_w
+        name: Power W
+        suffix: W
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: compressor_active
+        name: Compressor active
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_reason
+        name: Fan reason
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_action
+        name: Fan action
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_action_needed
+        name: Action needed
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: last_apply_action
+        name: Last apply action
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: last_apply_at
+        name: Last apply at
