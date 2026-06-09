@@ -7,7 +7,6 @@ meant to prevent short cycling while a keg is carbonating/serving.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -15,12 +14,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .control_policy import SOURCE_BACKEND, request_action, section_policy
+
 DOMAIN_DATA = "brewassistant"
 GUARD_UNSUB_KEY = "kegerator_guard_unsub"
 GUARD_WATCHDOG_UNSUB_KEY = "kegerator_guard_watchdog_unsub"
 GUARD_ENABLED_KEY = "kegerator_guard_enabled_runtime"
 GUARD_LAST_ACTION_KEY = "kegerator_guard_last_action"
 GUARD_LAST_EVALUATION_KEY = "kegerator_guard_last_evaluation"
+SECTION = "kegerator_guard"
 
 GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 KEGERATOR_SWITCH = "switch.kegerator"
@@ -98,11 +100,11 @@ def _summary(status: str, air_temp: float | None, action: str, reason: str) -> s
     return f"{status} · air {air} · {action} · {reason}"
 
 
-def _expected_state_for_action(action: str) -> str | None:
+def _command_for_action(action: str) -> str | None:
     if action == "turn_on":
-        return "on"
+        return "kegerator_guard_on"
     if action == "turn_off":
-        return "off"
+        return "kegerator_guard_off"
     return None
 
 
@@ -168,13 +170,18 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         action = "keep_off"
         reason = "air temperature is inside serving/carbonation band"
 
+    command = _command_for_action(control_action)
+
     return {
         "enabled": enabled,
         "status": status,
         "action": action,
         "control_action": control_action,
+        "control_command": command,
         "reason": reason,
         "summary": _summary(status, air_temp, action, reason),
+        "policy_section": SECTION,
+        "policy": section_policy(hass, SECTION),
         "air_temperature": round(air_temp, 2) if air_temp is not None else None,
         "target_temperature": TARGET_TEMP,
         "start_temperature": START_TEMP,
@@ -193,6 +200,9 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "climate_conflicts": conflicts,
         "climate_conflict": bool(conflicts),
         "last_control_action": last_action,
+        "last_policy_result": last_action,
+        "last_policy_status": last_action.get("status") if isinstance(last_action, dict) else None,
+        "last_policy_summary": last_action.get("summary") if isinstance(last_action, dict) else None,
         "last_evaluation": last_evaluation,
         "watchdog_active": runtime.get(GUARD_WATCHDOG_UNSUB_KEY) is not None,
         "mode": "serving_carbonation_air_control",
@@ -205,39 +215,31 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
     runtime[GUARD_LAST_EVALUATION_KEY] = dt_util.utcnow().isoformat()
     snapshot = build_kegerator_guard_snapshot(hass)
     action = snapshot.get("control_action")
+    command = snapshot.get("control_command")
 
-    if not snapshot.get("enabled") or action not in {"turn_on", "turn_off"}:
+    if not snapshot.get("enabled") or action not in {"turn_on", "turn_off"} or not isinstance(command, str):
         return snapshot
 
-    expected_state = _expected_state_for_action(str(action))
-    before_state = _state(hass, KEGERATOR_SWITCH)
-    attempt = {
-        "action": action,
-        "entity_id": KEGERATOR_SWITCH,
-        "at": dt_util.utcnow().isoformat(),
-        "reason": snapshot.get("reason"),
-        "air_temperature": snapshot.get("air_temperature"),
-        "before_state": before_state,
-        "result": "attempting",
-    }
-    runtime[GUARD_LAST_ACTION_KEY] = attempt
-
-    try:
-        await hass.services.async_call(
-            "homeassistant",
-            str(action),
-            {"entity_id": KEGERATOR_SWITCH},
-            blocking=True,
-        )
-        await asyncio.sleep(1)
-        after_state = _state(hass, KEGERATOR_SWITCH)
-        attempt["after_state"] = after_state
-        attempt["result"] = "applied" if after_state == expected_state else "attempted_no_state_change"
-    except Exception as err:  # noqa: BLE001 - expose HA service failure in diagnostics
-        attempt["result"] = "error"
-        attempt["error"] = str(err)
-
-    runtime[GUARD_LAST_ACTION_KEY] = attempt
+    result = await request_action(
+        hass,
+        section=SECTION,
+        command=command,
+        source=SOURCE_BACKEND,
+        reason=f"Kegerator guard: {snapshot.get('reason')}",
+        context={
+            "control_action": action,
+            "air_temperature": snapshot.get("air_temperature"),
+            "kegerator_state": snapshot.get("kegerator_state"),
+            "compressor_on": snapshot.get("compressor_on"),
+            "on_minutes": snapshot.get("on_minutes"),
+            "off_minutes": snapshot.get("off_minutes"),
+            "start_temperature": snapshot.get("start_temperature"),
+            "stop_temperature": snapshot.get("stop_temperature"),
+            "safety_low_temperature": snapshot.get("safety_low_temperature"),
+            "climate_conflicts": snapshot.get("climate_conflicts"),
+        },
+    )
+    runtime[GUARD_LAST_ACTION_KEY] = result
     return build_kegerator_guard_snapshot(hass)
 
 
