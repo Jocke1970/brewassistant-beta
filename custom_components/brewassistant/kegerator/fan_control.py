@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from ..control_policy import SOURCE_BACKEND, request_action, section_policy
 
 CLIMATE = "climate.kegerator_kylskap"
 AIR_TEMP = "sensor.kyl_temperatur_4"
@@ -23,6 +24,7 @@ FAN_POWER = "sensor.kegerator_fan_power"
 CHAMBER = "climate.fermentation_chamber"
 
 DATA_KEY = "kegerator_fan_auto"
+SECTION = "kegerator_fan"
 
 COMPRESSOR_W = 20.0
 FAN_W = 2.0
@@ -192,11 +194,14 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reason = "standby"
 
     action = "none"
+    command = None
     if _available(hass, FAN):
         if should_run and not fan_running:
             action = "turn_on_fan"
+            command = "kegerator_fan_on"
         elif not should_run and fan_running:
             action = "turn_off_fan"
+            command = "kegerator_fan_off"
 
     if not climate_on:
         status = "off"
@@ -218,6 +223,9 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     else:
         warning = "ok"
 
+    data = _bucket(hass)
+    policy_result = data.get("last_policy_result")
+
     summary = (
         f"{status} · {_fmt_temp(current)} → {_fmt_temp(target)} · "
         f"Δ {'—' if delta is None else f'{delta:+.1f} °C'} · "
@@ -231,6 +239,11 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "status": status,
         "summary": summary,
         "warning_level": warning,
+        "policy_section": SECTION,
+        "policy": section_policy(hass, SECTION),
+        "last_policy_result": policy_result,
+        "last_policy_status": policy_result.get("status") if isinstance(policy_result, dict) else None,
+        "last_policy_summary": policy_result.get("summary") if isinstance(policy_result, dict) else None,
         "climate_entity": CLIMATE,
         "climate_state": climate_state,
         "climate_enabled": climate_on,
@@ -264,6 +277,7 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "fan_recommendation": "run" if should_run else "stop",
         "fan_action_needed": action != "none",
         "fan_action": action,
+        "fan_command": command,
         "fan_reason": reason,
         "fan_switch_ok": _available(hass, FAN),
         "temperature_sensor_ok": _available(hass, AIR_TEMP),
@@ -280,11 +294,31 @@ def build_kegerator_fan_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
     snapshot = build_kegerator_fan_snapshot(hass)
     action = snapshot.get("fan_action")
+    command = snapshot.get("fan_command")
 
-    if action == "turn_on_fan":
-        await hass.services.async_call("switch", "turn_on", {"entity_id": FAN}, blocking=True)
-    elif action == "turn_off_fan":
-        await hass.services.async_call("switch", "turn_off", {"entity_id": FAN}, blocking=True)
+    policy_result: dict[str, Any] | None = None
+    if isinstance(command, str):
+        policy_result = await request_action(
+            hass,
+            section=SECTION,
+            command=command,
+            source=SOURCE_BACKEND,
+            reason=f"Kegerator fan auto: {snapshot.get('fan_reason')}",
+            context={
+                "fan_action": action,
+                "fan_reason": snapshot.get("fan_reason"),
+                "fan_should_run": snapshot.get("fan_should_run"),
+                "fan_running": snapshot.get("fan_running"),
+                "fan_state": snapshot.get("fan_state"),
+                "fan_power_w": snapshot.get("fan_power_w"),
+                "compressor_active": snapshot.get("compressor_active"),
+                "afterrun_active": snapshot.get("afterrun_active"),
+                "afterrun_remaining_minutes": snapshot.get("afterrun_remaining_minutes"),
+                "power_entity": snapshot.get("power_entity"),
+                "power_w": snapshot.get("power_w"),
+                "temperature_delta": snapshot.get("temperature_delta"),
+            },
+        )
 
     if action != "none":
         await asyncio.sleep(0)
@@ -293,11 +327,15 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
     data["last_apply_action"] = action
     data["last_apply_reason"] = snapshot.get("fan_reason")
     data["last_apply_at"] = dt_util.utcnow().isoformat()
+    data["last_policy_result"] = policy_result
 
     refreshed = build_kegerator_fan_snapshot(hass)
     refreshed["last_apply_action"] = data["last_apply_action"]
     refreshed["last_apply_reason"] = data["last_apply_reason"]
     refreshed["last_apply_at"] = data["last_apply_at"]
+    refreshed["last_policy_result"] = policy_result
+    refreshed["last_policy_status"] = policy_result.get("status") if isinstance(policy_result, dict) else None
+    refreshed["last_policy_summary"] = policy_result.get("summary") if isinstance(policy_result, dict) else None
     return refreshed
 
 
