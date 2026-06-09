@@ -31,13 +31,15 @@ POLICY_OPTIONS = [READ_ONLY_POLICY, APPLY_WITH_CONFIRM_POLICY, DIRECT_ACTION_POL
 SOURCE_BREW_TRACKER = "brew_tracker"
 SOURCE_QUICK_SELECT = "quick_select"
 SOURCE_MANUAL = "manual"
+SOURCE_BACKEND = "backend"
 
-ROUTER_SOURCE = "brewzilla_policy_router"
+ROUTER_SOURCE = "brewassistant_policy_router"
 LAST_POLICY_RESULT_KEY = "control_policy_last_result"
 
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
+KEGERATOR_FAN_SWITCH = "switch.kegerator_fan"
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
@@ -91,6 +93,13 @@ SECTION_CONFIG: dict[str, dict[str, Any]] = {
         "default_policy": APPLY_WITH_CONFIRM_POLICY,
         "default_direct_unlocked": False,
     },
+    "kegerator_fan": {
+        "name": "Kegerator fan",
+        "policy_entity": "select.brewassistant_kegerator_fan_policy",
+        "direct_unlock_entity": "switch.brewassistant_kegerator_fan_direct_unlocked",
+        "default_policy": DIRECT_ACTION_POLICY,
+        "default_direct_unlocked": True,
+    },
 }
 
 SECTION_ALIASES = {
@@ -103,6 +112,9 @@ SECTION_ALIASES = {
     "brewtracker": "brew_tracker_feed",
     "brew_tracker": "brew_tracker_feed",
     "tracker": "brew_tracker_feed",
+    "fan": "kegerator_fan",
+    "kegeratorfan": "kegerator_fan",
+    "kegerator_fan_auto": "kegerator_fan",
 }
 
 
@@ -247,6 +259,18 @@ def build_action(
         service_data = {"entity_id": BREWZILLA_PUMP_SWITCH}
         summary = reason or "Stop BrewZilla pump"
 
+    elif command == "kegerator_fan_on":
+        domain = "switch"
+        service = "turn_on"
+        service_data = {"entity_id": KEGERATOR_FAN_SWITCH}
+        summary = reason or "Start kegerator circulation fan"
+
+    elif command == "kegerator_fan_off":
+        domain = "switch"
+        service = "turn_off"
+        service_data = {"entity_id": KEGERATOR_FAN_SWITCH}
+        summary = reason or "Stop kegerator circulation fan"
+
     action = {
         "source": ROUTER_SOURCE,
         "kind": command,
@@ -345,8 +369,6 @@ async def request_action(
         }
         return _store_policy_result(hass, result)
 
-    # Direct action requires both the capability and, for Brew Tracker sourced
-    # requests, the feed itself to be explicitly unlocked.
     if not policy["direct_unlocked"]:
         result = {
             **action,
