@@ -40,6 +40,7 @@ BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
 KEGERATOR_FAN_SWITCH = "switch.kegerator_fan"
+KEGERATOR_SWITCH = "switch.kegerator"
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
@@ -100,6 +101,13 @@ SECTION_CONFIG: dict[str, dict[str, Any]] = {
         "default_policy": DIRECT_ACTION_POLICY,
         "default_direct_unlocked": True,
     },
+    "kegerator_guard": {
+        "name": "Kegerator guard",
+        "policy_entity": "select.brewassistant_kegerator_guard_policy",
+        "direct_unlock_entity": "switch.brewassistant_kegerator_guard_direct_unlocked",
+        "default_policy": DIRECT_ACTION_POLICY,
+        "default_direct_unlocked": True,
+    },
 }
 
 SECTION_ALIASES = {
@@ -115,6 +123,10 @@ SECTION_ALIASES = {
     "fan": "kegerator_fan",
     "kegeratorfan": "kegerator_fan",
     "kegerator_fan_auto": "kegerator_fan",
+    "guard": "kegerator_guard",
+    "kegerator_power": "kegerator_guard",
+    "kegerator_compressor": "kegerator_guard",
+    "compressor": "kegerator_guard",
 }
 
 
@@ -270,6 +282,18 @@ def build_action(
         service = "turn_off"
         service_data = {"entity_id": KEGERATOR_FAN_SWITCH}
         summary = reason or "Stop kegerator circulation fan"
+
+    elif command == "kegerator_guard_on":
+        domain = "homeassistant"
+        service = "turn_on"
+        service_data = {"entity_id": KEGERATOR_SWITCH}
+        summary = reason or "Start kegerator power relay"
+
+    elif command == "kegerator_guard_off":
+        domain = "homeassistant"
+        service = "turn_off"
+        service_data = {"entity_id": KEGERATOR_SWITCH}
+        summary = reason or "Stop kegerator power relay"
 
     action = {
         "source": ROUTER_SOURCE,
