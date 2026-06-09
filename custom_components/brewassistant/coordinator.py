@@ -29,6 +29,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .kegerator.fan_control import async_apply_kegerator_fan_auto
 
 _LOGGER = logging.getLogger(__name__)
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
@@ -51,6 +52,7 @@ _INACTIVE_RUNTIME_STATUSES = {
     "carbonating",
     "conditioning",
 }
+FAN_AUTO_SWITCH = "switch.brewassistant_kegerator_fan_auto_enabled"
 
 
 @dataclass(slots=True)
@@ -333,6 +335,9 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
                 "brewzilla": brewzilla_result,
             }
         await async_apply_climate_supervisor(self.hass)
+        if self.hass.states.is_state(FAN_AUTO_SWITCH, "on"):
+            fan_result = await async_apply_kegerator_fan_auto(self.hass)
+            self.hass.data.setdefault(DOMAIN, {})["last_kegerator_fan_auto_tick"] = fan_result
 
         liquid_entity = _entity_from_entry(
             self.config_entry,
