@@ -33,7 +33,7 @@ from .carbonation_backend.carbonation_runtime import (
 )
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
-from .kegerator_guard import async_setup_kegerator_guard
+from .kegerator.guard import async_setup_kegerator_guard
 from .brewday.manual_brewday_runtime import ManualRuntimeState
 from .brewday.manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
