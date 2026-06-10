@@ -1,9 +1,11 @@
 """Deterministic kegerator fan backend for BrewAssistant.
 
-The fan controller is intentionally small and state-machine based:
+Default strategy: compressor + afterrun only.
+
+The controller is intentionally state-machine based:
 
 1. Read Home Assistant inputs.
-2. Evaluate the desired fan state.
+2. Evaluate desired fan state.
 3. Apply the desired switch state through the section policy router.
 4. Expose rich diagnostics for dashboard/debugging.
 
@@ -38,6 +40,7 @@ CHAMBER = "climate.fermentation_chamber"
 
 DATA_KEY = "kegerator_fan_auto"
 SECTION = "kegerator_fan"
+STRATEGY = "compressor_afterrun_only"
 
 COMPRESSOR_W = 20.0
 FAN_W = 2.0
@@ -84,6 +87,15 @@ class FanInputs:
 
 
 @dataclass(slots=True)
+class FanDemand:
+    too_warm: bool
+    too_cold: bool
+    cooling_requested: bool
+    warming_fast: bool
+    diagnostic_reason: str
+
+
+@dataclass(slots=True)
 class FanDecision:
     state: str
     reason: str
@@ -97,6 +109,7 @@ class FanDecision:
     afterrun_remaining_minutes: float
     warning_level: str
     transition: str | None
+    demand: FanDemand
 
 
 def kegerator_fan_auto_interval() -> timedelta:
@@ -224,8 +237,33 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
     )
 
 
+def _demand(inputs: FanInputs) -> FanDemand:
+    too_warm = inputs.temperature_delta is not None and inputs.temperature_delta >= TOO_WARM_C
+    too_cold = inputs.temperature_delta is not None and inputs.temperature_delta <= TOO_COLD_C
+    cooling_requested = inputs.hvac_action == "cooling"
+    warming_fast = inputs.trend_c_per_hour is not None and WARMING_C_H <= inputs.trend_c_per_hour <= MAX_REASONABLE_WARMING_C_H
+
+    if too_cold:
+        diagnostic_reason = "too_cold"
+    elif cooling_requested:
+        diagnostic_reason = "cooling_requested"
+    elif too_warm:
+        diagnostic_reason = "too_warm"
+    elif warming_fast:
+        diagnostic_reason = "warming_fast"
+    else:
+        diagnostic_reason = "stable"
+
+    return FanDemand(
+        too_warm=too_warm,
+        too_cold=too_cold,
+        cooling_requested=cooling_requested,
+        warming_fast=warming_fast,
+        diagnostic_reason=diagnostic_reason,
+    )
+
+
 def _sync_compressor_runtime(hass: HomeAssistant, inputs: FanInputs) -> str | None:
-    """Update compressor transition state and explicit afterrun timer."""
     data = _bucket(hass)
     now = dt_util.utcnow()
     previous = data.get(RUNTIME_PREVIOUS_COMPRESSOR_ACTIVE)
@@ -282,10 +320,11 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
     inputs = _read_inputs(hass)
     transition = _sync_compressor_runtime(hass, inputs) if mutate else None
     afterrun_active, afterrun_until, afterrun_remaining = _afterrun_state(hass, inputs)
+    demand = _demand(inputs)
 
-    desired_state = "off"
-    reason = "standby"
-
+    # Default strategy: fan follows the compressor, then runs afterrun.
+    # Temperature demand is diagnostic only. It must not keep the fan running
+    # by itself, otherwise a warm-but-idle fridge can hold the fan on forever.
     if not inputs.fan_switch_ok:
         desired_state = "blocked"
         reason = "missing_fan_switch"
@@ -298,23 +337,11 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
     elif afterrun_active:
         desired_state = "afterrun"
         reason = "afterrun"
-    elif inputs.temperature_delta is not None and inputs.temperature_delta <= TOO_COLD_C:
-        desired_state = "off"
-        reason = "too_cold"
-    elif inputs.hvac_action == "cooling":
-        desired_state = "circulation"
-        reason = "cooling_requested"
-    elif inputs.temperature_delta is not None and inputs.temperature_delta >= TOO_WARM_C:
-        desired_state = "circulation"
-        reason = "too_warm"
-    elif inputs.trend_c_per_hour is not None and WARMING_C_H <= inputs.trend_c_per_hour <= MAX_REASONABLE_WARMING_C_H:
-        desired_state = "circulation"
-        reason = "warming_fast"
     else:
         desired_state = "standby"
         reason = "standby"
 
-    should_run = desired_state in {"compressor_follow", "afterrun", "circulation"}
+    should_run = desired_state in {"compressor_follow", "afterrun"}
     desired_switch_state = "on" if should_run else "off"
 
     action = "none"
@@ -340,12 +367,14 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
         afterrun_remaining_minutes=afterrun_remaining,
         warning_level=_warning_level(inputs),
         transition=transition,
+        demand=demand,
     )
 
     if mutate:
         data = _bucket(hass)
         data[RUNTIME_LAST_DECISION] = {
             "at": dt_util.utcnow().isoformat(),
+            "strategy": STRATEGY,
             "inputs": asdict(inputs),
             "decision": asdict(decision),
         }
@@ -376,9 +405,11 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
     last_decision = data.get(RUNTIME_LAST_DECISION)
     last_apply = data.get(RUNTIME_LAST_APPLY)
     last_transition = data.get(RUNTIME_LAST_TRANSITION)
+    demand = decision.demand
 
     return {
         "source": "python_kegerator_fan_backend_v2_state_machine",
+        "strategy": STRATEGY,
         "status": status,
         "desired_fan_state": decision.state,
         "desired_switch_state": decision.desired_switch_state,
@@ -398,6 +429,11 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "last_apply_at": last_apply.get("at") if isinstance(last_apply, dict) else data.get("last_apply_at"),
         "last_apply_result": last_apply.get("result") if isinstance(last_apply, dict) else None,
         "last_transition": last_transition,
+        "temperature_demand_reason": demand.diagnostic_reason,
+        "temperature_demand_too_warm": demand.too_warm,
+        "temperature_demand_too_cold": demand.too_cold,
+        "temperature_demand_cooling_requested": demand.cooling_requested,
+        "temperature_demand_warming_fast": demand.warming_fast,
         "climate_entity": CLIMATE,
         "climate_state": inputs.climate_state,
         "climate_enabled": inputs.climate_enabled,
@@ -406,8 +442,8 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "current_temperature": inputs.current_temperature,
         "target_temperature": inputs.target_temperature,
         "temperature_delta": inputs.temperature_delta,
-        "too_warm": inputs.temperature_delta is not None and inputs.temperature_delta >= TOO_WARM_C,
-        "too_cold": inputs.temperature_delta is not None and inputs.temperature_delta <= TOO_COLD_C,
+        "too_warm": demand.too_warm,
+        "too_cold": demand.too_cold,
         "average_15m": inputs.average_15m,
         "trend_c_per_hour": inputs.trend_c_per_hour,
         "trend_label": inputs.trend_label,
@@ -468,11 +504,13 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
             source=SOURCE_BACKEND,
             reason=f"Kegerator fan auto: {decision.reason}",
             context={
+                "strategy": STRATEGY,
                 "desired_fan_state": decision.state,
                 "desired_switch_state": decision.desired_switch_state,
                 "actual_switch_state": inputs.fan_state,
                 "fan_action": decision.action,
                 "fan_reason": decision.reason,
+                "temperature_demand_reason": decision.demand.diagnostic_reason,
                 "fan_should_run": decision.should_run,
                 "fan_running": inputs.fan_running,
                 "fan_power_w": inputs.fan_power_w,
@@ -491,9 +529,11 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
     after_inputs = _read_inputs(hass)
     apply_result = {
         "at": dt_util.utcnow().isoformat(),
+        "strategy": STRATEGY,
         "action": decision.action,
         "command": decision.command,
         "reason": decision.reason,
+        "temperature_demand_reason": decision.demand.diagnostic_reason,
         "desired_fan_state": decision.state,
         "desired_switch_state": decision.desired_switch_state,
         "before_state": before_state,
