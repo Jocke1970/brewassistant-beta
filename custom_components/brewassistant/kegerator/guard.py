@@ -1,9 +1,4 @@
-"""Kegerator compressor guard.
-
-This module provides an emergency-safe serving/carbonation controller for the
-kegerator compressor. It intentionally controls air temperature only and is
-meant to prevent short cycling while a keg is carbonating/serving.
-"""
+"""Kegerator compressor guard."""
 
 from __future__ import annotations
 
@@ -17,12 +12,14 @@ from homeassistant.util import dt as dt_util
 from ..control_policy import SOURCE_BACKEND, request_action, section_policy
 
 DOMAIN_DATA = "brewassistant"
-GUARD_UNSUB_KEY = "kegerator_guard_unsub"
 GUARD_WATCHDOG_UNSUB_KEY = "kegerator_guard_watchdog_unsub"
 GUARD_ENABLED_KEY = "kegerator_guard_enabled_runtime"
 GUARD_LAST_ACTION_KEY = "kegerator_guard_last_action"
 GUARD_LAST_EVALUATION_KEY = "kegerator_guard_last_evaluation"
+GUARD_LAST_CLIMATE_ACTION_KEY = "kegerator_guard_last_climate_action"
 SECTION = "kegerator_guard"
+STRATEGY = "serving_carbonation_air_control"
+CONTROL_OWNER = "kegerator_guard"
 
 GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 KEGERATOR_SWITCH = "switch.kegerator"
@@ -86,7 +83,7 @@ def _minutes_since_changed(hass: HomeAssistant, entity_id: str) -> float | None:
 
 
 def _climate_conflicts(hass: HomeAssistant) -> list[str]:
-    """Return climate controllers that may fight the guard."""
+    """Return climate controllers that may conflict with guard control."""
     conflicts: list[str] = []
     for entity_id in CLIMATE_CONFLICT_ENTITIES:
         state = _state(hass, entity_id)
@@ -108,6 +105,14 @@ def _command_for_action(action: str) -> str | None:
     return None
 
 
+def _desired_power(control_action: str, compressor_on: bool) -> str:
+    if control_action == "turn_on":
+        return "on"
+    if control_action == "turn_off":
+        return "off"
+    return "on" if compressor_on else "off"
+
+
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build current kegerator guard state."""
     enabled = _guard_enabled(hass)
@@ -124,6 +129,7 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime = _runtime_data(hass)
     last_action = runtime.get(GUARD_LAST_ACTION_KEY)
     last_evaluation = runtime.get(GUARD_LAST_EVALUATION_KEY)
+    last_climate_action = runtime.get(GUARD_LAST_CLIMATE_ACTION_KEY)
 
     status = "disabled"
     action = "none"
@@ -171,13 +177,20 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reason = "air temperature is inside serving/carbonation band"
 
     command = _command_for_action(control_action)
+    desired_power = _desired_power(control_action, compressor_on)
 
     return {
+        "source": "python_kegerator_guard_backend",
         "enabled": enabled,
         "status": status,
         "action": action,
         "control_action": control_action,
         "control_command": command,
+        "control_owner": CONTROL_OWNER if enabled else "none",
+        "guard_strategy": STRATEGY,
+        "desired_kegerator_power": desired_power,
+        "actual_kegerator_power_state": kegerator_state,
+        "action_needed": control_action in {"turn_on", "turn_off"},
         "reason": reason,
         "summary": _summary(status, air_temp, action, reason),
         "policy_section": SECTION,
@@ -197,15 +210,18 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "kegerator_switch_entity": KEGERATOR_SWITCH,
         "carbonation_status": carbonation_status,
         "carbonation_temperature": carbonation_temp,
+        "climate_conflict_entities": CLIMATE_CONFLICT_ENTITIES,
         "climate_conflicts": conflicts,
         "climate_conflict": bool(conflicts),
+        "climate_conflict_action": "turn_off" if conflicts and enabled else "none",
+        "last_climate_conflict_action": last_climate_action,
         "last_control_action": last_action,
         "last_policy_result": last_action,
         "last_policy_status": last_action.get("status") if isinstance(last_action, dict) else None,
         "last_policy_summary": last_action.get("summary") if isinstance(last_action, dict) else None,
         "last_evaluation": last_evaluation,
         "watchdog_active": runtime.get(GUARD_WATCHDOG_UNSUB_KEY) is not None,
-        "mode": "serving_carbonation_air_control",
+        "mode": STRATEGY,
     }
 
 
@@ -227,7 +243,11 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
         source=SOURCE_BACKEND,
         reason=f"Kegerator guard: {snapshot.get('reason')}",
         context={
+            "control_owner": CONTROL_OWNER,
+            "guard_strategy": STRATEGY,
             "control_action": action,
+            "desired_kegerator_power": snapshot.get("desired_kegerator_power"),
+            "actual_kegerator_power_state": snapshot.get("actual_kegerator_power_state"),
             "air_temperature": snapshot.get("air_temperature"),
             "kegerator_state": snapshot.get("kegerator_state"),
             "compressor_on": snapshot.get("compressor_on"),
@@ -265,9 +285,14 @@ async def async_enable_kegerator_guard(hass: HomeAssistant) -> None:
     data = _runtime_data(hass)
     data[GUARD_ENABLED_KEY] = True
 
-    # Prevent generic/dual thermostats from fighting direct compressor guard control.
     conflicts = _climate_conflicts(hass)
     if conflicts:
+        data[GUARD_LAST_CLIMATE_ACTION_KEY] = {
+            "at": dt_util.utcnow().isoformat(),
+            "action": "climate.turn_off",
+            "entity_id": conflicts,
+            "reason": "avoid controller conflict while guard is enabled",
+        }
         await hass.services.async_call(
             "climate",
             "turn_off",
