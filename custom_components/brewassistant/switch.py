@@ -32,7 +32,7 @@ from .kegerator.fan_control import (
     build_kegerator_fan_snapshot,
     kegerator_fan_auto_interval,
 )
-from .kegerator_guard import (
+from .kegerator.guard import (
     async_apply_kegerator_guard,
     async_disable_kegerator_guard,
     async_enable_kegerator_guard,
