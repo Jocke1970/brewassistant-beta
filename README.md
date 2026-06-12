@@ -1,6 +1,9 @@
-# BrewAssistant v0.2.0-beta.1
+# BrewAssistant v0.2.0-beta.2
 
-**BrewAssistant v0.2.0-beta.1** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
+**BrewAssistant v0.2.0-beta.2** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
+
+> [!WARNING]
+> BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
 
 The project has moved away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and hardware orchestration live in `custom_components/brewassistant/`.
 
@@ -15,7 +18,7 @@ Legacy local packages      = local compatibility/cleanup only, not mainline repo
 ## Current status
 
 ```text
-v0.2.0-beta.1
+v0.2.0-beta.2
 Supervised BrewZilla Brewday Beta
 ```
 
@@ -27,6 +30,8 @@ Validated in the active beta branch:
 ✅ Normalized Brewday Runtime selects Brewfather or Manual Brewday source
 ✅ Human-friendly Brew Tracker step labels
 ✅ Paused Brewfather freeze-state handling
+✅ BrewTracker entity resolver supports brew_tracker and brewtracker naming variants
+✅ BrewTracker Feed Health dashboard card
 ✅ BrewZilla runtime sensors
 ✅ BrewZilla target sync from normalized Brewday Runtime
 ✅ BrewZilla Orchestration bridge for Manual Brewday target
@@ -66,6 +71,7 @@ Beta limitations / still pending validation:
 
 ```text
 [ ] first full serious all-grain batch from start to transfer
+[ ] BrewTracker running → paused → next-step transitions with real Brewfather snapshots
 [ ] hop addition/event notifications
 [ ] real counterflow chilling data
 [ ] active fermentation and cold-crash validation
@@ -76,6 +82,66 @@ Beta limitations / still pending validation:
 [ ] no known local BrewZilla/RAPT API integration
 [ ] external RAPT BLE Thermometer depends on RAPT Cloud Link control-device telemetry
 ```
+
+---
+
+## HACS custom repository install
+
+This beta can be installed as a **HACS custom repository** after the GitHub repository has been made public.
+
+In Home Assistant:
+
+```text
+HACS → three-dot menu → Custom repositories
+```
+
+Add repository URL:
+
+```text
+https://github.com/Jocke1970/brewassistant-beta
+```
+
+Select category/type:
+
+```text
+Integration
+```
+
+Then install **BrewAssistant Beta**, restart Home Assistant, and add/configure the integration from:
+
+```text
+Settings → Devices & services → Add integration → BrewAssistant Beta
+```
+
+Notes:
+
+```text
+- HACS installs the integration files under /config/custom_components/brewassistant/.
+- Dashboard YAML files in dashboards/ are examples and are not automatically installed as dashboards.
+- This repo is intended as a custom repository, not as a default HACS repository.
+- Keep operator supervision active during all BrewZilla/heater/pump tests.
+```
+
+---
+
+## Manual install / update
+
+Manual installation is still supported.
+
+From a temporary clone of the repository:
+
+```bash
+rm -rf /tmp/brewassistant-beta
+git clone --depth 1 --branch main https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta
+
+cp -a /config/custom_components/brewassistant /config/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M) 2>/dev/null || true
+
+rsync -a --delete \
+  /tmp/brewassistant-beta/custom_components/brewassistant/ \
+  /config/custom_components/brewassistant/
+```
+
+Restart Home Assistant after syncing.
 
 ---
 
