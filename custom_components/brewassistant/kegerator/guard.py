@@ -27,8 +27,11 @@ AIR_TEMP_ENTITY = "sensor.kyl_temperatur_4"
 CARBONATION_STATUS_ENTITY = "sensor.brewassistant_carbonation_status"
 CARBONATION_TEMP_ENTITY = "sensor.brewassistant_carbonation_temperature"
 
+# climate.kegerator_kylskap is the protected cooling controller and must not be
+# disabled by the guard on Home Assistant restart. The kegerator climate is owned
+# by Home Assistant's climate layer and should remain available/on unless the
+# operator explicitly disables it.
 CLIMATE_CONFLICT_ENTITIES = (
-    "climate.kegerator_kylskap",
     "climate.fermentation_chamber",
 )
 
