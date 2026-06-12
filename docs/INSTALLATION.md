@@ -12,7 +12,49 @@ Legacy local packages          = not part of mainline install
 
 ---
 
-## Install path
+## Recommended install path: HACS custom repository
+
+After this GitHub repository has been made public, BrewAssistant Beta can be installed through HACS as a custom repository.
+
+In Home Assistant:
+
+```text
+HACS → three-dot menu → Custom repositories
+```
+
+Add repository URL:
+
+```text
+https://github.com/Jocke1970/brewassistant-beta
+```
+
+Select category/type:
+
+```text
+Integration
+```
+
+Then install **BrewAssistant Beta**.
+
+Restart Home Assistant after installation or update.
+
+Configure from:
+
+```text
+Settings → Devices & services → Add integration → BrewAssistant Beta
+```
+
+Notes:
+
+```text
+- HACS installs the integration under /config/custom_components/brewassistant/.
+- Dashboard YAML files under dashboards/ are examples and are not automatically installed as dashboards.
+- This beta should be treated as a HACS custom repository, not a default HACS repository.
+```
+
+---
+
+## Manual install path
 
 Place the integration here in Home Assistant:
 
