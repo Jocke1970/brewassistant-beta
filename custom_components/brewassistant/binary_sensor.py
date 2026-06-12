@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .brewday.brewday_runtime import build_brewday_runtime_snapshot
 from .carbonation import build_carbonation_snapshot
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
@@ -56,7 +57,28 @@ def _source_health(coordinator: BrewAssistantCoordinator) -> dict:
 
 
 def _runtime_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    return build_runtime_snapshot(coordinator.hass, _runtime_entities(coordinator))
+    """Return runtime availability, preferring the Brewday runtime feed."""
+    brewday = build_brewday_runtime_snapshot(coordinator.hass)
+    if brewday.get("source") != "None":
+        return {
+            "source_status": f"OK · {brewday.get('source')} runtime active",
+            "brewfather_available": True,
+            "available_count": 1,
+            "total_count": 1,
+            "source": brewday.get("source"),
+            "runtime_state": brewday.get("runtime_state"),
+            "status": brewday.get("status"),
+            "stage": brewday.get("stage"),
+            "step": brewday.get("step"),
+            "source_entity": brewday.get("source_entity"),
+            "snapshot_entity": brewday.get("snapshot_entity"),
+            "snapshot_age_seconds": brewday.get("snapshot_age_seconds"),
+            "paused_freeze": brewday.get("paused_freeze"),
+            "refresh_recommended": brewday.get("refresh_recommended"),
+        }
+    legacy = build_runtime_snapshot(coordinator.hass, _runtime_entities(coordinator))
+    legacy["source"] = "legacy_configured_entities"
+    return legacy
 
 
 def _runtime_entities(coordinator: BrewAssistantCoordinator) -> dict[str, str]:
@@ -312,4 +334,14 @@ class BrewAssistantRuntimeAvailableBinarySensor(BrewAssistantEntity, BinarySenso
             "source_status": snapshot.get("source_status"),
             "available_count": snapshot.get("available_count"),
             "total_count": snapshot.get("total_count"),
+            "source": snapshot.get("source"),
+            "runtime_state": snapshot.get("runtime_state"),
+            "status": snapshot.get("status"),
+            "stage": snapshot.get("stage"),
+            "step": snapshot.get("step"),
+            "source_entity": snapshot.get("source_entity"),
+            "snapshot_entity": snapshot.get("snapshot_entity"),
+            "snapshot_age_seconds": snapshot.get("snapshot_age_seconds"),
+            "paused_freeze": snapshot.get("paused_freeze"),
+            "refresh_recommended": snapshot.get("refresh_recommended"),
         }
