@@ -14,33 +14,55 @@ from homeassistant.util import dt as dt_util
 
 BAD = {"unknown", "unavailable", "none", ""}
 ACTIVE = {"running", "paused", "completed", "awaiting_snapshot"}
+EntityRef = str | tuple[str, ...]
 
-BF_STATUS = "sensor.brewfather_brew_tracker_status"
-BF_STAGE = "sensor.brewfather_brew_tracker_stage"
-BF_STEP = "sensor.brewfather_brew_tracker_step"
-BF_NEXT = "sensor.brewfather_brew_tracker_next_step"
-BF_PROGRESS = "sensor.brewfather_brew_tracker_progress"
-BF_REMAINING = "sensor.brewfather_brew_tracker_time_remaining"
-BF_RAW = "sensor.brewfather_brew_tracker_raw"
-
-
-def state(hass: HomeAssistant, entity_id: str, default: str = "") -> str:
-    obj = hass.states.get(entity_id)
-    if obj is None or obj.state in BAD:
-        return default
-    return obj.state
+BF_STATUS: EntityRef = ("sensor.brewfather_brew_tracker_status", "sensor.brewfather_brewtracker_status")
+BF_STAGE: EntityRef = ("sensor.brewfather_brew_tracker_stage", "sensor.brewfather_brewtracker_stage")
+BF_STEP: EntityRef = ("sensor.brewfather_brew_tracker_step", "sensor.brewfather_brewtracker_step")
+BF_NEXT: EntityRef = ("sensor.brewfather_brew_tracker_next_step", "sensor.brewfather_brewtracker_next_step")
+BF_PROGRESS: EntityRef = ("sensor.brewfather_brew_tracker_progress", "sensor.brewfather_brewtracker_progress")
+BF_REMAINING: EntityRef = ("sensor.brewfather_brew_tracker_time_remaining", "sensor.brewfather_brewtracker_time_remaining")
+BF_RAW: EntityRef = ("sensor.brewfather_brew_tracker_raw", "sensor.brewfather_brewtracker_raw")
 
 
-def state_obj(hass: HomeAssistant, entity_id: str) -> State | None:
-    obj = hass.states.get(entity_id)
-    if obj is None or obj.state in BAD:
-        return None
-    return obj
+def entity_candidates(entity_id: EntityRef) -> tuple[str, ...]:
+    """Return candidate entity ids for a logical BrewTracker source."""
+    return entity_id if isinstance(entity_id, tuple) else (entity_id,)
 
 
-def attr(hass: HomeAssistant, entity_id: str, name: str) -> Any:
-    obj = hass.states.get(entity_id)
-    return None if obj is None else obj.attributes.get(name)
+def resolved_entity_id(hass: HomeAssistant, entity_id: EntityRef) -> str:
+    """Return the first existing candidate entity id, or the primary candidate."""
+    candidates = entity_candidates(entity_id)
+    for candidate in candidates:
+        if hass.states.get(candidate) is not None:
+            return candidate
+    return candidates[0]
+
+
+def state(hass: HomeAssistant, entity_id: EntityRef, default: str = "") -> str:
+    for candidate in entity_candidates(entity_id):
+        obj = hass.states.get(candidate)
+        if obj is not None and obj.state not in BAD:
+            return obj.state
+    return default
+
+
+def state_obj(hass: HomeAssistant, entity_id: EntityRef) -> State | None:
+    for candidate in entity_candidates(entity_id):
+        obj = hass.states.get(candidate)
+        if obj is not None and obj.state not in BAD:
+            return obj
+    return None
+
+
+def attr(hass: HomeAssistant, entity_id: EntityRef, name: str) -> Any:
+    for candidate in entity_candidates(entity_id):
+        obj = hass.states.get(candidate)
+        if obj is not None:
+            value = obj.attributes.get(name)
+            if value is not None:
+                return value
+    return None
 
 
 def as_float(value: Any) -> float | None:
@@ -323,6 +345,8 @@ def timeline(hass: HomeAssistant, resolved_step_index: int | None = None) -> lis
                 "time": step.get("time"),
                 "duration": step.get("duration"),
                 "value": step.get("value"),
+                "pause_before": step.get("pauseBefore"),
+                "final": step.get("final"),
                 "completed": completed,
                 "active": active,
                 "upcoming": upcoming,
@@ -335,6 +359,7 @@ def timeline(hass: HomeAssistant, resolved_step_index: int | None = None) -> lis
             "duration": stage.get("duration"),
             "remaining_seconds": stage.get("remainingSeconds"),
             "progress_percent": stage.get("progressPercent"),
+            "paused": stage.get("paused"),
             "completed": completed_stage,
             "active": active_stage,
             "upcoming": upcoming_stage,
@@ -395,6 +420,8 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         nxt_name, nxt_desc, nxt_step = next_step(hass)
     raw_step_name = step_name(cur_step, state(hass, BF_STEP, "Unknown"))
     step = step_display_name(cur_step, raw_step_name)
+    current_pause_before = bool(cur_step.get("pauseBefore")) if isinstance(cur_step, dict) else False
+    next_pause_before = bool(nxt_step.get("pauseBefore")) if isinstance(nxt_step, dict) else False
     if terminal_complete:
         nxt_name = "None"
         nxt_desc = "BrewAssistant har tolkat sista Brew Tracker-steget som färdigt."
@@ -407,7 +434,13 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     snap_obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     stage_name = clean(stage.get("name")) or state(hass, BF_STAGE, "Unknown")
     elapsed = max((duration or 0) - stage_remaining, 0) if duration else as_float(stage.get("elapsedSeconds"))
-    target = None if runtime_state == "completed" else (as_float(cur_step.get("value")) or as_float(nxt_step.get("value") if isinstance(nxt_step, dict) else None))
+    current_target = as_float(cur_step.get("value")) if isinstance(cur_step, dict) else None
+    next_target = as_float(nxt_step.get("value")) if isinstance(nxt_step, dict) else None
+    target = None if runtime_state == "completed" else (current_target or next_target)
+    target_source = None
+    if target is not None:
+        target_source = "current_step" if current_target is not None else "next_step"
+    source_entity = resolved_entity_id(hass, BF_RAW)
     return {
         "source": "Brewfather Brew Tracker",
         "status": "completed" if terminal_complete and status == "running" else status,
@@ -420,9 +453,11 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "time_remaining_seconds": step_remaining,
         "time_remaining_minutes": round(step_remaining / 60),
         "target_temperature": target,
+        "target_temperature_source": target_source,
         "actual_temperature": None,
         "summary": f"{runtime_state} · {stage_name} · {step} · {round(progress)}% · {fmt(step_remaining)} kvar",
-        "source_entity": BF_RAW,
+        "source_entity": source_entity,
+        "source_entity_candidates": list(entity_candidates(BF_RAW)),
         "snapshot_entity": snap_obj.entity_id if snap_obj else None,
         "snapshot_updated_at": snap_obj.last_updated.isoformat() if snap_obj else None,
         "snapshot_age_seconds": age,
@@ -434,6 +469,10 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "refresh_recommended": refresh,
         "awaiting_snapshot": awaiting,
         "paused_freeze": status == "paused",
+        "stage_paused": bool(stage.get("paused")) if isinstance(stage, dict) else False,
+        "current_step_pause_before": current_pause_before,
+        "next_step_pause_before": next_pause_before,
+        "confirmation_hint": current_pause_before or next_pause_before,
         "terminal_complete_inferred": terminal_complete,
         "stage_duration_seconds": duration,
         "stage_elapsed_seconds": elapsed,
@@ -454,10 +493,11 @@ def inactive_snapshot() -> dict[str, Any]:
     return {
         "source": "None", "status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "raw_step_name": None,
         "next_step": "None", "progress": 0.0, "time_remaining_seconds": 0, "time_remaining_minutes": 0,
-        "target_temperature": None, "actual_temperature": None, "summary": "idle · Idle", "source_entity": None,
-        "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0, "snapshot_age_minutes": 0,
+        "target_temperature": None, "target_temperature_source": None, "actual_temperature": None, "summary": "idle · Idle", "source_entity": None,
+        "source_entity_candidates": [], "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0, "snapshot_age_minutes": 0,
         "raw_remaining_seconds": None, "raw_stage_remaining_seconds": None, "live_elapsed_since_snapshot_seconds": 0,
         "live_timer_active": False, "refresh_recommended": False, "awaiting_snapshot": False, "paused_freeze": False,
+        "stage_paused": False, "current_step_pause_before": False, "next_step_pause_before": False, "confirmation_hint": False,
         "terminal_complete_inferred": False, "stage_duration_seconds": None,
         "stage_elapsed_seconds": None, "stage_remaining_seconds": 0, "stage_remaining_minutes": 0, "stage_progress_percent": 0,
         "raw_step_index": None, "resolved_step_index": None, "current_step_remaining_seconds": 0, "current_step_remaining_minutes": 0,
