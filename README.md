@@ -69,7 +69,8 @@ Validated in the active beta baseline:
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and compact idle UI
 ✅ Backend domain layout refactor
-✅ Local Home Assistant baseline cleanup: no `bryggeriet_` BrewAssistant entity prefix
+✅ Local Home Assistant baseline cleanup: no active `bryggeriet_` BrewAssistant entity prefix
+✅ Legacy local cleanup validated in active HA install: old audit sensors inactive, current Event Log active
 ✅ Integration brand assets under `custom_components/brewassistant/brand/`
 ✅ Main repo pruned of legacy package/dashboard clutter
 ```
@@ -85,7 +86,6 @@ Beta limitations / still pending validation:
 [ ] full carbonation/serving cooling-cycle validation
 [ ] full kegerator fan-auto turn-off validation after afterrun expiry
 [ ] kegerator guard watchdog async-safety patch log validation after HA restart
-[ ] legacy package cleanup validation in existing local HA installs
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
 [ ] external RAPT BLE Thermometer depends on RAPT Cloud Link control-device telemetry
