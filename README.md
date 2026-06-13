@@ -37,7 +37,7 @@ Validated in the active beta branch:
 ✅ BrewZilla Orchestration bridge for Manual Brewday target
 ✅ BrewZilla heater/pump direct actions
 ✅ ABORT service for heater + pump
-✅ Brewday audit backend, services, sensors and dashboard
+✅ Brewday Event Log backend, services, sensors and dashboard example
 ✅ Smart Brewfather refresh policy
 ✅ Low-temperature BrewZilla water test: 30 → 35 → 40 → 45 → 50 → 55°C
 ✅ Dry-run mash profile target validation: 45 → 55 → 65 → 72 → 78°C
@@ -54,16 +54,19 @@ Validated in the active beta branch:
 ✅ BrewZilla Cockpit operator hardware card with mash/wort source display
 ✅ Brewday Card operator cockpit
 ✅ Manual Brewday operator card
-✅ Brewday Audit Card dashboard example
+✅ Brewday Event Log Card dashboard example
 ✅ Brewfather RAW Timeline debug card
 ✅ Climate Supervisor backend and UI
-✅ Kegerator Fan Backend initial compressor/afterrun/fan-auto validation
+✅ Kegerator Fan Backend clean entity IDs and Always on validation
+✅ Kegerator fan mode/afterrun/fan-auto controls
 ✅ Carbonation Runtime backend, persistence and UI
 ✅ Carbonation control entity naming aligned with existing HA entity IDs
 ✅ Counterflow Wort Cooling backend and UI
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and compact idle UI
 ✅ Backend domain layout refactor
+✅ Local Home Assistant baseline cleanup: no `bryggeriet_` BrewAssistant entity prefix
+✅ Integration brand assets under `custom_components/brewassistant/brand/`
 ✅ Main repo pruned of legacy packages, patch notes and obsolete migration docs
 ```
 
@@ -77,6 +80,7 @@ Beta limitations / still pending validation:
 [ ] active fermentation and cold-crash validation
 [ ] full carbonation/serving cooling-cycle validation
 [ ] full kegerator fan-auto turn-off validation after afterrun expiry
+[ ] kegerator guard watchdog async-safety patch log validation after HA restart
 [ ] legacy package cleanup validation in existing local HA installs
 [ ] RAPT Cloud Link latency remains a known limitation
 [ ] no known local BrewZilla/RAPT API integration
@@ -117,6 +121,7 @@ Notes:
 
 ```text
 - HACS installs the integration files under /config/custom_components/brewassistant/.
+- Integration brand assets live under /config/custom_components/brewassistant/brand/.
 - Dashboard YAML files in dashboards/ are examples and are not automatically installed as dashboards.
 - This repo is intended as a custom repository, not as a default HACS repository.
 - Keep operator supervision active during all BrewZilla/heater/pump tests.
@@ -177,9 +182,10 @@ Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan 
 | BrewZilla Orchestration | Apply target/heater/pump actions when allowed by runtime state. |
 | BrewZilla Temperature Resolver | Separate mash, wort/kettle and mash-wort delta temperature roles. |
 | BrewZilla Learning | Advisory recommendations using the shared temperature resolver. |
-| Brewday Audit | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
+| Brewday Event Log | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
+| Kegerator Guard | Safety/watchdog layer for kegerator climate and compressor guard diagnostics. |
 | Kegerator Fan Backend | Infer compressor/fan state and optionally manage fan circulation/afterrun. |
 | Cooling Runtime | Track counterflow wort cooling status, pump requirement, heater guard, ETA and pitch readiness. |
 | Carbonation Runtime | Track carbonation session state, inputs, calculations and serving guidance. |
@@ -198,7 +204,7 @@ Brewfather RAW Brew Tracker or Manual Brewday
 → BrewAssistant Stage Engine
 → BrewAssistant BrewZilla Orchestration
 → BrewZilla target/heater/pump actions when allowed
-→ Brewday Audit log
+→ Brewday Event Log
 → Dashboard verification
 ```
 
@@ -246,8 +252,9 @@ Key beta behavior:
 - Compressor activity is inferred from sensor.kegerator_power > 20 W.
 - Fan running state is inferred from switch.kegerator_fan or fan power > 2 W.
 - Fan-auto is off by default.
-- Fan runs while compressor is active.
-- Fan afterrun continues after compressor stop.
+- Fan modes: Off, Always on, Afterrun.
+- Always on turns on switch.kegerator_fan while fan-auto is enabled.
+- Afterrun runs fan while compressor is active and continues for configured minutes after compressor stop.
 - Restart/statistics trend spikes are ignored above +5.00 °C/h.
 - Fan service calls are blocking.
 - Compressor/cooling target control remains in climate.kegerator_kylskap.
@@ -258,36 +265,3 @@ Key beta behavior:
 ## Credits / Acknowledgements
 
 BrewAssistant is an independent Home Assistant custom integration and is not affiliated with Brewfather, KegLand/RAPT or RAPT Cloud.
-
-Thanks to:
-
-- **Brewfather Home Assistant integration** by `MvdDonk`  
-  Community integration used as one possible source for Brewfather recipe, batch and brewing data in Home Assistant.  
-  https://github.com/MvdDonk/brewfather
-
-- **RAPT Cloud Link for Home Assistant** by `berra200`  
-  Community integration used to expose RAPT/BrewZilla telemetry to Home Assistant.  
-  https://github.com/berra200/home-assistant-rapt-cloud-link
-
-- **Home Assistant and the brewing automation community**  
-  For the ecosystem, frontend cards, integrations and testing inspiration.
-
----
-
-## Documentation index
-
-```text
-docs/CLEAN_BASELINE.md                 Clean baseline rules and cleanup policy
-docs/INSTALLATION.md                  Current Home Assistant custom integration install guide
-docs/setup.md                         Current setup, update and verification guide
-docs/dashboard-baselines.md           Current dashboard/card baseline policy
-docs/architecture-target.md            Long-term process-first architecture target
-docs/module-capability-model.md        Module defaults, capabilities and policy model
-docs/manual-brewday.md                Python Manual Brewday runtime, services and safety model
-docs/backend-domain-layout.md          Backend package layout after domain refactor
-docs/kegerator-fan-backend.md          Kegerator fan/compressor inference and fan-auto policy
-docs/brewzilla-temperature-sources.md  Mash/Wort temperature resolver and dashboard policy
-docs/counterflow-chiller.md            Python CFC sanitation backend and CFC Ready flow
-docs/legacy-package-cleanup.md        Local HA legacy package cleanup checklist
-docs/structure.md                      Project structure and module responsibilities
-```
