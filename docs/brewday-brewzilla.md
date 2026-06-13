@@ -2,7 +2,7 @@
 
 This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker → BrewAssistant → BrewZilla.
 
-Status: **MVP validated in supervised Brewfather/BrewZilla dry-run with audit logging**.
+Status: **MVP validated in supervised Brewfather/BrewZilla dry-run with event logging**.
 
 The first verified path is BrewZilla/RAPT hardware, but the architecture should remain as hardware-profile friendly as possible. BrewAssistant should expose canonical `sensor.brewassistant_brewday_*` and `sensor.brewassistant_brewzilla_*` entities to dashboards instead of making every card parse raw Brewfather data directly.
 
@@ -23,7 +23,7 @@ BrewZilla orchestration helper
         ↓
 BrewZilla target / heater / pump actions
         ↓
-Brewday audit log
+Brewday event log
 ```
 
 Verified test sequences:
@@ -47,7 +47,7 @@ Observed result:
 ✅ BrewZilla target changed through the full dry-run sequence
 ✅ Heater and pump actions were evaluated and logged
 ✅ ABORT remained available as a hard stop
-✅ Audit log captured runtime, target sync and orchestration events
+✅ Event log captured runtime, target sync and orchestration events
 ⚠️ Remaining issues are primarily presentation/wording and full-process validation beyond mash
 ```
 
@@ -200,9 +200,11 @@ Manual refresh is still available as a service, but normal operation should not 
 
 ---
 
-## Audit log
+## Event log
 
-Brewday audit records post-run analysis data for runtime and BrewZilla orchestration.
+Brewday event log records post-run analysis data for runtime and BrewZilla orchestration.
+
+Current service names are kept for compatibility:
 
 ```text
 brewassistant.brewday_audit_start
@@ -214,7 +216,7 @@ brewassistant.brewday_audit_snapshot
 Main sensor:
 
 ```text
-sensor.brewassistant_brewday_audit_summary
+sensor.brewassistant_brewday_event_log_summary
 ```
 
 Detailed documentation:
@@ -241,94 +243,12 @@ Use for diagnostics or when the external Brewfather integration appears stale.
 brewassistant.apply_brewzilla_target
 ```
 
-Runs the direct action helper once. Normal operation calls this through the coordinator loop.
+Direct target/action application should only be used when the relevant BrewAssistant policy permits it.
 
-### Abort BrewZilla actions
+### Abort BrewZilla
 
 ```text
 brewassistant.abort_brewzilla
 ```
 
-Hard stop for BrewAssistant-controlled BrewZilla outputs:
-
-```text
-switch.brewzilla_heater → off
-switch.brewzilla_pump   → off
-```
-
-The dashboard ABORT button should call this service.
-
----
-
-## Core entities
-
-### Brewday runtime
-
-```text
-sensor.brewassistant_brewday_runtime_source
-sensor.brewassistant_brewday_runtime_state
-sensor.brewassistant_brewday_runtime_status
-sensor.brewassistant_brewday_runtime_stage
-sensor.brewassistant_brewday_runtime_step
-sensor.brewassistant_brewday_runtime_next_step
-sensor.brewassistant_brewday_runtime_summary
-sensor.brewassistant_brewday_target_temperature
-sensor.brewassistant_brewday_live_time_remaining_minutes
-sensor.brewassistant_brewday_live_progress
-sensor.brewassistant_brewday_snapshot_age_minutes
-sensor.brewassistant_brewday_awaiting_snapshot
-sensor.brewassistant_brewday_refresh_recommended
-```
-
-Useful runtime attributes include:
-
-```text
-raw_step_index
-resolved_step_index
-raw_step_name
-snapshot_age_seconds
-paused_freeze
-timeline
-```
-
-### BrewZilla runtime/control
-
-```text
-sensor.brewassistant_brewzilla_runtime_state
-sensor.brewassistant_brewzilla_runtime_summary
-sensor.brewassistant_brewzilla_current_temperature
-sensor.brewassistant_brewzilla_target_temperature
-sensor.brewassistant_brewzilla_requested_target
-sensor.brewassistant_brewzilla_applied_target
-sensor.brewassistant_brewzilla_target_delta
-sensor.brewassistant_brewzilla_target_sync_needed
-sensor.brewassistant_brewzilla_can_apply_target
-sensor.brewassistant_brewzilla_orchestration_mode
-sensor.brewassistant_brewzilla_control_reason
-sensor.brewassistant_brewzilla_safety_state
-```
-
-BrewZilla hardware entities used by the current profile:
-
-```text
-switch.brewzilla
-sensor.brewzilla_power
-sensor.brewzilla_connection
-sensor.brewzilla_temperature
-number.brewzilla_target_temperature
-switch.brewzilla_heater
-switch.brewzilla_pump
-number.brewzilla_heat_utilization
-number.brewzilla_pump_utilization
-```
-
----
-
-## Dashboard examples
-
-```text
-dashboards/brewzilla_cockpit_v3_4_collapsed.yaml
-dashboards/brewday_card_v3_5_raw_runtime_polish.yaml
-dashboards/brewday_audit_card_v1_1.yaml
-dashboards/brewfather_raw_timeline_v2.yaml
-```
+This is the hard stop path for BrewZilla orchestration.
