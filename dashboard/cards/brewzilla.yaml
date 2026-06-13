@@ -1,0 +1,805 @@
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_runtime_summary
+    name: BrewZilla Orchestration
+    icon: |
+      [[[
+        const safety = String(states['sensor.brewassistant_brewzilla_safety_state']?.state ?? '').toLowerCase();
+        const state = String(states['sensor.brewassistant_brewzilla_runtime_state']?.state ?? '').toLowerCase();
+        const sync = String(states['sensor.brewassistant_brewzilla_target_sync_needed']?.state ?? '').toLowerCase();
+
+        if (safety.includes('abort') || safety.includes('unsafe') || safety.includes('blocked')) return 'mdi:alert-octagon-outline';
+        if (state.includes('disconnected')) return 'mdi:connection';
+        if (sync === 'on' || sync === 'true' || sync === 'yes') return 'mdi:sync-alert';
+        if (state.includes('running') || state.includes('live') || state.includes('connected')) return 'mdi:kettle-steam-outline';
+        return 'mdi:kettle-outline';
+      ]]]
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    hold_action:
+      action: more-info
+    label: |
+      [[[
+        function clean(v) {
+          if (v === undefined || v === null) return null;
+          const s = String(v);
+          return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+        }
+
+        function n(id) {
+          const raw = states[id]?.state;
+          const val = Number(String(raw ?? '').replace(',', '.'));
+          return Number.isFinite(val) ? val : null;
+        }
+
+        function boolish(v) {
+          const s = String(v ?? '').toLowerCase();
+          return v === true || ['on','true','yes','1'].includes(s);
+        }
+
+        function fmt(v, unit = '', d = 1) {
+          if (!Number.isFinite(v)) return '—';
+          return `${v.toFixed(d)}${unit ? ' ' + unit : ''}`;
+        }
+
+        function short(v, max = 42) {
+          const s = String(v ?? '—');
+          return s.length > max ? s.slice(0, max - 1) + '…' : s;
+        }
+
+        const summary = clean(states['sensor.brewassistant_brewzilla_runtime_summary']?.state) || '—';
+        const runtimeState = clean(states['sensor.brewassistant_brewzilla_runtime_state']?.state) || 'disconnected';
+        const safety = clean(states['sensor.brewassistant_brewzilla_safety_state']?.state) || 'unknown';
+        const mode = clean(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state) || '—';
+        const reason = clean(states['sensor.brewassistant_brewzilla_control_reason']?.state) || '—';
+
+        const requested = n('sensor.brewassistant_brewzilla_requested_target');
+        const applied = n('sensor.brewassistant_brewzilla_applied_target');
+        const delta = n('sensor.brewassistant_brewzilla_target_delta');
+
+        const syncRaw = states['sensor.brewassistant_brewzilla_target_sync_needed']?.state;
+        const canRaw = states['sensor.brewassistant_brewzilla_can_apply_target']?.state;
+        const syncNeeded = boolish(syncRaw);
+        const canApply = boolish(canRaw);
+
+        const mash = n('sensor.brewassistant_brewzilla_mash_temperature');
+        const wort = n('sensor.brewassistant_brewzilla_wort_temperature');
+        const mwDelta = n('sensor.brewassistant_brewzilla_temperature_delta_mash_wort');
+        const rate = n('sensor.brewassistant_brewzilla_temp_rate');
+
+        const learningStatus = clean(states['sensor.brewassistant_brewzilla_learning_status']?.state) || '—';
+        const risk = clean(states['sensor.brewassistant_brewzilla_overshoot_risk']?.state) || '—';
+
+        let headline = 'BrewZilla redo';
+        let badge = 'Ready';
+        let badgeIcon = 'mdi:kettle-outline';
+        let chipBg = 'rgba(76,175,80,.12)';
+        let chipBorder = 'rgba(76,175,80,.24)';
+
+        const rs = runtimeState.toLowerCase();
+        const sf = safety.toLowerCase();
+
+        if (rs.includes('disconnected')) {
+          headline = 'Väntar på BrewZilla';
+          badge = 'Disconnected';
+          badgeIcon = 'mdi:connection';
+          chipBg = 'rgba(127,127,127,.12)';
+          chipBorder = 'rgba(127,127,127,.20)';
+        } else if (sf.includes('abort') || sf.includes('unsafe') || sf.includes('blocked')) {
+          headline = 'Säkerhet blockerar';
+          badge = 'Blocked';
+          badgeIcon = 'mdi:alert-octagon-outline';
+          chipBg = 'rgba(244,67,54,.12)';
+          chipBorder = 'rgba(244,67,54,.26)';
+        } else if (syncNeeded && canApply) {
+          headline = 'Target sync väntar';
+          badge = 'Sync';
+          badgeIcon = 'mdi:sync-alert';
+          chipBg = 'rgba(255,193,7,.14)';
+          chipBorder = 'rgba(255,193,7,.28)';
+        } else if (rs.includes('running') || rs.includes('live') || rs.includes('connected')) {
+          headline = 'BrewZilla aktiv';
+          badge = 'Active';
+          badgeIcon = 'mdi:kettle-steam-outline';
+          chipBg = 'rgba(33,150,243,.12)';
+          chipBorder = 'rgba(33,150,243,.24)';
+        }
+
+        const metric = (title, main, sub, icon, kind = 'neutral') => {
+          const bg =
+            kind === 'blue' ? 'rgba(33,150,243,.09)' :
+            kind === 'cyan' ? 'rgba(0,188,212,.10)' :
+            kind === 'green' ? 'rgba(76,175,80,.11)' :
+            kind === 'yellow' ? 'rgba(255,193,7,.13)' :
+            kind === 'red' ? 'rgba(244,67,54,.11)' :
+            'rgba(127,127,127,.08)';
+          const border =
+            kind === 'blue' ? 'rgba(33,150,243,.20)' :
+            kind === 'cyan' ? 'rgba(0,188,212,.22)' :
+            kind === 'green' ? 'rgba(76,175,80,.24)' :
+            kind === 'yellow' ? 'rgba(255,193,7,.26)' :
+            kind === 'red' ? 'rgba(244,67,54,.24)' :
+            'rgba(127,127,127,.14)';
+          return `
+            <div style="
+              min-width:0;
+              border-radius:13px;
+              padding:7px 6px;
+              background:${bg};
+              border:1px solid ${border};
+              display:grid;
+              grid-template-columns:18px minmax(0,1fr);
+              gap:5px;
+              align-items:center;
+            ">
+              <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon>
+              <div style="min-width:0;text-align:center;">
+                <div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div>
+                <div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
+                <div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
+              </div>
+            </div>
+          `;
+        };
+
+        const safetyKind = sf.includes('abort') || sf.includes('unsafe') || sf.includes('blocked') ? 'red' : sf.includes('ok') || sf.includes('safe') ? 'green' : 'neutral';
+        const deltaKind = Number.isFinite(delta) && Math.abs(delta) > 0.5 ? 'yellow' : 'green';
+        const canKind = canApply ? 'green' : syncNeeded ? 'yellow' : 'neutral';
+        const syncKind = syncNeeded ? 'yellow' : 'green';
+        const riskKind = risk === 'high' || risk === 'active_overshoot' ? 'red' : risk === 'medium' ? 'yellow' : risk === 'low' ? 'green' : 'neutral';
+
+        return `
+          <div style="line-height:1.25;min-width:0;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+              <div style="min-width:0;">
+                <div style="font-size:12px;font-weight:850;opacity:.66;">Hardware cockpit · target sync · supervised action</div>
+                <div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div>
+              </div>
+              <div style="
+                display:inline-flex;
+                align-items:center;
+                gap:6px;
+                padding:6px 9px;
+                border-radius:999px;
+                background:${chipBg};
+                border:1px solid ${chipBorder};
+                font-size:11px;
+                font-weight:950;
+                white-space:nowrap;
+              ">
+                <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
+                <span>${badge}</span>
+              </div>
+            </div>
+
+            <div style="margin-top:8px;text-align:center;">
+              <div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div>
+              <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">
+                ${runtimeState} · ${mode} · safety ${safety}<br>${short(reason, 72)}
+              </div>
+            </div>
+
+            <div style="
+              margin-top:11px;
+              display:grid;
+              grid-template-columns:repeat(4,minmax(0,1fr));
+              gap:7px;
+            ">
+              ${metric('Req', fmt(requested, '°C'), 'runtime', 'mdi:target', 'blue')}
+              ${metric('Applied', fmt(applied, '°C'), 'BrewZilla', 'mdi:kettle-steam-outline', 'cyan')}
+              ${metric('Δ Target', fmt(delta, '°C'), 'sync diff', 'mdi:delta', deltaKind)}
+              ${metric('Sync', syncNeeded ? 'Needed' : 'OK', canApply ? 'can apply' : 'hold', 'mdi:sync', syncKind)}
+            </div>
+
+            <div style="
+              margin-top:7px;
+              display:grid;
+              grid-template-columns:repeat(4,minmax(0,1fr));
+              gap:7px;
+            ">
+              ${metric('Mash', fmt(mash, '°C'), 'mash', 'mdi:thermometer-lines', 'blue')}
+              ${metric('Wort', fmt(wort, '°C'), 'kettle', 'mdi:kettle-steam-outline', 'cyan')}
+              ${metric('M/W Δ', fmt(mwDelta, '°C'), 'diff', 'mdi:thermometer-chevron-up', Number.isFinite(mwDelta) && Math.abs(mwDelta) > 1.0 ? 'yellow' : 'green')}
+              ${metric('Safety', safety, canApply ? 'apply ok' : 'blocked/hold', 'mdi:shield-check-outline', safetyKind)}
+            </div>
+
+            <div style="
+              margin-top:10px;
+              display:grid;
+              grid-template-columns:20px minmax(0,1fr);
+              gap:7px;
+              align-items:center;
+              border-radius:14px;
+              padding:8px 9px;
+              background:${syncNeeded ? 'rgba(255,193,7,.12)' : 'rgba(76,175,80,.10)'};
+              border:1px solid ${syncNeeded ? 'rgba(255,193,7,.28)' : 'rgba(76,175,80,.24)'};
+            ">
+              <ha-icon icon="${syncNeeded ? 'mdi:sync-alert' : 'mdi:check-circle-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon>
+              <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
+                target ${fmt(requested, '°C')} → ${fmt(applied, '°C')} · sync ${syncNeeded ? 'needed' : 'ok'} · can_apply ${canApply ? 'true' : 'false'} · learning ${learningStatus} · risk ${risk}
+              </div>
+            </div>
+          </div>
+        `;
+      ]]]
+    styles:
+      card:
+        - border-radius: 22px
+        - padding: 14px
+        - overflow: hidden
+        - background: >-
+            linear-gradient(135deg, rgba(33,150,243,.10),
+            rgba(127,127,127,.035))
+        - border: 1px solid rgba(33,150,243,.20)
+        - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+      grid:
+        - grid-template-areas: "\"i n\" \"i l\""
+        - grid-template-columns: 42px minmax(0,1fr)
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+      icon:
+        - width: 27px
+        - height: 27px
+      img_cell:
+        - width: 42px
+        - height: 42px
+        - border-radius: 50%
+        - background: rgba(33,150,243,.15)
+        - color: rgb(33,150,243)
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 15px
+        - font-weight: 950
+        - letter-spacing: "-.02em"
+      label:
+        - justify-self: stretch
+        - text-align: left
+        - white-space: normal
+        - margin-top: 4px
+  - type: conditional
+    conditions:
+      - condition: numeric_state
+        entity: sensor.brewzilla_power
+        above: 0
+    card:
+      type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          name: APPLY TARGET
+          icon: mdi:target-account
+          tap_action:
+            action: call-service
+            service: brewassistant.apply_brewzilla_target
+            confirmation:
+              text: Apply current Brewday Runtime target to BrewZilla?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(76,175,80,.10)
+              - border: 1px solid rgba(76,175,80,.24)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+        - type: custom:button-card
+          name: ABORT
+          icon: mdi:alert-octagon-outline
+          tap_action:
+            action: call-service
+            service: brewassistant.abort_brewzilla
+            confirmation:
+              text: ABORT BrewZilla heater and pump outputs?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(244,67,54,.11)
+              - border: 1px solid rgba(244,67,54,.26)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+  - type: vertical-stack
+    cards:
+      - type: conditional
+        conditions:
+          - entity: sensor.brewassistant_brewday_stage_group
+            state_not: boil
+          - condition: numeric_state
+            above: 0
+            entity: sensor.brewzilla_power
+        card:
+          type: custom:gauge-card-pro
+          entity: sensor.brewassistant_brewzilla_wort_temperature
+          min: 20
+          max: 80
+          needle: true
+          gradient: true
+          gradient_resolution: auto
+          round: full
+          animation_speed: normal
+          entity_id:
+            - sensor.brewassistant_brewzilla_wort_temperature
+            - sensor.brewassistant_brewzilla_mash_temperature
+            - sensor.brewassistant_brewzilla_runtime_target_temperature
+            - sensor.brewassistant_brewzilla_requested_target
+            - sensor.brewassistant_brewzilla_target_temperature
+            - sensor.brewassistant_brewzilla_device_target_temperature
+            - sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+            - sensor.brewassistant_brewzilla_orchestration_mode
+            - sensor.brewassistant_brewzilla_safety_state
+            - sensor.brewassistant_brewday_runtime_state
+            - sensor.brewassistant_brewday_stage
+            - sensor.brewassistant_brewday_stage_group
+            - sensor.brewassistant_brewday_runtime_step
+            - number.brewzilla_target_temperature
+            - sensor.brewzilla_temperature
+          value: >
+            {% set wort =
+            states('sensor.brewassistant_brewzilla_wort_temperature') %}
+
+            {% if wort not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ wort | float(0) }}
+            {% else %}
+              {{ states('sensor.brewzilla_temperature') | float(0) }}
+            {% endif %}
+          segments:
+            - from: 20
+              color: "#42a5f5"
+            - from: 35
+              color: "#26c6da"
+            - from: 50
+              color: "#66bb6a"
+            - from: 63
+              color: "#d4e157"
+            - from: 68
+              color: "#ffca28"
+            - from: 72
+              color: "#ff9800"
+            - from: 78
+              color: "#ef5350"
+          setpoint:
+            type: template
+            value: >
+              {% set rt =
+              states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+              %}
+
+              {% set req =
+              states('sensor.brewassistant_brewzilla_requested_target') %}
+
+              {% set ba =
+              states('sensor.brewassistant_brewzilla_target_temperature') %}
+
+              {% set dev =
+              states('sensor.brewassistant_brewzilla_device_target_temperature')
+              %}
+
+              {% set raw = states('number.brewzilla_target_temperature') %}
+
+              {% if rt not in ['unknown', 'unavailable', 'none', ''] %}
+                {{ rt | float(0) }}
+              {% elif req not in ['unknown', 'unavailable', 'none', ''] %}
+                {{ req | float(0) }}
+              {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
+                {{ ba | float(0) }}
+              {% elif dev not in ['unknown', 'unavailable', 'none', ''] %}
+                {{ dev | float(0) }}
+              {% elif raw not in ['unknown', 'unavailable', 'none', ''] %}
+                {{ raw | float(0) }}
+              {% else %}
+                0
+              {% endif %}
+            color: "#ff1744"
+            label: true
+            precision: 1
+          min_indicator:
+            type: template
+            value: >
+              {% set target =
+              states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+              %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+              {% endif %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+              {% endif %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('number.brewzilla_target_temperature') %}
+              {% endif %}
+
+              {{ (target | float(0)) - 0.5 }}
+            color: rgba(255,255,255,.55)
+            label: false
+          max_indicator:
+            type: template
+            value: >
+              {% set target =
+              states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+              %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+              {% endif %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+              {% endif %}
+
+              {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = states('number.brewzilla_target_temperature') %}
+              {% endif %}
+
+              {{ (target | float(0)) + 0.5 }}
+            color: rgba(255,255,255,.55)
+            label: false
+          titles:
+            primary:
+              value: >
+                {% set runtime =
+                states('sensor.brewassistant_brewday_runtime_state') %}
+
+                {% set stage = states('sensor.brewassistant_brewday_stage') %}
+
+                {% set step =
+                states('sensor.brewassistant_brewday_runtime_step') %}
+
+                {% if runtime in ['idle', 'inactive', 'unknown', 'unavailable',
+                'none', ''] %}
+                  BrewZilla temperatur
+                {% elif stage not in ['unknown', 'unavailable', 'none', ''] %}
+                  {{ stage }}{% if step not in ['unknown', 'unavailable', 'none', ''] %} · {{ step }}{% endif %}
+                {% else %}
+                  BrewZilla temperatur
+                {% endif %}
+              font_size: 14px
+          value_texts:
+            primary:
+              value: >
+                {% set wort =
+                states('sensor.brewassistant_brewzilla_wort_temperature') %}
+
+                {% if wort not in ['unknown', 'unavailable', 'none', ''] %}
+                  {{ wort | float(0) | round(1) }}
+                {% else %}
+                  {{ states('sensor.brewzilla_temperature') | float(0) | round(1) }}
+                {% endif %}
+              unit_of_measurement: °C
+            secondary:
+              value: >
+                {% set target =
+                states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+                %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+                {% endif %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+                {% endif %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('number.brewzilla_target_temperature') %}
+                {% endif %}
+
+                {% if target not in ['unknown', 'unavailable', 'none', ''] %}
+                  Target {{ target | float(0) | round(1) }}
+                {% else %}
+                  Target —
+                {% endif %}
+              unit_of_measurement: °C
+          icons:
+            right:
+              type: template
+              value: >
+                {% set mode =
+                states('sensor.brewassistant_brewzilla_orchestration_mode') %}
+
+                {% if mode == 'blocked' %}
+                  {% set icon = 'mdi:lock-outline' %}
+                  {% set color = 'rgba(127,127,127,.85)' %}
+                  {% set label = 'blocked' %}
+                {% elif mode == 'monitor' %}
+                  {% set icon = 'mdi:eye-outline' %}
+                  {% set color = 'rgb(33,150,243)' %}
+                  {% set label = 'monitor' %}
+                {% elif mode in ['apply', 'apply_with_confirm', 'apply with
+                confirm'] %}
+                  {% set icon = 'mdi:gesture-tap-button' %}
+                  {% set color = 'rgb(255,193,7)' %}
+                  {% set label = 'confirm' %}
+                {% elif mode in ['direct', 'direct_with_abort'] %}
+                  {% set icon = 'mdi:shield-check-outline' %}
+                  {% set color = 'rgb(76,175,80)' %}
+                  {% set label = 'direct' %}
+                {% else %}
+                  {% set icon = 'mdi:shield-outline' %}
+                  {% set color = 'rgba(127,127,127,.85)' %}
+                  {% set label = mode if mode not in ['unknown','unavailable','none',''] else 'mode' %}
+                {% endif %}
+
+                {{
+                  {
+                    "icon": icon,
+                    "color": color,
+                    "label": label
+                  }
+                }}
+          tap_action:
+            action: more-info
+            entity: sensor.brewassistant_brewzilla_wort_temperature
+          hold_action:
+            action: more-info
+            entity: number.brewzilla_target_temperature
+      - type: conditional
+        conditions:
+          - entity: sensor.brewassistant_brewday_stage_group
+            state: boil
+        card:
+          type: custom:gauge-card-pro
+          entity: sensor.brewassistant_brewzilla_wort_temperature
+          min: 80
+          max: 105
+          needle: true
+          gradient: true
+          gradient_resolution: high
+          round: full
+          animation_speed: normal
+          entity_id:
+            - sensor.brewassistant_brewzilla_wort_temperature
+            - sensor.brewassistant_brewzilla_runtime_target_temperature
+            - sensor.brewassistant_brewzilla_requested_target
+            - sensor.brewassistant_brewzilla_target_temperature
+            - sensor.brewassistant_brewzilla_device_target_temperature
+            - sensor.brewassistant_brewzilla_orchestration_mode
+            - sensor.brewassistant_brewzilla_safety_state
+            - sensor.brewassistant_brewday_stage
+            - sensor.brewassistant_brewday_stage_group
+            - sensor.brewassistant_brewday_runtime_state
+            - sensor.brewassistant_brewday_runtime_step
+            - number.brewzilla_target_temperature
+            - sensor.brewzilla_temperature
+          value: >
+            {% set wort =
+            states('sensor.brewassistant_brewzilla_wort_temperature') %}
+
+            {% if wort not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ wort | float(0) }}
+            {% else %}
+              {{ states('sensor.brewzilla_temperature') | float(0) }}
+            {% endif %}
+          value_text: >
+            {% set wort =
+            states('sensor.brewassistant_brewzilla_wort_temperature') %}
+
+            {% if wort not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ wort | float(0) | round(1) }} °C
+            {% else %}
+              {{ states('sensor.brewzilla_temperature') | float(0) | round(1) }} °C
+            {% endif %}
+          segments:
+            - from: 80
+              color: "#ffca28"
+            - from: 90
+              color: "#ff9800"
+            - from: 96
+              color: "#ff7043"
+            - from: 100
+              color: "#e53935"
+          setpoint:
+            type: template
+            value: >
+              {% set rt =
+              states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+              %}
+
+              {% set req =
+              states('sensor.brewassistant_brewzilla_requested_target') %}
+
+              {% set ba =
+              states('sensor.brewassistant_brewzilla_target_temperature') %}
+
+              {% set dev =
+              states('sensor.brewassistant_brewzilla_device_target_temperature')
+              %}
+
+              {% set raw = states('number.brewzilla_target_temperature') %}
+
+
+              {% set target = 100 %}
+
+              {% if rt not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = rt | float(100) %}
+              {% elif req not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = req | float(100) %}
+              {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = ba | float(100) %}
+              {% elif dev not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = dev | float(100) %}
+              {% elif raw not in ['unknown', 'unavailable', 'none', ''] %}
+                {% set target = raw | float(100) %}
+              {% endif %}
+
+
+              {{ 100 if target < 80 else target }}
+            color: "#ff1744"
+            label: true
+            precision: 1
+          titles:
+            primary:
+              value: >
+                {% set runtime =
+                states('sensor.brewassistant_brewday_runtime_state') %}
+
+                {% set step =
+                states('sensor.brewassistant_brewday_runtime_step') %}
+
+                {% if runtime in ['idle', 'inactive', 'unknown', 'unavailable',
+                'none', ''] %}
+                  BrewZilla kok
+                {% else %}
+                  Boil{% if step not in ['unknown', 'unavailable', 'none', ''] %} · {{ step }}{% endif %}
+                {% endif %}
+              font_size: 14px
+          value_texts:
+            primary:
+              value: >
+                {% set wort =
+                states('sensor.brewassistant_brewzilla_wort_temperature') %}
+
+                {% if wort not in ['unknown', 'unavailable', 'none', ''] %}
+                  {{ wort | float(0) | round(1) }}
+                {% else %}
+                  {{ states('sensor.brewzilla_temperature') | float(0) | round(1) }}
+                {% endif %}
+              unit_of_measurement: °C
+            secondary:
+              value: >
+                {% set target =
+                states('sensor.brewassistant_brewzilla_runtime_target_temperature')
+                %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+                {% endif %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+                {% endif %}
+
+                {% if target in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set target = states('number.brewzilla_target_temperature') %}
+                {% endif %}
+
+
+                {% set t = target | float(100) %}
+
+                Boil target {{ 100.0 if t < 80 else t | round(1) }}
+              unit_of_measurement: °C
+          icons:
+            right:
+              type: template
+              value: >
+                {% set mode =
+                states('sensor.brewassistant_brewzilla_orchestration_mode') %}
+
+                {% if mode == 'blocked' %}
+                  {% set icon = 'mdi:kettle-steam-outline' %}
+                  {% set color = 'rgba(244,67,54,.85)' %}
+                  {% set label = 'blocked' %}
+                {% elif mode == 'monitor' %}
+                  {% set icon = 'mdi:kettle-steam-outline' %}
+                  {% set color = 'rgb(255,152,0)' %}
+                  {% set label = 'monitor' %}
+                {% elif mode in ['apply', 'apply_with_confirm', 'apply with
+                confirm'] %}
+                  {% set icon = 'mdi:gesture-tap-button' %}
+                  {% set color = 'rgb(255,193,7)' %}
+                  {% set label = 'confirm' %}
+                {% elif mode in ['direct', 'direct_with_abort'] %}
+                  {% set icon = 'mdi:shield-check-outline' %}
+                  {% set color = 'rgb(76,175,80)' %}
+                  {% set label = 'direct' %}
+                {% else %}
+                  {% set icon = 'mdi:kettle-steam-outline' %}
+                  {% set color = 'rgb(229,57,53)' %}
+                  {% set label = mode if mode not in ['unknown','unavailable','none',''] else 'boil' %}
+                {% endif %}
+
+                {{
+                  {
+                    "icon": icon,
+                    "color": color,
+                    "label": label
+                  }
+                }}
+          tap_action:
+            action: more-info
+            entity: sensor.brewassistant_brewzilla_wort_temperature
+          hold_action:
+            action: more-info
+            entity: number.brewzilla_target_temperature
+  - type: conditional
+    conditions:
+      - condition: numeric_state
+        entity: sensor.brewzilla_power
+        above: 0
+    card:
+      type: custom:expander-card
+      title-card:
+        type: custom:button-card
+        entity: sensor.brewassistant_brewzilla_runtime_summary
+        name: BrewZilla detaljer
+        icon: mdi:tune-variant
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            const state = states['sensor.brewassistant_brewzilla_runtime_state']?.state ?? '—';
+            const safety = states['sensor.brewassistant_brewzilla_safety_state']?.state ?? '—';
+            const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state ?? '—';
+            const sync = states['sensor.brewassistant_brewzilla_target_sync_needed']?.state ?? '—';
+            return `${state} · ${mode} · safety ${safety} · sync ${sync}`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(127,127,127,.055)
+            - border: 1px solid rgba(127,127,127,.14)
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 34px minmax(0,1fr)
+            - column-gap: 10px
+          icon:
+            - width: 22px
+            - height: 22px
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 11.5px
+            - font-weight: 750
+            - opacity: 0.72
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_brewzilla_runtime_summary
+              name: Runtime summary
+            - entity: sensor.brewassistant_brewzilla_runtime_state
+              name: Runtime state
+            - entity: sensor.brewassistant_brewzilla_safety_state
+              name: Safety state
+            - entity: sensor.brewassistant_brewzilla_orchestration_mode
+              name: Orchestration mode
+            - entity: sensor.brewassistant_brewzilla_control_reason
+              name: Control reason
+            - entity: sensor.brewassistant_brewzilla_requested_target
+              name: Requested target
+            - entity: sensor.brewassistant_brewzilla_applied_target
+              name: Applied target
+            - entity: sensor.brewassistant_brewzilla_target_delta
+              name: Target delta
+            - entity: sensor.brewassistant_brewzilla_target_sync_needed
+              name: Target sync needed
+            - entity: sensor.brewassistant_brewzilla_can_apply_target
+              name: Can apply target
+            - entity: sensor.brewassistant_brewzilla_mash_temperature
+              name: Mash temperature
+            - entity: sensor.brewassistant_brewzilla_wort_temperature
+              name: Wort temperature
+            - entity: sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+              name: Mash/wort delta
