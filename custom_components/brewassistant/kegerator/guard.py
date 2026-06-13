@@ -376,8 +376,8 @@ async def async_setup_kegerator_guard(hass: HomeAssistant) -> None:
     if data.get(GUARD_WATCHDOG_UNSUB_KEY) is not None:
         return
 
-    def _tick(now: datetime) -> None:
-        hass.async_create_task(async_apply_kegerator_guard(hass))
+    async def _tick(now: datetime) -> None:
+        await async_apply_kegerator_guard(hass)
 
     data[GUARD_WATCHDOG_UNSUB_KEY] = async_track_time_interval(
         hass,
