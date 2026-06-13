@@ -24,11 +24,7 @@ The backend is exposed through a Home Assistant switch created by BrewAssistant:
 switch.brewassistant_kegerator_fan_auto_enabled
 ```
 
-Home Assistant may prefix the entity with the integration/device area name, for example:
-
-```text
-switch.bryggeriet_brewassistant_kegerator_fan_auto_enabled
-```
+Preferred Home Assistant entity IDs should use the clean BrewAssistant namespace without area/device prefixes. If old prefixed entities exist locally, clean them through Home Assistant's Entity Registry UI before validating dashboards.
 
 The switch is off by default.
 
@@ -85,7 +81,8 @@ Fan should stop when:
 ```text
 compressor threshold: 20 W
 fan power threshold: 2 W
-afterrun: 10 min
+default afterrun: 10 min
+summer/warm-room afterrun recommendation: 2-3 min
 too warm delta: +0.8 °C
 too cold delta: -0.8 °C
 warming trend: +0.20 °C/h
@@ -139,6 +136,6 @@ restart trend spike ignored by max reasonable warming guard
 Still pending:
 
 ```text
-full automatic fan turn-off after afterrun expiry using the GitHub-synced syntax-fixed branch
+full automatic fan turn-off after afterrun expiry
 longer multi-cycle validation after HA restart
 ```
