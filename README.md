@@ -1,6 +1,6 @@
-# BrewAssistant v0.2.0-beta.2
+# BrewAssistant v0.2.0-beta.5
 
-**BrewAssistant v0.2.0-beta.2** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
+**BrewAssistant v0.2.0-beta.5** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
 
 > [!WARNING]
 > BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
@@ -18,8 +18,8 @@ Legacy local packages      = local compatibility/cleanup only, not mainline repo
 ## Current status
 
 ```text
-v0.2.0-beta.2
-Supervised BrewZilla Brewday Beta
+v0.2.0-beta.5
+Clean Baseline Beta
 ```
 
 Validated in the active beta branch:
@@ -134,7 +134,12 @@ From a temporary clone of the repository:
 rm -rf /tmp/brewassistant-beta
 git clone --depth 1 --branch main https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta
 
-cp -a /config/custom_components/brewassistant /config/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M) 2>/dev/null || true
+mkdir -p /config/brewassistant_backups/custom_components
+
+if [ -d /config/custom_components/brewassistant ]; then
+  cp -a /config/custom_components/brewassistant \
+    /config/brewassistant_backups/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M)
+fi
 
 rsync -a --delete \
   /tmp/brewassistant-beta/custom_components/brewassistant/ \
@@ -272,6 +277,7 @@ Thanks to:
 ## Documentation index
 
 ```text
+docs/CLEAN_BASELINE.md                 Clean baseline rules and cleanup policy
 docs/INSTALLATION.md                  Current Home Assistant custom integration install guide
 docs/setup.md                         Current setup, update and verification guide
 docs/dashboard-baselines.md           Current dashboard/card baseline policy
