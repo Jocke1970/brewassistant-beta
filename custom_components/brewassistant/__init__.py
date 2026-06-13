@@ -8,6 +8,7 @@ maintained in the Python-only branch.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -60,11 +61,16 @@ SERVICE_CARBONATION_UPDATE = "carbonation_update"
 SERVICE_CARBONATION_PAUSE = "carbonation_pause"
 SERVICE_CARBONATION_RESET = "carbonation_reset"
 
+KEGERATOR_CLIMATE_ENTITY = "climate.kegerator_kylskap"
+KEGERATOR_CLIMATE_TARGET = 4.0
+KEGERATOR_CLIMATE_OFF_STATES = {"off", "unknown", "unavailable", "none", ""}
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
     await async_load_brewday_audit_log(hass)
     await async_load_carbonation_runtime(hass)
+    hass.async_create_task(_ensure_kegerator_climate_on(hass))
     await async_setup_kegerator_guard(hass)
 
     coordinator = BrewAssistantCoordinator(hass, entry)
@@ -75,6 +81,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _ensure_kegerator_climate_on(hass: HomeAssistant) -> None:
+    """Keep the configured kegerator climate on after Home Assistant restart."""
+    await asyncio.sleep(60)
+
+    state = hass.states.get(KEGERATOR_CLIMATE_ENTITY)
+    if state is None:
+        return
+
+    if state.state not in KEGERATOR_CLIMATE_OFF_STATES:
+        return
+
+    await hass.services.async_call(
+        "climate",
+        "set_temperature",
+        {
+            "entity_id": KEGERATOR_CLIMATE_ENTITY,
+            "temperature": KEGERATOR_CLIMATE_TARGET,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "climate",
+        "set_hvac_mode",
+        {
+            "entity_id": KEGERATOR_CLIMATE_ENTITY,
+            "hvac_mode": "cool",
+        },
+        blocking=True,
+    )
+    _LOGGER.warning(
+        "BrewAssistant restored %s from %s to cool %.1f °C",
+        KEGERATOR_CLIMATE_ENTITY,
+        state.state,
+        KEGERATOR_CLIMATE_TARGET,
+    )
 
 
 def _register_services(hass: HomeAssistant) -> None:
