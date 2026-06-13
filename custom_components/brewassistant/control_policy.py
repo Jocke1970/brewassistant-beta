@@ -139,8 +139,28 @@ def normalize_section(section: str | None) -> str:
     return SECTION_ALIASES.get(raw, raw)
 
 
+def _resolve_entity_id(hass: HomeAssistant, entity_id: str) -> str:
+    """Resolve exact entity id, or same suffix with HA area/prefix added."""
+    if hass.states.get(entity_id) is not None:
+        return entity_id
+
+    if "." not in entity_id:
+        return entity_id
+
+    domain, object_id = entity_id.split(".", 1)
+    wanted_suffix = f"_{object_id}"
+
+    for state in hass.states.async_all(domain):
+        candidate_object_id = state.entity_id.split(".", 1)[1]
+        if candidate_object_id == object_id or candidate_object_id.endswith(wanted_suffix):
+            return state.entity_id
+
+    return entity_id
+
+
 def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
-    obj = hass.states.get(entity_id)
+    resolved = _resolve_entity_id(hass, entity_id)
+    obj = hass.states.get(resolved)
     if obj is None or obj.state in BAD_STATES:
         return default
     return obj.state
@@ -423,8 +443,10 @@ def build_control_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             "name": str(config["name"]),
             "policy": section_policy(hass, section),
             "direct_unlocked": direct_unlocked(hass, section),
-            "policy_entity": str(config["policy_entity"]),
-            "direct_unlock_entity": str(config["direct_unlock_entity"]),
+            "policy_entity": _resolve_entity_id(hass, str(config["policy_entity"])),
+            "policy_entity_configured": str(config["policy_entity"]),
+            "direct_unlock_entity": _resolve_entity_id(hass, str(config["direct_unlock_entity"])),
+            "direct_unlock_entity_configured": str(config["direct_unlock_entity"]),
         }
         for section, config in SECTION_CONFIG.items()
     }

@@ -137,6 +137,33 @@ def _state(hass: HomeAssistant, entity_id: str) -> str | None:
     return state.state
 
 
+def _state_by_suffix(hass: HomeAssistant, domain: str, suffix: str) -> tuple[str | None, str | None]:
+    """Return state/entity for exact suffix, allowing HA area prefixes."""
+    exact = f"{domain}.{suffix}"
+    value = _state(hass, exact)
+    if value is not None:
+        return value, exact
+
+    wanted_suffix = f"_{suffix}"
+    for state in hass.states.async_all(domain):
+        object_id = state.entity_id.split(".", 1)[1]
+        if object_id == suffix or object_id.endswith(wanted_suffix):
+            if state.state not in BAD_STATES:
+                return state.state, state.entity_id
+
+    return None, None
+
+
+def _number_by_suffix(hass: HomeAssistant, suffix: str, default: float) -> tuple[float, str | None]:
+    raw, entity_id = _state_by_suffix(hass, "number", suffix)
+    if raw is None:
+        return default, entity_id
+    try:
+        return float(str(raw).replace(",", ".")), entity_id
+    except (TypeError, ValueError):
+        return default, entity_id
+
+
 def _available(hass: HomeAssistant, entity_id: str) -> bool:
     state = hass.states.get(entity_id)
     return state is not None and state.state not in BAD_STATES
@@ -197,15 +224,31 @@ def _format_trend(value: float | None) -> str:
 
 
 def _fan_mode(hass: HomeAssistant) -> str:
-    mode = _state(hass, FAN_MODE_SELECT)
+    mode, _entity_id = _state_by_suffix(hass, "select", "brewassistant_kegerator_fan_mode")
     return mode if mode in FAN_MODE_OPTIONS else DEFAULT_FAN_MODE
 
 
 def _afterrun_minutes(hass: HomeAssistant) -> float:
-    value = _num_state(hass, AFTER_RUN_NUMBER)
-    if value is None:
-        return AFTER_RUN_MIN
+    value, _entity_id = _number_by_suffix(
+        hass,
+        "brewassistant_kegerator_fan_afterrun_minutes",
+        AFTER_RUN_MIN,
+    )
     return max(0.0, min(float(value), 60.0))
+
+
+def _fan_mode_entity(hass: HomeAssistant) -> str | None:
+    _value, entity_id = _state_by_suffix(hass, "select", "brewassistant_kegerator_fan_mode")
+    return entity_id or FAN_MODE_SELECT
+
+
+def _afterrun_entity(hass: HomeAssistant) -> str | None:
+    _value, entity_id = _number_by_suffix(
+        hass,
+        "brewassistant_kegerator_fan_afterrun_minutes",
+        AFTER_RUN_MIN,
+    )
+    return entity_id or AFTER_RUN_NUMBER
 
 
 def _climate_enabled(state: str | None) -> bool:
@@ -438,7 +481,8 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "source": "python_kegerator_fan_backend_v2_state_machine",
         "strategy": STRATEGY,
         "fan_mode": _fan_mode(hass),
-        "fan_mode_entity": FAN_MODE_SELECT,
+        "fan_mode_entity": _fan_mode_entity(hass),
+        "fan_mode_entity_configured": FAN_MODE_SELECT,
         "fan_mode_options": FAN_MODE_OPTIONS,
         "status": status,
         "desired_fan_state": decision.state,
@@ -489,7 +533,8 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "afterrun_until": decision.afterrun_until,
         "afterrun_remaining_minutes": decision.afterrun_remaining_minutes,
         "afterrun_minutes": _afterrun_minutes(hass),
-        "afterrun_entity": AFTER_RUN_NUMBER,
+        "afterrun_entity": _afterrun_entity(hass),
+        "afterrun_entity_configured": AFTER_RUN_NUMBER,
         "fan_switch_entity": FAN,
         "fan_state": inputs.fan_state,
         "fan_power_entity": FAN_POWER,
