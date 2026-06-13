@@ -1,6 +1,6 @@
 # Roadmap
 
-This document outlines the BrewAssistant v4 roadmap.
+This document outlines the BrewAssistant beta roadmap.
 
 BrewAssistant is moving from YAML package logic toward a Python custom integration where runtime state, stage interpretation, calculations and hardware decisions live in `custom_components/brewassistant/`.
 
@@ -16,9 +16,11 @@ YAML/dashboard as presentation layer only
 ### Current phase
 
 ```text
-Python Core stabilization
+Clean Baseline Beta
 ↓
-Brewday/BrewZilla MVP validated with audit dry-run
+Home Assistant log validation after async watchdog cleanup
+↓
+First full serious all-grain BrewZilla batch validation
 ↓
 Boil / hop / cooling validation
 ↓
@@ -50,10 +52,10 @@ Full YAML retirement
 [x] Brewday stage timer resolver
 [x] Brewday timeline generation
 [x] Brewfather paused freeze-state handling
-[x] Brewday audit backend
-[x] Brewday audit services
-[x] Brewday audit sensors
-[x] Brewday audit dashboard
+[x] Brewday Event Log backend
+[x] Brewday Event Log services
+[x] Brewday Event Log sensors
+[x] Brewday Event Log dashboard example
 [x] Manual Brewday Python engine
 [x] Manual Brewday source adapter
 [x] Manual Brewday services
@@ -75,6 +77,11 @@ Full YAML retirement
 [x] Carbonation Cockpit v3.1 UI
 [x] Climate Supervisor backend for dynamic kegerator targets
 [x] Climate Supervisor UI card v1.0
+[x] Kegerator fan mode controls: Off / Always on / Afterrun
+[x] Kegerator fan auto tick async-safety cleanup
+[x] Kegerator guard watchdog async-safety cleanup
+[x] Clean Home Assistant entity baseline without `bryggeriet_` BrewAssistant prefix
+[x] Integration brand assets under custom component brand directory
 [x] Fermentation Cockpit scope guard
 [x] Fermentation Cockpit v2.1 UI
 ```
@@ -148,11 +155,11 @@ Current status:
 [x] Integrate Stage Engine data into BrewZilla UI
 [x] Add BrewZilla Cockpit v3.4 dashboard example
 [x] Add Brewday Card v3.5 dashboard example
-[x] Add Brewday Audit Card v1.1 dashboard example
+[x] Add Brewday Event Log Card dashboard example
 [x] Add RAW Timeline debug card
 [x] Low-temperature water test verified 30 → 35 → 40 → 45 → 50 → 55°C
 [x] Dry-run mash profile verified 45 → 55 → 65 → 72 → 78°C target flow
-[x] Brewday audit log captured runtime and BrewZilla orchestration actions
+[x] Brewday Event Log captured runtime and BrewZilla orchestration actions
 [x] Store dashboard examples in repo under dashboards/
 ```
 
