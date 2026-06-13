@@ -78,7 +78,12 @@ From a temporary clone of the repository:
 rm -rf /tmp/brewassistant-beta
 git clone --depth 1 --branch main https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta
 
-cp -a /config/custom_components/brewassistant /config/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M) 2>/dev/null || true
+mkdir -p /config/brewassistant_backups/custom_components
+
+if [ -d /config/custom_components/brewassistant ]; then
+  cp -a /config/custom_components/brewassistant \
+    /config/brewassistant_backups/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M)
+fi
 
 rsync -a --delete \
   /tmp/brewassistant-beta/custom_components/brewassistant/ \
