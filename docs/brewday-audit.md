@@ -1,6 +1,6 @@
-# Brewday Audit Log
+# Brewday Event Log
 
-BrewAssistant includes a Python-owned Brewday audit log for post-run analysis of Brewfather Brew Tracker, BrewAssistant runtime resolution and BrewZilla orchestration.
+BrewAssistant includes a Python-owned Brewday event log for post-run analysis of Brewfather Brew Tracker, BrewAssistant runtime resolution and BrewZilla orchestration.
 
 Status: **validated during a Brewfather/BrewZilla dry-run mash profile**.
 
@@ -8,7 +8,7 @@ Status: **validated during a Brewfather/BrewZilla dry-run mash profile**.
 
 ## Purpose
 
-The audit log is intended to answer these questions after a test batch or real brewday:
+The event log is intended to answer these questions after a test batch or real brewday:
 
 ```text
 What did Brewfather expose?
@@ -18,7 +18,7 @@ Was heater/pump action needed or executed?
 Was the system waiting for a fresh Brewfather snapshot?
 ```
 
-The audit log should be used during regression testing before adding new large features.
+The event log should be used during regression testing before adding new large features.
 
 ---
 
@@ -30,11 +30,13 @@ The log is persisted through Home Assistant storage:
 .storage/brewassistant_brewday_audit_log
 ```
 
-It is also exposed through dashboard-friendly sensors.
+The storage filename is kept as-is for compatibility. User-facing sensors use event-log naming.
 
 ---
 
 ## Services
+
+Current service names are kept as-is for compatibility:
 
 ```text
 brewassistant.brewday_audit_start
@@ -53,18 +55,18 @@ brewassistant.brewday_audit_snapshot   # optional checkpoints
 brewassistant.brewday_audit_stop
 ```
 
-`brewassistant.abort_brewzilla` is recorded as an audit event as well.
+`brewassistant.abort_brewzilla` is recorded as an event as well.
 
 ---
 
 ## Sensors
 
 ```text
-sensor.brewassistant_brewday_audit_summary
-sensor.brewassistant_brewday_audit_event_count
-sensor.brewassistant_brewday_audit_last_event
-sensor.brewassistant_brewday_audit_last_step
-sensor.brewassistant_brewday_audit_last_target
+sensor.brewassistant_brewday_event_log_summary
+sensor.brewassistant_brewday_event_log_event_count
+sensor.brewassistant_brewday_event_log_last_event
+sensor.brewassistant_brewday_event_log_last_step
+sensor.brewassistant_brewday_event_log_last_target
 ```
 
 The summary sensor exposes the full event list in attributes:
@@ -162,8 +164,10 @@ This is not automatically an error. BrewAssistant resolves the active step from 
 Current dashboard example:
 
 ```text
-dashboards/brewday_audit_card_v1_1.yaml
+dashboards/brewday_audit_card_v1_2.yaml
 ```
+
+The file name is legacy for now; the card content uses event-log sensor names.
 
 The card provides:
 
