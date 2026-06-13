@@ -21,6 +21,9 @@ custom_components/brewassistant/
 ├── select.py
 ├── number.py
 ├── services.yaml
+├── brand/
+│   ├── icon.png
+│   └── logo.png
 ├── carbonation.py
 ├── brewday/
 ├── brewzilla/
@@ -37,7 +40,7 @@ custom_components/brewassistant/
 
 ```text
 brewday/
-  Brewday runtime, Manual Brewday runtime, stage engine, audit and addition alerts.
+  Brewday runtime, Manual Brewday runtime, stage engine, event log and addition alerts.
 
 brewzilla/
   BrewZilla runtime, temperature resolver, learning, energy and orchestration.
@@ -55,7 +58,7 @@ fermentation/
   Fermentation and fermentation climate support.
 
 kegerator/
-  Kegerator fan/compressor inference and fan-auto backend.
+  Kegerator guard, fan/compressor inference and fan-auto backend.
   The climate integration owns the cooling target and compressor behavior.
   The fan backend manages circulation fan decisions and diagnostics.
 
@@ -71,9 +74,13 @@ The kegerator backend is intentionally narrow:
 climate.kegerator_kylskap
   cooling target and compressor behavior
 
+kegerator/guard.py
+  safety/watchdog diagnostics and climate restart restore guard
+
 kegerator/fan_control.py
   compressor inference from sensor.kegerator_power
   fan-auto runtime diagnostics
+  fan mode handling: Off / Always on / Afterrun
   fan circulation decisions
 
 switch.kegerator_fan
@@ -109,3 +116,12 @@ number.py
 ```
 
 Those files should act as routers/registrars and import backend entities from the domain packages.
+
+## Brand assets
+
+Home Assistant integration brand images live in:
+
+```text
+custom_components/brewassistant/brand/icon.png
+custom_components/brewassistant/brand/logo.png
+```
