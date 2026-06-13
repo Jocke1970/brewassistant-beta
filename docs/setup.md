@@ -135,7 +135,7 @@ select.brewassistant_kegerator_fan_mode
 number.brewassistant_kegerator_fan_afterrun_minutes
 ```
 
-Preferred clean entity IDs should not include area/device prefixes such as `bryggeriet_`. If Home Assistant creates prefixed entities, clean them through the Entity Registry UI.
+Preferred entity IDs should use the clean BrewAssistant namespace without Home Assistant area/device prefixes. If Home Assistant creates prefixed entities locally, clean them through the Entity Registry UI before validating dashboards.
 
 ### Fermentation
 
@@ -218,7 +218,7 @@ sensor.brewassistant_fermentation_chamber_air_temperature_average
 Baseline checks should show:
 
 ```text
-- no active `bryggeriet_brewassistant_*` entity IDs
+- no active prefixed BrewAssistant entity IDs
 - `sensor.brewassistant_brewday_event_log_summary` exists
 - old `sensor.brewassistant_brewday_audit_*` entities are gone or unknown
 - `climate.kegerator_kylskap` remains `cool` when serving cooling should be active
