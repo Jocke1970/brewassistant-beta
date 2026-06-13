@@ -1,6 +1,6 @@
 # BrewAssistant v0.2.0-beta.5
 
-**BrewAssistant v0.2.0-beta.5** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control/visualization, counterflow wort cooling, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboards and notifications.
+**BrewAssistant v0.2.0-beta.5** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboard cards and notifications.
 
 > [!WARNING]
 > BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
@@ -9,7 +9,7 @@ The project has moved away from YAML-heavy Home Assistant packages toward a Pyth
 
 ```text
 Python custom integration = logic, normalization, stage engine, calculations, control decisions
-YAML/dashboard             = presentation and explicit operator actions
+Dashboard YAML             = presentation and explicit operator actions
 Legacy local packages      = local compatibility/cleanup only, not mainline repo setup
 ```
 
@@ -22,7 +22,7 @@ v0.2.0-beta.5
 Clean Baseline Beta
 ```
 
-Validated in the active beta branch:
+Validated in the active beta baseline:
 
 ```text
 ✅ Brewfather RAW Brew Tracker runtime resolver
@@ -31,13 +31,14 @@ Validated in the active beta branch:
 ✅ Human-friendly Brew Tracker step labels
 ✅ Paused Brewfather freeze-state handling
 ✅ BrewTracker entity resolver supports brew_tracker and brewtracker naming variants
-✅ BrewTracker Feed Health dashboard card
+✅ Brewfather Feed dashboard card
+✅ Source Health dashboard card
 ✅ BrewZilla runtime sensors
 ✅ BrewZilla target sync from normalized Brewday Runtime
 ✅ BrewZilla Orchestration bridge for Manual Brewday target
 ✅ BrewZilla heater/pump direct actions
 ✅ ABORT service for heater + pump
-✅ Brewday Event Log backend, services, sensors and dashboard example
+✅ Brewday Event Log backend, services, sensors and dashboard card
 ✅ Smart Brewfather refresh policy
 ✅ Low-temperature BrewZilla water test: 30 → 35 → 40 → 45 → 50 → 55°C
 ✅ Dry-run mash profile target validation: 45 → 55 → 65 → 72 → 78°C
@@ -51,23 +52,26 @@ Validated in the active beta branch:
 ✅ BrewZilla selectable mash temperature source resolver
 ✅ BrewZilla mash/wort/delta dashboard-safe sensors
 ✅ BrewZilla Learning uses the shared mash/wort resolver
-✅ BrewZilla Cockpit operator hardware card with mash/wort source display
-✅ Brewday Card operator cockpit
+✅ BrewZilla operator card and learning card baseline
+✅ Brewday Runtime operator card
 ✅ Manual Brewday operator card
-✅ Brewday Event Log Card dashboard example
-✅ Brewfather RAW Timeline debug card
+✅ Kegerator fan/guard card baseline
+✅ Fermentation cockpit card baseline
+✅ Carbonation runtime card baseline
+✅ BrewAssistant Hub card baseline
+✅ Sanity dashboard baseline
 ✅ Climate Supervisor backend and UI
-✅ Kegerator Fan Backend clean entity IDs and Always on validation
+✅ Kegerator Fan Backend clean entity IDs and Always on / Afterrun validation
 ✅ Kegerator fan mode/afterrun/fan-auto controls
 ✅ Carbonation Runtime backend, persistence and UI
 ✅ Carbonation control entity naming aligned with existing HA entity IDs
-✅ Counterflow Wort Cooling backend and UI
+✅ Counterflow Wort Cooling backend
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
 ✅ Fermentation Cockpit scope guard and compact idle UI
 ✅ Backend domain layout refactor
 ✅ Local Home Assistant baseline cleanup: no `bryggeriet_` BrewAssistant entity prefix
 ✅ Integration brand assets under `custom_components/brewassistant/brand/`
-✅ Main repo pruned of legacy packages, patch notes and obsolete migration docs
+✅ Main repo pruned of legacy package/dashboard clutter
 ```
 
 Beta limitations / still pending validation:
@@ -91,7 +95,7 @@ Beta limitations / still pending validation:
 
 ## HACS custom repository install
 
-This beta can be installed as a **HACS custom repository** after the GitHub repository has been made public.
+This beta can be installed as a **HACS custom repository**.
 
 In Home Assistant:
 
@@ -122,7 +126,7 @@ Notes:
 ```text
 - HACS installs the integration files under /config/custom_components/brewassistant/.
 - Integration brand assets live under /config/custom_components/brewassistant/brand/.
-- Dashboard YAML files in dashboards/ are examples and are not automatically installed as dashboards.
+- Dashboard YAML files in dashboard/ are examples and are not automatically installed as dashboards.
 - This repo is intended as a custom repository, not as a default HACS repository.
 - Keep operator supervision active during all BrewZilla/heater/pump tests.
 ```
@@ -152,6 +156,43 @@ rsync -a --delete \
 ```
 
 Restart Home Assistant after syncing.
+
+---
+
+## Dashboard baseline
+
+Current dashboard examples live under:
+
+```text
+dashboard/
+```
+
+Current baseline files:
+
+```text
+dashboard/brewassistant_sanity.yaml
+dashboard/cards/brewassistant_hub.yaml
+dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_event_log.yaml
+dashboard/cards/brewassistant_manual_brewday.yaml
+dashboard/cards/brewassistant_source_health.yaml
+dashboard/cards/brewfather_feed.yaml
+dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_learning.yaml
+dashboard/cards/carbonation.yaml
+dashboard/cards/fermentation.yaml
+dashboard/cards/kegerator.yaml
+```
+
+Dashboard docs:
+
+```text
+dashboard/README.md
+docs/dashboard-baselines.md
+docs/beta5-sanity-dashboard.md
+```
+
+Dashboard YAML is presentation-only. It may display state and call explicit operator actions, but business logic should stay in the Python integration.
 
 ---
 
@@ -218,50 +259,4 @@ Key beta behavior:
 - Boil stages fall back to 100°C when Brew Tracker omits a temperature target.
 - Pump is stopped during boil unless an explicit operator action, such as CFC Ready, starts it.
 - Runtime completion can be inferred when the final Brew Tracker step reaches zero.
-- Heater and pump are stopped when the runtime is completed.
-- Shelly power is treated as local live telemetry.
-- RAPT temperature/target are treated as cloud/control telemetry.
-- RAPT heat/pump utilization are treated as slower config telemetry.
-- Mash temperature is operator-selectable, defaulting to Auto.
-- Wort/kettle temperature is BrewZilla internal thermometer.
-- Mash/Wort delta is exposed as dashboard-safe context.
-- RAPT Pill is not used as a hot-side brew temperature source.
 ```
-
----
-
-## Kegerator fan-auto flow
-
-Current kegerator fan backend flow:
-
-```text
-climate.kegerator_kylskap
-+ sensor.kyl_temperatur_4
-+ sensor.brewassistant_kegerator_air_temperature_average
-+ sensor.kegerator_power
-+ switch.kegerator_fan
-+ sensor.kegerator_fan_power
-→ Kegerator Fan Backend
-→ switch.brewassistant_kegerator_fan_auto_enabled attributes
-→ optional switch.kegerator_fan on/off actions when fan-auto is enabled
-```
-
-Key beta behavior:
-
-```text
-- Compressor activity is inferred from sensor.kegerator_power > 20 W.
-- Fan running state is inferred from switch.kegerator_fan or fan power > 2 W.
-- Fan-auto is off by default.
-- Fan modes: Off, Always on, Afterrun.
-- Always on turns on switch.kegerator_fan while fan-auto is enabled.
-- Afterrun runs fan while compressor is active and continues for configured minutes after compressor stop.
-- Restart/statistics trend spikes are ignored above +5.00 °C/h.
-- Fan service calls are blocking.
-- Compressor/cooling target control remains in climate.kegerator_kylskap.
-```
-
----
-
-## Credits / Acknowledgements
-
-BrewAssistant is an independent Home Assistant custom integration and is not affiliated with Brewfather, KegLand/RAPT or RAPT Cloud.
