@@ -187,8 +187,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         else:
             interval = timedelta(seconds=30)
 
-        def _tick(now) -> None:
-            self.coordinator.hass.async_create_task(self._async_tick())
+        async def _tick(now) -> None:
+            await self._async_tick()
 
         self._tick_unsub = async_track_time_interval(
             self.coordinator.hass,
