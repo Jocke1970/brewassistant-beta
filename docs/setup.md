@@ -44,7 +44,7 @@ rsync -a --delete \
   /config/custom_components/brewassistant/
 ```
 
-Always back up the currently installed integration before replacing it.
+Always back up the currently installed integration before replacing it, but keep backups outside `/config/custom_components/`, for example under `/config/brewassistant_backups/`.
 
 ---
 
@@ -214,7 +214,7 @@ Exact entity IDs may vary if Home Assistant adds an area/device prefix.
 Recommended update flow:
 
 ```text
-1. Back up /config/custom_components/brewassistant/.
+1. Back up /config/custom_components/brewassistant/ to /config/brewassistant_backups/.
 2. Pull latest main from this repository.
 3. Sync custom_components/brewassistant/ into Home Assistant.
 4. Restart Home Assistant.
