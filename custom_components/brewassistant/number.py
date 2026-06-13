@@ -78,6 +78,19 @@ CFC_NUMBERS: dict[str, dict[str, Any]] = {
     },
 }
 
+KEGERATOR_FAN_NUMBERS: dict[str, dict[str, Any]] = {
+    "kegerator_fan_afterrun_minutes": {
+        "name": "BrewAssistant Kegerator Fan Afterrun Minutes",
+        "object_id": "brewassistant_kegerator_fan_afterrun_minutes",
+        "icon": "mdi:timer-outline",
+        "unit": "min",
+        "min": 0.0,
+        "max": 60.0,
+        "step": 1.0,
+        "default": 10.0,
+    },
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -95,7 +108,59 @@ async def async_setup_entry(
             BrewAssistantCounterflowChillerNumber(coordinator, key, config)
             for key, config in CFC_NUMBERS.items()
         ]
+        + [
+            BrewAssistantKegeratorFanNumber(coordinator, key, config)
+            for key, config in KEGERATOR_FAN_NUMBERS.items()
+        ]
     )
+
+
+class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
+    """Simple kegerator fan number control."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
+        super().__init__(coordinator, key)
+        self._config = config
+        self._value = float(config["default"])
+        self._attr_unique_id = f"{DOMAIN}_number_{key}"
+        self._attr_name = str(config["name"])
+        self._attr_suggested_object_id = str(config["object_id"])
+        self._attr_icon = str(config["icon"])
+        self._attr_native_unit_of_measurement = str(config["unit"])
+        self._attr_native_min_value = float(config["min"])
+        self._attr_native_max_value = float(config["max"])
+        self._attr_native_step = float(config["step"])
+
+    async def async_added_to_hass(self) -> None:
+        """Restore number value after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is None:
+            return
+        try:
+            self._value = float(last_state.state)
+        except (TypeError, ValueError):
+            self._value = float(self._config["default"])
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current value."""
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set current value."""
+        self._value = max(float(self._config["min"]), min(float(value), float(self._config["max"])))
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return diagnostics."""
+        return {
+            "source": "kegerator_fan_simple_control",
+            "default": self._config.get("default"),
+        }
 
 
 class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):

@@ -41,6 +41,13 @@ BREWZILLA_LEARNING_CONTEXT_OPTIONS = [
     "Real mash",
 ]
 
+KEGERATOR_FAN_MODE_OPTIONS = [
+    "Off",
+    "Cooling only",
+    "Afterrun",
+    "Always on",
+]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -56,6 +63,7 @@ async def async_setup_entry(
             BrewAssistantApplyModeSelect(coordinator),
             BrewAssistantBrewZillaLearningContextSelect(coordinator),
             BrewAssistantBrewZillaMashTemperatureSourceSelect(coordinator),
+            BrewAssistantKegeratorFanModeSelect(coordinator),
         ]
         + [
             BrewAssistantSectionPolicySelect(coordinator, section, config)
@@ -289,6 +297,54 @@ class BrewAssistantBrewZillaMashTemperatureSourceSelect(BrewAssistantEntity, Res
             "default": "Auto",
             "auto_priority": "BLE > Control Device > Internal",
             "wort_temperature_source": "BrewZilla Internal",
+        }
+
+
+class BrewAssistantKegeratorFanModeSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Simple kegerator fan mode selector."""
+
+    _attr_has_entity_name = False
+    _attr_options = KEGERATOR_FAN_MODE_OPTIONS
+    _attr_icon = "mdi:fan-auto"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "kegerator_fan_mode")
+        self._attr_unique_id = f"{DOMAIN}_select_kegerator_fan_mode"
+        self._attr_name = "BrewAssistant Kegerator Fan Mode"
+        self._attr_suggested_object_id = f"{DOMAIN}_kegerator_fan_mode"
+        self._current_option = "Afterrun"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore fan mode after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in KEGERATOR_FAN_MODE_OPTIONS:
+            self._current_option = last_state.state
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str | None:
+        """Return selected fan mode."""
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Set fan mode."""
+        if option not in KEGERATOR_FAN_MODE_OPTIONS:
+            return
+        self._current_option = option
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | bool]:
+        """Return fan mode diagnostics."""
+        return {
+            "source": "kegerator_fan_simple_control",
+            "default": "Afterrun",
+            "off": "Fan is kept off while fan-auto is enabled",
+            "cooling_only": "Fan follows compressor activity",
+            "afterrun": "Fan follows compressor activity and stays on after stop",
+            "always_on": "Fan stays on while fan-auto is enabled",
         }
 
 

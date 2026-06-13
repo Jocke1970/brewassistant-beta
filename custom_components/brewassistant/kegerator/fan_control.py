@@ -36,6 +36,16 @@ POWER_CANDIDATES = (
 )
 FAN = "switch.kegerator_fan"
 FAN_POWER = "sensor.kegerator_fan_power"
+FAN_MODE_SELECT = "select.brewassistant_kegerator_fan_mode"
+AFTER_RUN_NUMBER = "number.brewassistant_kegerator_fan_afterrun_minutes"
+
+MODE_OFF = "Off"
+MODE_COOLING_ONLY = "Cooling only"
+MODE_AFTERRUN = "Afterrun"
+MODE_ALWAYS_ON = "Always on"
+FAN_MODE_OPTIONS = [MODE_OFF, MODE_COOLING_ONLY, MODE_AFTERRUN, MODE_ALWAYS_ON]
+DEFAULT_FAN_MODE = MODE_AFTERRUN
+
 CHAMBER = "climate.fermentation_chamber"
 
 DATA_KEY = "kegerator_fan_auto"
@@ -186,6 +196,18 @@ def _format_trend(value: float | None) -> str:
     return "collecting" if value is None else f"{value:+.2f} °C/h"
 
 
+def _fan_mode(hass: HomeAssistant) -> str:
+    mode = _state(hass, FAN_MODE_SELECT)
+    return mode if mode in FAN_MODE_OPTIONS else DEFAULT_FAN_MODE
+
+
+def _afterrun_minutes(hass: HomeAssistant) -> float:
+    value = _num_state(hass, AFTER_RUN_NUMBER)
+    if value is None:
+        return AFTER_RUN_MIN
+    return max(0.0, min(float(value), 60.0))
+
+
 def _climate_enabled(state: str | None) -> bool:
     return state not in {None, "off", "unknown", "unavailable", "none", ""}
 
@@ -263,7 +285,7 @@ def _demand(inputs: FanInputs) -> FanDemand:
     )
 
 
-def _sync_compressor_runtime(hass: HomeAssistant, inputs: FanInputs) -> str | None:
+def _sync_compressor_runtime(hass: HomeAssistant, inputs: FanInputs, afterrun_minutes: float) -> str | None:
     data = _bucket(hass)
     now = dt_util.utcnow()
     previous = data.get(RUNTIME_PREVIOUS_COMPRESSOR_ACTIVE)
@@ -278,7 +300,7 @@ def _sync_compressor_runtime(hass: HomeAssistant, inputs: FanInputs) -> str | No
         return transition
 
     if previous is True:
-        afterrun_until = now + timedelta(minutes=AFTER_RUN_MIN)
+        afterrun_until = now + timedelta(minutes=afterrun_minutes)
         transition = "compressor_active_to_idle"
         data[RUNTIME_AFTERRUN_UNTIL] = afterrun_until.isoformat()
         data[RUNTIME_LAST_TRANSITION] = {
@@ -318,19 +340,24 @@ def _warning_level(inputs: FanInputs) -> str:
 
 def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecision]:
     inputs = _read_inputs(hass)
-    transition = _sync_compressor_runtime(hass, inputs) if mutate else None
+    fan_mode = _fan_mode(hass)
+    afterrun_minutes = _afterrun_minutes(hass)
+    transition = _sync_compressor_runtime(hass, inputs, afterrun_minutes) if mutate else None
     afterrun_active, afterrun_until, afterrun_remaining = _afterrun_state(hass, inputs)
     demand = _demand(inputs)
 
-    # Default strategy: fan follows the compressor, then runs afterrun.
-    # Temperature demand is diagnostic only. It must not keep the fan running
-    # by itself, otherwise a warm-but-idle fridge can hold the fan on forever.
     if not inputs.fan_switch_ok:
         desired_state = "blocked"
         reason = "missing_fan_switch"
-    elif not inputs.climate_enabled:
+    elif fan_mode == MODE_OFF:
         desired_state = "off"
-        reason = "climate_off"
+        reason = "mode_off"
+    elif fan_mode == MODE_ALWAYS_ON:
+        desired_state = "always_on"
+        reason = "mode_always_on"
+    elif fan_mode == MODE_COOLING_ONLY:
+        desired_state = "compressor_follow" if inputs.compressor_active else "standby"
+        reason = "compressor_active" if inputs.compressor_active else "compressor_idle"
     elif inputs.compressor_active:
         desired_state = "compressor_follow"
         reason = "compressor_active"
@@ -339,9 +366,9 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
         reason = "afterrun"
     else:
         desired_state = "standby"
-        reason = "standby"
+        reason = "compressor_idle_afterrun_expired"
 
-    should_run = desired_state in {"compressor_follow", "afterrun"}
+    should_run = desired_state in {"compressor_follow", "afterrun", "always_on"}
     desired_switch_state = "on" if should_run else "off"
 
     action = "none"
@@ -410,6 +437,9 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
     return {
         "source": "python_kegerator_fan_backend_v2_state_machine",
         "strategy": STRATEGY,
+        "fan_mode": _fan_mode(hass),
+        "fan_mode_entity": FAN_MODE_SELECT,
+        "fan_mode_options": FAN_MODE_OPTIONS,
         "status": status,
         "desired_fan_state": decision.state,
         "desired_switch_state": decision.desired_switch_state,
@@ -458,7 +488,8 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "afterrun_active": decision.afterrun_active,
         "afterrun_until": decision.afterrun_until,
         "afterrun_remaining_minutes": decision.afterrun_remaining_minutes,
-        "afterrun_minutes": AFTER_RUN_MIN,
+        "afterrun_minutes": _afterrun_minutes(hass),
+        "afterrun_entity": AFTER_RUN_NUMBER,
         "fan_switch_entity": FAN,
         "fan_state": inputs.fan_state,
         "fan_power_entity": FAN_POWER,
