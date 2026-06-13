@@ -26,6 +26,8 @@ button.py
 select.py
 number.py
 services.yaml
+brand/icon.png
+brand/logo.png
 brewday/
 brewzilla/
 carbonation_backend/
@@ -107,6 +109,7 @@ Main BrewAssistant areas:
 
 ```text
 sensor.brewassistant_brewday_*
+sensor.brewassistant_brewday_event_log_*
 sensor.brewassistant_brewzilla_*
 select.brewassistant_brewzilla_mash_temperature_source
 ```
@@ -123,13 +126,16 @@ switch.kegerator_fan
 sensor.kegerator_fan_power
 ```
 
-Main BrewAssistant entity:
+Main BrewAssistant entities:
 
 ```text
+switch.brewassistant_kegerator_guard_enabled
 switch.brewassistant_kegerator_fan_auto_enabled
+select.brewassistant_kegerator_fan_mode
+number.brewassistant_kegerator_fan_afterrun_minutes
 ```
 
-Home Assistant may prefix the final entity ID with the integration/device area name.
+Preferred clean entity IDs should not include area/device prefixes such as `bryggeriet_`. If Home Assistant creates prefixed entities, clean them through the Entity Registry UI.
 
 ### Fermentation
 
@@ -185,7 +191,7 @@ Recommended cleanup policy:
 - Do not enable old package helpers together with the Python integration unless deliberately testing migration behavior.
 - Disable old kegerator/fermentation/carbonation package helpers after verifying dashboards no longer depend on them.
 - Use Developer Tools → States and the Entity Registry UI to remove orphaned unavailable entities.
-- Never edit Home Assistant .storage files manually for cleanup.
+- Keep backup copies outside /config/custom_components/.
 ```
 
 ---
@@ -199,13 +205,25 @@ sensor.brewassistant_core_version
 sensor.brewassistant_next_action
 sensor.brewassistant_brewday_runtime_status
 sensor.brewassistant_brewday_stage
+sensor.brewassistant_brewday_event_log_summary
 sensor.brewassistant_brewzilla_wort_temperature
+switch.brewassistant_kegerator_guard_enabled
 switch.brewassistant_kegerator_fan_auto_enabled
+select.brewassistant_kegerator_fan_mode
+number.brewassistant_kegerator_fan_afterrun_minutes
 sensor.brewassistant_carbonation_status
 sensor.brewassistant_fermentation_chamber_air_temperature_average
 ```
 
-Exact entity IDs may vary if Home Assistant adds an area/device prefix.
+Baseline checks should show:
+
+```text
+- no active `bryggeriet_brewassistant_*` entity IDs
+- `sensor.brewassistant_brewday_event_log_summary` exists
+- old `sensor.brewassistant_brewday_audit_*` entities are gone or unknown
+- `climate.kegerator_kylskap` remains `cool` when serving cooling should be active
+- `switch.kegerator_fan` follows fan mode when fan-auto is enabled
+```
 
 ---
 
