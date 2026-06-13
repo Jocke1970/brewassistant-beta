@@ -2,7 +2,7 @@
 
 This guide describes the current BrewAssistant beta setup in Home Assistant.
 
-BrewAssistant is now centered on the Python custom integration in `custom_components/brewassistant/`. Old YAML package files are no longer the source of truth for mainline setup.
+BrewAssistant is centered on the Python custom integration in `custom_components/brewassistant/`. Old YAML package files are no longer the source of truth for mainline setup.
 
 ---
 
@@ -68,10 +68,34 @@ If Home Assistant keeps old entity IDs from the entity registry, verify the actu
 
 Dashboard YAML is optional and should be treated as presentation only.
 
+Current dashboard examples live under:
+
+```text
+dashboard/
+```
+
 Current baseline/dashboard policy is documented in:
 
 ```text
+dashboard/README.md
 docs/dashboard-baselines.md
+```
+
+Current dashboard/card files:
+
+```text
+dashboard/brewassistant_sanity.yaml
+dashboard/cards/brewassistant_hub.yaml
+dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_event_log.yaml
+dashboard/cards/brewassistant_manual_brewday.yaml
+dashboard/cards/brewassistant_source_health.yaml
+dashboard/cards/brewfather_feed.yaml
+dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_learning.yaml
+dashboard/cards/carbonation.yaml
+dashboard/cards/fermentation.yaml
+dashboard/cards/kegerator.yaml
 ```
 
 Dashboard cards may use custom Lovelace cards such as:
@@ -112,6 +136,7 @@ sensor.brewassistant_brewday_*
 sensor.brewassistant_brewday_event_log_*
 sensor.brewassistant_brewzilla_*
 select.brewassistant_brewzilla_mash_temperature_source
+binary_sensor.brewassistant_runtime_brewfather_available
 ```
 
 ### Kegerator / serving
@@ -143,7 +168,8 @@ Useful sources:
 
 ```text
 climate.fermentation_chamber
-RAPT Pill or other gravity/temperature source
+sensor.yellow_pill_gravity
+sensor.yellow_pill_temperature
 switch.fermentation_heat_mat
 sensor.fermentation_heat_mat_power
 ```
@@ -223,6 +249,12 @@ Baseline checks should show:
 - old `sensor.brewassistant_brewday_audit_*` entities are gone or unknown
 - `climate.kegerator_kylskap` remains `cool` when serving cooling should be active
 - `switch.kegerator_fan` follows fan mode when fan-auto is enabled
+```
+
+For a compact post-restart UI check, use:
+
+```text
+dashboard/brewassistant_sanity.yaml
 ```
 
 ---
