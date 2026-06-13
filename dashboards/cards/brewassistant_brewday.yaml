@@ -1,0 +1,363 @@
+type: conditional
+conditions:
+  - entity: sensor.brewassistant_brewday_runtime_state
+    state_not: idle
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_brewday_runtime_summary
+      name: Brewday Runtime
+      icon: |
+        [[[
+          const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'unknown';
+          const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+
+          if (state === 'paused') return 'mdi:pause-circle-outline';
+          if (state === 'completed' || state === 'finished') return 'mdi:check-decagram-outline';
+          if (stage.includes('mash')) return 'mdi:pot-steam-outline';
+          if (stage.includes('boil')) return 'mdi:kettle-steam-outline';
+          if (stage.includes('cool') || stage.includes('chill')) return 'mdi:snowflake-thermometer';
+          if (state === 'running' || state === 'live') return 'mdi:play-circle-outline';
+          return 'mdi:beer-outline';
+        ]]]
+      show_state: false
+      show_label: true
+      tap_action:
+        action: more-info
+      hold_action:
+        action: more-info
+      label: |
+        [[[
+          function clean(v) {
+            if (v === undefined || v === null) return null;
+            const s = String(v);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+          }
+
+          function n(id) {
+            const raw = states[id]?.state;
+            const val = Number(String(raw ?? '').replace(',', '.'));
+            return Number.isFinite(val) ? val : null;
+          }
+
+          function fmt(v, unit = '', d = 1) {
+            if (!Number.isFinite(v)) return '—';
+            return `${v.toFixed(d)}${unit ? ' ' + unit : ''}`;
+          }
+
+          function short(v, max = 48) {
+            const s = String(v ?? '—');
+            return s.length > max ? s.slice(0, max - 1) + '…' : s;
+          }
+
+          const summary = clean(states['sensor.brewassistant_brewday_runtime_summary']?.state) || '—';
+          const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
+          const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
+          const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
+          const next = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
+
+          const liveProgress = n('sensor.brewassistant_brewday_live_progress');
+          const remaining = n('sensor.brewassistant_brewday_live_time_remaining_minutes');
+
+          const stageEngine = clean(states['sensor.brewassistant_brewday_stage']?.state) || '—';
+          const statusLine = clean(states['sensor.brewassistant_brewday_stage_status_line']?.state) || summary;
+          const suggestedAction = clean(states['sensor.brewassistant_brewday_stage_suggested_action']?.state) || '—';
+          const controlHint = clean(states['sensor.brewassistant_brewday_stage_control_hint']?.state) || '—';
+
+          const eventSummary = clean(states['sensor.brewassistant_brewday_event_log_summary']?.state) || 'empty';
+          const eventCount = n('sensor.brewassistant_brewday_event_log_event_count');
+          const lastEvent = clean(states['sensor.brewassistant_brewday_event_log_last_event']?.state) || '—';
+
+          let headline = 'Brewday aktiv';
+          let badge = 'Running';
+          let badgeIcon = 'mdi:play-circle-outline';
+          let chipBg = 'rgba(76,175,80,.12)';
+          let chipBorder = 'rgba(76,175,80,.24)';
+
+          if (runtimeState === 'paused') {
+            headline = 'Brewday pausad';
+            badge = 'Paused';
+            badgeIcon = 'mdi:pause-circle-outline';
+            chipBg = 'rgba(255,193,7,.14)';
+            chipBorder = 'rgba(255,193,7,.28)';
+          } else if (runtimeState === 'completed' || runtimeState === 'finished') {
+            headline = 'Brewday klar';
+            badge = 'Done';
+            badgeIcon = 'mdi:check-decagram-outline';
+            chipBg = 'rgba(76,175,80,.13)';
+            chipBorder = 'rgba(76,175,80,.28)';
+          } else if (runtimeState === 'awaiting_snapshot') {
+            headline = 'Väntar på snapshot';
+            badge = 'Waiting';
+            badgeIcon = 'mdi:cloud-sync-outline';
+            chipBg = 'rgba(33,150,243,.12)';
+            chipBorder = 'rgba(33,150,243,.24)';
+          } else if (runtimeState === 'idle') {
+            headline = 'Idle';
+            badge = 'Idle';
+            badgeIcon = 'mdi:sleep';
+            chipBg = 'rgba(127,127,127,.12)';
+            chipBorder = 'rgba(127,127,127,.20)';
+          }
+
+          const progressMain = Number.isFinite(liveProgress) ? `${liveProgress.toFixed(0)} %` : '—';
+          const remainingMain = Number.isFinite(remaining) ? `${remaining.toFixed(0)} min` : '—';
+          const eventMain = Number.isFinite(eventCount) ? `${eventCount.toFixed(0)}` : '0';
+
+          const metric = (title, main, sub, icon, kind = 'neutral') => {
+            const bg =
+              kind === 'blue' ? 'rgba(33,150,243,.09)' :
+              kind === 'cyan' ? 'rgba(0,188,212,.10)' :
+              kind === 'green' ? 'rgba(76,175,80,.11)' :
+              kind === 'yellow' ? 'rgba(255,193,7,.13)' :
+              kind === 'red' ? 'rgba(244,67,54,.11)' :
+              'rgba(127,127,127,.08)';
+            const border =
+              kind === 'blue' ? 'rgba(33,150,243,.20)' :
+              kind === 'cyan' ? 'rgba(0,188,212,.22)' :
+              kind === 'green' ? 'rgba(76,175,80,.24)' :
+              kind === 'yellow' ? 'rgba(255,193,7,.26)' :
+              kind === 'red' ? 'rgba(244,67,54,.24)' :
+              'rgba(127,127,127,.14)';
+            return `
+              <div style="
+                min-width:0;
+                border-radius:13px;
+                padding:7px 6px;
+                background:${bg};
+                border:1px solid ${border};
+                display:grid;
+                grid-template-columns:18px minmax(0,1fr);
+                gap:5px;
+                align-items:center;
+              ">
+                <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon>
+                <div style="min-width:0;text-align:center;">
+                  <div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div>
+                  <div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
+                  <div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
+                </div>
+              </div>
+            `;
+          };
+
+          return `
+            <div style="line-height:1.25;min-width:0;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+                <div style="min-width:0;">
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">Operator cockpit · runtime · stage · event log</div>
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div>
+                </div>
+                <div style="
+                  display:inline-flex;
+                  align-items:center;
+                  gap:6px;
+                  padding:6px 9px;
+                  border-radius:999px;
+                  background:${chipBg};
+                  border:1px solid ${chipBorder};
+                  font-size:11px;
+                  font-weight:950;
+                  white-space:nowrap;
+                ">
+                  <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
+                  <span>${badge}</span>
+                </div>
+              </div>
+
+              <div style="margin-top:8px;text-align:center;">
+                <div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div>
+                <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">
+                  ${runtimeState} · ${stage} · ${short(step, 48)}<br>next: ${short(next, 60)}
+                </div>
+              </div>
+
+              <div style="
+                margin-top:11px;
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:7px;
+              ">
+                ${metric('Stage', short(stage, 12), stageEngine, 'mdi:map-marker-path', 'blue')}
+                ${metric('Step', short(step, 14), 'current', 'mdi:format-list-checks', 'cyan')}
+                ${metric('Next', short(next, 14), 'next', 'mdi:skip-next-circle-outline', 'neutral')}
+                ${metric('Progress', progressMain, remainingMain, 'mdi:progress-clock', Number.isFinite(liveProgress) && liveProgress > 80 ? 'green' : 'neutral')}
+              </div>
+
+              <div style="
+                margin-top:7px;
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:7px;
+              ">
+                ${metric('Action', short(suggestedAction, 14), 'suggested', 'mdi:gesture-tap-button', suggestedAction !== '—' ? 'yellow' : 'neutral')}
+                ${metric('Control', short(controlHint, 14), 'hint', 'mdi:shield-check-outline', 'neutral')}
+                ${metric('Events', eventMain, eventSummary, 'mdi:clipboard-text-clock-outline', Number.isFinite(eventCount) && eventCount > 0 ? 'green' : 'neutral')}
+                ${metric('Last', short(lastEvent, 14), 'event', 'mdi:history', 'neutral')}
+              </div>
+
+              <div style="
+                margin-top:10px;
+                display:grid;
+                grid-template-columns:20px minmax(0,1fr);
+                gap:7px;
+                align-items:center;
+                border-radius:14px;
+                padding:8px 9px;
+                background:rgba(76,175,80,.10);
+                border:1px solid rgba(76,175,80,.24);
+              ">
+                <ha-icon icon="mdi:check-circle-outline" style="width:15px;height:15px;opacity:.76;"></ha-icon>
+                <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
+                  ${short(statusLine, 120)}
+                </div>
+              </div>
+            </div>
+          `;
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 14px
+          - overflow: hidden
+          - background: >-
+              linear-gradient(135deg, rgba(33,150,243,.10),
+              rgba(127,127,127,.035))
+          - border: 1px solid rgba(33,150,243,.20)
+          - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+        grid:
+          - grid-template-areas: "\"i n\" \"i l\""
+          - grid-template-columns: 42px minmax(0,1fr)
+          - grid-template-rows: min-content min-content
+          - column-gap: 12px
+        icon:
+          - width: 27px
+          - height: 27px
+        img_cell:
+          - width: 42px
+          - height: 42px
+          - border-radius: 50%
+          - background: rgba(33,150,243,.15)
+          - color: rgb(33,150,243)
+        name:
+          - justify-self: start
+          - align-self: end
+          - font-size: 15px
+          - font-weight: 950
+          - letter-spacing: "-.02em"
+        label:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
+          - margin-top: 4px
+    - type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          entity: button.brewassistant_confirm_supervised_apply
+          name: CONFIRM
+          icon: mdi:check-decagram
+          tap_action:
+            action: call-service
+            service: button.press
+            target:
+              entity_id: button.brewassistant_confirm_supervised_apply
+            confirmation:
+              text: Confirm pending BrewAssistant supervised action?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(76,175,80,.10)
+              - border: 1px solid rgba(76,175,80,.24)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+        - type: custom:button-card
+          entity: button.brewassistant_cancel_supervised_apply
+          name: CANCEL
+          icon: mdi:cancel
+          tap_action:
+            action: call-service
+            service: button.press
+            target:
+              entity_id: button.brewassistant_cancel_supervised_apply
+            confirmation:
+              text: Cancel pending BrewAssistant supervised action?
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(244,67,54,.09)
+              - border: 1px solid rgba(244,67,54,.22)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+    - type: custom:expander-card
+      title-card:
+        type: custom:button-card
+        entity: sensor.brewassistant_brewday_runtime_summary
+        name: Brewday detaljer
+        icon: mdi:tune-variant
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? '—';
+            const stage = states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '—';
+            const step = states['sensor.brewassistant_brewday_runtime_step']?.state ?? '—';
+            const events = states['sensor.brewassistant_brewday_event_log_event_count']?.state ?? '0';
+            return `${state} · ${stage} · ${step} · events ${events}`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(127,127,127,.055)
+            - border: 1px solid rgba(127,127,127,.14)
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 34px minmax(0,1fr)
+            - column-gap: 10px
+          icon:
+            - width: 22px
+            - height: 22px
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 11.5px
+            - font-weight: 750
+            - opacity: 0.72
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_brewday_runtime_summary
+              name: Runtime summary
+            - entity: sensor.brewassistant_brewday_runtime_state
+              name: Runtime state
+            - entity: sensor.brewassistant_brewday_runtime_stage
+              name: Runtime stage
+            - entity: sensor.brewassistant_brewday_runtime_step
+              name: Runtime step
+            - entity: sensor.brewassistant_brewday_runtime_next_step
+              name: Next step
+            - entity: sensor.brewassistant_brewday_live_time_remaining_minutes
+              name: Remaining minutes
+            - entity: sensor.brewassistant_brewday_live_progress
+              name: Live progress
+            - entity: sensor.brewassistant_brewday_stage_status_line
+              name: Stage status line
+            - entity: sensor.brewassistant_brewday_stage_suggested_action
+              name: Suggested action
+            - entity: sensor.brewassistant_brewday_stage_control_hint
+              name: Control hint
+            - entity: sensor.brewassistant_brewday_event_log_summary
+              name: Event log summary
+            - entity: sensor.brewassistant_brewday_event_log_event_count
+              name: Event count
