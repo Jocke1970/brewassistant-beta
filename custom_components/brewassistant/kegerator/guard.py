@@ -26,6 +26,9 @@ KEGERATOR_SWITCH = "switch.kegerator"
 AIR_TEMP_ENTITY = "sensor.kyl_temperatur_4"
 CARBONATION_STATUS_ENTITY = "sensor.brewassistant_carbonation_status"
 CARBONATION_TEMP_ENTITY = "sensor.brewassistant_carbonation_temperature"
+KEGERATOR_CLIMATE_ENTITY = "climate.kegerator_kylskap"
+KEGERATOR_CLIMATE_RESTART_TARGET = 4.0
+CLIMATE_OFF_STATES = {"off", "unknown", "unavailable", "none", ""}
 
 # climate.kegerator_kylskap is the protected cooling controller and must not be
 # disabled by the guard on Home Assistant restart. The kegerator climate is owned
@@ -114,6 +117,102 @@ def _desired_power(control_action: str, compressor_on: bool) -> str:
     if control_action == "turn_off":
         return "off"
     return "on" if compressor_on else "off"
+
+
+async def async_restore_kegerator_climate_if_needed(
+    hass: HomeAssistant,
+    *,
+    source: str = "watchdog",
+) -> dict[str, Any]:
+    """Ensure the kegerator climate is cooling after HA restart.
+
+    This is intentionally simple and safety-first:
+    if kegerator guard is enabled and the climate entity is off/unknown/unavailable,
+    restore cool mode and a conservative 4 °C target.
+    """
+    runtime = _runtime_data(hass)
+    climate_state_obj = hass.states.get(KEGERATOR_CLIMATE_ENTITY)
+    climate_state = climate_state_obj.state if climate_state_obj is not None else "missing"
+    enabled = _guard_enabled(hass)
+
+    result = {
+        "at": dt_util.utcnow().isoformat(),
+        "source": source,
+        "enabled": enabled,
+        "climate_entity": KEGERATOR_CLIMATE_ENTITY,
+        "climate_state": climate_state,
+        "target_temperature": KEGERATOR_CLIMATE_RESTART_TARGET,
+        "action": "none",
+        "status": "ok",
+    }
+
+    if not enabled:
+        result["status"] = "disabled"
+        result["reason"] = "kegerator guard is disabled"
+        runtime["kegerator_climate_restart_last_action"] = result
+        return result
+
+    if climate_state not in CLIMATE_OFF_STATES and climate_state != "missing":
+        result["reason"] = "climate already active"
+        runtime["kegerator_climate_restart_last_action"] = result
+        return result
+
+    try:
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {
+                "entity_id": KEGERATOR_CLIMATE_ENTITY,
+                "temperature": KEGERATOR_CLIMATE_RESTART_TARGET,
+            },
+            blocking=True,
+        )
+        await hass.services.async_call(
+            "climate",
+            "set_hvac_mode",
+            {
+                "entity_id": KEGERATOR_CLIMATE_ENTITY,
+                "hvac_mode": "cool",
+            },
+            blocking=True,
+        )
+        result["action"] = "restore_cool"
+        result["status"] = "restored"
+        result["reason"] = f"{KEGERATOR_CLIMATE_ENTITY} was {climate_state}; restored to cool"
+        await hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "notification_id": "brewassistant_kegerator_climate_restart_guard",
+                "title": "Kegerator climate restored",
+                "message": (
+                    f"{KEGERATOR_CLIMATE_ENTITY} was {climate_state}. "
+                    f"BrewAssistant restored cool mode and target "
+                    f"{KEGERATOR_CLIMATE_RESTART_TARGET:.1f} °C."
+                ),
+            },
+            blocking=False,
+        )
+    except Exception as ex:
+        result["action"] = "restore_failed"
+        result["status"] = "failed"
+        result["reason"] = str(ex)
+        await hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "notification_id": "brewassistant_kegerator_climate_restart_guard",
+                "title": "Kegerator climate restore FAILED",
+                "message": (
+                    f"{KEGERATOR_CLIMATE_ENTITY} was {climate_state}, "
+                    f"but BrewAssistant could not restore it: {ex}"
+                ),
+            },
+            blocking=False,
+        )
+
+    runtime["kegerator_climate_restart_last_action"] = result
+    return result
 
 
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -218,6 +317,10 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "climate_conflict": bool(conflicts),
         "climate_conflict_action": "turn_off" if conflicts and enabled else "none",
         "last_climate_conflict_action": last_climate_action,
+        "kegerator_climate_entity": KEGERATOR_CLIMATE_ENTITY,
+        "kegerator_climate_state": hass.states.get(KEGERATOR_CLIMATE_ENTITY).state if hass.states.get(KEGERATOR_CLIMATE_ENTITY) is not None else None,
+        "kegerator_climate_restart_target": KEGERATOR_CLIMATE_RESTART_TARGET,
+        "last_climate_restart_action": runtime.get("kegerator_climate_restart_last_action"),
         "last_control_action": last_action,
         "last_policy_result": last_action,
         "last_policy_status": last_action.get("status") if isinstance(last_action, dict) else None,
@@ -232,6 +335,7 @@ async def async_apply_kegerator_guard(hass: HomeAssistant) -> dict[str, Any]:
     """Apply the kegerator guard once if enabled."""
     runtime = _runtime_data(hass)
     runtime[GUARD_LAST_EVALUATION_KEY] = dt_util.utcnow().isoformat()
+    await async_restore_kegerator_climate_if_needed(hass, source="kegerator_guard_watchdog")
     snapshot = build_kegerator_guard_snapshot(hass)
     action = snapshot.get("control_action")
     command = snapshot.get("control_command")
