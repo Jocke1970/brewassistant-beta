@@ -1,4 +1,4 @@
-# BrewAssistant Brewday Audit Card v1.2
+# BrewAssistant Brewday Event Log Card v1.2
 # Compact top card always visible. Details appear only while brewday runtime is active.
 
 # Required custom cards:
@@ -10,8 +10,8 @@
 type: custom:vertical-stack-in-card
 cards:
   - type: custom:mushroom-template-card
-    entity: sensor.brewassistant_brewday_audit_summary
-    primary: Brewday Audit
+    entity: sensor.brewassistant_brewday_event_log_summary
+    primary: Brewday Event Log
     secondary: >-
       {% set runtime = states('sensor.brewassistant_brewday_runtime_state') %}
       {% set count = state_attr(entity, 'event_count') or 0 %}
@@ -90,7 +90,7 @@ cards:
                 action: call-service
                 service: brewassistant.brewday_audit_clear
                 confirmation:
-                  text: Clear Brewday audit log?
+                  text: Clear Brewday event log?
               styles:
                 card:
                   - border-radius: 16px
@@ -104,29 +104,29 @@ cards:
           square: false
           cards:
             - type: custom:mushroom-entity-card
-              entity: sensor.brewassistant_brewday_audit_summary
+              entity: sensor.brewassistant_brewday_event_log_summary
               name: Status
               icon: mdi:clipboard-text-clock
             - type: custom:mushroom-entity-card
-              entity: sensor.brewassistant_brewday_audit_event_count
+              entity: sensor.brewassistant_brewday_event_log_event_count
               name: Events
               icon: mdi:counter
             - type: custom:mushroom-entity-card
-              entity: sensor.brewassistant_brewday_audit_last_event
+              entity: sensor.brewassistant_brewday_event_log_last_event
               name: Last event
               icon: mdi:history
             - type: custom:mushroom-entity-card
-              entity: sensor.brewassistant_brewday_audit_last_step
+              entity: sensor.brewassistant_brewday_event_log_last_step
               name: Last step
               icon: mdi:playlist-check
             - type: custom:mushroom-entity-card
-              entity: sensor.brewassistant_brewday_audit_last_target
+              entity: sensor.brewassistant_brewday_event_log_last_target
               name: Last target
               icon: mdi:target
 
         - type: markdown
           content: >-
-            {% set a = state_attr('sensor.brewassistant_brewday_audit_summary', 'recent_events') or [] %}
+            {% set a = state_attr('sensor.brewassistant_brewday_event_log_summary', 'recent_events') or [] %}
             {% if a | count == 0 %}
             **Recent events:** none yet
             {% else %}
