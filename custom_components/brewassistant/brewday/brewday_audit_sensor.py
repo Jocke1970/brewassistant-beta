@@ -13,15 +13,15 @@ from ..entity import BrewAssistantEntity
 
 
 AUDIT_SENSORS: dict[str, dict[str, Any]] = {
-    "brewday_audit_summary": {"field": "status"},
-    "brewday_audit_event_count": {
+    "brewday_event_log_summary": {"field": "status"},
+    "brewday_event_log_event_count": {
         "field": "event_count",
         "unit": "events",
         "state_class": SensorStateClass.MEASUREMENT,
     },
-    "brewday_audit_last_event": {"field": "last_event_type"},
-    "brewday_audit_last_step": {"field": "last_step"},
-    "brewday_audit_last_target": {"field": "last_target"},
+    "brewday_event_log_last_event": {"field": "last_event_type"},
+    "brewday_event_log_last_step": {"field": "last_step"},
+    "brewday_event_log_last_target": {"field": "last_target"},
 }
 
 
