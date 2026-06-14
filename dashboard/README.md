@@ -1,6 +1,6 @@
 # BrewAssistant dashboard
 
-This directory contains the current dashboard baseline for BrewAssistant Beta.
+This directory contains the current dashboard card baseline for BrewAssistant Beta.
 
 Dashboard files are examples/operator UI only. Runtime normalization, orchestration, safety checks and calculations live in the Python custom integration under `custom_components/brewassistant/`.
 
@@ -8,7 +8,6 @@ Dashboard files are examples/operator UI only. Runtime normalization, orchestrat
 
 ```text
 dashboard/
-  brewassistant_clean.yaml
   brewassistant_sanity.yaml
   cards/
     brewassistant_hub.yaml
@@ -24,19 +23,14 @@ dashboard/
     kegerator.yaml
 ```
 
-## Clean dashboard
+## Hub replacement workflow
 
-`brewassistant_clean.yaml` is the switch-driven daily dashboard example.
+`cards/brewassistant_hub.yaml` is the daily mission-control card and should replace the existing BrewAssistant Hub card in the Home Assistant dashboard.
 
-It always shows:
-
-```text
-cards/brewassistant_hub.yaml
-```
-
-All other module cards are wrapped by persistent BrewAssistant visibility switches:
+The Hub card exposes:
 
 ```text
+switch.brewzilla
 switch.brewassistant_show_brewday
 switch.brewassistant_show_manual_brewday
 switch.brewassistant_show_brewfather_feed
@@ -49,7 +43,7 @@ switch.brewassistant_show_carbonation
 switch.brewassistant_show_kegerator
 ```
 
-The Hub card exposes these switches plus `switch.brewzilla` main power, so the dashboard can stay clean when a module is not currently relevant.
+The `switch.brewassistant_show_*` entities are persistent backend visibility controls. Existing dashboard cards can be wrapped with conditional-card visibility against these switches, or left as-is until that UI pass is done.
 
 ## Cards
 
@@ -71,7 +65,7 @@ The Hub card exposes these switches plus `switch.brewzilla` main power, so the d
 
 `brewassistant_sanity.yaml` is a compact post-restart validation dashboard. It is intended for quick checks after updating Home Assistant or the BrewAssistant integration.
 
-The sanity dashboard is intentionally not switch-hidden, because it is meant for diagnostics even when the daily clean dashboard is collapsed.
+The sanity dashboard is intentionally not switch-hidden, because it is meant for diagnostics even when the daily dashboard is collapsed.
 
 ## Frontend dependencies
 
