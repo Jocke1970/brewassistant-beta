@@ -8,6 +8,7 @@ Dashboard files are examples/operator UI only. Runtime normalization, orchestrat
 
 ```text
 dashboard/
+  brewassistant_clean.yaml
   brewassistant_sanity.yaml
   cards/
     brewassistant_hub.yaml
@@ -23,11 +24,38 @@ dashboard/
     kegerator.yaml
 ```
 
+## Clean dashboard
+
+`brewassistant_clean.yaml` is the switch-driven daily dashboard example.
+
+It always shows:
+
+```text
+cards/brewassistant_hub.yaml
+```
+
+All other module cards are wrapped by persistent BrewAssistant visibility switches:
+
+```text
+switch.brewassistant_show_brewday
+switch.brewassistant_show_manual_brewday
+switch.brewassistant_show_brewfather_feed
+switch.brewassistant_show_brewzilla
+switch.brewassistant_show_brewzilla_learning
+switch.brewassistant_show_event_log
+switch.brewassistant_show_source_health
+switch.brewassistant_show_fermentation
+switch.brewassistant_show_carbonation
+switch.brewassistant_show_kegerator
+```
+
+The Hub card exposes these switches plus `switch.brewzilla` main power, so the dashboard can stay clean when a module is not currently relevant.
+
 ## Cards
 
 | File | Purpose |
 | --- | --- |
-| `brewassistant_hub.yaml` | Compact mission-control overview for the major BrewAssistant domains. |
+| `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
 | `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
 | `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
@@ -42,6 +70,8 @@ dashboard/
 ## Sanity dashboard
 
 `brewassistant_sanity.yaml` is a compact post-restart validation dashboard. It is intended for quick checks after updating Home Assistant or the BrewAssistant integration.
+
+The sanity dashboard is intentionally not switch-hidden, because it is meant for diagnostics even when the daily clean dashboard is collapsed.
 
 ## Frontend dependencies
 
@@ -66,5 +96,6 @@ Install required frontend cards before copying dashboard YAML into Home Assistan
 - Avoid storing every visual iteration in the repo.
 - Put backend logic in Python, not in dashboard templates.
 - Use dashboard YAML for presentation and explicit operator actions.
+- Use BrewAssistant dashboard visibility switches for daily dashboard show/hide.
 - Prefer clean BrewAssistant entity IDs without local area/device prefixes.
 ```
