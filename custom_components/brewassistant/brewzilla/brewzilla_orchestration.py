@@ -39,6 +39,13 @@ MASH_IN_APPROACH_PUMP_UTILIZATION = 50.0
 MASH_IN_READY_HEAT_UTILIZATION = 40.0
 MASH_IN_OVERSHOOT_HEAT_UTILIZATION = 0.0
 MASH_IN_PUMP_OFF_UTILIZATION = 0.0
+MASH_HOLD_LOWER_MARGIN_C = 0.3
+MASH_HOLD_UPPER_MARGIN_C = 0.5
+MASH_HOLD_HEAT_UTILIZATION = 40.0
+MASH_HOLD_RECOVERY_HEAT_UTILIZATION = 55.0
+MASH_HOLD_OVERSHOOT_HEAT_UTILIZATION = 0.0
+MASH_HOLD_PUMP_UTILIZATION = 50.0
+MASH_HOLD_AWAITING_CONFIRM_PUMP_UTILIZATION = 0.0
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {
@@ -51,6 +58,7 @@ _ACTIVE_RUNTIME_STATES = {
 }
 _MASH_WORDS = ("mash", "mäsk", "protein", "beta", "alpha", "saccharification", "sack", "rest")
 _BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokning", "kokgiva")
+_COOL_WORDS = ("cool", "chill", "kyl")
 _MASH_IN_HEAT_WORDS = (
     "heat strike",
     "strike water",
@@ -58,11 +66,19 @@ _MASH_IN_HEAT_WORDS = (
     "heating up to mash-in",
     "heat to mash",
     "heat mash",
-    "mash-in",
-    "mash in",
     "värm mäsk",
     "värmning till mäsk",
+)
+_MASH_HOLD_WORDS = (
+    "mash in",
+    "mash-in",
     "mäsk-in",
+    "saccharification",
+    "mash rest",
+    "mash hold",
+    "hold mash",
+    "mäskrast",
+    "rest",
 )
 LOCAL_LIVE_ENTITY_IDS = (BREWZILLA_POWER_SENSOR,)
 RAPT_CONTROL_ENTITY_IDS = (BREWZILLA_TEMP_SENSOR, BREWZILLA_TARGET_NUMBER)
@@ -199,6 +215,10 @@ def _rapt_brewzilla_observation(hass: HomeAssistant) -> dict[str, Any]:
     }
 
 
+def _current_stage_text(runtime: dict[str, Any]) -> str:
+    return f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('raw_step_name') or ''}".lower()
+
+
 def _stage_text(runtime: dict[str, Any]) -> str:
     return f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('next_step') or ''} {runtime.get('raw_step_name') or ''}".lower()
 
@@ -208,10 +228,19 @@ def _stage_is_boil(runtime: dict[str, Any]) -> bool:
 
 
 def _stage_is_heat_to_mash_in(runtime: dict[str, Any]) -> bool:
-    text = _stage_text(runtime)
-    if any(word in text for word in _BOIL_WORDS):
+    text = _current_stage_text(runtime)
+    if any(word in text for word in _BOIL_WORDS + _COOL_WORDS):
         return False
     return any(word in text for word in _MASH_IN_HEAT_WORDS)
+
+
+def _stage_is_mash_hold(runtime: dict[str, Any]) -> bool:
+    text = _current_stage_text(runtime)
+    if any(word in text for word in _BOIL_WORDS + _COOL_WORDS + _MASH_IN_HEAT_WORDS):
+        return False
+    return any(word in text for word in _MASH_HOLD_WORDS) or (
+        "mash" in text and "strike" not in text and "heat" not in text
+    )
 
 
 def _stage_recommends_pump(runtime: dict[str, Any]) -> bool:
@@ -228,6 +257,19 @@ def _utilization_action_needed(current: float | None, desired: float | None) -> 
     return desired is not None and (current is None or abs(float(desired) - float(current)) > UTILIZATION_TOLERANCE)
 
 
+def _inactive_strategy() -> dict[str, Any]:
+    return {
+        "active": False,
+        "phase": None,
+        "desired_heat_utilization": None,
+        "desired_pump_utilization": None,
+        "desired_heater_on": None,
+        "desired_pump_on": None,
+        "mash_in_confirmation_recommended": False,
+        "reason": None,
+    }
+
+
 def _mash_in_heat_strategy(
     runtime: dict[str, Any],
     *,
@@ -236,16 +278,7 @@ def _mash_in_heat_strategy(
 ) -> dict[str, Any]:
     """Return stage-specific BrewZilla actions for heating strike water/mash-in."""
     if not _stage_is_heat_to_mash_in(runtime) or current_temperature is None or requested_target is None:
-        return {
-            "active": False,
-            "phase": None,
-            "desired_heat_utilization": None,
-            "desired_pump_utilization": None,
-            "desired_heater_on": None,
-            "desired_pump_on": None,
-            "mash_in_confirmation_recommended": False,
-            "reason": None,
-        }
+        return _inactive_strategy()
 
     delta_to_target = requested_target - current_temperature
     if delta_to_target > MASH_IN_APPROACH_MARGIN_C:
@@ -290,6 +323,61 @@ def _mash_in_heat_strategy(
         "desired_heater_on": desired_heater_on,
         "desired_pump_on": desired_pump_on,
         "mash_in_confirmation_recommended": mash_in_confirmation_recommended,
+        "reason": reason,
+    }
+
+
+def _mash_hold_strategy(
+    runtime: dict[str, Any],
+    *,
+    runtime_state: str,
+    current_temperature: float | None,
+    requested_target: float | None,
+) -> dict[str, Any]:
+    """Return BrewZilla actions for mash-in/rest temperature holding."""
+    if not _stage_is_mash_hold(runtime) or current_temperature is None or requested_target is None:
+        return _inactive_strategy()
+
+    text = _current_stage_text(runtime)
+    awaiting_mash_in_confirmation = runtime_state == "awaiting_confirm" and (
+        "mash in" in text or "mash-in" in text or "mäsk-in" in text
+    )
+    desired_pump_on = not awaiting_mash_in_confirmation
+    desired_pump_utilization = (
+        MASH_HOLD_AWAITING_CONFIRM_PUMP_UTILIZATION
+        if awaiting_mash_in_confirmation
+        else MASH_HOLD_PUMP_UTILIZATION
+    )
+    delta_to_target = requested_target - current_temperature
+
+    if delta_to_target > MASH_HOLD_LOWER_MARGIN_C:
+        phase = "mash_hold_recover"
+        desired_heat_utilization = MASH_HOLD_RECOVERY_HEAT_UTILIZATION
+        desired_heater_on = True
+        reason = "Mash hold: below target; apply moderate heat and circulate if mash-in is confirmed."
+    elif current_temperature > requested_target + MASH_HOLD_UPPER_MARGIN_C:
+        phase = "mash_hold_overshoot"
+        desired_heat_utilization = MASH_HOLD_OVERSHOOT_HEAT_UTILIZATION
+        desired_heater_on = False
+        reason = "Mash hold: above target; heat OFF while temperature settles."
+    else:
+        phase = "mash_hold_stable"
+        desired_heat_utilization = MASH_HOLD_HEAT_UTILIZATION
+        desired_heater_on = True
+        reason = "Mash hold: maintain target with gentle heat and controlled circulation."
+
+    if awaiting_mash_in_confirmation:
+        reason = f"{reason} Pump remains OFF while awaiting mash-in confirmation."
+
+    return {
+        "active": True,
+        "phase": phase,
+        "delta_to_target": round(delta_to_target, 2),
+        "desired_heat_utilization": desired_heat_utilization,
+        "desired_pump_utilization": desired_pump_utilization,
+        "desired_heater_on": desired_heater_on,
+        "desired_pump_on": desired_pump_on,
+        "mash_in_confirmation_recommended": awaiting_mash_in_confirmation,
         "reason": reason,
     }
 
@@ -344,20 +432,27 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         current_temperature=current_temperature,
         requested_target=requested_target,
     )
+    mash_hold_strategy = _mash_hold_strategy(
+        runtime,
+        runtime_state=runtime_state,
+        current_temperature=current_temperature,
+        requested_target=requested_target,
+    )
+    active_strategy = mash_in_strategy if mash_in_strategy.get("active") else mash_hold_strategy
 
     pump_recommended = _stage_recommends_pump(runtime)
     heater_action_needed = heating_needed and not heater_on
     pump_action_needed = pump_recommended and not pump_on
     pump_stop_needed = boil_stage and pump_on
     heater_stop_needed = completed_runtime and heater_on
-    desired_heat_utilization = mash_in_strategy.get("desired_heat_utilization")
-    desired_pump_utilization = mash_in_strategy.get("desired_pump_utilization")
+    desired_heat_utilization = active_strategy.get("desired_heat_utilization")
+    desired_pump_utilization = active_strategy.get("desired_pump_utilization")
     heat_utilization_action_needed = False
     pump_utilization_action_needed = False
 
-    if mash_in_strategy.get("active") and not completed_runtime:
-        desired_heater_on = mash_in_strategy.get("desired_heater_on")
-        desired_pump_on = mash_in_strategy.get("desired_pump_on")
+    if active_strategy.get("active") and not completed_runtime:
+        desired_heater_on = active_strategy.get("desired_heater_on")
+        desired_pump_on = active_strategy.get("desired_pump_on")
         pump_recommended = bool(desired_pump_on)
         heater_action_needed = bool(desired_heater_on is True and not heater_on)
         heater_stop_needed = bool(desired_heater_on is False and heater_on)
@@ -425,6 +520,8 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reason = "Boil stage detected without Brewday Runtime target; using 100°C boil fallback"
     if not completed_runtime and hard_block is None and mash_in_strategy.get("active"):
         reason = str(mash_in_strategy.get("reason") or reason)
+    elif not completed_runtime and hard_block is None and mash_hold_strategy.get("active"):
+        reason = str(mash_hold_strategy.get("reason") or reason)
     elif not completed_runtime and hard_block is None and pump_stop_needed:
         reason = "Pump should be OFF"
     elif not completed_runtime and hard_block is None and heater_stop_needed:
@@ -487,9 +584,12 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "mash_in_heat_strategy_active": bool(mash_in_strategy.get("active")),
         "mash_in_heat_strategy_phase": mash_in_strategy.get("phase"),
         "mash_in_heat_strategy_delta_to_target": mash_in_strategy.get("delta_to_target"),
-        "mash_in_confirmation_recommended": bool(mash_in_strategy.get("mash_in_confirmation_recommended")),
-        "desired_heater_on": mash_in_strategy.get("desired_heater_on"),
-        "desired_pump_on": mash_in_strategy.get("desired_pump_on"),
+        "mash_in_confirmation_recommended": bool(active_strategy.get("mash_in_confirmation_recommended")),
+        "mash_hold_strategy_active": bool(mash_hold_strategy.get("active")),
+        "mash_hold_strategy_phase": mash_hold_strategy.get("phase"),
+        "mash_hold_strategy_delta_to_target": mash_hold_strategy.get("delta_to_target"),
+        "desired_heater_on": active_strategy.get("desired_heater_on"),
+        "desired_pump_on": active_strategy.get("desired_pump_on"),
         "completion_stop_needed": completion_stop_needed,
         "completion_pump_stop_needed": completion_pump_stop_needed,
         "awaiting_snapshot": awaiting_snapshot,
