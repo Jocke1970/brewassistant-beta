@@ -37,8 +37,10 @@ Validated in the active beta baseline:
 ✅ BrewZilla target sync from normalized Brewday Runtime
 ✅ BrewZilla Orchestration bridge for Manual Brewday target
 ✅ BrewZilla heater/pump direct actions
+✅ BrewZilla mash-in heat strategy: ramp far, approach, mash-in ready and overshoot phases
 ✅ ABORT service for heater + pump
 ✅ Brewday Event Log backend, services, sensors and dashboard card
+✅ Brewday Event Log uses normalized runtime for Brewfather and Manual Brewday
 ✅ Smart Brewfather refresh policy
 ✅ Low-temperature BrewZilla water test: 30 → 35 → 40 → 45 → 50 → 55°C
 ✅ Dry-run mash profile target validation: 45 → 55 → 65 → 72 → 78°C
@@ -52,6 +54,7 @@ Validated in the active beta baseline:
 ✅ BrewZilla selectable mash temperature source resolver
 ✅ BrewZilla mash/wort/delta dashboard-safe sensors
 ✅ BrewZilla Learning uses the shared mash/wort resolver
+✅ BrewZilla Learning uses normalized runtime for Brewfather and Manual Brewday
 ✅ BrewZilla operator card and learning card baseline
 ✅ Brewday Runtime operator card
 ✅ Manual Brewday operator card
@@ -220,7 +223,7 @@ Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan 
 | Python Core | Normalize source entities and expose dashboard-safe state. |
 | Brewday Runtime | Resolve Brewfather RAW Brew Tracker and Manual Brewday sessions. |
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
-| BrewZilla Orchestration | Apply target/heater/pump actions when allowed by runtime state. |
+| BrewZilla Orchestration | Apply target/heater/pump/utilization strategies when allowed by runtime state. |
 | BrewZilla Temperature Resolver | Separate mash, wort/kettle and mash-wort delta temperature roles. |
 | BrewZilla Learning | Advisory recommendations using the shared temperature resolver. |
 | Brewday Event Log | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
@@ -256,6 +259,7 @@ Key beta behavior:
 - Manual Brewday can own prepare/start/pause/next/reset/finish runtime.
 - Manual Brewday can jump directly to Mash, Boil, Whirlpool/Hopstand and Cooling.
 - Mash steps can sync BrewZilla target from normalized runtime.
+- Heating to mash-in uses a staged BrewZilla strategy: pump off at full heat, taper/mix near target, then pump off for mash-in confirmation.
 - Boil stages fall back to 100°C when Brew Tracker omits a temperature target.
 - Pump is stopped during boil unless an explicit operator action, such as CFC Ready, starts it.
 - Runtime completion can be inferred when the final Brew Tracker step reaches zero.
