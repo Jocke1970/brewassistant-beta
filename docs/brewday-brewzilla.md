@@ -1,6 +1,6 @@
 # Brewday / BrewZilla Direct Flow
 
-This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker → BrewAssistant → BrewZilla.
+This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker or Manual Brewday → BrewAssistant → BrewZilla.
 
 Status: **MVP validated in supervised Brewfather/BrewZilla dry-run with event logging**.
 
@@ -13,15 +13,15 @@ The first verified path is BrewZilla/RAPT hardware, but the architecture should 
 The low-temperature water test and the follow-up dry-run mash profile verified the core technical chain:
 
 ```text
-Brewfather Brew Tracker raw timeline
+Brewfather Brew Tracker raw timeline or Manual Brewday
         ↓
-BrewAssistant RAW runtime resolver
+BrewAssistant normalized runtime resolver
         ↓
 BrewAssistant brewday runtime sensors
         ↓
 BrewZilla orchestration helper
         ↓
-BrewZilla target / heater / pump actions
+BrewZilla target / heater / pump / utilization actions
         ↓
 Brewday event log
 ```
@@ -44,6 +44,7 @@ Observed result:
 ✅ BrewAssistant ignored lagging convenience step sensors
 ✅ BrewAssistant can resolve active step ahead of RAW index using stage timing
 ✅ Paused Brewfather state remains stable as paused/freeze-state
+✅ Manual Brewday can feed normalized runtime and BrewZilla orchestration
 ✅ BrewZilla target changed through the full dry-run sequence
 ✅ Heater and pump actions were evaluated and logged
 ✅ ABORT remained available as a hard stop
@@ -68,7 +69,14 @@ step.time anchors
 This is handled in:
 
 ```text
-custom_components/brewassistant/brewday_runtime_core.py
+custom_components/brewassistant/brewday/brewday_runtime_core.py
+```
+
+The normalized runtime wrapper can also use Manual Brewday as the active source:
+
+```text
+custom_components/brewassistant/brewday/brewday_runtime.py
+custom_components/brewassistant/brewday/manual_brewday_adapter.py
 ```
 
 The runtime keeps both values for diagnostics:
@@ -128,7 +136,11 @@ The orchestration layer evaluates:
 ```text
 target_sync_needed
 heater_action_needed
+heater_stop_needed
 pump_action_needed
+pump_stop_needed
+heat_utilization_action_needed
+pump_utilization_action_needed
 ```
 
 Therefore this case is valid and should trigger an action:
@@ -147,7 +159,7 @@ heater = off
 Implemented in:
 
 ```text
-custom_components/brewassistant/brewzilla_orchestration.py
+custom_components/brewassistant/brewzilla/brewzilla_orchestration.py
 ```
 
 `target_delta` means synchronization delta:
@@ -164,6 +176,61 @@ current_temperature - target_temperature
 
 ---
 
+## Mash-in heat strategy
+
+Heating strike water / heating up to mash-in is handled as a BrewZilla orchestration strategy, not as dashboard logic and not as BrewZilla Learning control logic.
+
+The strategy is triggered from normalized runtime stage/step text such as:
+
+```text
+heat strike
+strike water
+heating up to mash
+heating up to mash-in
+mash in
+mash-in
+```
+
+The intent is to heat efficiently early, mix near target to reduce stratification, and then stop pump flow for the operator-controlled mash-in moment.
+
+Current phases:
+
+```text
+ramp_far:
+  condition: current_temperature < target - 5.0°C
+  heat_utilization: 100%
+  heater: ON
+  pump_utilization: 0%
+  pump: OFF
+
+approach:
+  condition: target - 5.0°C <= current_temperature < target - 0.5°C
+  heat_utilization: 60%
+  heater: ON
+  pump_utilization: 50%
+  pump: ON
+
+mash_in_ready:
+  condition: target - 0.5°C <= current_temperature <= target + 0.3°C
+  heat_utilization: 40%
+  heater: ON / gentle hold
+  pump_utilization: 0%
+  pump: OFF
+  mash_in_confirmation_recommended: true
+
+overshoot:
+  condition: current_temperature > target + 0.3°C
+  heat_utilization: 0%
+  heater: OFF
+  pump_utilization: 0%
+  pump: OFF
+  mash_in_confirmation_recommended: true
+```
+
+Dashboard/operator UI should show the strategy result through orchestration sensors and Event Log output. Parameter tuning, such as changing the 5°C approach margin or 60% approach heat utilization, belongs in backend strategy or future BrewZilla Learning recommendations.
+
+---
+
 ## Refresh policy
 
 BrewAssistant requests Brewfather entity refreshes through a smart refresh policy.
@@ -171,8 +238,8 @@ BrewAssistant requests Brewfather entity refreshes through a smart refresh polic
 Implemented in:
 
 ```text
-custom_components/brewassistant/brewday_refresh_policy.py
-custom_components/brewassistant/brewday_refresh.py
+custom_components/brewassistant/brewday/brewday_refresh_policy.py
+custom_components/brewassistant/brewday/brewday_refresh.py
 ```
 
 Policy overview:
@@ -219,36 +286,6 @@ Main sensor:
 sensor.brewassistant_brewday_event_log_summary
 ```
 
-Detailed documentation:
+Event Log uses normalized runtime, so both Brewfather Brew Tracker and Manual Brewday can provide stage, step and target context.
 
-```text
-docs/brewday-audit.md
-```
-
----
-
-## Services
-
-### Manual Brewfather refresh
-
-```text
-brewassistant.force_brewfather_refresh
-```
-
-Use for diagnostics or when the external Brewfather integration appears stale.
-
-### Apply BrewZilla target/actions
-
-```text
-brewassistant.apply_brewzilla_target
-```
-
-Direct target/action application should only be used when the relevant BrewAssistant policy permits it.
-
-### Abort BrewZilla
-
-```text
-brewassistant.abort_brewzilla
-```
-
-This is the hard stop path for BrewZilla orchestration.
+`last_target` prefers runtime target, but can fall back to requested/applied/device target values for action events where the runtime target was unavailable in older stored events.
