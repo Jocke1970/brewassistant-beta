@@ -56,6 +56,7 @@ Full YAML retirement
 [x] Brewday Event Log services
 [x] Brewday Event Log sensors
 [x] Brewday Event Log dashboard example
+[x] Brewday Event Log uses normalized runtime for Brewfather and Manual Brewday
 [x] Manual Brewday Python engine
 [x] Manual Brewday source adapter
 [x] Manual Brewday services
@@ -63,27 +64,33 @@ Full YAML retirement
 [x] Brewday Stage Engine v2
 [x] Brewday Stage Engine explicit Prepare stage
 [x] BrewZilla runtime sensors
-[x] BrewZilla target sync from runtime core
+[x] BrewZilla target sync from normalized runtime
 [x] BrewZilla heater/pump direct action helper
+[x] BrewZilla heat/pump utilization direct action helper
+[x] BrewZilla mash-in heat strategy: ramp far, approach, mash-in ready and overshoot
+[x] BrewZilla Learning uses normalized runtime for Brewfather and Manual Brewday
 [x] BrewZilla ABORT service
-[x] BrewZilla Cockpit v3.4 dashboard example
-[x] Brewday Card v3.5 RAW/runtime dashboard example
-[x] Brewfather RAW Timeline debug card
+[x] BrewZilla operator dashboard card
+[x] BrewZilla Learning dashboard card
+[x] Brewday Runtime dashboard card
+[x] Manual Brewday dashboard card
+[x] Source Health dashboard card
+[x] Brewfather Feed dashboard card
 [x] Counterflow Wort Cooling backend
 [x] Counterflow Wort Cooling cockpit UI
 [x] Python-owned Carbonation Runtime/session
 [x] Carbonation runtime persistence across HA restart
 [x] Carbonation services and controls
-[x] Carbonation Cockpit v3.1 UI
+[x] Carbonation Cockpit UI
 [x] Climate Supervisor backend for dynamic kegerator targets
-[x] Climate Supervisor UI card v1.0
+[x] Climate Supervisor UI card
 [x] Kegerator fan mode controls: Off / Always on / Afterrun
 [x] Kegerator fan auto tick async-safety cleanup
 [x] Kegerator guard watchdog async-safety cleanup
 [x] Clean Home Assistant entity baseline without `bryggeriet_` BrewAssistant prefix
 [x] Integration brand assets under custom component brand directory
 [x] Fermentation Cockpit scope guard
-[x] Fermentation Cockpit v2.1 UI
+[x] Fermentation Cockpit UI
 ```
 
 ---
@@ -151,27 +158,31 @@ Current status:
 [x] Add orchestration mode and reason sensors
 [x] Add apply-target/direct-action service
 [x] Separate target_sync_needed from heater_action_needed and pump_action_needed
+[x] Add direct heat utilization and pump utilization actions
+[x] Add staged heating-to-mash-in orchestration strategy
 [x] Add ABORT service for heater + pump
 [x] Integrate Stage Engine data into BrewZilla UI
-[x] Add BrewZilla Cockpit v3.4 dashboard example
-[x] Add Brewday Card v3.5 dashboard example
-[x] Add Brewday Event Log Card dashboard example
-[x] Add RAW Timeline debug card
+[x] Add BrewZilla operator dashboard card
+[x] Add BrewZilla Learning dashboard card
+[x] Add Brewday Runtime dashboard card
+[x] Add Brewday Event Log dashboard card
 [x] Low-temperature water test verified 30 → 35 → 40 → 45 → 50 → 55°C
 [x] Dry-run mash profile verified 45 → 55 → 65 → 72 → 78°C target flow
 [x] Brewday Event Log captured runtime and BrewZilla orchestration actions
-[x] Store dashboard examples in repo under dashboards/
+[x] Store dashboard examples in repo under dashboard/
 ```
 
 Current acceptance status:
 
 ```text
 MVP validated for supervised Brewfather/BrewZilla dry-run mash testing
+Mash-in heat strategy implemented and ready for water/first-batch validation
 ```
 
 Remaining validation:
 
 ```text
+[ ] Validate mash-in heat strategy in a water test to 66°C
 [ ] Validate against normal ingredient mash profile
 [ ] Validate boil-stage behavior
 [ ] Validate hop addition/event notification behavior
@@ -217,77 +228,3 @@ Remaining:
 ```
 
 ---
-
-# v4.6 Counterflow Wort Cooling
-
-Completed:
-
-```text
-[x] Detect Wort Cooling from Brew Tracker / Manual runtime current stage or step
-[x] Keep cooling in standby until Stage Engine enters cooling/pitch state
-[x] Surface cooling stage in Stage Engine UI
-[x] Track BrewZilla/kettle reference temperature
-[x] Track temperature fall rate when trend data exists
-[x] Add optional counterflow output temperature source if available
-[x] Add estimated pitch-ready status
-[x] Add ETA when cooling trend is available
-[x] Require BrewZilla pump during counterflow cooling
-[x] Guard against heater being on during cooling
-[x] Add Counterflow Cooling Cockpit UI
-```
-
-Remaining:
-
-```text
-[ ] Validate cooling rate/ETA during real counterflow chilling
-[ ] Tune pitch-ready tolerance if needed
-[ ] Add cooling efficiency indicator
-[ ] Add transfer/pitch notification hooks once wort reaches target range
-[ ] Add optional dedicated output temperature sensor mapping in config flow/options
-```
-
----
-
-# v4.7 Fermentation cockpit/runtime cleanup
-
-Completed:
-
-```text
-[x] Add Fermentation Cockpit scope guard
-[x] Ignore stale cold-crash helper when no fermentation/batch context is active
-[x] Show neutral standby/completed when no fermentation process is active
-[x] Hide smart recommendations in the UI when fermentation is out of scope
-[x] Add Fermentation Cockpit v2.1 UI polish
-```
-
-Remaining:
-
-```text
-[ ] Validate against an active fermentation batch
-[ ] Validate against active cold crash
-[ ] Later: build Python-owned Timed Fermentation Runtime
-[ ] Later: replace legacy helper/process sources where practical
-```
-
----
-
-# v4.8 Carbonation runtime cleanup
-
-Completed:
-
-```text
-[x] Carbonation calculation module exists
-[x] Carbonation sensors are registered
-[x] Carbonation runtime session is Python-owned
-[x] Carbonation persistence across Home Assistant restart
-[x] Carbonation service set: start/update/pause/reset
-[x] Carbonation UI controls and recommended pressure display
-```
-
-Remaining:
-
-```text
-[ ] Validate carbonation estimates against a real keg session
-[ ] Add optional history/trend tracking
-[ ] Add notification hooks when estimated carbonation reaches target
-```
