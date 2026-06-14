@@ -269,6 +269,126 @@ cards:
       type: horizontal-stack
       cards:
         - type: custom:button-card
+          entity: switch.brewzilla_heater
+          name: HEATER
+          icon: mdi:fire
+          show_state: false
+          show_label: true
+          triggers_update:
+            - switch.brewzilla_heater
+            - number.brewzilla_heat_utilization
+            - sensor.brewassistant_brewzilla_safety_state
+            - sensor.brewassistant_brewzilla_orchestration_mode
+          tap_action:
+            action: toggle
+            confirmation:
+              text: Toggle BrewZilla heater output?
+          label: |
+            [[[
+              const state = states['switch.brewzilla_heater']?.state ?? 'unknown';
+              const util = states['number.brewzilla_heat_utilization']?.state ?? '—';
+              const safety = states['sensor.brewassistant_brewzilla_safety_state']?.state ?? '—';
+              return `${state.toUpperCase()} · ${util}% · ${safety}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - min-height: 58px
+              - background: |
+                  [[[
+                    return states['switch.brewzilla_heater']?.state === 'on'
+                      ? 'rgba(244,67,54,.13)'
+                      : 'rgba(127,127,127,.07)';
+                  ]]]
+              - border: |
+                  [[[
+                    return states['switch.brewzilla_heater']?.state === 'on'
+                      ? '1px solid rgba(244,67,54,.30)'
+                      : '1px solid rgba(127,127,127,.16)';
+                  ]]]
+            icon:
+              - width: 22px
+              - height: 22px
+              - color: |
+                  [[[
+                    return states['switch.brewzilla_heater']?.state === 'on'
+                      ? 'rgb(244,67,54)'
+                      : 'rgba(127,127,127,.80)';
+                  ]]]
+            name:
+              - font-size: 12px
+              - font-weight: 950
+            label:
+              - font-size: 10px
+              - font-weight: 800
+              - opacity: 0.72
+              - white-space: normal
+        - type: custom:button-card
+          entity: switch.brewzilla_pump
+          name: PUMP
+          icon: mdi:pump
+          show_state: false
+          show_label: true
+          triggers_update:
+            - switch.brewzilla_pump
+            - number.brewzilla_pump_utilization
+            - sensor.brewassistant_brewday_stage_group
+            - sensor.brewassistant_brewzilla_control_reason
+          tap_action:
+            action: toggle
+            confirmation:
+              text: Toggle BrewZilla pump output?
+          label: |
+            [[[
+              const state = states['switch.brewzilla_pump']?.state ?? 'unknown';
+              const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
+              const stage = states['sensor.brewassistant_brewday_stage_group']?.state ?? '—';
+              return `${state.toUpperCase()} · ${util}% · ${stage}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - min-height: 58px
+              - background: |
+                  [[[
+                    return states['switch.brewzilla_pump']?.state === 'on'
+                      ? 'rgba(33,150,243,.13)'
+                      : 'rgba(127,127,127,.07)';
+                  ]]]
+              - border: |
+                  [[[
+                    return states['switch.brewzilla_pump']?.state === 'on'
+                      ? '1px solid rgba(33,150,243,.30)'
+                      : '1px solid rgba(127,127,127,.16)';
+                  ]]]
+            icon:
+              - width: 22px
+              - height: 22px
+              - color: |
+                  [[[
+                    return states['switch.brewzilla_pump']?.state === 'on'
+                      ? 'rgb(33,150,243)'
+                      : 'rgba(127,127,127,.80)';
+                  ]]]
+            name:
+              - font-size: 12px
+              - font-weight: 950
+            label:
+              - font-size: 10px
+              - font-weight: 800
+              - opacity: 0.72
+              - white-space: normal
+  - type: conditional
+    conditions:
+      - condition: numeric_state
+        entity: sensor.brewzilla_power
+        above: 0
+    card:
+      type: horizontal-stack
+      cards:
+        - type: custom:button-card
           name: APPLY TARGET
           icon: mdi:target-account
           tap_action:
