@@ -176,6 +176,41 @@ current_temperature - target_temperature
 
 ---
 
+## Control backend tracks
+
+The current implemented backend track is direct supervised control:
+
+```text
+Normalized Brewday Runtime
+→ BrewZilla Orchestration
+→ target / heater / pump / heat utilization / pump utilization
+→ Event Log
+```
+
+A future backend track should investigate RAPT Cloud Link profile orchestration:
+
+```text
+BrewAssistant runtime or recipe plan
+→ generated/selected RAPT/BrewZilla profile
+→ RAPT Cloud Link profile execution
+→ BrewZilla runs the profile
+→ BrewAssistant monitors telemetry and safety state
+```
+
+That profile-based path may be useful because BrewZilla can run brew profiles through RAPT Cloud. It must still be treated as a separate strategy from direct target/heater/pump actions, with clear source arbitration and operator safety controls.
+
+Minimum design requirements for the profile-control path:
+
+```text
+- Do not mix direct BrewZilla actions and RAPT profile execution without explicit ownership.
+- Source arbitration must decide whether Brewfather Runtime, Manual Brewday or RAPT/BrewZilla profile execution owns the current brewday.
+- Operator confirmation and ABORT must remain available.
+- Event Log must record which backend owned each action or observation.
+- RAPT Cloud latency/stale telemetry must remain visible in Source Health / BrewZilla diagnostics.
+```
+
+---
+
 ## Mash-in heat strategy
 
 Heating strike water / heating up to mash-in is handled as a BrewZilla orchestration strategy, not as dashboard logic and not as BrewZilla Learning control logic.
@@ -187,8 +222,6 @@ heat strike
 strike water
 heating up to mash
 heating up to mash-in
-mash in
-mash-in
 ```
 
 The intent is to heat efficiently early, mix near target to reduce stratification, and then stop pump flow for the operator-controlled mash-in moment.
