@@ -24,6 +24,8 @@ First full serious all-grain BrewZilla batch validation
 ↓
 Boil / hop / cooling validation
 ↓
+RAPT Cloud Link profile-orchestration investigation
+↓
 Climate Supervisor full-cycle validation
 ↓
 Carbonation runtime validation
@@ -183,12 +185,23 @@ Remaining validation:
 
 ```text
 [ ] Validate mash-in heat strategy in a water test to 66°C
+[ ] Validate mash-hold strategy after Mash in / Saccharification rest
 [ ] Validate against normal ingredient mash profile
 [ ] Validate boil-stage behavior
 [ ] Validate hop addition/event notification behavior
 [ ] Validate stale/disconnected RAPT/BrewZilla diagnostics during real use
 [ ] Validate RAPT Cloud/Brewfather poll cadence during real ramping
 [ ] Tune dashboard wording after first real brewday
+```
+
+Future backend tracks:
+
+```text
+[ ] Investigate RAPT Cloud Link profile orchestration as an alternative BrewZilla control backend
+[ ] Model BrewZilla profile execution as a separate control strategy from direct target/heater/pump actions
+[ ] Decide how BrewAssistant should create/select/start RAPT/BrewZilla profiles safely
+[ ] Add source arbitration between Brewfather runtime, Manual Brewday runtime and RAPT/BrewZilla profile execution
+[ ] Keep operator confirmation/ABORT semantics for any RAPT Cloud Link profile-control path
 ```
 
 ---
