@@ -113,6 +113,96 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "default": False,
         "kind": "fermentation_climate_supervisor",
     },
+    "show_brewday": {
+        "name": "BrewAssistant Show Brewday",
+        "object_id": "brewassistant_show_brewday",
+        "icon": "mdi:calendar-clock",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "brewday",
+        "card": "dashboard/cards/brewassistant_brewday.yaml",
+    },
+    "show_manual_brewday": {
+        "name": "BrewAssistant Show Manual Brewday",
+        "object_id": "brewassistant_show_manual_brewday",
+        "icon": "mdi:hand-back-right-outline",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "manual_brewday",
+        "card": "dashboard/cards/brewassistant_manual_brewday.yaml",
+    },
+    "show_brewfather_feed": {
+        "name": "BrewAssistant Show Brewfather Feed",
+        "object_id": "brewassistant_show_brewfather_feed",
+        "icon": "mdi:beer-outline",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "brewfather_feed",
+        "card": "dashboard/cards/brewfather_feed.yaml",
+    },
+    "show_brewzilla": {
+        "name": "BrewAssistant Show BrewZilla",
+        "object_id": "brewassistant_show_brewzilla",
+        "icon": "mdi:kettle-steam-outline",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "brewzilla",
+        "card": "dashboard/cards/brewzilla.yaml",
+    },
+    "show_brewzilla_learning": {
+        "name": "BrewAssistant Show BrewZilla Learning",
+        "object_id": "brewassistant_show_brewzilla_learning",
+        "icon": "mdi:brain",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "brewzilla_learning",
+        "card": "dashboard/cards/brewzilla_learning.yaml",
+    },
+    "show_event_log": {
+        "name": "BrewAssistant Show Event Log",
+        "object_id": "brewassistant_show_event_log",
+        "icon": "mdi:clipboard-text-clock-outline",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "event_log",
+        "card": "dashboard/cards/brewassistant_brewday_event_log.yaml",
+    },
+    "show_source_health": {
+        "name": "BrewAssistant Show Source Health",
+        "object_id": "brewassistant_show_source_health",
+        "icon": "mdi:heart-pulse",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "source_health",
+        "card": "dashboard/cards/brewassistant_source_health.yaml",
+    },
+    "show_fermentation": {
+        "name": "BrewAssistant Show Fermentation",
+        "object_id": "brewassistant_show_fermentation",
+        "icon": "mdi:beer",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "fermentation",
+        "card": "dashboard/cards/fermentation.yaml",
+    },
+    "show_carbonation": {
+        "name": "BrewAssistant Show Carbonation",
+        "object_id": "brewassistant_show_carbonation",
+        "icon": "mdi:chart-bubble",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "carbonation",
+        "card": "dashboard/cards/carbonation.yaml",
+    },
+    "show_kegerator": {
+        "name": "BrewAssistant Show Kegerator",
+        "object_id": "brewassistant_show_kegerator",
+        "icon": "mdi:snowflake-thermometer",
+        "default": True,
+        "kind": "dashboard_visibility",
+        "module": "kegerator",
+        "card": "dashboard/cards/kegerator.yaml",
+    },
 }
 
 
@@ -274,6 +364,15 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
             return build_climate_supervisor_snapshot(self.coordinator.hass)
         if self._kind == "fermentation_climate_supervisor":
             return build_fermentation_climate_supervisor_snapshot(self.coordinator.hass)
+        if self._kind == "dashboard_visibility":
+            return {
+                "source": "dashboard_visibility",
+                "kind": self._kind,
+                "module": self._config.get("module"),
+                "card": self._config.get("card"),
+                "default_visible": bool(self._config.get("default", False)),
+                "purpose": "Controls whether the matching BrewAssistant dashboard card should be shown by default.",
+            }
         return {
             "source": "python_runtime_control",
             "kind": self._kind,
