@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -233,11 +234,16 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         self._config = config
         self._kind = str(config.get("kind", "safety"))
         self._tick_unsub = None
+        self._clean_object_id = str(config["object_id"])
+        self._clean_entity_id = f"switch.{self._clean_object_id}"
+        self._entity_id_migration_result: str | None = None
         self._attr_unique_id = f"{DOMAIN}_switch_{key}"
         self._attr_name = str(config["name"])
         self._attr_icon = str(config["icon"])
         self._attr_is_on = bool(config.get("default", False))
-        self._attr_suggested_object_id = str(config["object_id"])
+        self._attr_suggested_object_id = self._clean_object_id
+        if self._kind == "dashboard_visibility":
+            self._attr_entity_id = self._clean_entity_id
 
     @property
     def name(self) -> str:
@@ -247,6 +253,7 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
     async def async_added_to_hass(self) -> None:
         """Restore last known switch state."""
         await super().async_added_to_hass()
+        await self._async_migrate_dashboard_visibility_entity_id()
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._attr_is_on = last_state.state == "on"
@@ -262,6 +269,38 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
                 if self._kind == "fermentation_climate_supervisor":
                     await async_enable_fermentation_climate_supervisor(self.coordinator.hass)
                 await self._async_tick()
+
+    async def _async_migrate_dashboard_visibility_entity_id(self) -> None:
+        """Rename HA-prefixed dashboard visibility entity IDs back to clean IDs.
+
+        Home Assistant may create area/device-prefixed entity IDs such as
+        switch.bryggeriet_brewassistant_show_fermentation. The dashboard cards
+        should be able to rely on the clean canonical switch IDs.
+        """
+        if self._kind != "dashboard_visibility":
+            return
+        current_entity_id = self.entity_id
+        desired_entity_id = self._clean_entity_id
+        if current_entity_id == desired_entity_id:
+            self._entity_id_migration_result = "already_clean"
+            return
+        if not current_entity_id or "." not in current_entity_id:
+            self._entity_id_migration_result = "missing_current_entity_id"
+            return
+        current_domain, current_object_id = current_entity_id.split(".", 1)
+        if current_domain != "switch" or not current_object_id.endswith(self._clean_object_id):
+            self._entity_id_migration_result = "manual_or_unexpected_entity_id_left_unchanged"
+            return
+        registry = er.async_get(self.coordinator.hass)
+        if registry.async_get(desired_entity_id) is not None:
+            self._entity_id_migration_result = "clean_entity_id_already_exists"
+            return
+        try:
+            registry.async_update_entity(current_entity_id, new_entity_id=desired_entity_id)
+            self.entity_id = desired_entity_id
+            self._entity_id_migration_result = f"renamed:{current_entity_id}->{desired_entity_id}"
+        except (KeyError, ValueError):
+            self._entity_id_migration_result = "rename_failed"
 
     def _ensure_tick(self) -> None:
         """Ensure periodic apply/monitor loop for active switches."""
@@ -371,6 +410,8 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
                 "module": self._config.get("module"),
                 "card": self._config.get("card"),
                 "default_visible": bool(self._config.get("default", False)),
+                "clean_entity_id": self._clean_entity_id,
+                "entity_id_migration_result": self._entity_id_migration_result,
                 "purpose": "Controls whether the matching BrewAssistant dashboard card should be shown by default.",
             }
         return {
