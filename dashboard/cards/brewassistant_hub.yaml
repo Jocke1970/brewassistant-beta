@@ -15,14 +15,10 @@ cards:
       - sensor.brewassistant_brewday_runtime_state
       - sensor.brewassistant_brewday_runtime_source
       - sensor.brewassistant_brewday_stage
-      - sensor.brewassistant_manual_brewday_summary
+      - sensor.brewassistant_manual_brewday_status
+      - sensor.brewassistant_manual_brewday_stage
       - switch.brewassistant_show_brewday
-      - switch.brewassistant_show_manual_brewday
-      - switch.brewassistant_show_brewfather_feed
-      - switch.brewassistant_show_brewzilla
-      - switch.brewassistant_show_brewzilla_learning
       - switch.brewassistant_show_event_log
-      - switch.brewassistant_show_source_health
       - switch.brewassistant_show_fermentation
       - switch.brewassistant_show_carbonation
       - switch.brewassistant_show_kegerator
@@ -71,7 +67,7 @@ cards:
                   BrewAssistant Hub
                 </div>
                 <div style="font-size:12px; font-weight:750; opacity:.68; margin-top:3px;">
-                  Status · module visibility · BrewZilla power
+                  Control surface · compact modules
                 </div>
               </div>
               <div style="
@@ -116,6 +112,7 @@ cards:
           const bzConn = clean(states['sensor.brewassistant_brewzilla_connection_state']?.state) || '—';
           const runtime = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || clean(states['sensor.brewassistant_brewday_stage']?.state) || 'idle';
           const source = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || '—';
+          const manual = clean(states['sensor.brewassistant_manual_brewday_status']?.state);
 
           const fermClimate = clean(states['climate.fermentation_chamber']?.state) || 'off';
           const fermTemp = num('sensor.brewassistant_fermentation_chamber_air_temperature_average');
@@ -127,7 +124,7 @@ cards:
 
           return `
             <div style="font-size:12px; font-weight:800; opacity:.76; line-height:1.35;">
-              Brewday ${runtime} · ${source}<br>
+              Brewday ${runtime} · ${source}${manual ? ' · Manual ' + manual : ''}<br>
               BrewZilla ${fmt(bzTemp,'°C')} · ${bzMode} · ${bzConn}<br>
               Fermentation ${fermClimate} · ${fmt(fermTemp,'°C')} · Carbonation ${carbStatus} · ${fmt(carbBar,'bar',2)}<br>
               Kegerator ${fmt(kegTemp,'°C')} · ${kegStatus} · fan ${fan}
@@ -145,8 +142,11 @@ cards:
           const runtimeSource = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || 'Manual / lokal';
           const recipe = clean(states['sensor.brewassistant_runtime_recipe_name']?.state) || clean(states['sensor.brewfather_next_fermentation_step']?.attributes?.recipe_name);
           const hasBrewfather = !!recipe || String(runtimeSource).toLowerCase().includes('brewfather');
-          const title = hasBrewfather ? 'Brewfather / Runtime' : 'Brewfather vilande';
-          const detail = hasBrewfather ? `${recipe || 'Aktiv källa'} · ${runtimeSource}` : 'Ingen aktiv Brewfather-batch · Manual Brewday kan vara primär controller';
+          const manualState = clean(states['sensor.brewassistant_manual_brewday_status']?.state);
+          const title = hasBrewfather ? 'Brewfather aktiv' : 'Brewfather vilande';
+          const detail = hasBrewfather
+            ? `${recipe || 'Aktiv källa'} · Manual override kan visas via Brewday`
+            : `Manual Brewday kan vara primär controller${manualState ? ' · ' + manualState : ''}`;
           const bg = hasBrewfather ? 'rgba(33,150,243,.10)' : 'rgba(127,127,127,.055)';
           const border = hasBrewfather ? 'rgba(33,150,243,.22)' : 'rgba(127,127,127,.10)';
           const icon = hasBrewfather ? 'mdi:beer-outline' : 'mdi:cloud-check-outline';
@@ -191,7 +191,7 @@ cards:
           [[[ 
             const power = states['sensor.brewzilla_power']?.state ?? '—';
             const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? '—';
-            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'} · ${power} W<br>${conn}`;
+            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'} · ${power} W<br>${conn} · BZ cards follow power`;
           ]]]
         styles: &hub_module_tile
           card:
@@ -239,117 +239,6 @@ cards:
             const stage = states['sensor.brewassistant_brewday_stage']?.state || states['sensor.brewassistant_brewday_runtime_stage']?.state || '—';
             const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
             return `${runtime} · ${source}<br>${stage} · ${visible}`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_manual_brewday
-        name: Manual Brewday
-        icon: mdi:hand-back-right-outline
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            const state = states['sensor.brewassistant_manual_brewday_status']?.state || states['sensor.brewassistant_brewday_runtime_state']?.state || '—';
-            const stage = states['sensor.brewassistant_manual_brewday_stage']?.state || states['sensor.brewassistant_brewday_runtime_stage']?.state || '—';
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${state} · ${stage}<br>${visible} · tap toggles`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_brewfather_feed
-        name: Brewfather Feed
-        icon: mdi:beer-outline
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            const source = states['sensor.brewassistant_brewday_runtime_source']?.state || '—';
-            const state = states['sensor.brewassistant_brewday_runtime_state']?.state || 'idle';
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${state} · ${source}<br>${visible} · feed card`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_brewzilla
-        name: BrewZilla
-        icon: mdi:kettle-steam-outline
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            function num(id) {
-              const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
-              return Number.isFinite(n) ? n : null;
-            }
-            const mode = states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '—';
-            const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state || '—';
-            const temp = num('sensor.brewassistant_brewzilla_wort_temperature') ?? num('sensor.brewzilla_temperature');
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${Number.isFinite(temp) ? temp.toFixed(1) + ' °C' : '—'} · ${mode}<br>${conn} · ${visible}`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_brewzilla_learning
-        name: BZ Learning
-        icon: mdi:brain
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            const phase = states['sensor.brewassistant_brewzilla_learning_phase']?.state || states['sensor.brewassistant_brewzilla_learning_status']?.state || 'Advisory';
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${phase}<br>${visible} · advisory card`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_event_log
-        name: Event Log
-        icon: mdi:clipboard-text-clock-outline
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            const summary = states['sensor.brewassistant_brewday_event_log_summary']?.state || '—';
-            const count = states['sensor.brewassistant_brewday_event_log_event_count']?.state || '0';
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${summary} · ${count} events<br>${visible} · log card`;
-          ]]]
-        styles: *hub_module_tile
-      - type: custom:button-card
-        entity: switch.brewassistant_show_source_health
-        name: Source Health
-        icon: mdi:heart-pulse
-        show_state: false
-        show_label: true
-        tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
-        label: |
-          [[[ 
-            const modules = states['sensor.brewassistant_module_summary']?.state || 'Diagnostics';
-            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${modules}<br>${visible} · diagnostics`;
           ]]]
         styles: *hub_module_tile
       - type: custom:button-card
@@ -421,56 +310,21 @@ cards:
             return `${Number.isFinite(temp) ? temp.toFixed(1) + ' °C' : '—'} · ${climate} · fan ${fan}<br>${visible} · serving/cooling`;
           ]]]
         styles: *hub_module_tile
-  - type: custom:button-card
-    show_icon: true
-    show_name: true
-    show_label: true
-    icon: mdi:information-outline
-    name: Nästa naturliga steg
-    label: |
-      [[[ 
-        function clean(v) {
-          if (v === undefined || v === null) return null;
-          const s = String(v);
-          return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-        }
-        const carb = clean(states['sensor.brewassistant_carbonation_status']?.state) || 'Inactive';
-        const ferm = clean(states['climate.fermentation_chamber']?.state) || 'off';
-        const brewday = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
-        const bzPower = clean(states['switch.brewzilla']?.state) || 'unknown';
-        const fanReason = clean(states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.fan_reason);
-
-        if (brewday !== 'idle' && brewday !== 'completed') return `Brewday är aktiv · följ Runtime, BrewZilla och Event Log.`;
-        if (bzPower === 'on') return 'BrewZilla är på · kontrollera att heater/pump är i rätt läge innan du lämnar den.';
-        if (carb === 'Ready to serve') return 'Carbonation är klar · dags att servera eller flytta till lagring.';
-        if (ferm !== 'off') return 'Fermentation chamber är aktiv · följ chamber temp, SG och klimatlogik.';
-        if (fanReason) return `Kegerator fan-logik: ${fanReason}.`;
-        return 'Allt ser lugnt ut · tryck på en modul-tile för att visa/dölja dess kort.';
-      ]]]
-    tap_action:
-      action: none
-    styles:
-      card:
-        - margin-top: 4px
-        - border-radius: 8px 8px 18px 18px
-        - padding: 10px 12px
-        - background: rgba(127,127,127,.06)
-        - border: 1px solid rgba(127,127,127,.12)
-      grid:
-        - grid-template-areas: "\"i n\" \"i l\""
-        - grid-template-columns: 30px minmax(0,1fr)
-        - column-gap: 8px
-      icon:
-        - width: 18px
-        - opacity: 0.72
-      name:
-        - justify-self: start
-        - font-size: 13px
-        - font-weight: 950
-      label:
-        - justify-self: start
-        - text-align: left
-        - white-space: normal
-        - font-size: 11.5px
-        - font-weight: 750
-        - opacity: 0.72
+      - type: custom:button-card
+        entity: switch.brewassistant_show_event_log
+        name: Event Log
+        icon: mdi:clipboard-text-clock-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const summary = states['sensor.brewassistant_brewday_event_log_summary']?.state || '—';
+            const count = states['sensor.brewassistant_brewday_event_log_event_count']?.state || '0';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${summary} · ${count} events<br>${visible} · log card`;
+          ]]]
+        styles: *hub_module_tile
