@@ -171,34 +171,186 @@ cards:
             </div>
           `;
         ]]]
-  - type: entities
-    title: Modules & Power
-    show_header_toggle: false
-    entities:
-      - entity: switch.brewzilla
-        name: BrewZilla Main Power
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: switch.brewzilla
+        name: BrewZilla Power
         icon: mdi:power
-      - type: divider
-      - entity: switch.brewassistant_show_brewday
-        name: Show Brewday Runtime
-      - entity: switch.brewassistant_show_manual_brewday
-        name: Show Manual Brewday
-      - entity: switch.brewassistant_show_brewfather_feed
-        name: Show Brewfather Feed
-      - entity: switch.brewassistant_show_brewzilla
-        name: Show BrewZilla
-      - entity: switch.brewassistant_show_brewzilla_learning
-        name: Show BrewZilla Learning
-      - entity: switch.brewassistant_show_event_log
-        name: Show Event Log
-      - entity: switch.brewassistant_show_source_health
-        name: Show Source Health
-      - entity: switch.brewassistant_show_fermentation
-        name: Show Fermentation
-      - entity: switch.brewassistant_show_carbonation
-        name: Show Carbonation
-      - entity: switch.brewassistant_show_kegerator
-        name: Show Kegerator
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+          confirmation:
+            text: Toggle BrewZilla main power?
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const power = states['sensor.brewzilla_power']?.state ?? '—';
+            const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? '—';
+            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'} · ${power} W · ${conn}`;
+          ]]]
+        styles: &hub_switch_tile
+          card:
+            - min-height: 64px
+            - padding: 11px
+            - border-radius: 16px
+            - background: |
+                [[[ return entity.state === 'on' ? 'rgba(76,175,80,.13)' : 'rgba(127,127,127,.065)'; ]]]
+            - border: |
+                [[[ return entity.state === 'on' ? '1px solid rgba(76,175,80,.28)' : '1px solid rgba(127,127,127,.13)'; ]]]
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 32px minmax(0,1fr)
+            - column-gap: 9px
+          icon:
+            - width: 20px
+            - color: |
+                [[[ return entity.state === 'on' ? 'rgb(76,175,80)' : 'rgba(127,127,127,.86)'; ]]]
+          name:
+            - justify-self: start
+            - font-size: 13px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 10.5px
+            - font-weight: 800
+            - opacity: 0.68
+      - type: custom:button-card
+        entity: switch.brewassistant_show_brewday
+        name: Brewday
+        icon: mdi:calendar-clock
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Runtime card' : 'Hidden · Runtime card'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_manual_brewday
+        name: Manual Brewday
+        icon: mdi:hand-back-right-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Manual controls' : 'Hidden · Manual controls'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_brewfather_feed
+        name: Brewfather Feed
+        icon: mdi:beer-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Feed card' : 'Hidden · Feed card'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_brewzilla
+        name: BrewZilla
+        icon: mdi:kettle-steam-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Operator card' : 'Hidden · Operator card'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_brewzilla_learning
+        name: BZ Learning
+        icon: mdi:brain
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Advisory card' : 'Hidden · Advisory card'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_event_log
+        name: Event Log
+        icon: mdi:clipboard-text-clock-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Log card' : 'Hidden · Log card'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_source_health
+        name: Source Health
+        icon: mdi:heart-pulse
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Diagnostics' : 'Hidden · Diagnostics'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_fermentation
+        name: Fermentation
+        icon: mdi:beer
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Chamber/Pill' : 'Hidden · Chamber/Pill'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_carbonation
+        name: Carbonation
+        icon: mdi:chart-bubble
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Pressure guide' : 'Hidden · Pressure guide'; ]]]
+        styles: *hub_switch_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_kegerator
+        name: Kegerator
+        icon: mdi:snowflake-thermometer
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ return entity.state === 'on' ? 'Visible · Serving/cooling' : 'Hidden · Serving/cooling'; ]]]
+        styles: *hub_switch_tile
   - type: grid
     columns: 2
     square: false
