@@ -14,7 +14,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from ..brewday.brewday_runtime_core import build_core_snapshot
+from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
 from .brewzilla_temperature import brewzilla_temperature_snapshot
 
 DATA_KEY = "brewzilla_learning"
@@ -34,7 +34,14 @@ BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 BREWZILLA_LEARNING_CONTEXT_SELECT = "select.brewassistant_brewzilla_learning_context"
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
-_ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot"}
+_ACTIVE_STATES = {
+    "live",
+    "running",
+    "paused",
+    "prepared",
+    "awaiting_snapshot",
+    "awaiting_confirm",
+}
 _RAMP_WORDS = ("ramp", "heat", "värm", "uppvärm", "strike", "mash in", "mash-in")
 _HOLD_WORDS = ("hold", "rest", "rast", "mash", "mäsk", "saccharification", "beta", "alpha")
 _BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokning", "kokgiva")
@@ -176,7 +183,6 @@ def _apply_heat_biases(suggestion: int, pump_bias: int, context_bias: int) -> in
 
 def _round5(value: float) -> int:
     return max(0, min(100, int(round(value / 5.0) * 5)))
-
 
 
 def _temperature_source_snapshot(hass: HomeAssistant, stage_kind: str) -> dict[str, Any]:
@@ -422,7 +428,7 @@ def _make_pending_recommendation(snapshot: dict[str, Any]) -> dict[str, Any] | N
 def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build BrewZilla learning/suggestion snapshot."""
     store = _learning_store(hass)
-    runtime = build_core_snapshot(hass)
+    runtime = build_brewday_runtime_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle").lower()
     stage_kind = _stage_kind(runtime)
     context = learning_context(hass)
