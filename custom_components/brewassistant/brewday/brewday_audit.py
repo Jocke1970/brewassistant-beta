@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .brewday_runtime_core import build_core_snapshot
+from .brewday_runtime import build_brewday_runtime_snapshot
 
 DATA_KEY = "brewday_audit_log"
 STORE_DATA_KEY = "brewday_audit_log_store"
@@ -24,7 +24,14 @@ STORAGE_KEY = "brewassistant_brewday_audit_log"
 STORAGE_VERSION = 1
 MAX_EVENTS = 250
 INVALID = {None, "unknown", "unavailable", "none", ""}
-ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot"}
+ACTIVE_STATES = {
+    "live",
+    "running",
+    "paused",
+    "prepared",
+    "awaiting_snapshot",
+    "awaiting_confirm",
+}
 
 BREWZILLA_CURRENT_TEMP = "sensor.brewassistant_brewzilla_current_temperature"
 BREWZILLA_DEVICE_TARGET = "sensor.brewassistant_brewzilla_target_temperature"
@@ -139,6 +146,17 @@ def _runtime_active(snapshot: dict[str, Any]) -> bool:
     return str(snapshot.get("runtime_state") or "").lower() in ACTIVE_STATES
 
 
+def _target_value(event: dict[str, Any] | None) -> float | None:
+    """Return best available target from an event."""
+    if not event:
+        return None
+    for key in ("tracker_target", "requested_target", "applied_target", "brewzilla_device_target"):
+        value = _as_float(event.get(key))
+        if value is not None:
+            return value
+    return None
+
+
 def _event_base(
     hass: HomeAssistant,
     event_type: str,
@@ -146,7 +164,7 @@ def _event_base(
     brewzilla_result: dict[str, Any] | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    runtime = build_core_snapshot(hass)
+    runtime = build_brewday_runtime_snapshot(hass)
     result = brewzilla_result or {}
     event = {
         "timestamp": _now().isoformat(),
@@ -278,7 +296,7 @@ async def async_record_brewday_audit_tick(
     if not log.active:
         return None
 
-    runtime = build_core_snapshot(hass)
+    runtime = build_brewday_runtime_snapshot(hass)
     result = brewzilla_result or {}
     if result.get("applied"):
         event_type = "brewzilla_action"
@@ -322,7 +340,7 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_event_at": last_event.get("timestamp") if last_event else None,
         "last_step": last_event.get("step") if last_event else None,
         "last_stage": last_event.get("stage") if last_event else None,
-        "last_target": last_event.get("tracker_target") if last_event else None,
+        "last_target": _target_value(last_event),
         "last_action_type": last_action.get("event_type") if last_action else None,
         "last_apply_result": last_action.get("apply_result") if last_action else None,
         "last_control_reason": last_event.get("control_reason") if last_event else None,
