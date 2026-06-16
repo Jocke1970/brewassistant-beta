@@ -7,7 +7,7 @@ card:
   cards:
     - type: custom:button-card
       entity: sensor.brewassistant_brewzilla_learning_status
-      name: BrewZilla Learning
+      name: Brewday Advice
       icon: |
         [[[
           const status = states['sensor.brewassistant_brewzilla_learning_status']?.state ?? 'unknown';
@@ -200,7 +200,7 @@ card:
                 grid-template-columns:repeat(4,minmax(0,1fr));
                 gap:7px;
               ">
-                ${metric('Learning', fmt(learningTemp, '°C'), source, 'mdi:brain', 'blue')}
+                ${metric('Advice', fmt(learningTemp, '°C'), source, 'mdi:brain', 'blue')}
                 ${metric('Target Δ', fmt(targetDelta, '°C'), role, 'mdi:target', Number.isFinite(targetDelta) && targetDelta < -0.3 ? 'red' : 'neutral')}
                 ${metric('Heat', fmt(suggestedHeat, '%', 0), Number.isFinite(heatAdjustment) ? `${heatAdjustment >= 0 ? '+' : ''}${heatAdjustment.toFixed(0)} %` : '—', 'mdi:fire', heatKind)}
                 ${metric('Risk', risk, confidence, 'mdi:alert-outline', riskKind)}
@@ -272,7 +272,7 @@ card:
             target:
               entity_id: button.brewassistant_brewzilla_learning_apply
             confirmation:
-              text: Apply current BrewZilla Learning recommendation?
+              text: Apply current Brewday Advice recommendation?
           styles:
             card:
               - border-radius: 16px
@@ -292,7 +292,7 @@ card:
             target:
               entity_id: button.brewassistant_brewzilla_learning_deny
             confirmation:
-              text: Deny and snooze current BrewZilla Learning recommendation?
+              text: Deny and snooze current Brewday Advice recommendation?
           styles:
             card:
               - border-radius: 16px
@@ -306,7 +306,7 @@ card:
       title-card:
         type: custom:button-card
         entity: sensor.brewassistant_brewzilla_learning_status
-        name: BrewZilla Learning detaljer
+        name: Brewday Advice detaljer
         icon: mdi:tune-variant
         show_state: false
         show_label: true
@@ -348,7 +348,7 @@ card:
           show_header_toggle: false
           entities:
             - entity: select.brewassistant_brewzilla_learning_context
-              name: Learning context
+              name: Advice context
             - entity: select.brewassistant_brewzilla_mash_temperature_source
               name: Mash temperature source
             - entity: sensor.brewassistant_brewzilla_learning_status
@@ -368,8 +368,8 @@ card:
             - entity: sensor.brewassistant_brewzilla_stage_kind
               name: Stage kind
             - entity: sensor.brewassistant_brewzilla_learning_temperature_source
-              name: Learning temp source
+              name: Advice temp source
             - entity: sensor.brewassistant_brewzilla_learning_temperature_role
-              name: Learning temp role
+              name: Advice temp role
             - entity: sensor.brewassistant_brewzilla_heat_strategy_reason
               name: Heat strategy reason
