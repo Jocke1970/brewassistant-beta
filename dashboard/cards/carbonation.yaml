@@ -1,691 +1,696 @@
-type: vertical-stack
-cards:
-  - type: custom:button-card
-    entity: sensor.brewassistant_carbonation_status
-    name: Carbonation Cockpit
-    icon: |
-      [[[
-        const status = String(states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive');
-        if (status === 'Ready to serve') return 'mdi:check-circle-outline';
-        if (status === 'Conditioning') return 'mdi:timer-sand';
-        if (status === 'Carbonating') return 'mdi:beer';
-        return 'mdi:sleep';
-      ]]]
-    show_state: false
-    show_label: true
-    tap_action:
-      action: more-info
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_carbonation
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
       entity: sensor.brewassistant_carbonation_status
-    hold_action:
-      action: more-info
-      entity: number.brewassistant_carbonation_pressure_bar
-    label: |
-      [[[
-        function clean(v) {
-          if (v === undefined || v === null) return null;
-          const s = String(v);
-          return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-        }
-
-        function n(id) {
-          const raw = states[id]?.state;
-          const val = Number(String(raw ?? '').replace(',', '.'));
-          return Number.isFinite(val) ? val : null;
-        }
-
-        function attr(entity, key) {
-          const raw = states[entity]?.attributes?.[key];
-          if (raw === undefined || raw === null) return null;
-          const s = String(raw);
-          return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-        }
-
-        function fmt(v, unit = '', d = 1) {
-          if (!Number.isFinite(v)) return '—';
-          return `${v.toFixed(d)}${unit ? ' ' + unit : ''}`;
-        }
-
-        function short(v, max = 48) {
-          const s = String(v ?? '—');
-          return s.length > max ? s.slice(0, max - 1) + '…' : s;
-        }
-
-        function sourceLabel(v) {
-          const s = String(v ?? '—');
-          if (s === 'python_runtime') return 'runtime';
-          if (s === 'sensor.kyl_temperatur_4') return 'kegerator temp';
-          if (s.includes('kyl_temperatur')) return 'kegerator temp';
-          if (s.includes('carbonation')) return 'carbonation';
-          return short(s.replace('sensor.', ''), 15);
-        }
-
-        const status = clean(states['sensor.brewassistant_carbonation_status']?.state) || 'Inactive';
-        const method = clean(states['sensor.brewassistant_carbonation_method']?.state) || 'Set-and-forget';
-        const summary = clean(states['sensor.brewassistant_carbonation_summary']?.state);
-
-        const target = n('sensor.brewassistant_carbonation_target_volumes');
-        const estimated = n('sensor.brewassistant_carbonation_estimated_volumes');
-        const equilibrium = n('sensor.brewassistant_carbonation_equilibrium_volumes');
-        const progress = n('sensor.brewassistant_carbonation_progress_percent');
-        const temp = n('sensor.brewassistant_carbonation_temperature');
-        const recBar = n('sensor.brewassistant_carbonation_recommended_pressure_bar');
-        const actualBar = n('sensor.brewassistant_carbonation_actual_pressure_bar');
-        const age = n('sensor.brewassistant_carbonation_age_days');
-
-        const tempSource = sourceLabel(attr('sensor.brewassistant_carbonation_status', 'temperature_source') || 'temp source');
-        const pressureSource = sourceLabel(attr('sensor.brewassistant_carbonation_status', 'pressure_source') || 'pressure source');
-
-        const pressureDelta = Number.isFinite(actualBar) && Number.isFinite(recBar) ? actualBar - recBar : null;
-        const volumeDelta = Number.isFinite(estimated) && Number.isFinite(target) ? estimated - target : null;
-
-        let headline = 'Kolsyrning inaktiv';
-        let badge = 'Inaktiv';
-        let badgeIcon = 'mdi:sleep';
-        let chipBg = 'rgba(127,127,127,.12)';
-        let chipBorder = 'rgba(127,127,127,.20)';
-        let tone = 'idle';
-
-        if (status === 'Ready to serve') {
-          headline = 'Redo att servera';
-          badge = 'Klar';
-          badgeIcon = 'mdi:check-circle-outline';
-          chipBg = 'rgba(76,175,80,.14)';
-          chipBorder = 'rgba(76,175,80,.28)';
-          tone = 'ready';
-        } else if (status === 'Conditioning') {
-          headline = 'Conditioning';
-          badge = 'Conditioning';
-          badgeIcon = 'mdi:timer-sand';
-          chipBg = 'rgba(255,193,7,.15)';
-          chipBorder = 'rgba(255,193,7,.30)';
-          tone = 'conditioning';
-        } else if (status === 'Carbonating') {
-          headline = 'Kolsyrar';
-          badge = 'Kolsyrar';
-          badgeIcon = 'mdi:beer';
-          chipBg = 'rgba(33,150,243,.14)';
-          chipBorder = 'rgba(33,150,243,.28)';
-          tone = 'carbonating';
-        } else if (Number.isFinite(progress) && progress > 0) {
-          headline = 'Kolsyrning pausad';
-          badge = `${progress.toFixed(0)} %`;
-          badgeIcon = 'mdi:pause-circle-outline';
-          chipBg = 'rgba(33,150,243,.10)';
-          chipBorder = 'rgba(33,150,243,.20)';
-          tone = 'partial';
-        }
-
-        const statusText =
-          summary ||
-          (status === 'Inactive'
-            ? `${method} · sätt tryck/volymer och tryck Start`
-            : `${fmt(estimated, 'vol', 2)} / ${fmt(target, 'vol', 2)} · ${fmt(progress, '%', 0)}`);
-
-        const metric = (title, main, sub, icon, kind = 'neutral') => {
-          const bg =
-            kind === 'blue' ? 'rgba(33,150,243,.09)' :
-            kind === 'cyan' ? 'rgba(0,188,212,.10)' :
-            kind === 'green' ? 'rgba(76,175,80,.11)' :
-            kind === 'yellow' ? 'rgba(255,193,7,.13)' :
-            kind === 'orange' ? 'rgba(255,152,0,.13)' :
-            kind === 'red' ? 'rgba(244,67,54,.11)' :
-            'rgba(127,127,127,.08)';
-          const border =
-            kind === 'blue' ? 'rgba(33,150,243,.20)' :
-            kind === 'cyan' ? 'rgba(0,188,212,.22)' :
-            kind === 'green' ? 'rgba(76,175,80,.24)' :
-            kind === 'yellow' ? 'rgba(255,193,7,.26)' :
-            kind === 'orange' ? 'rgba(255,152,0,.26)' :
-            kind === 'red' ? 'rgba(244,67,54,.24)' :
-            'rgba(127,127,127,.14)';
-          return `
-            <div style="
-              min-width:0;
-              border-radius:13px;
-              padding:7px 6px;
-              background:${bg};
-              border:1px solid ${border};
-              display:grid;
-              grid-template-columns:18px minmax(0,1fr);
-              gap:5px;
-              align-items:center;
-            ">
-              <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon>
-              <div style="min-width:0;text-align:center;">
-                <div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div>
-                <div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
-                <div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
-              </div>
-            </div>
-          `;
-        };
-
-        const progressValue = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
-        const progressColor =
-          status === 'Ready to serve' ? 'rgba(76,175,80,.85)' :
-          status === 'Conditioning' ? 'rgba(255,193,7,.85)' :
-          status === 'Carbonating' ? 'rgba(33,150,243,.85)' :
-          'rgba(127,127,127,.28)';
-
-        const pressureNote =
-          Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.1 ? 'on target' :
-          Number.isFinite(pressureDelta) && pressureDelta < 0 ? 'under rec.' :
-          Number.isFinite(pressureDelta) && pressureDelta > 0 ? 'over rec.' :
-          pressureSource;
-
-        const pressureKind =
-          Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.1 ? 'green' :
-          Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.25 ? 'yellow' :
-          Number.isFinite(pressureDelta) ? 'orange' : 'neutral';
-
-        const volumeKind =
-          status === 'Ready to serve' ? 'green' :
-          Number.isFinite(progress) && progress >= 80 ? 'green' :
-          Number.isFinite(progress) && progress > 0 ? 'blue' :
-          'neutral';
-
-        const hintBg =
-          tone === 'ready' ? 'rgba(76,175,80,.10)' :
-          tone === 'conditioning' ? 'rgba(255,193,7,.10)' :
-          tone === 'carbonating' ? 'rgba(33,150,243,.10)' :
-          'rgba(127,127,127,.08)';
-        const hintBorder =
-          tone === 'ready' ? 'rgba(76,175,80,.20)' :
-          tone === 'conditioning' ? 'rgba(255,193,7,.22)' :
-          tone === 'carbonating' ? 'rgba(33,150,243,.22)' :
-          'rgba(127,127,127,.14)';
-
-        return `
-          <div style="line-height:1.25;min-width:0;">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-              <div style="min-width:0;">
-                <div style="font-size:12px;font-weight:850;opacity:.66;">CO₂ target · pressure · serving readiness</div>
-                <div style="font-size:12px;font-weight:850;opacity:.66;">${method} · ${short(status, 42)}</div>
-              </div>
-              <div style="
-                display:inline-flex;
-                align-items:center;
-                gap:6px;
-                padding:6px 9px;
-                border-radius:999px;
-                background:${chipBg};
-                border:1px solid ${chipBorder};
-                font-size:11px;
-                font-weight:950;
-                white-space:nowrap;
-              ">
-                <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
-                <span>${badge}</span>
-              </div>
-            </div>
-
-            <div style="margin-top:8px;text-align:center;">
-              <div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div>
-              <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">
-                ${fmt(estimated, 'vol', 2)} / ${fmt(target, 'vol', 2)} · ${fmt(progress, '%', 0)} · ${fmt(actualBar, 'bar', 2)} / ${fmt(recBar, 'bar', 2)}<br>${short(statusText, 78)}
-              </div>
-            </div>
-
-            <div style="
-              margin-top:11px;
-              display:grid;
-              grid-template-columns:repeat(4,minmax(0,1fr));
-              gap:7px;
-            ">
-              ${metric('Target', fmt(target, 'vol', 2), method, 'mdi:target', 'blue')}
-              ${metric('Est.', fmt(estimated, 'vol', 2), Number.isFinite(volumeDelta) ? `${volumeDelta >= 0 ? '+' : ''}${volumeDelta.toFixed(2)} vol` : 'estimated', 'mdi:chart-line', volumeKind)}
-              ${metric('Progress', fmt(progress, '%', 0), 'runtime', 'mdi:percent', progressValue >= 95 ? 'green' : progressValue > 0 ? 'blue' : 'neutral')}
-              ${metric('Temp', fmt(temp, '°C', 1), tempSource, 'mdi:thermometer', 'cyan')}
-            </div>
-
-            <div style="
-              margin-top:7px;
-              display:grid;
-              grid-template-columns:repeat(4,minmax(0,1fr));
-              gap:7px;
-            ">
-              ${metric('Rec.', fmt(recBar, 'bar', 2), 'target', 'mdi:gauge', 'neutral')}
-              ${metric('Actual', fmt(actualBar, 'bar', 2), pressureNote, 'mdi:gauge-full', pressureKind)}
-              ${metric('Equil.', fmt(equilibrium, 'vol', 2), 'equilibrium', 'mdi:scale-balance', 'neutral')}
-              ${metric('Age', fmt(age, 'd', 1), 'tracking', 'mdi:calendar-clock', Number.isFinite(age) && age > 0 ? 'green' : 'neutral')}
-            </div>
-
-            <div style="
-              margin-top:10px;
-              height:10px;
-              border-radius:999px;
-              background:rgba(127,127,127,.13);
-              overflow:hidden;
-              border:1px solid rgba(127,127,127,.08);
-            ">
-              <div style="height:100%; width:${progressValue}%; background:${progressColor}; border-radius:999px; transition:width .3s ease;"></div>
-            </div>
-
-            <div style="
-              margin-top:10px;
-              display:grid;
-              grid-template-columns:20px minmax(0,1fr);
-              gap:7px;
-              align-items:center;
-              border-radius:14px;
-              padding:8px 9px;
-              background:${hintBg};
-              border:1px solid ${hintBorder};
-            ">
-              <ha-icon icon="${status === 'Ready to serve' ? 'mdi:check-circle-outline' : status === 'Conditioning' ? 'mdi:timer-sand' : status === 'Carbonating' ? 'mdi:beer' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon>
-              <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
-                ${short(statusText, 112)}<br><span style="opacity:.62;">Pressure: ${pressureSource} · Temp: ${tempSource}</span>
-              </div>
-            </div>
-          </div>
-        `;
-      ]]]
-    styles:
-      card:
-        - border-radius: 22px
-        - padding: 14px
-        - overflow: hidden
-        - background: |
-            [[[
-              const status = states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive';
-              const progress = Number(states['sensor.brewassistant_carbonation_progress_percent']?.state);
-              if (status === 'Ready to serve') return 'linear-gradient(135deg, rgba(76,175,80,.14), rgba(127,127,127,.035))';
-              if (status === 'Conditioning') return 'linear-gradient(135deg, rgba(255,193,7,.13), rgba(127,127,127,.035))';
-              if (status === 'Carbonating') return 'linear-gradient(135deg, rgba(33,150,243,.14), rgba(127,127,127,.035))';
-              if (Number.isFinite(progress) && progress > 0) return 'linear-gradient(135deg, rgba(33,150,243,.09), rgba(127,127,127,.035))';
-              return 'linear-gradient(135deg, rgba(127,127,127,.10), rgba(127,127,127,.035))';
-            ]]]
-        - border: 1px solid rgba(127,127,127,.18)
-        - box-shadow: 0 2px 10px rgba(0,0,0,.08)
-      grid:
-        - grid-template-areas: "\"i n\" \"i l\""
-        - grid-template-columns: 42px minmax(0,1fr)
-        - grid-template-rows: min-content min-content
-        - column-gap: 12px
-      icon:
-        - width: 27px
-        - height: 27px
-      img_cell:
-        - width: 42px
-        - height: 42px
-        - border-radius: 50%
-        - background: rgba(33,150,243,.13)
-      name:
-        - justify-self: start
-        - align-self: end
-        - font-size: 15px
-        - font-weight: 950
-        - letter-spacing: "-.02em"
-      label:
-        - justify-self: stretch
-        - text-align: left
-        - white-space: normal
-        - margin-top: 4px
-  - type: custom:expander-card
-    title-card:
-      type: custom:button-card
-      entity: sensor.brewassistant_carbonation_status
-      name: Carbonation detaljer / styrning
-      icon: mdi:tune-variant
+      name: Carbonation Cockpit
+      icon: |
+        [[[
+          const status = String(states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive');
+          if (status === 'Ready to serve') return 'mdi:check-circle-outline';
+          if (status === 'Conditioning') return 'mdi:timer-sand';
+          if (status === 'Carbonating') return 'mdi:beer';
+          return 'mdi:sleep';
+        ]]]
       show_state: false
       show_label: true
+      tap_action:
+        action: more-info
+        entity: sensor.brewassistant_carbonation_status
+      hold_action:
+        action: more-info
+        entity: number.brewassistant_carbonation_pressure_bar
       label: |
         [[[
+          function clean(v) {
+            if (v === undefined || v === null) return null;
+            const s = String(v);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+          }
+
           function n(id) {
             const raw = states[id]?.state;
             const val = Number(String(raw ?? '').replace(',', '.'));
             return Number.isFinite(val) ? val : null;
           }
-          function fmt(v, d=1) {
-            return Number.isFinite(v) ? v.toFixed(d) : '—';
+
+          function attr(entity, key) {
+            const raw = states[entity]?.attributes?.[key];
+            if (raw === undefined || raw === null) return null;
+            const s = String(raw);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
           }
-          const status = states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive';
+
+          function fmt(v, unit = '', d = 1) {
+            if (!Number.isFinite(v)) return '—';
+            return `${v.toFixed(d)}${unit ? ' ' + unit : ''}`;
+          }
+
+          function short(v, max = 48) {
+            const s = String(v ?? '—');
+            return s.length > max ? s.slice(0, max - 1) + '…' : s;
+          }
+
+          function sourceLabel(v) {
+            const s = String(v ?? '—');
+            if (s === 'python_runtime') return 'runtime';
+            if (s === 'sensor.kyl_temperatur_4') return 'kegerator temp';
+            if (s.includes('kyl_temperatur')) return 'kegerator temp';
+            if (s.includes('carbonation')) return 'carbonation';
+            return short(s.replace('sensor.', ''), 15);
+          }
+
+          const status = clean(states['sensor.brewassistant_carbonation_status']?.state) || 'Inactive';
+          const method = clean(states['sensor.brewassistant_carbonation_method']?.state) || 'Set-and-forget';
+          const summary = clean(states['sensor.brewassistant_carbonation_summary']?.state);
+
           const target = n('sensor.brewassistant_carbonation_target_volumes');
           const estimated = n('sensor.brewassistant_carbonation_estimated_volumes');
-          const rec = n('sensor.brewassistant_carbonation_recommended_pressure_bar');
-          const actual = n('sensor.brewassistant_carbonation_actual_pressure_bar');
-          return `${status} · ${fmt(estimated, 2)} / ${fmt(target, 2)} vol · ${fmt(actual, 2)} / ${fmt(rec, 2)} bar`;
+          const equilibrium = n('sensor.brewassistant_carbonation_equilibrium_volumes');
+          const progress = n('sensor.brewassistant_carbonation_progress_percent');
+          const temp = n('sensor.brewassistant_carbonation_temperature');
+          const recBar = n('sensor.brewassistant_carbonation_recommended_pressure_bar');
+          const actualBar = n('sensor.brewassistant_carbonation_actual_pressure_bar');
+          const age = n('sensor.brewassistant_carbonation_age_days');
+
+          const tempSource = sourceLabel(attr('sensor.brewassistant_carbonation_status', 'temperature_source') || 'temp source');
+          const pressureSource = sourceLabel(attr('sensor.brewassistant_carbonation_status', 'pressure_source') || 'pressure source');
+
+          const pressureDelta = Number.isFinite(actualBar) && Number.isFinite(recBar) ? actualBar - recBar : null;
+          const volumeDelta = Number.isFinite(estimated) && Number.isFinite(target) ? estimated - target : null;
+
+          let headline = 'Kolsyrning inaktiv';
+          let badge = 'Inaktiv';
+          let badgeIcon = 'mdi:sleep';
+          let chipBg = 'rgba(127,127,127,.12)';
+          let chipBorder = 'rgba(127,127,127,.20)';
+          let tone = 'idle';
+
+          if (status === 'Ready to serve') {
+            headline = 'Redo att servera';
+            badge = 'Klar';
+            badgeIcon = 'mdi:check-circle-outline';
+            chipBg = 'rgba(76,175,80,.14)';
+            chipBorder = 'rgba(76,175,80,.28)';
+            tone = 'ready';
+          } else if (status === 'Conditioning') {
+            headline = 'Conditioning';
+            badge = 'Conditioning';
+            badgeIcon = 'mdi:timer-sand';
+            chipBg = 'rgba(255,193,7,.15)';
+            chipBorder = 'rgba(255,193,7,.30)';
+            tone = 'conditioning';
+          } else if (status === 'Carbonating') {
+            headline = 'Kolsyrar';
+            badge = 'Kolsyrar';
+            badgeIcon = 'mdi:beer';
+            chipBg = 'rgba(33,150,243,.14)';
+            chipBorder = 'rgba(33,150,243,.28)';
+            tone = 'carbonating';
+          } else if (Number.isFinite(progress) && progress > 0) {
+            headline = 'Kolsyrning pausad';
+            badge = `${progress.toFixed(0)} %`;
+            badgeIcon = 'mdi:pause-circle-outline';
+            chipBg = 'rgba(33,150,243,.10)';
+            chipBorder = 'rgba(33,150,243,.20)';
+            tone = 'partial';
+          }
+
+          const statusText =
+            summary ||
+            (status === 'Inactive'
+              ? `${method} · sätt tryck/volymer och tryck Start`
+              : `${fmt(estimated, 'vol', 2)} / ${fmt(target, 'vol', 2)} · ${fmt(progress, '%', 0)}`);
+
+          const metric = (title, main, sub, icon, kind = 'neutral') => {
+            const bg =
+              kind === 'blue' ? 'rgba(33,150,243,.09)' :
+              kind === 'cyan' ? 'rgba(0,188,212,.10)' :
+              kind === 'green' ? 'rgba(76,175,80,.11)' :
+              kind === 'yellow' ? 'rgba(255,193,7,.13)' :
+              kind === 'orange' ? 'rgba(255,152,0,.13)' :
+              kind === 'red' ? 'rgba(244,67,54,.11)' :
+              'rgba(127,127,127,.08)';
+            const border =
+              kind === 'blue' ? 'rgba(33,150,243,.20)' :
+              kind === 'cyan' ? 'rgba(0,188,212,.22)' :
+              kind === 'green' ? 'rgba(76,175,80,.24)' :
+              kind === 'yellow' ? 'rgba(255,193,7,.26)' :
+              kind === 'orange' ? 'rgba(255,152,0,.26)' :
+              kind === 'red' ? 'rgba(244,67,54,.24)' :
+              'rgba(127,127,127,.14)';
+            return `
+              <div style="
+                min-width:0;
+                border-radius:13px;
+                padding:7px 6px;
+                background:${bg};
+                border:1px solid ${border};
+                display:grid;
+                grid-template-columns:18px minmax(0,1fr);
+                gap:5px;
+                align-items:center;
+              ">
+                <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon>
+                <div style="min-width:0;text-align:center;">
+                  <div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div>
+                  <div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
+                  <div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
+                </div>
+              </div>
+            `;
+          };
+
+          const progressValue = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
+          const progressColor =
+            status === 'Ready to serve' ? 'rgba(76,175,80,.85)' :
+            status === 'Conditioning' ? 'rgba(255,193,7,.85)' :
+            status === 'Carbonating' ? 'rgba(33,150,243,.85)' :
+            'rgba(127,127,127,.28)';
+
+          const pressureNote =
+            Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.1 ? 'on target' :
+            Number.isFinite(pressureDelta) && pressureDelta < 0 ? 'under rec.' :
+            Number.isFinite(pressureDelta) && pressureDelta > 0 ? 'over rec.' :
+            pressureSource;
+
+          const pressureKind =
+            Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.1 ? 'green' :
+            Number.isFinite(pressureDelta) && Math.abs(pressureDelta) <= 0.25 ? 'yellow' :
+            Number.isFinite(pressureDelta) ? 'orange' : 'neutral';
+
+          const volumeKind =
+            status === 'Ready to serve' ? 'green' :
+            Number.isFinite(progress) && progress >= 80 ? 'green' :
+            Number.isFinite(progress) && progress > 0 ? 'blue' :
+            'neutral';
+
+          const hintBg =
+            tone === 'ready' ? 'rgba(76,175,80,.10)' :
+            tone === 'conditioning' ? 'rgba(255,193,7,.10)' :
+            tone === 'carbonating' ? 'rgba(33,150,243,.10)' :
+            'rgba(127,127,127,.08)';
+          const hintBorder =
+            tone === 'ready' ? 'rgba(76,175,80,.20)' :
+            tone === 'conditioning' ? 'rgba(255,193,7,.22)' :
+            tone === 'carbonating' ? 'rgba(33,150,243,.22)' :
+            'rgba(127,127,127,.14)';
+
+          return `
+            <div style="line-height:1.25;min-width:0;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+                <div style="min-width:0;">
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">CO₂ target · pressure · serving readiness</div>
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">${method} · ${short(status, 42)}</div>
+                </div>
+                <div style="
+                  display:inline-flex;
+                  align-items:center;
+                  gap:6px;
+                  padding:6px 9px;
+                  border-radius:999px;
+                  background:${chipBg};
+                  border:1px solid ${chipBorder};
+                  font-size:11px;
+                  font-weight:950;
+                  white-space:nowrap;
+                ">
+                  <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
+                  <span>${badge}</span>
+                </div>
+              </div>
+
+              <div style="margin-top:8px;text-align:center;">
+                <div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div>
+                <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">
+                  ${fmt(estimated, 'vol', 2)} / ${fmt(target, 'vol', 2)} · ${fmt(progress, '%', 0)} · ${fmt(actualBar, 'bar', 2)} / ${fmt(recBar, 'bar', 2)}<br>${short(statusText, 78)}
+                </div>
+              </div>
+
+              <div style="
+                margin-top:11px;
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:7px;
+              ">
+                ${metric('Target', fmt(target, 'vol', 2), method, 'mdi:target', 'blue')}
+                ${metric('Est.', fmt(estimated, 'vol', 2), Number.isFinite(volumeDelta) ? `${volumeDelta >= 0 ? '+' : ''}${volumeDelta.toFixed(2)} vol` : 'estimated', 'mdi:chart-line', volumeKind)}
+                ${metric('Progress', fmt(progress, '%', 0), 'runtime', 'mdi:percent', progressValue >= 95 ? 'green' : progressValue > 0 ? 'blue' : 'neutral')}
+                ${metric('Temp', fmt(temp, '°C', 1), tempSource, 'mdi:thermometer', 'cyan')}
+              </div>
+
+              <div style="
+                margin-top:7px;
+                display:grid;
+                grid-template-columns:repeat(4,minmax(0,1fr));
+                gap:7px;
+              ">
+                ${metric('Rec.', fmt(recBar, 'bar', 2), 'target', 'mdi:gauge', 'neutral')}
+                ${metric('Actual', fmt(actualBar, 'bar', 2), pressureNote, 'mdi:gauge-full', pressureKind)}
+                ${metric('Equil.', fmt(equilibrium, 'vol', 2), 'equilibrium', 'mdi:scale-balance', 'neutral')}
+                ${metric('Age', fmt(age, 'd', 1), 'tracking', 'mdi:calendar-clock', Number.isFinite(age) && age > 0 ? 'green' : 'neutral')}
+              </div>
+
+              <div style="
+                margin-top:10px;
+                height:10px;
+                border-radius:999px;
+                background:rgba(127,127,127,.13);
+                overflow:hidden;
+                border:1px solid rgba(127,127,127,.08);
+              ">
+                <div style="height:100%; width:${progressValue}%; background:${progressColor}; border-radius:999px; transition:width .3s ease;"></div>
+              </div>
+
+              <div style="
+                margin-top:10px;
+                display:grid;
+                grid-template-columns:20px minmax(0,1fr);
+                gap:7px;
+                align-items:center;
+                border-radius:14px;
+                padding:8px 9px;
+                background:${hintBg};
+                border:1px solid ${hintBorder};
+              ">
+                <ha-icon icon="${status === 'Ready to serve' ? 'mdi:check-circle-outline' : status === 'Conditioning' ? 'mdi:timer-sand' : status === 'Carbonating' ? 'mdi:beer' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon>
+                <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
+                  ${short(statusText, 112)}<br><span style="opacity:.62;">Pressure: ${pressureSource} · Temp: ${tempSource}</span>
+                </div>
+              </div>
+            </div>
+          `;
         ]]]
       styles:
         card:
-          - border-radius: 18px
-          - padding: 12px
-          - background: rgba(127,127,127,.055)
-          - border: 1px solid rgba(127,127,127,.14)
+          - border-radius: 22px
+          - padding: 14px
+          - overflow: hidden
+          - background: |
+              [[[
+                const status = states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive';
+                const progress = Number(states['sensor.brewassistant_carbonation_progress_percent']?.state);
+                if (status === 'Ready to serve') return 'linear-gradient(135deg, rgba(76,175,80,.14), rgba(127,127,127,.035))';
+                if (status === 'Conditioning') return 'linear-gradient(135deg, rgba(255,193,7,.13), rgba(127,127,127,.035))';
+                if (status === 'Carbonating') return 'linear-gradient(135deg, rgba(33,150,243,.14), rgba(127,127,127,.035))';
+                if (Number.isFinite(progress) && progress > 0) return 'linear-gradient(135deg, rgba(33,150,243,.09), rgba(127,127,127,.035))';
+                return 'linear-gradient(135deg, rgba(127,127,127,.10), rgba(127,127,127,.035))';
+              ]]]
+          - border: 1px solid rgba(127,127,127,.18)
+          - box-shadow: 0 2px 10px rgba(0,0,0,.08)
         grid:
           - grid-template-areas: "\"i n\" \"i l\""
-          - grid-template-columns: 34px minmax(0,1fr)
-          - column-gap: 10px
+          - grid-template-columns: 42px minmax(0,1fr)
+          - grid-template-rows: min-content min-content
+          - column-gap: 12px
         icon:
-          - width: 22px
-          - height: 22px
+          - width: 27px
+          - height: 27px
+        img_cell:
+          - width: 42px
+          - height: 42px
+          - border-radius: 50%
+          - background: rgba(33,150,243,.13)
         name:
           - justify-self: start
-          - font-size: 14px
+          - align-self: end
+          - font-size: 15px
           - font-weight: 950
+          - letter-spacing: "-.02em"
         label:
-          - justify-self: start
+          - justify-self: stretch
           - text-align: left
           - white-space: normal
-          - font-size: 11.5px
-          - font-weight: 750
-          - opacity: 0.72
-    cards:
-      - type: vertical-stack
-        cards:
-          - type: custom:vertical-stack-in-card
-            cards:
-              - type: custom:button-card
-                name: Carbonation inputs
-                icon: mdi:tune-variant
-                show_state: false
-                show_label: true
-                label: Metod, målvolym, startvolym och faktiskt tryck
-                styles:
-                  grid:
-                    - grid-template-areas: "\"i n\" \"i l\""
-                    - grid-template-columns: 38px 1fr
-                  card:
-                    - padding: 12px 14px
-                    - border-radius: 16px 16px 8px 8px
-                    - background: rgba(127,127,127,.06)
-                    - border: 1px solid rgba(127,127,127,.12)
-                    - box-shadow: none
-                  img_cell:
-                    - width: 32px
-                    - height: 32px
-                    - border-radius: 50%
-                    - background: rgba(33,150,243,.13)
-                  icon:
-                    - width: 18px
-                    - color: rgb(33,150,243)
-                  name:
-                    - justify-self: start
-                    - font-size: 15px
-                    - font-weight: 950
-                  label:
-                    - justify-self: start
-                    - font-size: 12px
-                    - opacity: 0.72
-              - type: custom:mushroom-select-card
-                entity: select.brewassistant_carbonation_method
-                name: Method
-                icon: mdi:format-list-bulleted-type
-                layout: horizontal
-                fill_container: true
-              - type: custom:mushroom-number-card
-                entity: number.brewassistant_carbonation_target_volumes
-                name: Target CO₂ volumes
-                icon: mdi:target
-                layout: horizontal
-                display_mode: buttons
-                fill_container: true
-              - type: custom:mushroom-number-card
-                entity: number.brewassistant_carbonation_start_volumes
-                name: Start CO₂ volumes
-                icon: mdi:beer
-                layout: horizontal
-                display_mode: buttons
-                fill_container: true
-              - type: custom:mushroom-number-card
-                entity: number.brewassistant_carbonation_pressure_bar
-                name: Actual pressure bar
-                icon: mdi:gauge
-                layout: horizontal
-                display_mode: buttons
-                fill_container: true
-          - type: grid
-            columns: 4
-            square: false
-            cards:
-              - type: custom:button-card
-                name: Start
-                icon: mdi:play
-                tap_action:
-                  action: call-service
-                  service: brewassistant.carbonation_start
-                styles:
-                  card:
-                    - min-height: 58px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(76,175,80,.11)
-                    - border: 1px solid rgba(76,175,80,.24)
-                  icon:
-                    - width: 20px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-              - type: custom:button-card
-                name: Update
-                icon: mdi:refresh
-                tap_action:
-                  action: call-service
-                  service: brewassistant.carbonation_update
-                styles:
-                  card:
-                    - min-height: 58px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(76,175,80,.11)
-                    - border: 1px solid rgba(76,175,80,.24)
-                  icon:
-                    - width: 20px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-              - type: custom:button-card
-                name: Pause
-                icon: mdi:pause
-                tap_action:
-                  action: call-service
-                  service: brewassistant.carbonation_pause
-                styles:
-                  card:
-                    - min-height: 58px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(76,175,80,.11)
-                    - border: 1px solid rgba(76,175,80,.24)
-                  icon:
-                    - width: 20px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-              - type: custom:button-card
-                name: Reset
-                icon: mdi:restart
-                tap_action:
-                  action: call-service
-                  service: brewassistant.carbonation_reset
-                  confirmation:
-                    text: Reset carbonation runtime?
-                styles:
-                  card:
-                    - min-height: 58px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(76,175,80,.11)
-                    - border: 1px solid rgba(76,175,80,.24)
-                  icon:
-                    - width: 20px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-          - type: custom:button-card
-            name: Quick targets
-            icon: mdi:tune-variant
-            show_state: false
-            show_label: true
-            label: Sätter målvolymen i carbonation runtime
-            styles:
-              grid:
-                - grid-template-areas: "\"i n\" \"i l\""
-                - grid-template-columns: 38px 1fr
-              card:
-                - padding: 11px 13px
-                - border-radius: 14px
-                - background: rgba(127,127,127,.06)
-                - border: 1px solid rgba(127,127,127,.12)
-                - box-shadow: none
-              img_cell:
-                - width: 30px
-                - height: 30px
-                - border-radius: 50%
-                - background: rgba(127,127,127,.10)
-              icon:
-                - width: 18px
-              name:
-                - justify-self: start
-                - font-size: 13px
-                - font-weight: 950
-              label:
-                - justify-self: start
-                - text-align: left
-                - white-space: normal
-          - type: grid
-            columns: 4
-            square: false
-            cards:
-              - type: custom:button-card
-                name: Low
-                label: 2.2 vol
-                icon: mdi:glass-mug
-                show_label: true
-                tap_action:
-                  action: call-service
-                  service: number.set_value
-                  target:
-                    entity_id: number.brewassistant_carbonation_target_volumes
-                  data:
-                    value: 2.2
-                styles:
-                  card:
-                    - min-height: 56px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(127,127,127,.06)
-                    - border: 1px solid rgba(127,127,127,.12)
-                  icon:
-                    - width: 19px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-                  label:
-                    - font-size: 10px
-                    - opacity: 0.72
-              - type: custom:button-card
-                name: Standard
-                label: 2.4 vol
-                icon: mdi:beer
-                show_label: true
-                tap_action:
-                  action: call-service
-                  service: number.set_value
-                  target:
-                    entity_id: number.brewassistant_carbonation_target_volumes
-                  data:
-                    value: 2.4
-                styles:
-                  card:
-                    - min-height: 56px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(127,127,127,.06)
-                    - border: 1px solid rgba(127,127,127,.12)
-                  icon:
-                    - width: 19px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-                  label:
-                    - font-size: 10px
-                    - opacity: 0.72
-              - type: custom:button-card
-                name: Sparkly
-                label: 2.6 vol
-                icon: mdi:creation
-                show_label: true
-                tap_action:
-                  action: call-service
-                  service: number.set_value
-                  target:
-                    entity_id: number.brewassistant_carbonation_target_volumes
-                  data:
-                    value: 2.6
-                styles:
-                  card:
-                    - min-height: 56px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(127,127,127,.06)
-                    - border: 1px solid rgba(127,127,127,.12)
-                  icon:
-                    - width: 19px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-                  label:
-                    - font-size: 10px
-                    - opacity: 0.72
-              - type: custom:button-card
-                name: Wheat
-                label: 2.8 vol
-                icon: mdi:barley
-                show_label: true
-                tap_action:
-                  action: call-service
-                  service: number.set_value
-                  target:
-                    entity_id: number.brewassistant_carbonation_target_volumes
-                  data:
-                    value: 2.8
-                styles:
-                  card:
-                    - min-height: 56px
-                    - padding: 9px
-                    - border-radius: 14px
-                    - background: rgba(127,127,127,.06)
-                    - border: 1px solid rgba(127,127,127,.12)
-                  icon:
-                    - width: 19px
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-                  label:
-                    - font-size: 10px
-                    - opacity: 0.72
-          - type: entities
-            title: Carbonation runtime
-            show_header_toggle: false
-            entities:
-              - entity: sensor.brewassistant_carbonation_status
-                name: Status
-              - entity: sensor.brewassistant_carbonation_method
-                name: Method
-              - entity: sensor.brewassistant_carbonation_summary
-                name: Summary
-              - entity: sensor.brewassistant_carbonation_target_volumes
-                name: Target volumes
-              - entity: sensor.brewassistant_carbonation_estimated_volumes
-                name: Estimated volumes
-              - entity: sensor.brewassistant_carbonation_equilibrium_volumes
-                name: Equilibrium volumes
-              - entity: sensor.brewassistant_carbonation_progress_percent
-                name: Progress
-              - entity: sensor.brewassistant_carbonation_temperature
-                name: Temperature
-              - entity: sensor.brewassistant_carbonation_recommended_pressure_bar
-                name: Recommended pressure
-              - entity: sensor.brewassistant_carbonation_actual_pressure_bar
-                name: Actual pressure
-              - entity: sensor.brewassistant_carbonation_age_days
-                name: Age
-              - type: attribute
-                entity: sensor.brewassistant_carbonation_status
-                attribute: temperature_source
-                name: Temperature source
-              - type: attribute
-                entity: sensor.brewassistant_carbonation_status
-                attribute: pressure_source
-                name: Pressure source
+          - margin-top: 4px
+    - type: custom:expander-card
+      title-card:
+        type: custom:button-card
+        entity: sensor.brewassistant_carbonation_status
+        name: Carbonation detaljer / styrning
+        icon: mdi:tune-variant
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            function n(id) {
+              const raw = states[id]?.state;
+              const val = Number(String(raw ?? '').replace(',', '.'));
+              return Number.isFinite(val) ? val : null;
+            }
+            function fmt(v, d=1) {
+              return Number.isFinite(v) ? v.toFixed(d) : '—';
+            }
+            const status = states['sensor.brewassistant_carbonation_status']?.state ?? 'Inactive';
+            const target = n('sensor.brewassistant_carbonation_target_volumes');
+            const estimated = n('sensor.brewassistant_carbonation_estimated_volumes');
+            const rec = n('sensor.brewassistant_carbonation_recommended_pressure_bar');
+            const actual = n('sensor.brewassistant_carbonation_actual_pressure_bar');
+            return `${status} · ${fmt(estimated, 2)} / ${fmt(target, 2)} vol · ${fmt(actual, 2)} / ${fmt(rec, 2)} bar`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(127,127,127,.055)
+            - border: 1px solid rgba(127,127,127,.14)
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 34px minmax(0,1fr)
+            - column-gap: 10px
+          icon:
+            - width: 22px
+            - height: 22px
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 11.5px
+            - font-weight: 750
+            - opacity: 0.72
+      cards:
+        - type: vertical-stack
+          cards:
+            - type: custom:vertical-stack-in-card
+              cards:
+                - type: custom:button-card
+                  name: Carbonation inputs
+                  icon: mdi:tune-variant
+                  show_state: false
+                  show_label: true
+                  label: Metod, målvolym, startvolym och faktiskt tryck
+                  styles:
+                    grid:
+                      - grid-template-areas: "\"i n\" \"i l\""
+                      - grid-template-columns: 38px 1fr
+                    card:
+                      - padding: 12px 14px
+                      - border-radius: 16px 16px 8px 8px
+                      - background: rgba(127,127,127,.06)
+                      - border: 1px solid rgba(127,127,127,.12)
+                      - box-shadow: none
+                    img_cell:
+                      - width: 32px
+                      - height: 32px
+                      - border-radius: 50%
+                      - background: rgba(33,150,243,.13)
+                    icon:
+                      - width: 18px
+                      - color: rgb(33,150,243)
+                    name:
+                      - justify-self: start
+                      - font-size: 15px
+                      - font-weight: 950
+                    label:
+                      - justify-self: start
+                      - font-size: 12px
+                      - opacity: 0.72
+                - type: custom:mushroom-select-card
+                  entity: select.brewassistant_carbonation_method
+                  name: Method
+                  icon: mdi:format-list-bulleted-type
+                  layout: horizontal
+                  fill_container: true
+                - type: custom:mushroom-number-card
+                  entity: number.brewassistant_carbonation_target_volumes
+                  name: Target CO₂ volumes
+                  icon: mdi:target
+                  layout: horizontal
+                  display_mode: buttons
+                  fill_container: true
+                - type: custom:mushroom-number-card
+                  entity: number.brewassistant_carbonation_start_volumes
+                  name: Start CO₂ volumes
+                  icon: mdi:beer
+                  layout: horizontal
+                  display_mode: buttons
+                  fill_container: true
+                - type: custom:mushroom-number-card
+                  entity: number.brewassistant_carbonation_pressure_bar
+                  name: Actual pressure bar
+                  icon: mdi:gauge
+                  layout: horizontal
+                  display_mode: buttons
+                  fill_container: true
+            - type: grid
+              columns: 4
+              square: false
+              cards:
+                - type: custom:button-card
+                  name: Start
+                  icon: mdi:play
+                  tap_action:
+                    action: call-service
+                    service: brewassistant.carbonation_start
+                  styles:
+                    card:
+                      - min-height: 58px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(76,175,80,.11)
+                      - border: 1px solid rgba(76,175,80,.24)
+                    icon:
+                      - width: 20px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                - type: custom:button-card
+                  name: Update
+                  icon: mdi:refresh
+                  tap_action:
+                    action: call-service
+                    service: brewassistant.carbonation_update
+                  styles:
+                    card:
+                      - min-height: 58px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(76,175,80,.11)
+                      - border: 1px solid rgba(76,175,80,.24)
+                    icon:
+                      - width: 20px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                - type: custom:button-card
+                  name: Pause
+                  icon: mdi:pause
+                  tap_action:
+                    action: call-service
+                    service: brewassistant.carbonation_pause
+                  styles:
+                    card:
+                      - min-height: 58px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(76,175,80,.11)
+                      - border: 1px solid rgba(76,175,80,.24)
+                    icon:
+                      - width: 20px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                - type: custom:button-card
+                  name: Reset
+                  icon: mdi:restart
+                  tap_action:
+                    action: call-service
+                    service: brewassistant.carbonation_reset
+                    confirmation:
+                      text: Reset carbonation runtime?
+                  styles:
+                    card:
+                      - min-height: 58px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(76,175,80,.11)
+                      - border: 1px solid rgba(76,175,80,.24)
+                    icon:
+                      - width: 20px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+            - type: custom:button-card
+              name: Quick targets
+              icon: mdi:tune-variant
+              show_state: false
+              show_label: true
+              label: Sätter målvolymen i carbonation runtime
+              styles:
+                grid:
+                  - grid-template-areas: "\"i n\" \"i l\""
+                  - grid-template-columns: 38px 1fr
+                card:
+                  - padding: 11px 13px
+                  - border-radius: 14px
+                  - background: rgba(127,127,127,.06)
+                  - border: 1px solid rgba(127,127,127,.12)
+                  - box-shadow: none
+                img_cell:
+                  - width: 30px
+                  - height: 30px
+                  - border-radius: 50%
+                  - background: rgba(127,127,127,.10)
+                icon:
+                  - width: 18px
+                name:
+                  - justify-self: start
+                  - font-size: 13px
+                  - font-weight: 950
+                label:
+                  - justify-self: start
+                  - text-align: left
+                  - white-space: normal
+            - type: grid
+              columns: 4
+              square: false
+              cards:
+                - type: custom:button-card
+                  name: Low
+                  label: 2.2 vol
+                  icon: mdi:glass-mug
+                  show_label: true
+                  tap_action:
+                    action: call-service
+                    service: number.set_value
+                    target:
+                      entity_id: number.brewassistant_carbonation_target_volumes
+                    data:
+                      value: 2.2
+                  styles:
+                    card:
+                      - min-height: 56px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(127,127,127,.06)
+                      - border: 1px solid rgba(127,127,127,.12)
+                    icon:
+                      - width: 19px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                    label:
+                      - font-size: 10px
+                      - opacity: 0.72
+                - type: custom:button-card
+                  name: Standard
+                  label: 2.4 vol
+                  icon: mdi:beer
+                  show_label: true
+                  tap_action:
+                    action: call-service
+                    service: number.set_value
+                    target:
+                      entity_id: number.brewassistant_carbonation_target_volumes
+                    data:
+                      value: 2.4
+                  styles:
+                    card:
+                      - min-height: 56px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(127,127,127,.06)
+                      - border: 1px solid rgba(127,127,127,.12)
+                    icon:
+                      - width: 19px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                    label:
+                      - font-size: 10px
+                      - opacity: 0.72
+                - type: custom:button-card
+                  name: Sparkly
+                  label: 2.6 vol
+                  icon: mdi:creation
+                  show_label: true
+                  tap_action:
+                    action: call-service
+                    service: number.set_value
+                    target:
+                      entity_id: number.brewassistant_carbonation_target_volumes
+                    data:
+                      value: 2.6
+                  styles:
+                    card:
+                      - min-height: 56px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(127,127,127,.06)
+                      - border: 1px solid rgba(127,127,127,.12)
+                    icon:
+                      - width: 19px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                    label:
+                      - font-size: 10px
+                      - opacity: 0.72
+                - type: custom:button-card
+                  name: Wheat
+                  label: 2.8 vol
+                  icon: mdi:barley
+                  show_label: true
+                  tap_action:
+                    action: call-service
+                    service: number.set_value
+                    target:
+                      entity_id: number.brewassistant_carbonation_target_volumes
+                    data:
+                      value: 2.8
+                  styles:
+                    card:
+                      - min-height: 56px
+                      - padding: 9px
+                      - border-radius: 14px
+                      - background: rgba(127,127,127,.06)
+                      - border: 1px solid rgba(127,127,127,.12)
+                    icon:
+                      - width: 19px
+                    name:
+                      - font-size: 11px
+                      - font-weight: 950
+                    label:
+                      - font-size: 10px
+                      - opacity: 0.72
+            - type: entities
+              title: Carbonation runtime
+              show_header_toggle: false
+              entities:
+                - entity: sensor.brewassistant_carbonation_status
+                  name: Status
+                - entity: sensor.brewassistant_carbonation_method
+                  name: Method
+                - entity: sensor.brewassistant_carbonation_summary
+                  name: Summary
+                - entity: sensor.brewassistant_carbonation_target_volumes
+                  name: Target volumes
+                - entity: sensor.brewassistant_carbonation_estimated_volumes
+                  name: Estimated volumes
+                - entity: sensor.brewassistant_carbonation_equilibrium_volumes
+                  name: Equilibrium volumes
+                - entity: sensor.brewassistant_carbonation_progress_percent
+                  name: Progress
+                - entity: sensor.brewassistant_carbonation_temperature
+                  name: Temperature
+                - entity: sensor.brewassistant_carbonation_recommended_pressure_bar
+                  name: Recommended pressure
+                - entity: sensor.brewassistant_carbonation_actual_pressure_bar
+                  name: Actual pressure
+                - entity: sensor.brewassistant_carbonation_age_days
+                  name: Age
+                - type: attribute
+                  entity: sensor.brewassistant_carbonation_status
+                  attribute: temperature_source
+                  name: Temperature source
+                - type: attribute
+                  entity: sensor.brewassistant_carbonation_status
+                  attribute: pressure_source
+                  name: Pressure source

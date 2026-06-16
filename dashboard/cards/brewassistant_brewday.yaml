@@ -1,7 +1,7 @@
 type: conditional
 conditions:
-  - entity: sensor.brewassistant_brewday_runtime_state
-    state_not: idle
+  - entity: switch.brewassistant_show_brewday
+    state: "on"
 card:
   type: vertical-stack
   cards:
