@@ -1,0 +1,330 @@
+type: custom:vertical-stack-in-card
+cards:
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    triggers_update:
+      - switch.brewzilla
+      - sensor.brewzilla_power
+      - sensor.brewassistant_brewzilla_orchestration_mode
+      - sensor.brewassistant_brewzilla_connection_state
+      - sensor.brewassistant_brewzilla_wort_temperature
+      - sensor.brewassistant_brewzilla_requested_target
+      - sensor.brewassistant_brewday_runtime_state
+      - sensor.brewassistant_brewday_runtime_source
+      - sensor.brewassistant_brewday_stage
+      - sensor.brewassistant_manual_brewday_status
+      - sensor.brewassistant_manual_brewday_stage
+      - switch.brewassistant_show_brewday
+      - switch.brewassistant_show_event_log
+      - switch.brewassistant_show_fermentation
+      - switch.brewassistant_show_carbonation
+      - switch.brewassistant_show_kegerator
+      - switch.brewassistant_kegerator_fan_auto_enabled
+      - climate.kegerator_kylskap
+      - sensor.kyl_temperatur_4
+      - switch.kegerator_fan
+      - climate.fermentation_chamber
+      - sensor.brewassistant_fermentation_chamber_air_temperature_average
+      - sensor.brewassistant_gravity
+      - sensor.brewassistant_carbonation_status
+      - sensor.brewassistant_carbonation_recommended_pressure_bar
+    styles:
+      card:
+        - border-radius: 20px 20px 8px 8px
+        - padding: 14px
+        - background: >-
+            linear-gradient(135deg, rgba(255,183,77,.13),
+            rgba(127,127,127,.035))
+        - border: 1px solid rgba(127,127,127,.14)
+        - box-shadow: var(--ha-card-box-shadow)
+      grid:
+        - grid-template-areas: "\"head\" \"summary\" \"source\""
+        - grid-template-columns: 1fr
+        - row-gap: 9px
+      custom_fields:
+        head:
+          - grid-area: head
+        summary:
+          - grid-area: summary
+        source:
+          - grid-area: source
+    custom_fields:
+      head: |
+        [[[ 
+          const bzPower = states['switch.brewzilla']?.state ?? 'unknown';
+          const bzWatts = states['sensor.brewzilla_power']?.state ?? '—';
+          const badgeBg = bzPower === 'on' ? 'rgba(76,175,80,.13)' : 'rgba(127,127,127,.10)';
+          const badgeBorder = bzPower === 'on' ? 'rgba(76,175,80,.28)' : 'rgba(127,127,127,.18)';
+          const badgeIcon = bzPower === 'on' ? 'mdi:power-plug' : 'mdi:power-plug-off-outline';
+
+          return `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="min-width:0;">
+                <div style="font-size:20px; font-weight:950; line-height:1.05; letter-spacing:-.02em;">
+                  BrewAssistant Hub
+                </div>
+                <div style="font-size:12px; font-weight:750; opacity:.68; margin-top:3px;">
+                  Control surface · compact modules
+                </div>
+              </div>
+              <div style="
+                border-radius:999px;
+                padding:6px 10px;
+                border:1px solid ${badgeBorder};
+                background:${badgeBg};
+                display:flex;
+                align-items:center;
+                gap:6px;
+                font-size:11px;
+                font-weight:950;
+                white-space:nowrap;
+              ">
+                <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
+                BZ ${String(bzPower).toUpperCase()} · ${bzWatts} W
+              </div>
+            </div>
+          `;
+        ]]]
+      summary: |
+        [[[ 
+          function clean(v) {
+            if (v === undefined || v === null) return null;
+            const s = String(v);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+          }
+
+          function num(id) {
+            const raw = states[id]?.state;
+            const n = Number(String(raw ?? '').replace(',', '.'));
+            return Number.isFinite(n) ? n : null;
+          }
+
+          function fmt(n, unit = '', d = 1) {
+            if (!Number.isFinite(n)) return '—';
+            return `${n.toFixed(d)}${unit ? ' ' + unit : ''}`;
+          }
+
+          const bzTemp = num('sensor.brewassistant_brewzilla_wort_temperature') ?? num('sensor.brewzilla_temperature');
+          const bzMode = clean(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state) || '—';
+          const bzConn = clean(states['sensor.brewassistant_brewzilla_connection_state']?.state) || '—';
+          const runtime = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || clean(states['sensor.brewassistant_brewday_stage']?.state) || 'idle';
+          const source = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || '—';
+          const manual = clean(states['sensor.brewassistant_manual_brewday_status']?.state);
+
+          const fermClimate = clean(states['climate.fermentation_chamber']?.state) || 'off';
+          const fermTemp = num('sensor.brewassistant_fermentation_chamber_air_temperature_average');
+          const carbStatus = clean(states['sensor.brewassistant_carbonation_status']?.state) || 'Inactive';
+          const carbBar = num('sensor.brewassistant_carbonation_recommended_pressure_bar');
+          const kegStatus = clean(states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.status) || clean(states['climate.kegerator_kylskap']?.state) || '—';
+          const kegTemp = num('sensor.kyl_temperatur_4');
+          const fan = clean(states['switch.kegerator_fan']?.state) || '—';
+
+          return `
+            <div style="font-size:12px; font-weight:800; opacity:.76; line-height:1.35;">
+              Brewday ${runtime} · ${source}${manual ? ' · Manual ' + manual : ''}<br>
+              BrewZilla ${fmt(bzTemp,'°C')} · ${bzMode} · ${bzConn}<br>
+              Fermentation ${fermClimate} · ${fmt(fermTemp,'°C')} · Carbonation ${carbStatus} · ${fmt(carbBar,'bar',2)}<br>
+              Kegerator ${fmt(kegTemp,'°C')} · ${kegStatus} · fan ${fan}
+            </div>
+          `;
+        ]]]
+      source: |
+        [[[ 
+          function clean(v) {
+            if (v === undefined || v === null) return null;
+            const s = String(v);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+          }
+
+          const runtimeSource = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || 'Manual / lokal';
+          const recipe = clean(states['sensor.brewassistant_runtime_recipe_name']?.state) || clean(states['sensor.brewfather_next_fermentation_step']?.attributes?.recipe_name);
+          const hasBrewfather = !!recipe || String(runtimeSource).toLowerCase().includes('brewfather');
+          const manualState = clean(states['sensor.brewassistant_manual_brewday_status']?.state);
+          const title = hasBrewfather ? 'Brewfather aktiv' : 'Brewfather vilande';
+          const detail = hasBrewfather
+            ? `${recipe || 'Aktiv källa'} · Manual override kan visas via Brewday`
+            : `Manual Brewday kan vara primär controller${manualState ? ' · ' + manualState : ''}`;
+          const bg = hasBrewfather ? 'rgba(33,150,243,.10)' : 'rgba(127,127,127,.055)';
+          const border = hasBrewfather ? 'rgba(33,150,243,.22)' : 'rgba(127,127,127,.10)';
+          const icon = hasBrewfather ? 'mdi:beer-outline' : 'mdi:cloud-check-outline';
+
+          return `
+            <div style="
+              display:grid;
+              grid-template-columns:22px minmax(0,1fr);
+              gap:8px;
+              align-items:center;
+              border-radius:14px;
+              padding:7px 10px;
+              background:${bg};
+              border:1px solid ${border};
+              min-width:0;
+            ">
+              <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.68;"></ha-icon>
+              <div style="min-width:0;display:flex;gap:7px;align-items:baseline;overflow:hidden;">
+                <div style="font-size:11px;font-weight:950;line-height:1.1;white-space:nowrap;">${title}</div>
+                <div style="font-size:10.5px;font-weight:750;opacity:.62;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail}</div>
+              </div>
+            </div>
+          `;
+        ]]]
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: switch.brewzilla
+        name: BrewZilla Power
+        icon: mdi:power
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+          confirmation:
+            text: Toggle BrewZilla main power?
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const power = states['sensor.brewzilla_power']?.state ?? '—';
+            const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? '—';
+            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'} · ${power} W<br>${conn} · BZ cards follow power`;
+          ]]]
+        styles: &hub_module_tile
+          card:
+            - min-height: 74px
+            - padding: 11px
+            - border-radius: 16px
+            - background: |
+                [[[ return entity.state === 'on' ? 'rgba(76,175,80,.13)' : 'rgba(127,127,127,.065)'; ]]]
+            - border: |
+                [[[ return entity.state === 'on' ? '1px solid rgba(76,175,80,.28)' : '1px solid rgba(127,127,127,.13)'; ]]]
+          grid:
+            - grid-template-areas: "\"i n\" \"i l\""
+            - grid-template-columns: 32px minmax(0,1fr)
+            - column-gap: 9px
+          icon:
+            - width: 20px
+            - color: |
+                [[[ return entity.state === 'on' ? 'rgb(76,175,80)' : 'rgba(127,127,127,.86)'; ]]]
+          name:
+            - justify-self: start
+            - font-size: 13px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 10.7px
+            - font-weight: 760
+            - line-height: 1.22
+            - opacity: 0.72
+      - type: custom:button-card
+        entity: switch.brewassistant_show_brewday
+        name: Brewday
+        icon: mdi:calendar-clock
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state || 'idle';
+            const source = states['sensor.brewassistant_brewday_runtime_source']?.state || '—';
+            const stage = states['sensor.brewassistant_brewday_stage']?.state || states['sensor.brewassistant_brewday_runtime_stage']?.state || '—';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${runtime} · ${source}<br>${stage} · ${visible}`;
+          ]]]
+        styles: *hub_module_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_fermentation
+        name: Fermentation
+        icon: mdi:beer-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            function num(id) {
+              const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+              return Number.isFinite(n) ? n : null;
+            }
+            const climate = states['climate.fermentation_chamber']?.state || 'off';
+            const chamber = num('sensor.brewassistant_fermentation_chamber_air_temperature_average');
+            const sgRaw = num('sensor.brewassistant_gravity');
+            const sg = Number.isFinite(sgRaw) && sgRaw > 0.95 && sgRaw < 1.2 ? sgRaw.toFixed(3) : '—';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${climate} · ${Number.isFinite(chamber) ? chamber.toFixed(1) + ' °C' : '—'} · SG ${sg}<br>${visible} · chamber/Pill`;
+          ]]]
+        styles: *hub_module_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_carbonation
+        name: Carbonation
+        icon: mdi:chart-bubble
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            function num(id) {
+              const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+              return Number.isFinite(n) ? n : null;
+            }
+            const status = states['sensor.brewassistant_carbonation_status']?.state || 'Inactive';
+            const bar = num('sensor.brewassistant_carbonation_recommended_pressure_bar');
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${status} · ${Number.isFinite(bar) ? bar.toFixed(2) + ' bar' : '—'}<br>${visible} · pressure guide`;
+          ]]]
+        styles: *hub_module_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_kegerator
+        name: Kegerator
+        icon: mdi:snowflake-thermometer
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            function num(id) {
+              const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+              return Number.isFinite(n) ? n : null;
+            }
+            const temp = num('sensor.kyl_temperatur_4');
+            const climate = states['climate.kegerator_kylskap']?.state || '—';
+            const fan = states['switch.kegerator_fan']?.state || '—';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${Number.isFinite(temp) ? temp.toFixed(1) + ' °C' : '—'} · ${climate} · fan ${fan}<br>${visible} · serving/cooling`;
+          ]]]
+        styles: *hub_module_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_event_log
+        name: Event Log
+        icon: mdi:clipboard-text-clock-outline
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const summary = states['sensor.brewassistant_brewday_event_log_summary']?.state || '—';
+            const count = states['sensor.brewassistant_brewday_event_log_event_count']?.state || '0';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${summary} · ${count} events<br>${visible} · log card`;
+          ]]]
+        styles: *hub_module_tile

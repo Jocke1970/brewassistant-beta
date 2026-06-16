@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python tooling/cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS/editor
+.DS_Store
+.vscode/

@@ -1,0 +1,184 @@
+title: Sanity
+path: brewassistant-beta5-sanity
+icon: mdi:beer-outline
+cards:
+  - type: markdown
+    title: BrewAssistant Beta.5 Baseline
+    content: >-
+      ## 🍺 BrewAssistant Beta.5
+
+      **Installed:** `{{ state_attr('update.brewassistant_beta_update',
+      'installed_version') or 'unknown' }}`   **Core:** `{{
+      states('sensor.brewassistant_core_version') }}`   **Module summary:** `{{
+      states('sensor.brewassistant_module_summary') }}`
+
+      ---
+
+      **Kegerator:** `{{ states('climate.kegerator_kylskap') }}` · target `{{
+      state_attr('climate.kegerator_kylskap', 'temperature') or '—' }} °C`  
+      **Guard:** `{{ states('switch.brewassistant_kegerator_guard_enabled') }}`
+      · `{{ state_attr('switch.brewassistant_kegerator_guard_enabled', 'status')
+      or '—' }}`   **Fan:** `{{
+      states('select.brewassistant_kegerator_fan_mode') }}` · auto `{{
+      states('switch.brewassistant_kegerator_fan_auto_enabled') }}` · fan `{{
+      states('switch.kegerator_fan') }}`   **Event Log:** `{{
+      states('sensor.brewassistant_brewday_event_log_summary') }}` · events `{{
+      states('sensor.brewassistant_brewday_event_log_event_count') }}`
+  - type: entities
+    title: Kegerator Guard / Climate
+    show_header_toggle: false
+    entities:
+      - entity: climate.kegerator_kylskap
+        name: Kegerator climate
+      - entity: sensor.kyl_temperatur_4
+        name: Kegerator air temperature
+      - entity: sensor.kegerator_power
+        name: Kegerator power
+      - entity: switch.brewassistant_kegerator_guard_enabled
+        name: Guard enabled
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: status
+        name: Guard status
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: summary
+        name: Guard summary
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: watchdog_active
+        name: Guard watchdog active
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: last_evaluation
+        name: Guard last evaluation
+  - type: entities
+    title: Kegerator Fan Auto
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_kegerator_fan_auto_enabled
+        name: Fan auto enabled
+      - entity: select.brewassistant_kegerator_fan_mode
+        name: Fan mode
+      - entity: number.brewassistant_kegerator_fan_afterrun_minutes
+        name: Afterrun minutes
+      - entity: switch.kegerator_fan
+        name: Fan switch
+      - entity: sensor.kegerator_fan_power
+        name: Fan power
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: status
+        name: Backend status
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: summary
+        name: Backend summary
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_should_run
+        name: Fan should run
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_reason
+        name: Reason
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: afterrun_active
+        name: Afterrun active
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: afterrun_remaining_minutes
+        name: Afterrun remaining
+  - type: entities
+    title: Brewday Runtime
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewday_runtime_summary
+        name: Runtime summary
+      - entity: sensor.brewassistant_brewday_runtime_state
+        name: Runtime state
+      - entity: sensor.brewassistant_brewday_runtime_stage
+        name: Runtime stage
+      - entity: sensor.brewassistant_brewday_runtime_step
+        name: Runtime step
+      - entity: sensor.brewassistant_brewday_runtime_next_step
+        name: Next step
+      - entity: sensor.brewassistant_brewday_live_time_remaining_minutes
+        name: Live remaining
+      - entity: sensor.brewassistant_brewday_live_progress
+        name: Live progress
+      - entity: sensor.brewassistant_brewday_stage
+        name: Stage engine stage
+      - entity: sensor.brewassistant_brewday_stage_status_line
+        name: Stage status line
+      - entity: sensor.brewassistant_brewday_stage_suggested_action
+        name: Suggested action
+      - entity: sensor.brewassistant_brewday_stage_control_hint
+        name: Control hint
+  - type: entities
+    title: BrewZilla Orchestration
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewzilla_runtime_summary
+        name: Runtime summary
+      - entity: sensor.brewassistant_brewzilla_runtime_state
+        name: Runtime state
+      - entity: sensor.brewassistant_brewzilla_safety_state
+        name: Safety state
+      - entity: sensor.brewassistant_brewzilla_orchestration_mode
+        name: Orchestration mode
+      - entity: sensor.brewassistant_brewzilla_control_reason
+        name: Control reason
+      - entity: sensor.brewassistant_brewzilla_requested_target
+        name: Requested target
+      - entity: sensor.brewassistant_brewzilla_applied_target
+        name: Applied target
+      - entity: sensor.brewassistant_brewzilla_target_delta
+        name: Target delta
+      - entity: sensor.brewassistant_brewzilla_target_sync_needed
+        name: Target sync needed
+      - entity: sensor.brewassistant_brewzilla_can_apply_target
+        name: Can apply target
+  - type: entities
+    title: Brewday Event Log
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewday_event_log_summary
+        name: Event log summary
+      - entity: sensor.brewassistant_brewday_event_log_event_count
+        name: Event count
+      - entity: sensor.brewassistant_brewday_event_log_last_event
+        name: Last event
+      - entity: sensor.brewassistant_brewday_event_log_last_step
+        name: Last step
+      - entity: sensor.brewassistant_brewday_event_log_last_target
+        name: Last target
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: Start log
+        icon: mdi:record-rec
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_start
+      - type: button
+        name: Snapshot
+        icon: mdi:camera-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_snapshot
+      - type: button
+        name: Stop log
+        icon: mdi:stop-circle-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_stop
+      - type: button
+        name: Clear log
+        icon: mdi:trash-can-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_clear
+          confirmation:
+            text: Clear Brewday Event Log?

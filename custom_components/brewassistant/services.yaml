@@ -1,0 +1,148 @@
+force_brewfather_refresh:
+  name: Force Brewfather refresh
+  description: Request a guarded manual refresh of Brewfather Brew Tracker source entities.
+
+apply_brewzilla_target:
+  name: Apply BrewZilla target
+  description: Apply the current Brewday Runtime target temperature to BrewZilla when orchestration safety checks allow it.
+
+abort_brewzilla:
+  name: Abort BrewZilla
+  description: Turn off BrewAssistant-controlled BrewZilla heater and pump outputs.
+
+brewday_audit_start:
+  name: Brewday audit start
+  description: Start a Python-owned Brewday audit log and clear previous events.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the audit_started event.
+      example: Low-temp Brewfather test batch
+
+brewday_audit_stop:
+  name: Brewday audit stop
+  description: Stop recording Brewday audit events without clearing the stored log.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the audit_stopped event.
+      example: Test complete
+
+brewday_audit_clear:
+  name: Brewday audit clear
+  description: Clear the Brewday audit log and stop recording.
+
+brewday_audit_snapshot:
+  name: Brewday audit snapshot
+  description: Record a manual diagnostic Brewday audit snapshot.
+  fields:
+    note:
+      name: Note
+      description: Optional note stored on the manual snapshot event.
+      example: Before next Brewfather step
+
+manual_brewday_prepare:
+  name: Manual Brewday prepare
+  description: Prepare the BrewAssistant manual brewday runtime session.
+
+manual_brewday_start:
+  name: Manual Brewday start
+  description: Start the BrewAssistant manual brewday runtime session.
+
+manual_brewday_pause:
+  name: Manual Brewday pause
+  description: Pause the BrewAssistant manual brewday runtime session.
+
+manual_brewday_next:
+  name: Manual Brewday next
+  description: Advance the BrewAssistant manual brewday runtime session to the next step.
+
+manual_brewday_start_mash:
+  name: Manual Brewday start mash
+  description: Jump the BrewAssistant manual brewday runtime session directly to the mash stage.
+
+manual_brewday_start_boil:
+  name: Manual Brewday start boil
+  description: Jump the BrewAssistant manual brewday runtime session directly to the boil stage.
+
+manual_brewday_start_whirlpool:
+  name: Manual Brewday start whirlpool
+  description: Jump the BrewAssistant manual brewday runtime session directly to the whirlpool/hop stand stage.
+
+manual_brewday_start_cooling:
+  name: Manual Brewday start cooling
+  description: Jump the BrewAssistant manual brewday runtime session directly to the wort cooling/chill step.
+
+manual_brewday_finish:
+  name: Manual Brewday finish
+  description: Finish the BrewAssistant manual brewday runtime session.
+
+manual_brewday_reset:
+  name: Manual Brewday reset
+  description: Reset the BrewAssistant manual brewday runtime session.
+
+carbonation_start:
+  name: Carbonation start
+  description: Start the Python-owned BrewAssistant carbonation runtime.
+  fields:
+    method:
+      name: Method
+      description: Carbonation method name.
+      example: Set-and-forget
+    target_volumes:
+      name: Target volumes
+      description: Target CO2 volumes.
+      example: 2.4
+    start_volumes:
+      name: Start volumes
+      description: Estimated starting CO2 volumes.
+      example: 0.85
+    pressure_bar:
+      name: Pressure bar
+      description: Current keg/regulator pressure in bar.
+      example: 0.8
+    temperature_c:
+      name: Temperature C
+      description: Current beer temperature in Celsius.
+      example: 4.0
+    started_at:
+      name: Started at
+      description: Optional carbonation start datetime.
+      example: "2026-05-24 15:00:00"
+
+carbonation_update:
+  name: Carbonation update
+  description: Update the Python-owned BrewAssistant carbonation runtime values.
+  fields:
+    method:
+      name: Method
+      description: Carbonation method name.
+      example: Set-and-forget
+    target_volumes:
+      name: Target volumes
+      description: Target CO2 volumes.
+      example: 2.4
+    start_volumes:
+      name: Start volumes
+      description: Estimated starting CO2 volumes.
+      example: 0.85
+    pressure_bar:
+      name: Pressure bar
+      description: Current keg/regulator pressure in bar.
+      example: 0.8
+    temperature_c:
+      name: Temperature C
+      description: Current beer temperature in Celsius.
+      example: 4.0
+    started_at:
+      name: Started at
+      description: Optional carbonation start datetime.
+      example: "2026-05-24 15:00:00"
+
+carbonation_pause:
+  name: Carbonation pause
+  description: Pause carbonation monitoring without clearing runtime values.
+
+carbonation_reset:
+  name: Carbonation reset
+  description: Reset the Python-owned BrewAssistant carbonation runtime.

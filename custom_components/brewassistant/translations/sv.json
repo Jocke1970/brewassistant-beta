@@ -1,0 +1,114 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BrewAssistant",
+        "description": "Välj vilka befintliga Home Assistant-entities BrewAssistant ska läsa och normalisera.",
+        "data": {
+          "liquid_temp_entity": "Vätsketemperaturkälla",
+          "chamber_temp_entity": "Fallback för kammartemperatur",
+          "recipe_target_entity": "Måltemperatur från recept/runtime",
+          "cold_crash_active_entity": "Cold crash aktiv-helper",
+          "cold_crash_target_entity": "Cold crash måltemperatur-helper",
+          "gravity_entity": "SG/gravity-källa",
+          "runtime_recipe_name_entity": "Runtime receptnamn-källa",
+          "runtime_status_entity": "Runtime status-källa",
+          "runtime_primary_target_entity": "Runtime primär måltemperatur-källa",
+          "runtime_cold_crash_target_entity": "Runtime cold crash måltemperatur-källa",
+          "runtime_target_fg_entity": "Runtime mål-FG-källa"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "BrewAssistant är redan konfigurerad."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BrewAssistant inställningar",
+        "description": "Uppdatera vilka befintliga Home Assistant-entities BrewAssistant ska läsa och normalisera.",
+        "data": {
+          "liquid_temp_entity": "Vätsketemperaturkälla",
+          "chamber_temp_entity": "Fallback för kammartemperatur",
+          "recipe_target_entity": "Måltemperatur från recept/runtime",
+          "cold_crash_active_entity": "Cold crash aktiv-helper",
+          "cold_crash_target_entity": "Cold crash måltemperatur-helper",
+          "gravity_entity": "SG/gravity-källa",
+          "runtime_recipe_name_entity": "Runtime receptnamn-källa",
+          "runtime_status_entity": "Runtime status-källa",
+          "runtime_primary_target_entity": "Runtime primär måltemperatur-källa",
+          "runtime_cold_crash_target_entity": "Runtime cold crash måltemperatur-källa",
+          "runtime_target_fg_entity": "Runtime mål-FG-källa"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "liquid_temperature": {"name": "Vätsketemperatur"},
+      "liquid_temperature_source": {"name": "Temperaturkälla"},
+      "chamber_temperature": {"name": "Kammartemperatur"},
+      "recipe_target_temperature": {"name": "Effektiv måltemperatur"},
+      "temperature_delta": {"name": "Temperaturdelta"},
+      "temperature_target_mode": {"name": "Temperaturmål-läge"},
+      "temperature_status": {"name": "Temperaturstatus"},
+      "temperature_severity": {"name": "Temperaturseverity"},
+      "source_summary": {"name": "Källsammanfattning"},
+      "status_summary": {"name": "Statussammanfattning"},
+      "problem_level": {"name": "Problemnivå"},
+      "process_status": {"name": "Processstatus"},
+      "process_next_step": {"name": "Nästa processsteg"},
+      "process_current_action_stage": {"name": "Nuvarande processsteg"},
+      "process_next_action_stage": {"name": "Nästa processsteg kategori"},
+      "process_summary": {"name": "Processsammanfattning"},
+      "smart_recommendation_summary": {"name": "Smart rekommendationssammanfattning"},
+      "smart_heat_recommendation": {"name": "Smart värmerekommendation"},
+      "smart_cooling_recommendation": {"name": "Smart kylrekommendation"},
+      "smart_fan_recommendation": {"name": "Smart fläktrekommendation"},
+      "smart_heat_block_reason_core": {"name": "Smart värmeblockering"},
+      "smart_suggested_heat_pulse_minutes": {"name": "Smart föreslagen värmepuls"},
+      "smart_recommendation_mode": {"name": "Smart rekommendationsläge"},
+      "smart_pill_status_core": {"name": "Smart Pill-status"},
+      "smart_pill_temp_age_minutes_core": {"name": "Smart Pill temperaturålder"},
+      "source_health_summary": {"name": "Källhälsa sammanfattning"},
+      "source_health_level": {"name": "Källhälsa nivå"},
+      "configured_liquid_temp_entity": {"name": "Konfigurerad vätsketemperatur-entity"},
+      "configured_chamber_temp_entity": {"name": "Konfigurerad kammartemperatur-entity"},
+      "configured_recipe_target_entity": {"name": "Konfigurerad receptmål-entity"},
+      "configured_cold_crash_active_entity": {"name": "Konfigurerad cold crash aktiv-entity"},
+      "configured_cold_crash_target_entity": {"name": "Konfigurerad cold crash mål-entity"},
+      "configured_gravity_entity": {"name": "Konfigurerad SG-entity"},
+      "gravity_last_updated": {"name": "SG senast uppdaterad"},
+      "batch_started_at": {"name": "Batch startad"},
+      "batch_age_hours": {"name": "Batch ålder timmar"},
+      "batch_age_days": {"name": "Batch ålder dagar"},
+      "core_version": {"name": "Core-version"},
+      "next_recommended_action": {"name": "Nästa rekommenderade åtgärd"},
+      "runtime_recipe_name": {"name": "Runtime receptnamn"},
+      "runtime_status": {"name": "Runtime status"},
+      "runtime_primary_target_temperature": {"name": "Runtime primär måltemperatur"},
+      "runtime_cold_crash_target_temperature": {"name": "Runtime cold crash måltemperatur"},
+      "runtime_target_fg": {"name": "Runtime mål-FG"},
+      "runtime_source_status": {"name": "Runtime källstatus"},
+      "gravity": {"name": "SG"}
+    },
+    "binary_sensor": {
+      "temperature_fallback_active": {"name": "Temperaturfallback aktiv"},
+      "runtime_ready": {"name": "Runtime redo"},
+      "runtime_brewfather_available": {"name": "Runtime Brewfather tillgänglig"},
+      "smart_heat_needed_core": {"name": "Smart värme behövs"},
+      "smart_heat_permitted_core": {"name": "Smart värme tillåten"},
+      "smart_cooling_recommended_core": {"name": "Smart kylning rekommenderas"},
+      "smart_fan_recommended_core": {"name": "Smart fläkt rekommenderas"},
+      "smart_rising_too_fast_core": {"name": "Smart temp stiger för snabbt"},
+      "smart_pill_stale_core": {"name": "Smart Pill stale"},
+      "source_liquid_temp_available": {"name": "Källa vätsketemperatur tillgänglig"},
+      "source_chamber_temp_available": {"name": "Källa kammartemperatur tillgänglig"},
+      "source_recipe_target_available": {"name": "Källa receptmål tillgänglig"},
+      "source_cold_crash_active_available": {"name": "Källa cold crash aktiv tillgänglig"},
+      "source_cold_crash_target_available": {"name": "Källa cold crash mål tillgänglig"},
+      "source_gravity_available": {"name": "Källa SG tillgänglig"}
+    }
+  }
+}
