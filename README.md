@@ -82,6 +82,7 @@ Validated in the active beta baseline:
 ✅ Carbonation control entity naming aligned with existing HA entity IDs
 ✅ Counterflow Wort Cooling backend
 ✅ Counter Flow Chiller sanitation backend and CFC Ready button
+✅ Counter Flow Chiller dashboard card baseline
 ✅ Fermentation Cockpit scope guard and compact idle UI
 ✅ Backend domain layout refactor
 ✅ Local Home Assistant baseline cleanup: no active `bryggeriet_` BrewAssistant entity prefix
@@ -195,6 +196,7 @@ dashboard/cards/brewfather_feed.yaml
 dashboard/cards/brewzilla.yaml
 dashboard/cards/brewzilla_learning.yaml
 dashboard/cards/carbonation.yaml
+dashboard/cards/counterflow_chiller.yaml
 dashboard/cards/fermentation.yaml
 dashboard/cards/kegerator.yaml
 ```

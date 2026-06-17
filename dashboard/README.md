@@ -19,6 +19,7 @@ dashboard/
     brewzilla.yaml
     brewzilla_learning.yaml
     carbonation.yaml
+    counterflow_chiller.yaml
     fermentation.yaml
     kegerator.yaml
 ```
@@ -37,6 +38,7 @@ switch.brewassistant_show_brewfather_feed
 switch.brewassistant_show_brewzilla
 switch.brewassistant_show_brewzilla_learning
 switch.brewassistant_show_event_log
+switch.brewassistant_show_cfc
 switch.brewassistant_show_source_health
 switch.brewassistant_show_fermentation
 switch.brewassistant_show_carbonation
@@ -58,6 +60,7 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
 | `brewzilla_learning.yaml` | BrewZilla learning/advisory card. |
 | `carbonation.yaml` | Carbonation runtime/status/control card. |
+| `counterflow_chiller.yaml` | Counter Flow Chiller sanitation/ready controls. |
 | `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
 | `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
 

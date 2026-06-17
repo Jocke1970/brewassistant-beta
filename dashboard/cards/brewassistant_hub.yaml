@@ -19,6 +19,7 @@ cards:
       - sensor.brewassistant_manual_brewday_stage
       - switch.brewassistant_show_brewday
       - switch.brewassistant_show_event_log
+      - switch.brewassistant_show_cfc
       - switch.brewassistant_show_fermentation
       - switch.brewassistant_show_carbonation
       - switch.brewassistant_show_kegerator
@@ -31,6 +32,10 @@ cards:
       - sensor.brewassistant_gravity
       - sensor.brewassistant_carbonation_status
       - sensor.brewassistant_carbonation_recommended_pressure_bar
+      - switch.brewassistant_counterflow_chiller_enabled
+      - switch.brewassistant_show_cfc
+      - number.brewassistant_counterflow_chiller_sanitize_minutes
+      - number.brewassistant_counterflow_chiller_pump_utilization
     styles:
       card:
         - border-radius: 20px 20px 8px 8px
@@ -326,5 +331,26 @@ cards:
             const count = states['sensor.brewassistant_brewday_event_log_event_count']?.state || '0';
             const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
             return `${summary} · ${count} events<br>${visible} · log card`;
+          ]]]
+        styles: *hub_module_tile
+      - type: custom:button-card
+        entity: switch.brewassistant_show_cfc
+        name: CFC
+        icon: mdi:snowflake-thermometer
+        show_state: false
+        show_label: true
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        label: |
+          [[[ 
+            const cfc = states['switch.brewassistant_counterflow_chiller_enabled'];
+            const status = cfc?.attributes?.status || cfc?.state || 'disabled';
+            const ready = cfc?.attributes?.ready === true ? 'ready' : 'not ready';
+            const min = states['number.brewassistant_counterflow_chiller_sanitize_minutes']?.state || cfc?.attributes?.sanitize_minutes || '—';
+            const pump = states['number.brewassistant_counterflow_chiller_pump_utilization']?.state || cfc?.attributes?.pump_utilization || '—';
+            const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
+            return `${status} · ${ready}<br>${visible} · ${min} min · pump ${pump}%`;
           ]]]
         styles: *hub_module_tile

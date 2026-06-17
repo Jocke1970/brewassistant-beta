@@ -132,6 +132,15 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
         "module": "event_log",
         "card": "dashboard/cards/brewassistant_brewday_event_log.yaml",
     },
+    "show_cfc": {
+        "name": "BrewAssistant Show CFC",
+        "object_id": "brewassistant_show_cfc",
+        "icon": "mdi:snowflake-thermometer",
+        "default": False,
+        "kind": "dashboard_visibility",
+        "module": "cfc",
+        "card": "dashboard/cards/counterflow_chiller.yaml",
+    },
     "show_fermentation": {
         "name": "BrewAssistant Show Fermentation",
         "object_id": "brewassistant_show_fermentation",

@@ -1,0 +1,123 @@
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_cfc
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: switch.brewassistant_counterflow_chiller_enabled
+      name: Counter Flow Chiller
+      icon: |
+        [[[
+          const ready = entity?.attributes?.ready === true;
+          const status = String(entity?.attributes?.status ?? entity?.state ?? 'disabled').toLowerCase();
+          if (ready) return 'mdi:check-circle-outline';
+          if (status === 'enabled') return 'mdi:snowflake-thermometer';
+          return 'mdi:snowflake-off';
+        ]]]
+      show_state: false
+      show_label: true
+      tap_action:
+        action: more-info
+      hold_action:
+        action: toggle
+      label: |
+        [[[
+          const a = entity?.attributes ?? {};
+          const status = a.status ?? entity?.state ?? 'disabled';
+          const ready = a.ready === true ? 'Ready' : 'Not ready';
+          const min = states['number.brewassistant_counterflow_chiller_sanitize_minutes']?.state ?? a.sanitize_minutes ?? '—';
+          const pump = states['number.brewassistant_counterflow_chiller_pump_utilization']?.state ?? a.pump_utilization ?? '—';
+          const last = a.last_action ?? '—';
+          return `${status} · ${ready}<br>Sanitize ${min} min · pump ${pump}% · ${last}`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 14px
+          - background: >-
+              linear-gradient(135deg, rgba(3,169,244,.10),
+              rgba(127,127,127,.035))
+          - border: 1px solid rgba(3,169,244,.22)
+          - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 42px minmax(0,1fr)
+          - column-gap: 12px
+        icon:
+          - width: 27px
+          - height: 27px
+          - color: rgb(3,169,244)
+        img_cell:
+          - width: 42px
+          - height: 42px
+          - border-radius: 50%
+          - background: rgba(3,169,244,.14)
+        name:
+          - justify-self: start
+          - font-size: 15px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 11.5px
+          - font-weight: 760
+          - line-height: 1.25
+          - opacity: 0.76
+
+    - type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          entity: switch.brewassistant_counterflow_chiller_enabled
+          name: CFC ENABLE
+          icon: mdi:toggle-switch-outline
+          tap_action:
+            action: toggle
+          hold_action:
+            action: more-info
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(3,169,244,.09)
+              - border: 1px solid rgba(3,169,244,.22)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+
+        - type: custom:button-card
+          entity: button.brewassistant_counterflow_chiller_ready
+          name: CFC READY
+          icon: mdi:check-decagram
+          tap_action:
+            action: call-service
+            service: button.press
+            target:
+              entity_id: button.brewassistant_counterflow_chiller_ready
+            confirmation:
+              text: Mark CFC ready and start configured pump circulation?
+          hold_action:
+            action: more-info
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(76,175,80,.10)
+              - border: 1px solid rgba(76,175,80,.24)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+
+    - type: entities
+      show_header_toggle: false
+      entities:
+        - entity: number.brewassistant_counterflow_chiller_sanitize_minutes
+          name: Sanitize minutes
+        - entity: number.brewassistant_counterflow_chiller_pump_utilization
+          name: Pump utilization
+        - entity: switch.brewassistant_counterflow_chiller_enabled
+          name: CFC backend enabled
+        - entity: button.brewassistant_counterflow_chiller_ready
+          name: CFC Ready
