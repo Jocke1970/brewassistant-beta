@@ -15,6 +15,18 @@ Legacy local packages      = local compatibility/cleanup only, not mainline repo
 
 ---
 
+## AI-assisted development
+
+BrewAssistant is a hobby/beta project developed in close collaboration between Joachim Eriksson and ChatGPT.
+
+Large parts of the Python integration, dashboard YAML, documentation, refactoring and troubleshooting have been generated, rewritten or iterated with ChatGPT based on Joachim's Home Assistant setup, brewing workflow, real hardware tests and feedback.
+
+Joachim provides the brewing domain context, hardware environment, requirements, testing, validation and operational decisions. The generated code should therefore be treated as experimental and reviewed carefully before use, especially anywhere it can affect heat, pumps, cooling, pressure equipment or other physical brewing hardware.
+
+This repository is shared openly for transparency, learning and experimentation — not as a claim that all code was hand-written by the repository owner.
+
+---
+
 ## Current status
 
 ```text
@@ -53,9 +65,9 @@ Validated in the active beta baseline:
 ✅ BrewZilla energy and SEK cost estimate sensors
 ✅ BrewZilla selectable mash temperature source resolver
 ✅ BrewZilla mash/wort/delta dashboard-safe sensors
-✅ BrewZilla Learning uses the shared mash/wort resolver
-✅ BrewZilla Learning uses normalized runtime for Brewfather and Manual Brewday
-✅ BrewZilla operator card and learning card baseline
+✅ Brewday Advice uses the shared mash/wort resolver
+✅ Brewday Advice uses normalized runtime for Brewfather and Manual Brewday
+✅ BrewZilla operator card and Brewday Advice card baseline
 ✅ Brewday Runtime operator card
 ✅ Manual Brewday operator card
 ✅ Kegerator fan/guard card baseline
@@ -225,7 +237,7 @@ Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan 
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
 | BrewZilla Orchestration | Apply target/heater/pump/utilization strategies when allowed by runtime state. |
 | BrewZilla Temperature Resolver | Separate mash, wort/kettle and mash-wort delta temperature roles. |
-| BrewZilla Learning | Advisory recommendations using the shared temperature resolver. |
+| Brewday Advice | Advisory recommendations using the shared temperature resolver. |
 | Brewday Event Log | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
