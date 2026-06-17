@@ -24,6 +24,8 @@ First full serious all-grain BrewZilla batch validation
 ↓
 Boil / hop / cooling validation
 ↓
+CFC Chill / Transfer Assistant design
+↓
 RAPT Cloud Link profile-orchestration investigation
 ↓
 Climate Supervisor full-cycle validation
@@ -202,6 +204,47 @@ Future backend tracks:
 [ ] Decide how BrewAssistant should create/select/start RAPT/BrewZilla profiles safely
 [ ] Add source arbitration between Brewfather runtime, Manual Brewday runtime and RAPT/BrewZilla profile execution
 [ ] Keep operator confirmation/ABORT semantics for any RAPT Cloud Link profile-control path
+```
+
+---
+
+# v4.4.1 CFC Chill / Transfer Assistant
+
+Current status:
+
+```text
+[x] Counter Flow Chiller backend store
+[x] CFC enabled switch
+[x] CFC sanitize minutes number
+[x] CFC pump utilization number
+[x] CFC Ready button for hot-side sanitation/circulation
+[x] CFC dashboard card baseline
+```
+
+Planned backend/UI work:
+
+```text
+[ ] Split CFC behavior into Sanitize / Chill / Transfer modes
+[ ] Add configurable cold_water_pump switch entity separate from BrewZilla wort pump
+[ ] Add CFC wort temperature source selector
+[ ] Support RAPT BLE Thermometer as wort-out / pitch-temperature source
+[ ] Add normalized CFC wort-out temperature sensor
+[ ] Add pitch target temperature number/input
+[ ] Add delta-to-pitch-target and pitch-ready status sensors
+[ ] Add CFC chill guidance: adjust wort flow, cold-water flow or wait
+[ ] Add CFC abort/stop behavior for cold water pump and BrewZilla pump according to mode
+[ ] Keep sanitize flow separate from chill/transfer flow: cold water pump should normally be off during sanitize
+[ ] Update CFC dashboard card after backend entities exist
+```
+
+Design notes:
+
+```text
+- BrewZilla pump moves wort.
+- cold_water_pump moves cooling water.
+- RAPT BLE Thermometer should preferably measure wort-out temperature near the fermenter.
+- CFC Ready remains the sanitation/connected action.
+- Chill / Transfer should become a supervised assistant, not unattended autopilot.
 ```
 
 ---
