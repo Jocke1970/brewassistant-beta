@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .brewday.brewday_refresh import maybe_request_brewfather_refresh
+from .brewzilla.brewzilla_learning import async_update_brewday_advice_notification
 from .brewzilla.brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
 from .climate_backend.climate_supervisor import async_apply_climate_supervisor
 from .const import (
@@ -334,6 +335,17 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
                 "refresh": refresh_result,
                 "brewzilla": brewzilla_result,
             }
+        advice_notification_result = await async_update_brewday_advice_notification(self.hass)
+        if advice_notification_result.get("notification_result") in {
+            "created",
+            "dismissed_no_pending",
+            "dismissed_after_apply",
+            "dismissed_after_deny",
+        }:
+            self.hass.data.setdefault(DOMAIN, {}).setdefault("last_brewday_tick", {})[
+                "advice_notification"
+            ] = advice_notification_result
+
         await async_apply_climate_supervisor(self.hass)
         if self.hass.states.is_state(FAN_AUTO_SWITCH, "on"):
             fan_result = await async_apply_kegerator_fan_auto(self.hass)
