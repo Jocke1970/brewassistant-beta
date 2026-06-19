@@ -46,6 +46,8 @@ MASH_HOLD_RECOVERY_HEAT_UTILIZATION = 55.0
 MASH_HOLD_OVERSHOOT_HEAT_UTILIZATION = 0.0
 MASH_HOLD_PUMP_UTILIZATION = 50.0
 MASH_HOLD_AWAITING_CONFIRM_PUMP_UTILIZATION = 0.0
+ABORT_LOCKOUT_SECONDS = 600
+ABORT_DATA_KEY = "brewzilla_last_abort"
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_RUNTIME_STATES = {
@@ -124,6 +126,38 @@ def _bool_state(hass: HomeAssistant, entity_id: str, default: bool = False) -> b
 
 def _runtime_active(state: str | None) -> bool:
     return (state or "").lower() in _ACTIVE_RUNTIME_STATES
+
+
+def _abort_lockout(hass: HomeAssistant) -> dict[str, Any] | None:
+    """Return active ABORT lockout diagnostics, if any."""
+    abort = hass.data.setdefault("brewassistant", {}).get(ABORT_DATA_KEY)
+    if not isinstance(abort, dict):
+        return None
+
+    aborted_at_raw = abort.get("aborted_at")
+    if aborted_at_raw is None:
+        return None
+
+    aborted_at = dt_util.parse_datetime(str(aborted_at_raw))
+    if aborted_at is None:
+        return None
+
+    age_seconds = max(
+        0,
+        int((dt_util.utcnow() - dt_util.as_utc(aborted_at)).total_seconds()),
+    )
+    remaining_seconds = ABORT_LOCKOUT_SECONDS - age_seconds
+    if remaining_seconds <= 0:
+        return None
+
+    return {
+        "active": True,
+        "age_seconds": age_seconds,
+        "remaining_seconds": remaining_seconds,
+        "seconds": ABORT_LOCKOUT_SECONDS,
+        "reason": f"BrewZilla ABORT lockout active ({remaining_seconds}s remaining)",
+        "last_abort": abort,
+    }
 
 
 def _entity_age_seconds(entity_state: State | None) -> int | None:
@@ -385,6 +419,7 @@ def _mash_hold_strategy(
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime = build_brewday_runtime_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle")
+    abort_lockout = _abort_lockout(hass)
     completed_runtime = runtime_state == "completed"
     requested_target = runtime.get("target_temperature")
     try:
@@ -483,7 +518,9 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     )
 
     hard_block = None
-    if not connected:
+    if abort_lockout is not None:
+        hard_block = str(abort_lockout.get("reason") or "BrewZilla ABORT lockout active")
+    elif not connected:
         hard_block = "BrewZilla disconnected"
     elif completed_runtime:
         hard_block = None
@@ -598,6 +635,14 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "orchestration_mode": mode,
         "safety_state": "operator-supervised",
         "control_reason": reason,
+        "abort_lockout_active": bool(abort_lockout),
+        "abort_lockout_remaining_seconds": (
+            abort_lockout.get("remaining_seconds") if abort_lockout is not None else None
+        ),
+        "abort_lockout_age_seconds": (
+            abort_lockout.get("age_seconds") if abort_lockout is not None else None
+        ),
+        "abort_lockout_seconds": ABORT_LOCKOUT_SECONDS,
         "has_pending_action": False,
         "pending_action": None,
         "pending_summary": None,
@@ -638,6 +683,7 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
         "source": SOURCE,
         "status": "aborted",
         "aborted_at": dt_util.utcnow().isoformat(),
+        "abort_lockout_seconds": ABORT_LOCKOUT_SECONDS,
         "actions": [],
     }
     for entity_id in (BREWZILLA_HEATER_SWITCH, BREWZILLA_PUMP_SWITCH):
@@ -645,14 +691,19 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
             await _call_switch(hass, "off", entity_id)
             result["actions"].append(f"turned_off:{entity_id}")
     await _reset_brewzilla_utilization(hass, result)
-    hass.data.setdefault("brewassistant", {})["brewzilla_last_abort"] = result
+    hass.data.setdefault("brewassistant", {})[ABORT_DATA_KEY] = result
     return result
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
     snapshot = build_orchestration_snapshot(hass)
     if not snapshot["can_apply_target"]:
-        result = {**snapshot, "applied": False, "apply_result": "not_needed_or_blocked"}
+        apply_result = (
+            "abort_lockout_active"
+            if snapshot.get("abort_lockout_active")
+            else "not_needed_or_blocked"
+        )
+        result = {**snapshot, "applied": False, "apply_result": apply_result}
         await async_record_brewday_audit_tick(hass, brewzilla_result=result)
         return result
     target = snapshot["requested_target"]
