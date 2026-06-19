@@ -49,6 +49,7 @@ _COOL_WORDS = ("cool", "chill", "kyl")
 _CONTEXT_OPTIONS = {"Unknown", "Water only", "Real mash"}
 MIN_RECOMMENDATION_DIFF = 5
 DENY_SNOOZE_SECONDS = 15 * 60
+ADVICE_NOTIFICATION_ID = "brewassistant_brewday_advice_pending"
 
 
 def _state_obj(hass: HomeAssistant, entity_id: str) -> State | None:
@@ -103,6 +104,120 @@ def learning_context(hass: HomeAssistant) -> str:
     if selected not in _CONTEXT_OPTIONS:
         return "Unknown"
     return str(selected)
+
+
+def _clean_display(value: Any, fallback: str = "—") -> str:
+    """Return a dashboard/notification friendly value."""
+    if value is None:
+        return fallback
+    text = str(value)
+    if text.lower() in _BAD:
+        return fallback
+    return text
+
+
+def _format_recommendation_notification_message(
+    snapshot: dict[str, Any],
+    pending: dict[str, Any],
+) -> str:
+    """Build persistent notification text for a pending Brewday Advice recommendation."""
+    action = _clean_display(pending.get("action_label"), "Kontrollera Brewday Advice-kortet")
+    kind = _clean_display(pending.get("kind"))
+    current = _clean_display(pending.get("current_value"))
+    recommended = _clean_display(pending.get("recommended_value"))
+    reason = _clean_display(pending.get("reason"), "Ingen orsak angiven.")
+    stage = _clean_display(snapshot.get("stage_kind"))
+    phase = _clean_display(snapshot.get("phase"))
+    confidence = _clean_display(pending.get("confidence") or snapshot.get("confidence"))
+    risk = _clean_display(snapshot.get("overshoot_risk"))
+    temp = _clean_display(snapshot.get("learning_temperature"))
+    delta = _clean_display(snapshot.get("delta_to_target"))
+
+    return (
+        "**Ny Brewday Advice-rekommendation**\n\n"
+        f"**Åtgärd:** {action}\n\n"
+        f"**Typ:** {kind}  \n"
+        f"**Värde:** {current} → {recommended}  \n"
+        f"**Stage/phase:** {stage} / {phase}  \n"
+        f"**Confidence:** {confidence}  \n"
+        f"**Overshoot-risk:** {risk}  \n"
+        f"**Temp / Δ target:** {temp} °C / {delta} °C\n\n"
+        f"**Orsak:** {reason}\n\n"
+        "Gå till **Brewday Advice**-kortet för **APPLY** eller **DENY**."
+    )
+
+
+async def _dismiss_advice_notification(
+    hass: HomeAssistant,
+    store: dict[str, Any],
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    """Dismiss the Brewday Advice persistent notification."""
+    await hass.services.async_call(
+        "persistent_notification",
+        "dismiss",
+        {"notification_id": ADVICE_NOTIFICATION_ID},
+        blocking=False,
+    )
+    store["last_notified_recommendation_id"] = None
+    store["last_notification_result"] = reason
+    store["last_notification_updated_at"] = dt_util.utcnow().isoformat()
+    return {
+        "source": "brewzilla_learning",
+        "notification_result": reason,
+        "notification_id": ADVICE_NOTIFICATION_ID,
+    }
+
+
+async def async_update_brewday_advice_notification(hass: HomeAssistant) -> dict[str, Any]:
+    """Create/dismiss Brewday Advice persistent notifications from backend state.
+
+    This keeps notification logic in Python instead of Home Assistant automation YAML.
+    A notification is created only when a new recommendation becomes pending.
+    """
+    store = _learning_store(hass)
+    snapshot = build_brewzilla_learning_snapshot(hass)
+    pending = snapshot.get("pending_recommendation")
+
+    if pending and snapshot.get("recommendation_state") == "pending":
+        recommendation_id = str(pending.get("recommendation_id") or "")
+        if recommendation_id and store.get("last_notified_recommendation_id") == recommendation_id:
+            return {
+                "source": "brewzilla_learning",
+                "notification_result": "already_notified",
+                "notification_id": ADVICE_NOTIFICATION_ID,
+                "recommendation_id": recommendation_id,
+            }
+
+        await hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "notification_id": ADVICE_NOTIFICATION_ID,
+                "title": "🍺 BrewAssistant Advice väntar",
+                "message": _format_recommendation_notification_message(snapshot, pending),
+            },
+            blocking=False,
+        )
+        store["last_notified_recommendation_id"] = recommendation_id
+        store["last_notification_result"] = "created"
+        store["last_notification_updated_at"] = dt_util.utcnow().isoformat()
+        return {
+            "source": "brewzilla_learning",
+            "notification_result": "created",
+            "notification_id": ADVICE_NOTIFICATION_ID,
+            "recommendation_id": recommendation_id,
+        }
+
+    if store.get("last_notified_recommendation_id"):
+        return await _dismiss_advice_notification(hass, store, reason="dismissed_no_pending")
+
+    return {
+        "source": "brewzilla_learning",
+        "notification_result": "no_pending",
+        "notification_id": ADVICE_NOTIFICATION_ID,
+    }
 
 
 def _context_bias(context: str) -> dict[str, Any]:
@@ -610,6 +725,7 @@ async def async_apply_brewzilla_learning_recommendation(hass: HomeAssistant) -> 
     }
     store["last_applied"] = result
     store["pending"] = None
+    await _dismiss_advice_notification(hass, store, reason="dismissed_after_apply")
     return result
 
 
@@ -634,4 +750,5 @@ async def async_deny_brewzilla_learning_recommendation(hass: HomeAssistant) -> d
     }
     store["last_denied"] = result
     store["pending"] = None
+    await _dismiss_advice_notification(hass, store, reason="dismissed_after_deny")
     return result
