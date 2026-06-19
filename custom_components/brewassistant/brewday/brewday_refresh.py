@@ -20,11 +20,13 @@ from .brewday_runtime_core import (
     BF_STAGE,
     BF_STATUS,
     BF_STEP,
+    EntityRef,
+    resolved_entity_id,
 )
 
 MANUAL_COOLDOWN_SECONDS = 60
 
-BREWFATHER_TRACKER_ENTITIES = [
+BREWFATHER_TRACKER_ENTITIES: list[EntityRef] = [
     BF_STATUS,
     BF_STAGE,
     BF_STEP,
@@ -41,11 +43,21 @@ def _state_store(hass: HomeAssistant) -> dict[str, Any]:
 
 
 async def _update_brewfather_tracker_entities(hass: HomeAssistant) -> None:
-    """Ask Home Assistant to refresh Brewfather tracker entities."""
+    """Ask Home Assistant to refresh resolved Brewfather tracker entities.
+
+    BrewTracker entity refs can be tuples of naming candidates. Home Assistant's
+    update_entity service only accepts concrete entity_id strings, not tuples.
+    """
+    entity_ids: list[str] = []
+    for ref in BREWFATHER_TRACKER_ENTITIES:
+        entity_id = resolved_entity_id(hass, ref)
+        if entity_id not in entity_ids:
+            entity_ids.append(entity_id)
+
     await hass.services.async_call(
         "homeassistant",
         "update_entity",
-        {"entity_id": BREWFATHER_TRACKER_ENTITIES},
+        {"entity_id": entity_ids},
         blocking=False,
     )
 
