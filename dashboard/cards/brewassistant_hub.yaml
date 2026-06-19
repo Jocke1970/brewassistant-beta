@@ -32,10 +32,10 @@ cards:
       - sensor.brewassistant_gravity
       - sensor.brewassistant_carbonation_status
       - sensor.brewassistant_carbonation_recommended_pressure_bar
-      - switch.brewassistant_counterflow_chiller_enabled
+      - switch.brewassistant_counter_flow_chiller_enabled
       - switch.brewassistant_show_cfc
-      - number.brewassistant_counterflow_chiller_sanitize_minutes
-      - number.brewassistant_counterflow_chiller_pump_utilization
+      - number.brewassistant_cfc_sanitize_minutes
+      - number.brewassistant_cfc_pump_utilization
     styles:
       card:
         - border-radius: 20px 20px 8px 8px
@@ -345,11 +345,11 @@ cards:
           action: more-info
         label: |
           [[[ 
-            const cfc = states['switch.brewassistant_counterflow_chiller_enabled'];
+            const cfc = states['switch.brewassistant_counter_flow_chiller_enabled'];
             const status = cfc?.attributes?.status || cfc?.state || 'disabled';
             const ready = cfc?.attributes?.ready === true ? 'ready' : 'not ready';
-            const min = states['number.brewassistant_counterflow_chiller_sanitize_minutes']?.state || cfc?.attributes?.sanitize_minutes || '—';
-            const pump = states['number.brewassistant_counterflow_chiller_pump_utilization']?.state || cfc?.attributes?.pump_utilization || '—';
+            const min = states['number.brewassistant_cfc_sanitize_minutes']?.state || cfc?.attributes?.sanitize_minutes || '—';
+            const pump = states['number.brewassistant_cfc_pump_utilization']?.state || cfc?.attributes?.pump_utilization || '—';
             const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
             return `${status} · ${ready}<br>${visible} · ${min} min · pump ${pump}%`;
           ]]]

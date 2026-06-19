@@ -6,7 +6,7 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
-      entity: switch.brewassistant_counterflow_chiller_enabled
+      entity: switch.brewassistant_counter_flow_chiller_enabled
       name: Counter Flow Chiller
       icon: |
         [[[
@@ -27,8 +27,8 @@ card:
           const a = entity?.attributes ?? {};
           const status = a.status ?? entity?.state ?? 'disabled';
           const ready = a.ready === true ? 'Ready' : 'Not ready';
-          const min = states['number.brewassistant_counterflow_chiller_sanitize_minutes']?.state ?? a.sanitize_minutes ?? '—';
-          const pump = states['number.brewassistant_counterflow_chiller_pump_utilization']?.state ?? a.pump_utilization ?? '—';
+          const min = states['number.brewassistant_cfc_sanitize_minutes']?.state ?? a.sanitize_minutes ?? '—';
+          const pump = states['number.brewassistant_cfc_pump_utilization']?.state ?? a.pump_utilization ?? '—';
           const last = a.last_action ?? '—';
           return `${status} · ${ready}<br>Sanitize ${min} min · pump ${pump}% · ${last}`;
         ]]]
@@ -70,7 +70,7 @@ card:
     - type: horizontal-stack
       cards:
         - type: custom:button-card
-          entity: switch.brewassistant_counterflow_chiller_enabled
+          entity: switch.brewassistant_counter_flow_chiller_enabled
           name: CFC ENABLE
           icon: mdi:toggle-switch-outline
           tap_action:
@@ -88,14 +88,14 @@ card:
               - font-weight: 950
 
         - type: custom:button-card
-          entity: button.brewassistant_counterflow_chiller_ready
+          entity: button.brewassistant_cfc_ready
           name: CFC READY
           icon: mdi:check-decagram
           tap_action:
             action: call-service
             service: button.press
             target:
-              entity_id: button.brewassistant_counterflow_chiller_ready
+              entity_id: button.brewassistant_cfc_ready
             confirmation:
               text: Mark CFC ready and start configured pump circulation?
           hold_action:
@@ -113,11 +113,11 @@ card:
     - type: entities
       show_header_toggle: false
       entities:
-        - entity: number.brewassistant_counterflow_chiller_sanitize_minutes
+        - entity: number.brewassistant_cfc_sanitize_minutes
           name: Sanitize minutes
-        - entity: number.brewassistant_counterflow_chiller_pump_utilization
+        - entity: number.brewassistant_cfc_pump_utilization
           name: Pump utilization
-        - entity: switch.brewassistant_counterflow_chiller_enabled
+        - entity: switch.brewassistant_counter_flow_chiller_enabled
           name: CFC backend enabled
-        - entity: button.brewassistant_counterflow_chiller_ready
+        - entity: button.brewassistant_cfc_ready
           name: CFC Ready
