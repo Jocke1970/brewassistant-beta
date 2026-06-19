@@ -672,10 +672,60 @@ async def _set_number(hass: HomeAssistant, entity_id: str, value: float) -> bool
     return True
 
 
-async def _reset_brewzilla_utilization(hass: HomeAssistant, result: dict[str, Any]) -> None:
+def _safe_zero(value: float | None) -> bool:
+    return value is None or abs(float(value)) <= UTILIZATION_TOLERANCE
+
+
+async def _enforce_brewzilla_safe_state(
+    hass: HomeAssistant,
+    result: dict[str, Any],
+    *,
+    action_prefix: str,
+    force: bool = False,
+) -> None:
+    """Send and verify BrewZilla safe-state commands.
+
+    ABORT/safety lockout uses the RAPT Cloud Link HA entities as the command
+    surface. If an external owner writes values back during lockout, BA reasserts
+    heater OFF, pump OFF, heat utilization 0 and pump utilization 0.
+    """
+    actions: list[str] = result.setdefault("actions", [])
+
+    for entity_id in (BREWZILLA_HEATER_SWITCH, BREWZILLA_PUMP_SWITCH):
+        state = hass.states.get(entity_id)
+        if state is None:
+            actions.append(f"{action_prefix}_missing:{entity_id}")
+            continue
+        if force or _bool_state(hass, entity_id):
+            await _call_switch(hass, "off", entity_id)
+            actions.append(f"{action_prefix}_off:{entity_id}")
+
     for entity_id in (BREWZILLA_HEAT_UTILIZATION, BREWZILLA_PUMP_UTILIZATION):
-        if await _set_number(hass, entity_id, 0):
-            result["actions"].append(f"set_zero:{entity_id}")
+        state = hass.states.get(entity_id)
+        if state is None:
+            actions.append(f"{action_prefix}_missing:{entity_id}")
+            continue
+        current = _float(hass, entity_id)
+        if force or not _safe_zero(current):
+            if await _set_number(hass, entity_id, 0):
+                actions.append(f"{action_prefix}_zero:{entity_id}")
+
+    heat_utilization = _float(hass, BREWZILLA_HEAT_UTILIZATION)
+    pump_utilization = _float(hass, BREWZILLA_PUMP_UTILIZATION)
+    heater_on = _bool_state(hass, BREWZILLA_HEATER_SWITCH)
+    pump_on = _bool_state(hass, BREWZILLA_PUMP_SWITCH)
+
+    result["safe_state_enforced"] = True
+    result["safe_state_ok"] = (
+        not heater_on
+        and not pump_on
+        and _safe_zero(heat_utilization)
+        and _safe_zero(pump_utilization)
+    )
+    result["safe_state_heater_on"] = heater_on
+    result["safe_state_pump_on"] = pump_on
+    result["safe_state_heat_utilization"] = heat_utilization
+    result["safe_state_pump_utilization"] = pump_utilization
 
 
 async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
@@ -686,11 +736,7 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
         "abort_lockout_seconds": ABORT_LOCKOUT_SECONDS,
         "actions": [],
     }
-    for entity_id in (BREWZILLA_HEATER_SWITCH, BREWZILLA_PUMP_SWITCH):
-        if hass.states.get(entity_id) is not None:
-            await _call_switch(hass, "off", entity_id)
-            result["actions"].append(f"turned_off:{entity_id}")
-    await _reset_brewzilla_utilization(hass, result)
+    await _enforce_brewzilla_safe_state(hass, result, action_prefix="abort", force=True)
     hass.data.setdefault("brewassistant", {})[ABORT_DATA_KEY] = result
     return result
 
@@ -703,7 +749,18 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
             if snapshot.get("abort_lockout_active")
             else "not_needed_or_blocked"
         )
-        result = {**snapshot, "applied": False, "apply_result": apply_result}
+        result = {**snapshot, "applied": False, "apply_result": apply_result, "actions": []}
+
+        if snapshot.get("abort_lockout_active"):
+            await _enforce_brewzilla_safe_state(
+                hass,
+                result,
+                action_prefix="abort_lockout",
+                force=False,
+            )
+            if result.get("actions"):
+                result["apply_result"] = "abort_lockout_enforced"
+
         await async_record_brewday_audit_tick(hass, brewzilla_result=result)
         return result
     target = snapshot["requested_target"]
