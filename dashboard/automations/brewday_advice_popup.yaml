@@ -1,0 +1,73 @@
+# BrewAssistant Brewday Advice popup/notification automation
+#
+# Purpose:
+# - Surface new Brewday Advice recommendations as a Home Assistant persistent notification.
+# - Avoid popup spam by triggering only when recommendation_state changes to pending.
+# - Dismiss the notification when the recommendation is no longer pending.
+#
+# Installation:
+# - Copy these automations into Home Assistant automations.yaml,
+#   or import/adapt them through Settings -> Automations & Scenes.
+# - The Brewday Advice card remains the detail/action surface for APPLY / DENY.
+
+- id: brewassistant_brewday_advice_popup_pending
+  alias: BrewAssistant - Brewday Advice popup when recommendation is pending
+  description: Show a persistent notification when Brewday Advice has a new pending recommendation.
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: sensor.brewassistant_brewzilla_learning_recommendation_state
+      to: "pending"
+  condition:
+    - condition: template
+      value_template: >-
+        {{ trigger.from_state is none or trigger.from_state.state != 'pending' }}
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: brewassistant_brewday_advice_pending
+        title: "🍺 BrewAssistant Advice väntar"
+        message: >-
+          {% set kind = states('sensor.brewassistant_brewzilla_learning_recommendation_kind') %}
+          {% set action = states('sensor.brewassistant_brewzilla_learning_recommendation_action_label') %}
+          {% set reason = states('sensor.brewassistant_brewzilla_learning_recommendation_reason') %}
+          {% set current = states('sensor.brewassistant_brewzilla_learning_recommendation_current_value') %}
+          {% set recommended = states('sensor.brewassistant_brewzilla_learning_recommendation_recommended_value') %}
+          {% set stage = states('sensor.brewassistant_brewzilla_stage_kind') %}
+          {% set phase = states('sensor.brewassistant_brewzilla_learning_phase') %}
+          {% set confidence = states('sensor.brewassistant_brewzilla_learning_confidence') %}
+          {% set risk = states('sensor.brewassistant_brewzilla_overshoot_risk') %}
+          {% set temp = states('sensor.brewassistant_brewzilla_learning_temperature') %}
+          {% set delta = states('sensor.brewassistant_brewzilla_delta_to_target') %}
+
+          **Ny Brewday Advice-rekommendation**
+
+          **Åtgärd:** {{ action if action not in ['unknown','unavailable','none',''] else 'Kontrollera Brewday Advice-kortet' }}
+
+          **Typ:** {{ kind }}  
+          **Värde:** {{ current }} → {{ recommended }}  
+          **Stage/phase:** {{ stage }} / {{ phase }}  
+          **Confidence:** {{ confidence }}  
+          **Overshoot-risk:** {{ risk }}  
+          **Temp / Δ target:** {{ temp }} °C / {{ delta }} °C
+
+          **Orsak:** {{ reason }}
+
+          Gå till **Brewday Advice**-kortet för **APPLY** eller **DENY**.
+
+- id: brewassistant_brewday_advice_popup_dismiss
+  alias: BrewAssistant - Dismiss Brewday Advice popup when cleared
+  description: Dismiss the Brewday Advice notification when no recommendation is pending.
+  mode: restart
+  trigger:
+    - platform: state
+      entity_id: sensor.brewassistant_brewzilla_learning_recommendation_state
+      from: "pending"
+  condition:
+    - condition: template
+      value_template: >-
+        {{ states('sensor.brewassistant_brewzilla_learning_recommendation_state') != 'pending' }}
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: brewassistant_brewday_advice_pending
