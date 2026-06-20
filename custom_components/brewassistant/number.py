@@ -91,6 +91,75 @@ KEGERATOR_FAN_NUMBERS: dict[str, dict[str, Any]] = {
     },
 }
 
+BATCH_CONTEXT_NUMBERS: dict[str, dict[str, Any]] = {
+    "batch_context_grain_amount_kg": {
+        "name": "BrewAssistant Batch Context Grain Amount",
+        "object_id": "brewassistant_batch_context_grain_amount_kg",
+        "icon": "mdi:sack",
+        "unit": "kg",
+        "min": 0.0,
+        "max": 25.0,
+        "step": 0.001,
+        "default": None,
+        "source_key": "grain_amount_kg",
+    },
+    "batch_context_mash_water_l": {
+        "name": "BrewAssistant Batch Context Mash Water",
+        "object_id": "brewassistant_batch_context_mash_water_l",
+        "icon": "mdi:water",
+        "unit": "L",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.01,
+        "default": None,
+        "source_key": "mash_water_l",
+    },
+    "batch_context_strike_water_l": {
+        "name": "BrewAssistant Batch Context Strike Water",
+        "object_id": "brewassistant_batch_context_strike_water_l",
+        "icon": "mdi:kettle",
+        "unit": "L",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.01,
+        "default": None,
+        "source_key": "strike_water_l",
+    },
+    "batch_context_sparge_water_l": {
+        "name": "BrewAssistant Batch Context Sparge Water",
+        "object_id": "brewassistant_batch_context_sparge_water_l",
+        "icon": "mdi:water-plus",
+        "unit": "L",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.01,
+        "default": None,
+        "source_key": "sparge_water_l",
+    },
+    "batch_context_pre_boil_volume_l": {
+        "name": "BrewAssistant Batch Context Pre-Boil Volume",
+        "object_id": "brewassistant_batch_context_pre_boil_volume_l",
+        "icon": "mdi:pot-steam",
+        "unit": "L",
+        "min": 0.0,
+        "max": 150.0,
+        "step": 0.01,
+        "default": None,
+        "source_key": "pre_boil_volume_l",
+    },
+    "batch_context_grain_temperature_c": {
+        "name": "BrewAssistant Batch Context Grain Temperature",
+        "object_id": "brewassistant_batch_context_grain_temperature_c",
+        "icon": "mdi:thermometer",
+        "unit": "°C",
+        "min": -10.0,
+        "max": 40.0,
+        "step": 0.1,
+        "default": None,
+        "source_key": "grain_temperature_c",
+    },
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -112,7 +181,60 @@ async def async_setup_entry(
             BrewAssistantKegeratorFanNumber(coordinator, key, config)
             for key, config in KEGERATOR_FAN_NUMBERS.items()
         ]
+        + [
+            BrewAssistantBatchContextNumber(coordinator, key, config)
+            for key, config in BATCH_CONTEXT_NUMBERS.items()
+        ]
     )
+
+
+class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
+    """Python-owned manual batch context number control."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
+        super().__init__(coordinator, key)
+        self._config = config
+        self._value: float | None = None
+        self._attr_unique_id = f"{DOMAIN}_number_{key}"
+        self._attr_name = str(config["name"])
+        self._attr_suggested_object_id = str(config["object_id"])
+        self._attr_icon = str(config["icon"])
+        self._attr_native_unit_of_measurement = str(config["unit"])
+        self._attr_native_min_value = float(config["min"])
+        self._attr_native_max_value = float(config["max"])
+        self._attr_native_step = float(config["step"])
+
+    async def async_added_to_hass(self) -> None:
+        """Restore number value after restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is None or last_state.state in {"unknown", "unavailable", "none", ""}:
+            return
+        try:
+            self._value = float(last_state.state)
+        except (TypeError, ValueError):
+            self._value = None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current manual batch context value."""
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set current manual batch context value."""
+        self._value = max(float(self._config["min"]), min(float(value), float(self._config["max"])))
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return diagnostics."""
+        return {
+            "source": "manual_batch_context",
+            "source_key": self._config["source_key"],
+            "display_default": self._config.get("default"),
+        }
 
 
 class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
