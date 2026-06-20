@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -200,15 +201,45 @@ class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, Number
         self._attr_unique_id = f"{DOMAIN}_number_{key}"
         self._attr_name = str(config["name"])
         self._attr_suggested_object_id = str(config["object_id"])
+        self.entity_id = f"number.{self._config['object_id']}"
         self._attr_icon = str(config["icon"])
         self._attr_native_unit_of_measurement = str(config["unit"])
         self._attr_native_min_value = float(config["min"])
         self._attr_native_max_value = float(config["max"])
         self._attr_native_step = float(config["step"])
 
+    def _ensure_stable_entity_id(self) -> None:
+        """Rename registry entry to the stable BrewAssistant entity ID.
+
+        Home Assistant may derive entity IDs from the device/config entry name.
+        Batch context controls are operator-facing BrewAssistant controls and
+        should keep stable repo-defined entity IDs.
+        """
+        desired_entity_id = f"number.{self._config['object_id']}"
+        registry = er.async_get(self.coordinator.hass)
+        current_entity_id = registry.async_get_entity_id(
+            "number",
+            DOMAIN,
+            str(self._attr_unique_id),
+        )
+
+        if current_entity_id is None or current_entity_id == desired_entity_id:
+            return
+
+        existing = registry.async_get(desired_entity_id)
+        if existing is not None and existing.unique_id != self._attr_unique_id:
+            return
+
+        try:
+            registry.async_update_entity(current_entity_id, new_entity_id=desired_entity_id)
+            self.entity_id = desired_entity_id
+        except ValueError:
+            return
+
     async def async_added_to_hass(self) -> None:
         """Restore number value after restart."""
         await super().async_added_to_hass()
+        self._ensure_stable_entity_id()
         last_state = await self.async_get_last_state()
         if last_state is None or last_state.state in {"unknown", "unavailable", "none", ""}:
             return
