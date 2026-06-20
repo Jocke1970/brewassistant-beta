@@ -1,10 +1,4 @@
-"""BA-owned BrewZilla utilization overlay for orchestration.
-
-This module patches the existing BrewZilla orchestration functions at package
-import time. It keeps the large orchestration module untouched while allowing
-operator-confirmed Brewday Advice utilization values to be reasserted if RAPT
-Cloud Link or BrewZilla writes them back.
-"""
+"""BA-owned BrewZilla utilization overlay for orchestration."""
 
 from __future__ import annotations
 
@@ -23,20 +17,19 @@ _BASE_APPLY_BREWZILLA_TARGET_IF_ALLOWED = _base.async_apply_brewzilla_target_if_
 BREWZILLA_HEAT_UTILIZATION = _base.BREWZILLA_HEAT_UTILIZATION
 BREWZILLA_PUMP_UTILIZATION = _base.BREWZILLA_PUMP_UTILIZATION
 UTILIZATION_TOLERANCE = _base.UTILIZATION_TOLERANCE
-SOURCE = _base.SOURCE
 
-_PATCHED = False
+_INSTALLED = False
 
 
 def _utilization_action_needed(current: float | None, desired: float | None) -> bool:
-    return desired is not None and (current is None or abs(float(desired) - float(current)) > UTILIZATION_TOLERANCE)
+    if desired is None:
+        return False
+    if current is None:
+        return True
+    return abs(float(desired) - float(current)) > UTILIZATION_TOLERANCE
 
 
-def _owned_control_overlay(
-    hass: HomeAssistant,
-    snapshot: dict[str, Any],
-) -> dict[str, Any]:
-    """Return snapshot with BA-owned desired utilization overlay applied."""
+def _owned_control_overlay(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str, Any]:
     runtime_state = str(snapshot.get("brewday_state") or "idle")
     runtime_active = _base._runtime_active(runtime_state)
     completed_runtime = bool(snapshot.get("completed_runtime"))
@@ -64,7 +57,12 @@ def _owned_control_overlay(
     heat_needed = _utilization_action_needed(snapshot.get("heat_utilization"), desired_heat)
     pump_needed = _utilization_action_needed(snapshot.get("pump_utilization"), desired_pump)
     owned_action_needed = bool(owned_active and (heat_needed or pump_needed))
-    can_reassert = bool(snapshot.get("connected") and runtime_active and not completed_runtime and not abort_lockout_active)
+    can_reassert = bool(
+        snapshot.get("connected")
+        and runtime_active
+        and not completed_runtime
+        and not abort_lockout_active
+    )
 
     overlaid = {
         **snapshot,
@@ -80,8 +78,12 @@ def _owned_control_overlay(
         "ba_owned_control_cleared_at": owned.get("cleared_at"),
         "ba_owned_control_clear_reason": owned.get("clear_reason"),
         "ba_owned_reassert_action_needed": owned_action_needed,
-        "heat_utilization_action_needed": bool(snapshot.get("heat_utilization_action_needed") or heat_needed),
-        "pump_utilization_action_needed": bool(snapshot.get("pump_utilization_action_needed") or pump_needed),
+        "heat_utilization_action_needed": bool(
+            snapshot.get("heat_utilization_action_needed") or heat_needed
+        ),
+        "pump_utilization_action_needed": bool(
+            snapshot.get("pump_utilization_action_needed") or pump_needed
+        ),
     }
 
     if owned_action_needed and can_reassert:
@@ -90,14 +92,24 @@ def _owned_control_overlay(
         overlaid["control_reason"] = "BA-owned Brewday Advice utilization should be reasserted"
         overlaid["rapt_critical_refresh_recommended"] = True
     elif owned_action_needed:
-        overlaid["control_reason"] = "BA-owned Brewday Advice utilization waiting for safe reassert conditions"
+        overlaid["control_reason"] = (
+            "BA-owned Brewday Advice utilization waiting for safe reassert conditions"
+        )
 
     return overlaid
 
 
 def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build BrewZilla orchestration snapshot with BA-owned utilization overlay."""
     return _owned_control_overlay(hass, _BASE_BUILD_ORCHESTRATION_SNAPSHOT(hass))
+
+
+async def _call_base_apply_without_overlay(hass: HomeAssistant) -> dict[str, Any]:
+    current_build = _base.build_orchestration_snapshot
+    _base.build_orchestration_snapshot = _BASE_BUILD_ORCHESTRATION_SNAPSHOT
+    try:
+        return await _BASE_APPLY_BREWZILLA_TARGET_IF_ALLOWED(hass)
+    finally:
+        _base.build_orchestration_snapshot = current_build
 
 
 async def _set_owned_utilization_if_needed(
@@ -109,14 +121,13 @@ async def _set_owned_utilization_if_needed(
     desired_value: Any,
     actions: list[str],
 ) -> bool:
-    desired = desired_value
-    if desired is None:
+    if desired_value is None:
         return False
     current = snapshot.get(f"{kind}_utilization")
-    if not _utilization_action_needed(current, float(desired)):
+    if not _utilization_action_needed(current, float(desired_value)):
         return False
 
-    value = round(float(desired), 1)
+    value = round(float(desired_value), 1)
     if await _base._set_number(hass, entity_id, value):
         actions.append(f"ba_owned_reassert_{kind}_utilization:{value}")
         return True
@@ -125,12 +136,11 @@ async def _set_owned_utilization_if_needed(
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Apply BrewZilla orchestration and reassert BA-owned utilization when needed."""
     snapshot = build_orchestration_snapshot(hass)
     if not snapshot.get("ba_owned_reassert_action_needed"):
-        return await _BASE_APPLY_BREWZILLA_TARGET_IF_ALLOWED(hass)
+        return await _call_base_apply_without_overlay(hass)
 
-    base_result = await _BASE_APPLY_BREWZILLA_TARGET_IF_ALLOWED(hass)
+    base_result = await _call_base_apply_without_overlay(hass)
     actions = list(base_result.get("actions") or [])
 
     heat_changed = await _set_owned_utilization_if_needed(
@@ -167,10 +177,9 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
 
 
 def install_owned_orchestration_patch() -> None:
-    """Install BA-owned orchestration wrappers into the base module."""
-    global _PATCHED
-    if _PATCHED:
+    global _INSTALLED
+    if _INSTALLED:
         return
     _base.build_orchestration_snapshot = build_orchestration_snapshot
     _base.async_apply_brewzilla_target_if_allowed = async_apply_brewzilla_target_if_allowed
-    _PATCHED = True
+    _INSTALLED = True
