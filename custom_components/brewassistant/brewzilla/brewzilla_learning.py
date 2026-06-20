@@ -35,12 +35,19 @@ BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 BREWZILLA_LEARNING_CONTEXT_SELECT = "select.brewassistant_brewzilla_learning_context"
 BREWFATHER_BREW_TRACKER_RAW = "sensor.brewfather_brew_tracker_raw"
 
-MANUAL_GRAIN_AMOUNT_KG = "input_number.brewassistant_batch_context_grain_amount_kg"
-MANUAL_MASH_WATER_L = "input_number.brewassistant_batch_context_mash_water_l"
-MANUAL_STRIKE_WATER_L = "input_number.brewassistant_batch_context_strike_water_l"
-MANUAL_SPARGE_WATER_L = "input_number.brewassistant_batch_context_sparge_water_l"
-MANUAL_PRE_BOIL_VOLUME_L = "input_number.brewassistant_batch_context_pre_boil_volume_l"
-MANUAL_GRAIN_TEMPERATURE_C = "input_number.brewassistant_batch_context_grain_temperature_c"
+MANUAL_GRAIN_AMOUNT_KG = "number.brewassistant_batch_context_grain_amount_kg"
+MANUAL_MASH_WATER_L = "number.brewassistant_batch_context_mash_water_l"
+MANUAL_STRIKE_WATER_L = "number.brewassistant_batch_context_strike_water_l"
+MANUAL_SPARGE_WATER_L = "number.brewassistant_batch_context_sparge_water_l"
+MANUAL_PRE_BOIL_VOLUME_L = "number.brewassistant_batch_context_pre_boil_volume_l"
+MANUAL_GRAIN_TEMPERATURE_C = "number.brewassistant_batch_context_grain_temperature_c"
+
+LEGACY_MANUAL_GRAIN_AMOUNT_KG = "input_number.brewassistant_batch_context_grain_amount_kg"
+LEGACY_MANUAL_MASH_WATER_L = "input_number.brewassistant_batch_context_mash_water_l"
+LEGACY_MANUAL_STRIKE_WATER_L = "input_number.brewassistant_batch_context_strike_water_l"
+LEGACY_MANUAL_SPARGE_WATER_L = "input_number.brewassistant_batch_context_sparge_water_l"
+LEGACY_MANUAL_PRE_BOIL_VOLUME_L = "input_number.brewassistant_batch_context_pre_boil_volume_l"
+LEGACY_MANUAL_GRAIN_TEMPERATURE_C = "input_number.brewassistant_batch_context_grain_temperature_c"
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_STATES = {
@@ -382,16 +389,28 @@ def _brewfather_batch_context(hass: HomeAssistant) -> dict[str, Any]:
     }
 
 
+
+def _manual_float(hass: HomeAssistant, primary_entity: str, legacy_entity: str) -> float | None:
+    value = _float(hass, primary_entity)
+    if value is not None:
+        return value
+    return _float(hass, legacy_entity)
+
+
 def _manual_batch_context(hass: HomeAssistant) -> dict[str, Any]:
-    mash_water_l = _float(hass, MANUAL_MASH_WATER_L)
-    strike_water_l = _float(hass, MANUAL_STRIKE_WATER_L)
+    mash_water_l = _manual_float(hass, MANUAL_MASH_WATER_L, LEGACY_MANUAL_MASH_WATER_L)
+    strike_water_l = _manual_float(hass, MANUAL_STRIKE_WATER_L, LEGACY_MANUAL_STRIKE_WATER_L)
     return {
         "source": "manual",
-        "grain_amount_kg": _float(hass, MANUAL_GRAIN_AMOUNT_KG),
+        "grain_amount_kg": _manual_float(hass, MANUAL_GRAIN_AMOUNT_KG, LEGACY_MANUAL_GRAIN_AMOUNT_KG),
         "mash_water_l": mash_water_l if mash_water_l is not None else strike_water_l,
-        "sparge_water_l": _float(hass, MANUAL_SPARGE_WATER_L),
-        "pre_boil_volume_l": _float(hass, MANUAL_PRE_BOIL_VOLUME_L),
-        "grain_temperature_c": _float(hass, MANUAL_GRAIN_TEMPERATURE_C),
+        "sparge_water_l": _manual_float(hass, MANUAL_SPARGE_WATER_L, LEGACY_MANUAL_SPARGE_WATER_L),
+        "pre_boil_volume_l": _manual_float(hass, MANUAL_PRE_BOIL_VOLUME_L, LEGACY_MANUAL_PRE_BOIL_VOLUME_L),
+        "grain_temperature_c": _manual_float(
+            hass,
+            MANUAL_GRAIN_TEMPERATURE_C,
+            LEGACY_MANUAL_GRAIN_TEMPERATURE_C,
+        ),
     }
 
 
