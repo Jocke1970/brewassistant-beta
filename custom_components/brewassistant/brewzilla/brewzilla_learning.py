@@ -338,8 +338,8 @@ def _brewfather_batch_context(hass: HomeAssistant) -> dict[str, Any]:
     stages = []
     if data and isinstance(data.get("stages"), list):
         stages = [stage for stage in data["stages"] if isinstance(stage, dict)]
-    if current_stage:
-        stages.insert(0, current_stage)
+    elif current_stage:
+        stages = [current_stage]
 
     grain_g = 0.0
     mash_water_l = None
