@@ -34,10 +34,17 @@ def _manual_engine_is_active(hass: HomeAssistant) -> bool:
 
 
 def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build a normalized brewday runtime snapshot."""
+    """Build a normalized brewday runtime snapshot.
+
+    External live Brewfather Brew Tracker data must win over Manual Brewday.
+    Manual runtime is a fallback only when there is no active Brewfather source.
+    """
+    runtime_source = source(hass)
+    if runtime_source == "Brewfather Brew Tracker":
+        return build_core_snapshot(hass)
     if _manual_engine_is_active(hass):
         return build_manual_engine_snapshot(hass)
-    if source(hass) == "Manual Brewday":
+    if runtime_source == "Manual Brewday":
         return build_manual_engine_snapshot(hass)
     return build_core_snapshot(hass)
 
