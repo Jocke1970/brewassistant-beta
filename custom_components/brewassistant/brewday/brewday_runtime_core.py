@@ -23,6 +23,7 @@ BF_NEXT: EntityRef = ("sensor.brewfather_brew_tracker_next_step", "sensor.brewfa
 BF_PROGRESS: EntityRef = ("sensor.brewfather_brew_tracker_progress", "sensor.brewfather_brewtracker_progress")
 BF_REMAINING: EntityRef = ("sensor.brewfather_brew_tracker_time_remaining", "sensor.brewfather_brewtracker_time_remaining")
 BF_RAW: EntityRef = ("sensor.brewfather_brew_tracker_raw", "sensor.brewfather_brewtracker_raw")
+LIVE_ATTR_SOURCES: tuple[EntityRef, ...] = (BF_STAGE, BF_STATUS, BF_RAW)
 
 
 def entity_candidates(entity_id: EntityRef) -> tuple[str, ...]:
@@ -65,6 +66,21 @@ def attr(hass: HomeAssistant, entity_id: EntityRef, name: str) -> Any:
     return None
 
 
+def live_attr(hass: HomeAssistant, name: str) -> Any:
+    """Return live Brew Tracker attribute from the freshest source sensors."""
+    for entity_id in LIVE_ATTR_SOURCES:
+        value = attr(hass, entity_id, name)
+        if value is not None:
+            return value
+    return None
+
+
+def live_dict_attr(hass: HomeAssistant, name: str) -> dict[str, Any]:
+    """Return live Brew Tracker dict attribute when available."""
+    value = live_attr(hass, name)
+    return value if isinstance(value, dict) else {}
+
+
 def as_float(value: Any) -> float | None:
     try:
         if value is None or str(value) in BAD:
@@ -77,6 +93,20 @@ def as_float(value: Any) -> float | None:
 def as_int(value: Any, default: int = 0) -> int:
     number = as_float(value)
     return default if number is None else int(number)
+
+
+def as_bool(value: Any) -> bool | None:
+    """Return a permissive bool for Brewfather attributes."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"true", "on", "yes", "1"}:
+        return True
+    if text in {"false", "off", "no", "0"}:
+        return False
+    return None
 
 
 def clean(value: Any, limit: int = 96) -> str | None:
@@ -162,12 +192,36 @@ def raw_data(hass: HomeAssistant) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def live_current_stage(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the Brew Tracker current_stage attribute from live sensors."""
+    return live_dict_attr(hass, "current_stage")
+
+
+def live_current_step(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the Brew Tracker current_step attribute from live sensors."""
+    return live_dict_attr(hass, "current_step")
+
+
+def live_next_step(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the Brew Tracker next_step attribute from live sensors."""
+    return live_dict_attr(hass, "next_step")
+
+
 def stages(hass: HomeAssistant) -> list[dict[str, Any]]:
     values = raw_data(hass).get("stages")
-    return [item for item in values if isinstance(item, dict)] if isinstance(values, list) else []
+    if isinstance(values, list):
+        return [item for item in values if isinstance(item, dict)]
+    live_stage = live_current_stage(hass)
+    return [live_stage] if live_stage else []
 
 
 def indices(hass: HomeAssistant) -> tuple[int | None, int | None]:
+    live_stage = live_current_stage(hass)
+    if live_stage:
+        stage_index = as_int(live_attr(hass, "stage_index"), as_int(raw_data(hass).get("stage"), 0))
+        step_index = as_int(live_stage.get("step"), -1)
+        return stage_index if stage_index >= 0 else None, None if step_index < 0 else step_index
+
     all_stages = stages(hass)
     stage_index = as_int(raw_data(hass).get("stage"), -1)
     if stage_index < 0 or stage_index >= len(all_stages):
@@ -200,6 +254,9 @@ def resolve_step_index_from_remaining(stage: dict[str, Any], stage_remaining: in
 
 
 def current_stage(hass: HomeAssistant) -> dict[str, Any]:
+    live_stage = live_current_stage(hass)
+    if live_stage:
+        return live_stage
     stage_index, _ = indices(hass)
     all_stages = stages(hass)
     if stage_index is not None and stage_index < len(all_stages):
@@ -217,6 +274,9 @@ def current_step_from_index(stage: dict[str, Any], step_index: int | None) -> di
 
 
 def current_step(hass: HomeAssistant) -> dict[str, Any]:
+    live_step = live_current_step(hass)
+    if live_step:
+        return live_step
     stage = current_stage(hass)
     _, step_index = indices(hass)
     step = current_step_from_index(stage, step_index)
@@ -251,6 +311,9 @@ def next_step_from_index(
 
 
 def next_step(hass: HomeAssistant) -> tuple[str, str | None, dict[str, Any] | None]:
+    live_step = live_next_step(hass)
+    if live_step:
+        return step_display_name(live_step, state(hass, BF_NEXT, "None")), step_desc(live_step), live_step
     stage_index, step_index = indices(hass)
     all_stages = stages(hass)
     if stage_index is not None and step_index is not None and stage_index < len(all_stages):
@@ -305,7 +368,7 @@ def is_terminal_stage_step(
 
 
 def snapshot_age(hass: HomeAssistant) -> int:
-    obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
+    obj = state_obj(hass, BF_STAGE) or state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     if obj is None:
         return 0
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(obj.last_updated)).total_seconds()))
@@ -370,8 +433,22 @@ def timeline(hass: HomeAssistant, resolved_step_index: int | None = None) -> lis
 
 
 def brewfather_session_active(hass: HomeAssistant) -> bool:
-    """Return true only when Brewfather Brew Tracker exposes an active brewday session."""
-    return state(hass, BF_STATUS, "inactive").lower() == BREWDAY_ACTIVE_STATUS
+    """Return true when Brewfather exposes an active, not completed brewday session."""
+    source_state = state(hass, BF_STATUS, "inactive").lower()
+    if source_state == BREWDAY_ACTIVE_STATUS:
+        return True
+
+    active = as_bool(live_attr(hass, "active"))
+    enabled = as_bool(live_attr(hass, "enabled"))
+    completed = as_bool(live_attr(hass, "completed"))
+    batch_status = str(live_attr(hass, "brew_tracker_batch_status") or "").strip().lower()
+
+    return bool(
+        active is True
+        and completed is not True
+        and enabled is not False
+        and batch_status in {"brewing", "fermenting", "planning", ""}
+    )
 
 
 def source(hass: HomeAssistant) -> str:
@@ -383,7 +460,7 @@ def source(hass: HomeAssistant) -> str:
 
 def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     source_status = state(hass, BF_STATUS, "inactive").lower()
-    if source_status != BREWDAY_ACTIVE_STATUS:
+    if not brewfather_session_active(hass):
         snapshot = inactive_snapshot()
         snapshot["status"] = source_status
         snapshot["source_status"] = source_status
@@ -394,7 +471,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     raw_remaining = as_int(state(hass, BF_REMAINING), 0)
     age = snapshot_age(hass)
     stage = current_stage(hass)
-    status = "paused" if bool(stage.get("paused")) else "running"
+    status = "paused" if bool(stage.get("paused")) or source_status == "paused" else "running"
     raw_stage_remaining = as_int(stage.get("remainingSeconds"), raw_remaining)
 
     stage_remaining = max(raw_stage_remaining - age, 0) if status == "running" else max(raw_stage_remaining, 0)
@@ -444,7 +521,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         nxt_desc = "Runtime väntar på att Brewfather publicerar nästa checkpoint."
     if status == "paused" and nxt_desc is None:
         nxt_desc = "Brewfather är pausad; BrewAssistant behåller aktuellt steg och target."
-    snap_obj = state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
+    snap_obj = state_obj(hass, BF_STAGE) or state_obj(hass, BF_RAW) or state_obj(hass, BF_REMAINING) or state_obj(hass, BF_STATUS)
     stage_name = clean(stage.get("name")) or state(hass, BF_STAGE, "Unknown")
     elapsed = max((duration or 0) - stage_remaining, 0) if duration else as_float(stage.get("elapsedSeconds"))
     current_target = as_float(cur_step.get("value")) if isinstance(cur_step, dict) else None
@@ -453,7 +530,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     target_source = None
     if target is not None:
         target_source = "current_step" if current_target is not None else "next_step"
-    source_entity = resolved_entity_id(hass, BF_RAW)
+    source_entity = resolved_entity_id(hass, BF_STAGE)
     return {
         "source": "Brewfather Brew Tracker",
         "status": "completed" if terminal_complete else status,
@@ -471,7 +548,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "actual_temperature": None,
         "summary": f"{runtime_state} · {stage_name} · {step} · {round(progress)}% · {fmt(step_remaining)} kvar",
         "source_entity": source_entity,
-        "source_entity_candidates": list(entity_candidates(BF_RAW)),
+        "source_entity_candidates": list(entity_candidates(BF_STAGE)),
         "snapshot_entity": snap_obj.entity_id if snap_obj else None,
         "snapshot_updated_at": snap_obj.last_updated.isoformat() if snap_obj else None,
         "snapshot_age_seconds": age,
