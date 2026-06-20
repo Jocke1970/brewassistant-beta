@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 BAD = {"unknown", "unavailable", "none", ""}
-ACTIVE = {"running", "paused", "completed", "awaiting_snapshot"}
+BREWDAY_ACTIVE_STATUS = "active"
 EntityRef = str | tuple[str, ...]
 
 BF_STATUS: EntityRef = ("sensor.brewfather_brew_tracker_status", "sensor.brewfather_brewtracker_status")
@@ -369,19 +369,32 @@ def timeline(hass: HomeAssistant, resolved_step_index: int | None = None) -> lis
     return rows
 
 
+def brewfather_session_active(hass: HomeAssistant) -> bool:
+    """Return true only when Brewfather Brew Tracker exposes an active brewday session."""
+    return state(hass, BF_STATUS, "inactive").lower() == BREWDAY_ACTIVE_STATUS
+
+
 def source(hass: HomeAssistant) -> str:
     """Return the external runtime source handled by this core resolver."""
-    bf_status = state(hass, BF_STATUS)
-    if bf_status in ACTIVE:
+    if brewfather_session_active(hass):
         return "Brewfather Brew Tracker"
     return "None"
 
 
 def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    status = state(hass, BF_STATUS, "inactive")
+    source_status = state(hass, BF_STATUS, "inactive").lower()
+    if source_status != BREWDAY_ACTIVE_STATUS:
+        snapshot = inactive_snapshot()
+        snapshot["status"] = source_status
+        snapshot["source_status"] = source_status
+        snapshot["source_entity"] = resolved_entity_id(hass, BF_STATUS)
+        snapshot["source_entity_candidates"] = list(entity_candidates(BF_STATUS))
+        return snapshot
+
     raw_remaining = as_int(state(hass, BF_REMAINING), 0)
     age = snapshot_age(hass)
     stage = current_stage(hass)
+    status = "paused" if bool(stage.get("paused")) else "running"
     raw_stage_remaining = as_int(stage.get("remainingSeconds"), raw_remaining)
 
     stage_remaining = max(raw_stage_remaining - age, 0) if status == "running" else max(raw_stage_remaining, 0)
@@ -400,13 +413,13 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     progress = as_float(stage.get("progressPercent")) or as_float(state(hass, BF_PROGRESS)) or 0.0
     if duration and duration > 0:
         progress = round(min(max(((duration - stage_remaining) / duration) * 100, 0), 100), 1)
-    if terminal_complete or status == "completed":
+    if terminal_complete:
         progress = 100.0
         stage_remaining = 0
         step_remaining = 0
 
     runtime_state = (
-        "completed" if status == "completed" or terminal_complete
+        "completed" if terminal_complete
         else "awaiting_snapshot" if step_remaining <= 0 and status == "running"
         else "live" if status == "running"
         else "paused" if status == "paused"
@@ -443,7 +456,8 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     source_entity = resolved_entity_id(hass, BF_RAW)
     return {
         "source": "Brewfather Brew Tracker",
-        "status": "completed" if terminal_complete and status == "running" else status,
+        "status": "completed" if terminal_complete else status,
+        "source_status": source_status,
         "runtime_state": runtime_state,
         "stage": stage_name,
         "step": step,
@@ -491,7 +505,7 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 def inactive_snapshot() -> dict[str, Any]:
     return {
-        "source": "None", "status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "raw_step_name": None,
+        "source": "None", "status": "inactive", "source_status": "inactive", "runtime_state": "idle", "stage": "Idle", "step": "Idle", "raw_step_name": None,
         "next_step": "None", "progress": 0.0, "time_remaining_seconds": 0, "time_remaining_minutes": 0,
         "target_temperature": None, "target_temperature_source": None, "actual_temperature": None, "summary": "idle · Idle", "source_entity": None,
         "source_entity_candidates": [], "snapshot_entity": None, "snapshot_updated_at": None, "snapshot_age_seconds": 0, "snapshot_age_minutes": 0,
