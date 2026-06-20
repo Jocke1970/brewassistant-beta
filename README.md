@@ -1,14 +1,14 @@
-# BrewAssistant v0.2.0-beta.5
+# BrewAssistant v0.2.0-beta.6
 
-**BrewAssistant v0.2.0-beta.5** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboard cards and notifications.
+**BrewAssistant v0.2.0-beta.6** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboard cards and notifications.
 
 > [!WARNING]
 > BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
 
-The project has moved away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations and hardware orchestration live in `custom_components/brewassistant/`.
+The project has moved away from YAML-heavy Home Assistant packages toward a Python custom integration where business logic, runtime normalization, stage interpretation, calculations, safety guards, notifications and hardware orchestration live in `custom_components/brewassistant/`.
 
 ```text
-Python custom integration = logic, normalization, stage engine, calculations, control decisions
+Python custom integration = logic, normalization, stage engine, calculations, control decisions, safety guards, notifications
 Dashboard YAML             = presentation and explicit operator actions
 Legacy local packages      = local compatibility/cleanup only, not mainline repo setup
 ```
@@ -30,8 +30,8 @@ This repository is shared openly for transparency, learning and experimentation 
 ## Current status
 
 ```text
-v0.2.0-beta.5
-Clean Baseline Beta
+v0.2.0-beta.6
+Safe Advice Beta
 ```
 
 Validated in the active beta baseline:
@@ -51,6 +51,8 @@ Validated in the active beta baseline:
 ✅ BrewZilla heater/pump direct actions
 ✅ BrewZilla mash-in heat strategy: ramp far, approach, mash-in ready and overshoot phases
 ✅ ABORT service for heater + pump
+✅ ABORT lockout blocks automatic BrewZilla re-apply after operator stop
+✅ ABORT safe-state enforcement: heater off, pump off, heat utilization 0 and pump utilization 0
 ✅ Brewday Event Log backend, services, sensors and dashboard card
 ✅ Brewday Event Log uses normalized runtime for Brewfather and Manual Brewday
 ✅ Smart Brewfather refresh policy
@@ -67,6 +69,7 @@ Validated in the active beta baseline:
 ✅ BrewZilla mash/wort/delta dashboard-safe sensors
 ✅ Brewday Advice uses the shared mash/wort resolver
 ✅ Brewday Advice uses normalized runtime for Brewfather and Manual Brewday
+✅ Brewday Advice persistent notification for new pending recommendations
 ✅ BrewZilla operator card and Brewday Advice card baseline
 ✅ Brewday Runtime operator card
 ✅ Manual Brewday operator card
@@ -207,9 +210,10 @@ Dashboard docs:
 dashboard/README.md
 docs/dashboard-baselines.md
 docs/beta5-sanity-dashboard.md
+docs/beta6-release-notes.md
 ```
 
-Dashboard YAML is presentation-only. It may display state and call explicit operator actions, but business logic should stay in the Python integration.
+Dashboard YAML is presentation-only. It may display state and call explicit operator actions, but business logic, safety guards and backend notifications should stay in the Python integration.
 
 ---
 
@@ -218,13 +222,15 @@ Dashboard YAML is presentation-only. It may display state and call explicit oper
 ```text
 Status: beta
 Scope: supervised BrewZilla/Brewfather/manual brewday runtime
-Control policy: operator-supervised direct actions with abort available
+Control policy: operator-supervised direct actions with ABORT lockout and safe-state enforcement
 Not stable
 Not unattended autopilot
 Not recommended without active operator supervision
 ```
 
 BrewAssistant may apply BrewZilla target/heater/pump actions during a brewday, but the intended operating model is still supervised. The operator should remain present, verify BrewZilla behavior, and keep abort/manual controls available.
+
+ABORT has highest priority over normal orchestration. During ABORT lockout, BrewAssistant should hold BrewZilla heater off, pump off, heat utilization 0 and pump utilization 0 through the available RAPT Cloud Link command entities.
 
 Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan actions through its fan-auto switch. Compressor/cooling target behavior remains owned by `climate.kegerator_kylskap` and its Home Assistant climate/thermostat layer.
 
@@ -239,7 +245,7 @@ Kegerator Fan Backend is narrower: it may only manage kegerator circulation fan 
 | Stage Engine | Interpret runtime state plus BrewZilla telemetry into current brewday stage. |
 | BrewZilla Orchestration | Apply target/heater/pump/utilization strategies when allowed by runtime state. |
 | BrewZilla Temperature Resolver | Separate mash, wort/kettle and mash-wort delta temperature roles. |
-| Brewday Advice | Advisory recommendations using the shared temperature resolver. |
+| Brewday Advice | Advisory recommendations using the shared temperature resolver; backend notifies the operator when new pending advice appears. |
 | Brewday Event Log | Persist event snapshots for post-run analysis of runtime and BrewZilla actions. |
 | CFC Sanitation | Optional Counter Flow Chiller boil-sanitation reminder and CFC Ready pump action. |
 | Climate Supervisor | Calculate and apply dynamic kegerator/serving air targets through climate control. |
@@ -263,6 +269,7 @@ Brewfather RAW Brew Tracker or Manual Brewday
 → BrewAssistant BrewZilla Orchestration
 → BrewZilla target/heater/pump actions when allowed
 → Brewday Event Log
+→ Brewday Advice backend notification when new pending advice appears
 → Dashboard verification
 ```
 
@@ -277,4 +284,6 @@ Key beta behavior:
 - Boil stages fall back to 100°C when Brew Tracker omits a temperature target.
 - Pump is stopped during boil unless an explicit operator action, such as CFC Ready, starts it.
 - Runtime completion can be inferred when the final Brew Tracker step reaches zero.
+- ABORT blocks automatic re-apply and enforces heater/pump/utilization safe state during lockout.
+- New Brewday Advice recommendations create a backend-owned persistent notification.
 ```
