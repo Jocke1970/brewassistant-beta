@@ -8,6 +8,7 @@ same recommendation for a short period.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -32,6 +33,14 @@ BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
 BREWZILLA_HEAT_UTILIZATION = "number.brewzilla_heat_utilization"
 BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 BREWZILLA_LEARNING_CONTEXT_SELECT = "select.brewassistant_brewzilla_learning_context"
+BREWFATHER_BREW_TRACKER_RAW = "sensor.brewfather_brew_tracker_raw"
+
+MANUAL_GRAIN_AMOUNT_KG = "input_number.brewassistant_batch_context_grain_amount_kg"
+MANUAL_MASH_WATER_L = "input_number.brewassistant_batch_context_mash_water_l"
+MANUAL_STRIKE_WATER_L = "input_number.brewassistant_batch_context_strike_water_l"
+MANUAL_SPARGE_WATER_L = "input_number.brewassistant_batch_context_sparge_water_l"
+MANUAL_PRE_BOIL_VOLUME_L = "input_number.brewassistant_batch_context_pre_boil_volume_l"
+MANUAL_GRAIN_TEMPERATURE_C = "input_number.brewassistant_batch_context_grain_temperature_c"
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 _ACTIVE_STATES = {
@@ -57,6 +66,7 @@ _STRIKE_MASH_IN_CONTEXT_WORDS = (
     "värmning till mäsk",
 )
 _CONTEXT_OPTIONS = {"Unknown", "Water only", "Real mash"}
+DEFAULT_GRAIN_TEMPERATURE_C = 20.0
 MIN_RECOMMENDATION_DIFF = 5
 DENY_SNOOZE_SECONDS = 15 * 60
 ADVICE_NOTIFICATION_ID = "brewassistant_brewday_advice_pending"
@@ -273,26 +283,171 @@ def _stage_kind(runtime: dict[str, Any]) -> str:
     return "unknown"
 
 
-def _batch_context_snapshot(runtime: dict[str, Any], stage_kind: str) -> dict[str, Any]:
+def _decimal(value: str) -> float | None:
+    try:
+        return float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def _html_text(value: Any) -> str:
+    return re.sub(r"<[^>]+>", " ", str(value or "")).replace("&nbsp;", " ")
+
+
+def _extract_liters(value: Any) -> list[float]:
+    return [
+        float(match.group(1).replace(",", "."))
+        for match in re.finditer(r"<b>\s*([0-9]+(?:[.,][0-9]+)?)\s*L\s*</b>", str(value or ""), re.I)
+    ]
+
+
+def _extract_grams(value: Any) -> list[float]:
+    return [
+        float(match.group(1).replace(",", "."))
+        for match in re.finditer(r"<b>\s*([0-9]+(?:[.,][0-9]+)?)\s*g\s*</b>", str(value or ""), re.I)
+    ]
+
+
+def _tracker_steps(stage: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(stage, dict):
+        return []
+    steps = stage.get("steps")
+    return [step for step in steps if isinstance(step, dict)] if isinstance(steps, list) else []
+
+
+def _brewfather_tracker_data(hass: HomeAssistant) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    raw = _state_obj(hass, BREWFATHER_BREW_TRACKER_RAW)
+    if raw is None:
+        return None, None
+    data = raw.attributes.get("data")
+    data = data if isinstance(data, dict) else None
+    current_stage = raw.attributes.get("current_stage")
+    current_stage = current_stage if isinstance(current_stage, dict) else None
+    return data, current_stage
+
+
+def _brewfather_batch_context(hass: HomeAssistant) -> dict[str, Any]:
+    data, current_stage = _brewfather_tracker_data(hass)
+    stages = []
+    if data and isinstance(data.get("stages"), list):
+        stages = [stage for stage in data["stages"] if isinstance(stage, dict)]
+    if current_stage:
+        stages.insert(0, current_stage)
+
+    grain_g = 0.0
+    mash_water_l = None
+    sparge_water_l = None
+    pre_boil_volume_l = None
+
+    for stage in stages:
+        stage_name = str(stage.get("name") or "").lower()
+        for step in _tracker_steps(stage):
+            description = str(step.get("description") or "")
+            tooltip = str(step.get("tooltip") or "")
+            text = _html_text(f"{description} {tooltip}").lower()
+
+            if mash_water_l is None and (
+                "mäskvatten" in text
+                or "mash water" in text
+                or "strike water" in text
+            ):
+                liters = _extract_liters(description)
+                if liters:
+                    mash_water_l = liters[0]
+
+            if "mäsktillsatser" in text or "mash additions" in text:
+                grain_g += sum(_extract_grams(description))
+
+            if sparge_water_l is None and ("sparge" in stage_name or "laka" in text or "lakning" in text):
+                liters = _extract_liters(description)
+                if liters:
+                    sparge_water_l = liters[0]
+                    if len(liters) > 1:
+                        pre_boil_volume_l = liters[-1]
+
+            if pre_boil_volume_l is None and ("kokvolym" in text or "pre boil" in text or "pre-boil" in text):
+                liters = _extract_liters(description)
+                if liters:
+                    pre_boil_volume_l = liters[-1]
+
+    grain_amount_kg = round(grain_g / 1000.0, 3) if grain_g > 0 else None
+    return {
+        "source": "brewfather_brew_tracker_raw" if any(
+            value is not None for value in (grain_amount_kg, mash_water_l, sparge_water_l, pre_boil_volume_l)
+        ) else None,
+        "grain_amount_kg": grain_amount_kg,
+        "mash_water_l": mash_water_l,
+        "sparge_water_l": sparge_water_l,
+        "pre_boil_volume_l": pre_boil_volume_l,
+    }
+
+
+def _manual_batch_context(hass: HomeAssistant) -> dict[str, Any]:
+    mash_water_l = _float(hass, MANUAL_MASH_WATER_L)
+    strike_water_l = _float(hass, MANUAL_STRIKE_WATER_L)
+    return {
+        "source": "manual",
+        "grain_amount_kg": _float(hass, MANUAL_GRAIN_AMOUNT_KG),
+        "mash_water_l": mash_water_l if mash_water_l is not None else strike_water_l,
+        "sparge_water_l": _float(hass, MANUAL_SPARGE_WATER_L),
+        "pre_boil_volume_l": _float(hass, MANUAL_PRE_BOIL_VOLUME_L),
+        "grain_temperature_c": _float(hass, MANUAL_GRAIN_TEMPERATURE_C),
+    }
+
+
+def _batch_context_snapshot(hass: HomeAssistant, runtime: dict[str, Any], stage_kind: str) -> dict[str, Any]:
     """Return batch-context guard diagnostics for strike/mash-in advice."""
     text = f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('raw_step_name') or ''}".lower()
     context_required = bool(
         stage_kind == "ramp"
         and any(word in text for word in _STRIKE_MASH_IN_CONTEXT_WORDS)
     )
+
+    manual = _manual_batch_context(hass)
+    brewfather = _brewfather_batch_context(hass)
+
+    grain_amount_kg = manual["grain_amount_kg"] if manual["grain_amount_kg"] is not None else brewfather["grain_amount_kg"]
+    mash_water_l = manual["mash_water_l"] if manual["mash_water_l"] is not None else brewfather["mash_water_l"]
+    sparge_water_l = manual["sparge_water_l"] if manual["sparge_water_l"] is not None else brewfather["sparge_water_l"]
+    pre_boil_volume_l = (
+        manual["pre_boil_volume_l"] if manual["pre_boil_volume_l"] is not None else brewfather["pre_boil_volume_l"]
+    )
+    manual_grain_temp = manual["grain_temperature_c"]
+    grain_temperature_c = manual_grain_temp if manual_grain_temp is not None else DEFAULT_GRAIN_TEMPERATURE_C
+
+    source_parts = []
+    if any(manual.get(key) is not None for key in ("grain_amount_kg", "mash_water_l", "sparge_water_l", "pre_boil_volume_l", "grain_temperature_c")):
+        source_parts.append("manual")
+    if brewfather.get("source"):
+        source_parts.append(str(brewfather["source"]))
+    source = "+".join(source_parts) if source_parts else None
+
+    missing = []
+    if grain_amount_kg is None:
+        missing.append("grain_amount_kg")
+    if mash_water_l is None:
+        missing.append("mash_water_l")
+    if grain_temperature_c is None:
+        missing.append("grain_temperature_c")
+
+    available = not missing
+    needs_context = bool(context_required and not available)
     return {
-        "batch_context_available": False,
-        "needs_batch_context": context_required,
-        "batch_context_missing": (
-            ["grain_amount_kg", "water_volume_l", "grain_temperature_c"]
-            if context_required
-            else []
-        ),
+        "batch_context_source": source,
+        "batch_context_available": available,
+        "needs_batch_context": needs_context,
+        "batch_context_missing": missing if context_required else [],
         "batch_context_reason": (
-            "Strike/mash-in heat advice requires grain amount, water volume and grain temperature context."
-            if context_required
+            "Strike/mash-in heat advice requires grain amount, mash water volume and grain temperature context."
+            if needs_context
             else None
         ),
+        "grain_amount_kg": grain_amount_kg,
+        "mash_water_l": mash_water_l,
+        "sparge_water_l": sparge_water_l,
+        "pre_boil_volume_l": pre_boil_volume_l,
+        "grain_temperature_c": grain_temperature_c,
+        "grain_temperature_assumed": manual_grain_temp is None and grain_temperature_c is not None,
     }
 
 
@@ -581,7 +736,7 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     stage_kind = _stage_kind(runtime)
     context = learning_context(hass)
     context_mod = _context_bias(context)
-    batch_context = _batch_context_snapshot(runtime, stage_kind)
+    batch_context = _batch_context_snapshot(hass, runtime, stage_kind)
 
     store["observation_count"] = int(store.get("observation_count") or 0) + 1
     store["last_observed_at"] = dt_util.utcnow().isoformat()
@@ -661,8 +816,15 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "learning_context": context,
         "needs_batch_context": batch_context["needs_batch_context"],
         "batch_context_available": batch_context["batch_context_available"],
+        "batch_context_source": batch_context["batch_context_source"],
         "batch_context_missing": batch_context["batch_context_missing"],
         "batch_context_reason": batch_context["batch_context_reason"],
+        "grain_amount_kg": batch_context["grain_amount_kg"],
+        "mash_water_l": batch_context["mash_water_l"],
+        "sparge_water_l": batch_context["sparge_water_l"],
+        "pre_boil_volume_l": batch_context["pre_boil_volume_l"],
+        "grain_temperature_c": batch_context["grain_temperature_c"],
+        "grain_temperature_assumed": batch_context["grain_temperature_assumed"],
         "profile_weight": context_mod["profile_weight"],
         "context_confidence_cap": context_mod["confidence_cap"],
         "context_heat_bias": context_mod["suggestion_bias"],
