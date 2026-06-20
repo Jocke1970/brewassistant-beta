@@ -46,6 +46,16 @@ _RAMP_WORDS = ("ramp", "heat", "värm", "uppvärm", "strike", "mash in", "mash-i
 _HOLD_WORDS = ("hold", "rest", "rast", "mash", "mäsk", "saccharification", "beta", "alpha")
 _BOIL_WORDS = ("boil", "kok", "boiling", "heating to boil", "värm till kok", "kokning", "kokgiva")
 _COOL_WORDS = ("cool", "chill", "kyl")
+_STRIKE_MASH_IN_CONTEXT_WORDS = (
+    "strike",
+    "strike water",
+    "mash in",
+    "mash-in",
+    "inmäsk",
+    "inmask",
+    "värm mäsk",
+    "värmning till mäsk",
+)
 _CONTEXT_OPTIONS = {"Unknown", "Water only", "Real mash"}
 MIN_RECOMMENDATION_DIFF = 5
 DENY_SNOOZE_SECONDS = 15 * 60
@@ -261,6 +271,29 @@ def _stage_kind(runtime: dict[str, Any]) -> str:
     if any(word in text for word in _HOLD_WORDS):
         return "mash_hold"
     return "unknown"
+
+
+def _batch_context_snapshot(runtime: dict[str, Any], stage_kind: str) -> dict[str, Any]:
+    """Return batch-context guard diagnostics for strike/mash-in advice."""
+    text = f"{runtime.get('stage') or ''} {runtime.get('step') or ''} {runtime.get('raw_step_name') or ''}".lower()
+    context_required = bool(
+        stage_kind == "ramp"
+        and any(word in text for word in _STRIKE_MASH_IN_CONTEXT_WORDS)
+    )
+    return {
+        "batch_context_available": False,
+        "needs_batch_context": context_required,
+        "batch_context_missing": (
+            ["grain_amount_kg", "water_volume_l", "grain_temperature_c"]
+            if context_required
+            else []
+        ),
+        "batch_context_reason": (
+            "Strike/mash-in heat advice requires grain amount, water volume and grain temperature context."
+            if context_required
+            else None
+        ),
+    }
 
 
 def _pump_mixing_state(stage_kind: str, pump_on: bool, pump_utilization: float | None) -> str:
@@ -548,6 +581,7 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     stage_kind = _stage_kind(runtime)
     context = learning_context(hass)
     context_mod = _context_bias(context)
+    batch_context = _batch_context_snapshot(runtime, stage_kind)
 
     store["observation_count"] = int(store.get("observation_count") or 0) + 1
     store["last_observed_at"] = dt_util.utcnow().isoformat()
@@ -591,6 +625,12 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         pump_utilization=pump_utilization,
     )
 
+    if batch_context["needs_batch_context"]:
+        suggestion = None
+        confidence = "low"
+        phase = "needs_batch_context"
+        reason = str(batch_context["batch_context_reason"])
+
     overshoot_risk = "unknown"
     if delta_to_target is not None and rate_per_min is not None:
         if delta_to_target < -0.3:
@@ -619,6 +659,10 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "runtime_step": runtime.get("step"),
         "runtime_raw_step_name": runtime.get("raw_step_name"),
         "learning_context": context,
+        "needs_batch_context": batch_context["needs_batch_context"],
+        "batch_context_available": batch_context["batch_context_available"],
+        "batch_context_missing": batch_context["batch_context_missing"],
+        "batch_context_reason": batch_context["batch_context_reason"],
         "profile_weight": context_mod["profile_weight"],
         "context_confidence_cap": context_mod["confidence_cap"],
         "context_heat_bias": context_mod["suggestion_bias"],
@@ -667,7 +711,7 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     }
 
     pending = store.get("pending")
-    candidate = _make_pending_recommendation(base_snapshot)
+    candidate = None if base_snapshot.get("needs_batch_context") else _make_pending_recommendation(base_snapshot)
     if candidate is not None and not _denied_snoozed(hass, str(candidate["recommendation_id"])):
         if not pending or pending.get("recommendation_id") != candidate.get("recommendation_id"):
             candidate["state"] = "pending"
@@ -678,16 +722,23 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         store["pending"] = None
         pending = None
 
+    needs_batch_context = bool(base_snapshot.get("needs_batch_context"))
+    no_pending_reason = (
+        str(base_snapshot.get("batch_context_reason"))
+        if needs_batch_context
+        else "No actionable learning recommendation right now."
+    )
+
     return {
         **base_snapshot,
-        "status": "pending" if pending else "observing",
-        "recommendation_state": pending.get("state") if pending else "none",
+        "status": "pending" if pending else "needs_batch_context" if needs_batch_context else "observing",
+        "recommendation_state": pending.get("state") if pending else "needs_batch_context" if needs_batch_context else "none",
         "recommendation_id": pending.get("recommendation_id") if pending else None,
         "recommendation_kind": pending.get("kind") if pending else None,
         "recommendation_entity_id": pending.get("entity_id") if pending else None,
         "recommendation_current_value": pending.get("current_value") if pending else None,
         "recommendation_recommended_value": pending.get("recommended_value") if pending else None,
-        "recommendation_reason": pending.get("reason") if pending else "No actionable learning recommendation right now.",
+        "recommendation_reason": pending.get("reason") if pending else no_pending_reason,
         "recommendation_action_label": pending.get("action_label") if pending else None,
         "pending_recommendation": pending,
         "last_applied": store.get("last_applied"),
