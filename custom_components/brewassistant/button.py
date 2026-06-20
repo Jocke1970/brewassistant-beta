@@ -14,6 +14,7 @@ from .brewzilla.brewzilla_learning import (
     async_deny_brewzilla_learning_recommendation,
     build_brewzilla_learning_snapshot,
 )
+from .brewzilla.brewzilla_owned_control import remember_owned_control_from_apply_result
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .cooling.counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
@@ -132,7 +133,8 @@ class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantEntity, ButtonEntit
 
     async def async_press(self) -> None:
         """Apply current recommendation."""
-        await async_apply_brewzilla_learning_recommendation(self.coordinator.hass)
+        result = await async_apply_brewzilla_learning_recommendation(self.coordinator.hass)
+        remember_owned_control_from_apply_result(self.coordinator.hass, result)
         self.async_write_ha_state()
 
     @property
