@@ -390,16 +390,21 @@ def _mash_hold_strategy(
         desired_heat_utilization = MASH_HOLD_RECOVERY_HEAT_UTILIZATION
         desired_heater_on = True
         reason = "Mash hold: below target; apply moderate heat and circulate if mash-in is confirmed."
+    elif delta_to_target > 0:
+        phase = "mash_hold_stable_below_target"
+        desired_heat_utilization = MASH_HOLD_HEAT_UTILIZATION
+        desired_heater_on = True
+        reason = "Mash hold: slightly below target; apply gentle heat and controlled circulation."
     elif current_temperature > requested_target + MASH_HOLD_UPPER_MARGIN_C:
         phase = "mash_hold_overshoot"
         desired_heat_utilization = MASH_HOLD_OVERSHOOT_HEAT_UTILIZATION
         desired_heater_on = False
         reason = "Mash hold: above target; heat OFF while temperature settles."
     else:
-        phase = "mash_hold_stable"
-        desired_heat_utilization = MASH_HOLD_HEAT_UTILIZATION
-        desired_heater_on = True
-        reason = "Mash hold: maintain target with gentle heat and controlled circulation."
+        phase = "mash_hold_at_target"
+        desired_heat_utilization = MASH_HOLD_OVERSHOOT_HEAT_UTILIZATION
+        desired_heater_on = False
+        reason = "Mash hold: target reached; heat OFF while temperature settles."
 
     if awaiting_mash_in_confirmation:
         reason = f"{reason} Pump remains OFF while awaiting mash-in confirmation."
