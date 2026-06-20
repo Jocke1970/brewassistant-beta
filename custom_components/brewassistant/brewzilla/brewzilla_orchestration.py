@@ -9,6 +9,7 @@ from homeassistant.util import dt as dt_util
 
 from ..brewday.brewday_audit import async_record_brewday_audit_tick
 from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
+from .brewzilla_owned_control import clear_owned_control, get_owned_control
 
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
@@ -482,6 +483,32 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     heater_stop_needed = completed_runtime and heater_on
     desired_heat_utilization = active_strategy.get("desired_heat_utilization")
     desired_pump_utilization = active_strategy.get("desired_pump_utilization")
+
+    if abort_lockout is not None:
+        owned_control = clear_owned_control(hass, reason="abort_lockout")
+    elif completed_runtime:
+        owned_control = clear_owned_control(hass, reason="completed_runtime")
+    else:
+        owned_control = get_owned_control(hass)
+
+    owned_control_active = bool(
+        owned_control.get("active")
+        and _runtime_active(runtime_state)
+        and not completed_runtime
+        and abort_lockout is None
+    )
+    ba_owned_desired_heat_utilization = (
+        owned_control.get("desired_heat_utilization") if owned_control_active else None
+    )
+    ba_owned_desired_pump_utilization = (
+        owned_control.get("desired_pump_utilization") if owned_control_active else None
+    )
+
+    if ba_owned_desired_heat_utilization is not None:
+        desired_heat_utilization = ba_owned_desired_heat_utilization
+    if ba_owned_desired_pump_utilization is not None:
+        desired_pump_utilization = ba_owned_desired_pump_utilization
+
     heat_utilization_action_needed = False
     pump_utilization_action_needed = False
 
@@ -493,8 +520,21 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         heater_stop_needed = bool(desired_heater_on is False and heater_on)
         pump_action_needed = bool(desired_pump_on is True and not pump_on)
         pump_stop_needed = bool((desired_pump_on is False and pump_on) or (boil_stage and pump_on))
-        heat_utilization_action_needed = _utilization_action_needed(heat_utilization, desired_heat_utilization)
-        pump_utilization_action_needed = _utilization_action_needed(pump_utilization, desired_pump_utilization)
+
+    if (active_strategy.get("active") or owned_control_active) and not completed_runtime:
+        heat_utilization_action_needed = _utilization_action_needed(
+            heat_utilization,
+            desired_heat_utilization,
+        )
+        pump_utilization_action_needed = _utilization_action_needed(
+            pump_utilization,
+            desired_pump_utilization,
+        )
+
+    ba_owned_reassert_action_needed = bool(
+        owned_control_active
+        and (heat_utilization_action_needed or pump_utilization_action_needed)
+    )
 
     completion_stop_needed = completed_runtime and (heater_on or pump_on)
     completion_pump_stop_needed = completed_runtime and pump_on
@@ -555,7 +595,9 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         reason = "Brewday runtime completed"
     elif hard_block is None and boil_target_fallback_active:
         reason = "Boil stage detected without Brewday Runtime target; using 100°C boil fallback"
-    if not completed_runtime and hard_block is None and mash_in_strategy.get("active"):
+    if not completed_runtime and hard_block is None and ba_owned_reassert_action_needed:
+        reason = "BA-owned Brewday Advice utilization should be reasserted"
+    elif not completed_runtime and hard_block is None and mash_in_strategy.get("active"):
         reason = str(mash_in_strategy.get("reason") or reason)
     elif not completed_runtime and hard_block is None and mash_hold_strategy.get("active"):
         reason = str(mash_hold_strategy.get("reason") or reason)
@@ -616,6 +658,16 @@ def build_orchestration_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "pump_utilization": pump_utilization,
         "desired_heat_utilization": desired_heat_utilization,
         "desired_pump_utilization": desired_pump_utilization,
+        "ba_owned_control_active": owned_control_active,
+        "ba_owned_control_source": owned_control.get("source"),
+        "ba_owned_control_recommendation_id": owned_control.get("recommendation_id"),
+        "ba_owned_desired_heat_utilization": ba_owned_desired_heat_utilization,
+        "ba_owned_desired_pump_utilization": ba_owned_desired_pump_utilization,
+        "ba_owned_control_created_at": owned_control.get("created_at"),
+        "ba_owned_control_updated_at": owned_control.get("updated_at"),
+        "ba_owned_control_cleared_at": owned_control.get("cleared_at"),
+        "ba_owned_control_clear_reason": owned_control.get("clear_reason"),
+        "ba_owned_reassert_action_needed": ba_owned_reassert_action_needed,
         "heat_utilization_action_needed": heat_utilization_action_needed,
         "pump_utilization_action_needed": pump_utilization_action_needed,
         "mash_in_heat_strategy_active": bool(mash_in_strategy.get("active")),
@@ -736,6 +788,7 @@ async def async_abort_brewzilla(hass: HomeAssistant) -> dict[str, Any]:
         "abort_lockout_seconds": ABORT_LOCKOUT_SECONDS,
         "actions": [],
     }
+    clear_owned_control(hass, reason="abort")
     await _enforce_brewzilla_safe_state(hass, result, action_prefix="abort", force=True)
     hass.data.setdefault("brewassistant", {})[ABORT_DATA_KEY] = result
     return result
@@ -778,17 +831,29 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     desired_heat_utilization = snapshot.get("desired_heat_utilization")
     if snapshot.get("heat_utilization_action_needed") and desired_heat_utilization is not None:
         heat_value = round(float(desired_heat_utilization), 1)
+        heat_action = (
+            "ba_owned_reassert_heat_utilization"
+            if snapshot.get("ba_owned_control_active")
+            and snapshot.get("ba_owned_desired_heat_utilization") is not None
+            else "set_heat_utilization"
+        )
         if await _set_number(hass, BREWZILLA_HEAT_UTILIZATION, heat_value):
             heat_utilization_changed = True
-            actions.append(f"set_heat_utilization:{heat_value}")
+            actions.append(f"{heat_action}:{heat_value}")
 
     pump_utilization_changed = False
     desired_pump_utilization = snapshot.get("desired_pump_utilization")
     if snapshot.get("pump_utilization_action_needed") and desired_pump_utilization is not None:
         pump_value = round(float(desired_pump_utilization), 1)
+        pump_action = (
+            "ba_owned_reassert_pump_utilization"
+            if snapshot.get("ba_owned_control_active")
+            and snapshot.get("ba_owned_desired_pump_utilization") is not None
+            else "set_pump_utilization"
+        )
         if await _set_number(hass, BREWZILLA_PUMP_UTILIZATION, pump_value):
             pump_utilization_changed = True
-            actions.append(f"set_pump_utilization:{pump_value}")
+            actions.append(f"{pump_action}:{pump_value}")
 
     heater_changed = False
     if snapshot.get("heater_action_needed") and hass.states.get(BREWZILLA_HEATER_SWITCH) is not None:
