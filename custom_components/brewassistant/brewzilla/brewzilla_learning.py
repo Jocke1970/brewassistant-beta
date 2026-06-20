@@ -390,7 +390,35 @@ def _brewfather_batch_context(hass: HomeAssistant) -> dict[str, Any]:
 
 
 
-def _manual_float(hass: HomeAssistant, primary_entity: str, legacy_entity: str) -> float | None:
+def _manual_batch_context_value_by_source_key(hass: HomeAssistant, source_key: str) -> float | None:
+    """Find manual batch context number by stable integration-owned attributes.
+
+    Home Assistant may prefix entity IDs with the device/area name, so fixed
+    entity IDs are not reliable for integration-owned number entities.
+    """
+    for state in hass.states.async_all("number"):
+        if state.attributes.get("source") != "manual_batch_context":
+            continue
+        if state.attributes.get("source_key") != source_key:
+            continue
+        try:
+            if state.state in _BAD or str(state.state).lower() in _BAD:
+                return None
+            return float(state.state)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _manual_float(
+    hass: HomeAssistant,
+    primary_entity: str,
+    legacy_entity: str,
+    source_key: str,
+) -> float | None:
+    value = _manual_batch_context_value_by_source_key(hass, source_key)
+    if value is not None:
+        return value
     value = _float(hass, primary_entity)
     if value is not None:
         return value
@@ -398,18 +426,19 @@ def _manual_float(hass: HomeAssistant, primary_entity: str, legacy_entity: str) 
 
 
 def _manual_batch_context(hass: HomeAssistant) -> dict[str, Any]:
-    mash_water_l = _manual_float(hass, MANUAL_MASH_WATER_L, LEGACY_MANUAL_MASH_WATER_L)
-    strike_water_l = _manual_float(hass, MANUAL_STRIKE_WATER_L, LEGACY_MANUAL_STRIKE_WATER_L)
+    mash_water_l = _manual_float(hass, MANUAL_MASH_WATER_L, LEGACY_MANUAL_MASH_WATER_L, "mash_water_l")
+    strike_water_l = _manual_float(hass, MANUAL_STRIKE_WATER_L, LEGACY_MANUAL_STRIKE_WATER_L, "strike_water_l")
     return {
         "source": "manual",
-        "grain_amount_kg": _manual_float(hass, MANUAL_GRAIN_AMOUNT_KG, LEGACY_MANUAL_GRAIN_AMOUNT_KG),
+        "grain_amount_kg": _manual_float(hass, MANUAL_GRAIN_AMOUNT_KG, LEGACY_MANUAL_GRAIN_AMOUNT_KG, "grain_amount_kg"),
         "mash_water_l": mash_water_l if mash_water_l is not None else strike_water_l,
-        "sparge_water_l": _manual_float(hass, MANUAL_SPARGE_WATER_L, LEGACY_MANUAL_SPARGE_WATER_L),
-        "pre_boil_volume_l": _manual_float(hass, MANUAL_PRE_BOIL_VOLUME_L, LEGACY_MANUAL_PRE_BOIL_VOLUME_L),
+        "sparge_water_l": _manual_float(hass, MANUAL_SPARGE_WATER_L, LEGACY_MANUAL_SPARGE_WATER_L, "sparge_water_l"),
+        "pre_boil_volume_l": _manual_float(hass, MANUAL_PRE_BOIL_VOLUME_L, LEGACY_MANUAL_PRE_BOIL_VOLUME_L, "pre_boil_volume_l"),
         "grain_temperature_c": _manual_float(
             hass,
             MANUAL_GRAIN_TEMPERATURE_C,
             LEGACY_MANUAL_GRAIN_TEMPERATURE_C,
+            "grain_temperature_c",
         ),
     }
 
