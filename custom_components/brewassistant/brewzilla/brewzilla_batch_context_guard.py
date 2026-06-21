@@ -1,4 +1,4 @@
-"""BrewZilla batch-context source priority guard."""
+"""BrewZilla batch-context source priority and diagnostics guard."""
 
 from __future__ import annotations
 
@@ -7,7 +7,26 @@ from typing import Any
 from . import brewzilla_learning as _base
 
 _BASE_BATCH_CONTEXT_SNAPSHOT = _base._batch_context_snapshot
+_BASE_BUILD_BREWZILLA_LEARNING_SNAPSHOT = _base.build_brewzilla_learning_snapshot
 _INSTALLED = False
+
+_TEMPERATURE_DIAGNOSTIC_KEYS = (
+    "mash_source_selected",
+    "mash_temperature_age_seconds",
+    "mash_temperature_freshness_ok",
+    "mash_temperature_external_mash_candidate",
+    "wort_temperature_age_seconds",
+    "auto_priority",
+    "candidate_policy",
+    "ordered_candidates",
+    "candidates",
+)
+
+_BATCH_CONTEXT_DIAGNOSTIC_KEYS = (
+    "batch_context_priority",
+    "batch_context_brewfather_active",
+    "batch_context_value_sources",
+)
 
 
 def _present(value: Any) -> bool:
@@ -78,6 +97,15 @@ def _batch_context_snapshot(hass, runtime: dict[str, Any], stage_kind: str) -> d
     if not brewfather.get("source") or not _live_brewfather_context(hass, runtime):
         snapshot["batch_context_priority"] = "manual_first_no_live_brewfather"
         snapshot["batch_context_brewfather_active"] = False
+        snapshot["batch_context_value_sources"] = {
+            key: "manual" for key in (
+                "grain_amount_kg",
+                "mash_water_l",
+                "sparge_water_l",
+                "pre_boil_volume_l",
+                "grain_temperature_c",
+            ) if snapshot.get(key) is not None
+        }
         return snapshot
 
     manual = _base._manual_batch_context(hass)
@@ -143,9 +171,30 @@ def _batch_context_snapshot(hass, runtime: dict[str, Any], stage_kind: str) -> d
     return snapshot
 
 
+def _temperature_diagnostics(hass) -> dict[str, Any]:
+    temperature = _base.brewzilla_temperature_snapshot(hass)
+    return {key: temperature.get(key) for key in _TEMPERATURE_DIAGNOSTIC_KEYS if key in temperature}
+
+
+def _batch_context_diagnostics(hass) -> dict[str, Any]:
+    runtime = _base.build_brewday_runtime_snapshot(hass)
+    stage_kind = _base._stage_kind(runtime)
+    batch_context = _base._batch_context_snapshot(hass, runtime, stage_kind)
+    return {key: batch_context.get(key) for key in _BATCH_CONTEXT_DIAGNOSTIC_KEYS if key in batch_context}
+
+
+def build_brewzilla_learning_snapshot(hass) -> dict[str, Any]:
+    """Build learning snapshot and expose resolver diagnostics for UI/Ninja."""
+    snapshot = dict(_BASE_BUILD_BREWZILLA_LEARNING_SNAPSHOT(hass))
+    snapshot.update(_temperature_diagnostics(hass))
+    snapshot.update(_batch_context_diagnostics(hass))
+    return snapshot
+
+
 def install_batch_context_guard() -> None:
     global _INSTALLED
     if _INSTALLED:
         return
     _base._batch_context_snapshot = _batch_context_snapshot
+    _base.build_brewzilla_learning_snapshot = build_brewzilla_learning_snapshot
     _INSTALLED = True
