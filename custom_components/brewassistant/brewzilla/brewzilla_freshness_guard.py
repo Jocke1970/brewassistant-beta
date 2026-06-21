@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from . import brewzilla_batch_context_guard as _batch_context_guard
 from . import brewzilla_orchestration as _base
 
 RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS = 60
@@ -224,5 +225,6 @@ def install_freshness_guard() -> None:
     global _INSTALLED
     if _INSTALLED:
         return
+    _batch_context_guard.install_batch_context_guard()
     _base.build_orchestration_snapshot = build_orchestration_snapshot
     _INSTALLED = True
