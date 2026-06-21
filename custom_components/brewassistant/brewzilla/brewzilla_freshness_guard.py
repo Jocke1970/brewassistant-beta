@@ -1,9 +1,4 @@
-"""BrewZilla RCL freshness guard.
-
-This module installs a small safety wrapper around BrewZilla orchestration. It
-keeps active heater/pump decisions from being based on stale RAPT Cloud Link
-BrewZilla temperature/config snapshots.
-"""
+"""BrewZilla RCL freshness guard."""
 
 from __future__ import annotations
 
@@ -41,7 +36,6 @@ def _utilization_action_needed(current: Any, desired: float | None) -> bool:
 
 
 def _active_control_context(snapshot: dict[str, Any]) -> bool:
-    """Return true when stale RCL data must block active BrewZilla control."""
     if not _runtime_active(snapshot.get("brewday_state")):
         return False
     if bool(snapshot.get("completed_runtime")):
@@ -53,20 +47,26 @@ def _active_control_context(snapshot: dict[str, Any]) -> bool:
     )
 
 
+def _freshness_source(snapshot: dict[str, Any]) -> str | None:
+    if _as_number(snapshot.get("rapt_brewzilla_temperature_age_seconds")) is not None:
+        return "rapt_brewzilla_temperature_age_seconds"
+    if _as_number(snapshot.get("brewzilla_rapt_control_age_seconds")) is not None:
+        return "brewzilla_rapt_control_age_seconds"
+    return None
+
+
 def _freshness_age(snapshot: dict[str, Any]) -> float | None:
-    ages = [
-        _as_number(snapshot.get("brewzilla_rapt_control_age_seconds")),
-        _as_number(snapshot.get("rapt_brewzilla_temperature_age_seconds")),
-    ]
-    valid = [age for age in ages if age is not None]
-    return max(valid) if valid else None
+    temperature_age = _as_number(snapshot.get("rapt_brewzilla_temperature_age_seconds"))
+    if temperature_age is not None:
+        return temperature_age
+    return _as_number(snapshot.get("brewzilla_rapt_control_age_seconds"))
 
 
 def _apply_freshness_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Return an orchestration snapshot with active-control stale-data guard."""
     guarded = dict(snapshot)
     active_context = _active_control_context(guarded)
     age = _freshness_age(guarded)
+    source = _freshness_source(guarded)
 
     warning = bool(
         active_context
@@ -80,15 +80,9 @@ def _apply_freshness_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
     )
     reason = None
     if blocking:
-        reason = (
-            "BrewZilla/RCL data stale "
-            f"({int(age)}s); forcing heater/pump safe state before control."
-        )
+        reason = f"BrewZilla/RCL temperature data stale ({int(age)}s); control blocked."
     elif warning:
-        reason = (
-            "BrewZilla/RCL data getting stale "
-            f"({int(age)}s); refresh recommended before active control."
-        )
+        reason = f"BrewZilla/RCL temperature data getting stale ({int(age)}s); refresh recommended."
 
     guarded.update(
         {
@@ -96,6 +90,7 @@ def _apply_freshness_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
             "rcl_freshness_guard_blocking": blocking,
             "rcl_freshness_guard_reason": reason,
             "rcl_freshness_age_seconds": int(age) if age is not None else None,
+            "rcl_freshness_source": source,
             "rcl_freshness_warn_age_seconds": RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS,
             "rcl_freshness_block_age_seconds": RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS,
         }
@@ -152,12 +147,10 @@ def _apply_freshness_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_orchestration_snapshot(hass) -> dict[str, Any]:
-    """Build BrewZilla orchestration snapshot with stale RCL guard."""
     return _apply_freshness_guard(_BASE_BUILD_ORCHESTRATION_SNAPSHOT(hass))
 
 
 def install_freshness_guard() -> None:
-    """Install the freshness guard wrapper once."""
     global _INSTALLED
     if _INSTALLED:
         return
