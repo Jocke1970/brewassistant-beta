@@ -284,3 +284,44 @@ Remaining:
 ```
 
 ---
+BrewAssistant skarp driftmodell
+
+Processkälla:
+Brewfather Brew Tracker / Manual Brew
+→ BrewAssistant Runtime
+→ BrewZilla Executor
+→ BrewZilla/RCL
+
+BA ska:
+- övervaka och visualisera processen
+- visa aktivt steg, nästa steg och runtime target tydligt
+- ge advice när processen drar åt fel håll
+- exekvera temperatur/target mot BrewZilla via runtime när policy tillåter
+- aldrig låta BF/Manual prata direkt med BrewZilla
+- blocka osäker action, men först försöka självläka där det är rimligt
+
+Inlagt idag:
+#32 RCL refresh before blocking
+#33 BrewZilla temperature resolver guard
+#34 Live Brewfather batch context priority
+#35 Resolver diagnostics exposed
+
+Verifierat:
+- #32/#33/#34/#35 laddade efter restart
+- Mash/Wort faller tillbaka till sensor.brewzilla_temperature när BLE/control telemetry inte är giltig extern mash-källa
+- Batch-context diagnostics synliga
+- RCL refresh diagnostics synliga
+- Idle-läge safe: ingen refresh/block i idle
+
+Nästa test:
+- Starta test-BeerXML via Brewfather BrewTracker
+- Bekräfta runtime target → requested_target
+- Bekräfta stale RCL → refresh requested
+- Bekräfta fresh RCL → target sync till BrewZilla
+- Bekräfta Brewfather context → live_brewfather_first
+- Bekräfta manual context endast används som fallback
+
+Kvar:
+- Advice UI måste bli mycket tydligare/mer omissbar
+- RCL polling/refresh behöver valideras i aktiv runtime
+- Fortsatt BZ supervised runtime-test med lågtempsteg
