@@ -1,7 +1,8 @@
 """Brewfather Brew Tracker refresh policy for BrewAssistant.
 
-This module keeps Brew Tracker polling gentle during real brew days while still
-being responsive around step changes and short low-temperature test batches.
+This module keeps Brew Tracker polling gentle while idle, but treats active
+BrewZilla/Brewfather runtime as production flow. Short mash/ramp steps must not
+wait for the normal five-minute cadence before BA can see runtime changes.
 """
 
 from __future__ import annotations
@@ -19,11 +20,14 @@ STORE_KEY = "brewassistant_brewday_refresh"
 NORMAL_DEFAULT_INTERVAL = 5 * 60
 NORMAL_CHILLING_INTERVAL = 2 * 60
 NORMAL_IDLE_INTERVAL = 10 * 60
+ACTIVE_MASH_BOIL_INTERVAL = 30
+ACTIVE_SHORT_STEP_INTERVAL = 15
 TEST_DEFAULT_INTERVAL = 30
 ENDING_SOON_INTERVAL = 15
 AWAITING_SNAPSHOT_INTERVAL = 15
 MIN_REFRESH_INTERVAL = 10
-ENDING_SOON_SECONDS = 60
+ENDING_SOON_SECONDS = 120
+SHORT_STEP_SECONDS = 5 * 60
 AWAITING_BURST_MAX = 20
 AWAITING_BURST_WINDOW_SECONDS = 10 * 60
 TEST_STEP_DURATION_LIMIT_SECONDS = 5 * 60
@@ -87,7 +91,7 @@ def _is_test_profile(snapshot: dict[str, Any]) -> bool:
     )
 
 
-def _base_interval(snapshot: dict[str, Any], group: str, test_profile: bool) -> int:
+def _base_interval(group: str, test_profile: bool) -> int:
     if test_profile:
         return TEST_DEFAULT_INTERVAL
     if group == STAGE_GROUP_CHILL:
@@ -95,6 +99,24 @@ def _base_interval(snapshot: dict[str, Any], group: str, test_profile: bool) -> 
     if group in {STAGE_GROUP_MASH, STAGE_GROUP_BOIL, STAGE_GROUP_OTHER}:
         return NORMAL_DEFAULT_INTERVAL
     return NORMAL_IDLE_INTERVAL
+
+
+def _active_runtime_interval(group: str, remaining: int, test_profile: bool) -> tuple[int, str]:
+    """Return active BrewTracker cadence for production/supervised runtime.
+
+    The old five-minute cadence is too slow for short mash/ramp steps. During
+    active mash/boil runtime, BA needs a fresh process position quickly enough to
+    drive BrewZilla through the normalized runtime path.
+    """
+    if 0 <= remaining <= ENDING_SOON_SECONDS:
+        return ENDING_SOON_INTERVAL, "ending_soon"
+    if 0 < remaining <= SHORT_STEP_SECONDS:
+        return ACTIVE_SHORT_STEP_INTERVAL, "short_active_step"
+    if group in {STAGE_GROUP_MASH, STAGE_GROUP_BOIL}:
+        return ACTIVE_MASH_BOIL_INTERVAL, "active_mash_boil"
+    if test_profile:
+        return TEST_DEFAULT_INTERVAL, "test_profile"
+    return _base_interval(group, test_profile), "normal"
 
 
 def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
@@ -119,13 +141,10 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     remaining = int(snapshot.get("time_remaining_seconds") or 0)
     ending_soon = active and 0 <= remaining <= ENDING_SOON_SECONDS
 
-    interval = _base_interval(snapshot, group, test_profile)
+    interval = _base_interval(group, test_profile)
     reason = "inactive"
     if active:
-        reason = "normal"
-        if ending_soon:
-            interval = ENDING_SOON_INTERVAL
-            reason = "ending_soon"
+        interval, reason = _active_runtime_interval(group, remaining, test_profile)
         if awaiting:
             interval = AWAITING_SNAPSHOT_INTERVAL
             reason = "awaiting_snapshot"
@@ -162,6 +181,8 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "remaining_seconds": remaining,
         "awaiting_snapshot": awaiting,
         "ending_soon": ending_soon,
+        "short_active_step": bool(active and 0 < remaining <= SHORT_STEP_SECONDS),
+        "active_runtime_fast_cadence": bool(active and group in {STAGE_GROUP_MASH, STAGE_GROUP_BOIL, STAGE_GROUP_OTHER}),
         "interval_seconds": interval,
         "due": due,
         "reason": reason,
