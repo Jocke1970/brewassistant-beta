@@ -56,6 +56,14 @@ def _utilization_action_needed(current: Any, desired: float | None) -> bool:
 
 
 def _active_control_context(snapshot: dict[str, Any]) -> bool:
+    # ABORT/desync are higher-level safety states. RCL freshness must not
+    # overwrite their mode/reason, otherwise the UI says abort_lockout while the
+    # reason says stale RCL. Keep RCL age visible, but do not let this guard own
+    # control while those gates are active.
+    if snapshot.get("abort_lockout_active"):
+        return False
+    if snapshot.get("execution_desync") or snapshot.get("execution_desync_active"):
+        return False
     if not _runtime_active(snapshot.get("brewday_state")):
         return False
     if bool(snapshot.get("completed_runtime")):
