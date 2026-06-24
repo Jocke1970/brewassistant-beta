@@ -10,7 +10,8 @@ from . import brewzilla_orchestration as _base
 
 RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS = 60
 RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS = 90
-RCL_REFRESH_THROTTLE_SECONDS = 45
+RCL_REFRESH_THROTTLE_SECONDS = 60
+BREWZILLA_SAFE_MODE_ENTITY = "switch.brewassistant_brewzilla_safe_mode"
 
 RCL_REFRESH_ENTITY_IDS = [
     "sensor.brewzilla_temperature",
@@ -55,7 +56,22 @@ def _utilization_action_needed(current: Any, desired: float | None) -> bool:
     return abs(float(desired) - current_value) > _base.UTILIZATION_TOLERANCE
 
 
+def _safe_mode_enabled(hass) -> bool:
+    state = hass.states.get(BREWZILLA_SAFE_MODE_ENTITY)
+    if state is None:
+        return True
+    return str(state.state).lower() != "off"
+
+
 def _active_control_context(snapshot: dict[str, Any]) -> bool:
+    # ABORT/desync are higher-level safety states. RCL freshness must not
+    # overwrite their mode/reason, otherwise the UI says abort_lockout while the
+    # reason says stale RCL. Keep RCL age visible, but do not let this guard own
+    # control while those gates are active.
+    if snapshot.get("abort_lockout_active"):
+        return False
+    if snapshot.get("execution_desync") or snapshot.get("execution_desync_active"):
+        return False
     if not _runtime_active(snapshot.get("brewday_state")):
         return False
     if bool(snapshot.get("completed_runtime")):
@@ -135,20 +151,25 @@ def _apply_freshness_guard(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     active_context = _active_control_context(guarded)
     age = _freshness_age(guarded)
     source = _freshness_source(guarded)
+    safe_mode_enabled = _safe_mode_enabled(hass)
 
     warning = bool(
         active_context
         and age is not None
         and age > RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS
     )
+    diagnostic_bypass = bool(warning and not safe_mode_enabled)
     blocking = bool(
         active_context
+        and safe_mode_enabled
         and age is not None
         and age > RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS
     )
     reason = None
     if blocking:
         reason = f"BrewZilla/RCL temperature data stale ({int(age)}s); refresh requested and control blocked."
+    elif warning and diagnostic_bypass:
+        reason = f"BrewZilla/RCL temperature data stale ({int(age)}s); refresh requested, Safe Mode off so diagnostic Direct action may continue."
     elif warning:
         reason = f"BrewZilla/RCL temperature data getting stale ({int(age)}s); refresh requested."
 
@@ -163,6 +184,8 @@ def _apply_freshness_guard(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             "rcl_freshness_source": source,
             "rcl_freshness_warn_age_seconds": RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS,
             "rcl_freshness_block_age_seconds": RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS,
+            "rcl_freshness_safe_mode_enabled": safe_mode_enabled,
+            "rcl_freshness_diagnostic_bypass_active": diagnostic_bypass,
             **refresh_attrs,
         }
     )
