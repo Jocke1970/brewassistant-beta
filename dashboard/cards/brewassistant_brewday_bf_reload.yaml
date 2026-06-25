@@ -1,0 +1,22 @@
+type: custom:button-card
+name: BF RELOAD
+icon: mdi:cloud-sync-outline
+tap_action:
+  action: call-service
+  service: brewassistant.force_brewfather_refresh
+hold_action:
+  action: call-service
+  service: brewassistant.force_brewfather_refresh
+styles:
+  card:
+    - border-radius: 16px
+    - padding: 10px
+    - min-height: 54px
+    - background: rgba(33,150,243,.10)
+    - border: 1px solid rgba(33,150,243,.24)
+  icon:
+    - width: 22px
+    - height: 22px
+  name:
+    - font-size: 12px
+    - font-weight: 950

@@ -12,6 +12,7 @@ dashboard/
   cards/
     brewassistant_hub.yaml
     brewassistant_brewday.yaml
+    brewassistant_brewday_bf_reload.yaml
     brewassistant_brewday_event_log.yaml
     brewassistant_manual_brewday.yaml
     brewassistant_source_health.yaml
@@ -53,6 +54,7 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | --- | --- |
 | `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
 | `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
+| `brewassistant_brewday_bf_reload.yaml` | Compact Brewfather/BrewTracker reload button for placement on or near the Brewday Runtime card. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
 | `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
 | `brewassistant_source_health.yaml` | Source/feed health and integration status overview. |
@@ -63,6 +65,10 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | `counterflow_chiller.yaml` | Counter Flow Chiller sanitation/ready controls. |
 | `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
 | `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
+
+## Brewfather reload placement
+
+Use `cards/brewassistant_brewday_bf_reload.yaml` as a quick action on or directly below the Brewday Runtime card. It calls `brewassistant.force_brewfather_refresh` so the operator can refresh Brewfather/BrewTracker immediately after starting a brew in Brewfather, instead of waiting for the normal refresh policy interval.
 
 ## Sanity dashboard
 
