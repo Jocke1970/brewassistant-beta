@@ -1,9 +1,4 @@
-"""Brewfather Brew Tracker refresh policy for BrewAssistant.
-
-This module keeps Brew Tracker polling gentle while idle, but treats active
-BrewZilla/Brewfather runtime as production flow. Short mash/ramp steps must not
-wait for the normal five-minute cadence before BA can see runtime changes.
-"""
+"""Brewfather Brew Tracker refresh policy for BrewAssistant."""
 
 from __future__ import annotations
 
@@ -25,6 +20,7 @@ ACTIVE_SHORT_STEP_INTERVAL = 15
 TEST_DEFAULT_INTERVAL = 30
 ENDING_SOON_INTERVAL = 15
 AWAITING_SNAPSHOT_INTERVAL = 15
+PAUSING_INTERVAL = 30
 MIN_REFRESH_INTERVAL = 10
 ENDING_SOON_SECONDS = 120
 SHORT_STEP_SECONDS = 5 * 60
@@ -44,12 +40,11 @@ CHILL_WORDS = ("chill", "cool", "kyl", "cooling", "nedkyl")
 SETUP_WORDS = ("setup", "prepare", "förbered")
 TRANSFER_WORDS = ("transfer", "tapp", "rack")
 CLEAN_WORDS = ("clean", "cleanup", "rengör")
-ACTIVE_STATUSES = {"running", "paused", "live", "awaiting_snapshot", "awaiting snapshot"}
-ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "awaiting_snapshot", "awaiting snapshot"}
+ACTIVE_STATUSES = {"running", "paused", "pausing", "live", "awaiting_snapshot", "awaiting snapshot"}
+ACTIVE_RUNTIME_STATES = {"live", "running", "paused", "pausing", "awaiting_snapshot", "awaiting snapshot"}
 
 
 def _store(hass: HomeAssistant) -> dict[str, Any]:
-    """Return integration-local refresh state storage."""
     return hass.data.setdefault(STORE_KEY, {})
 
 
@@ -71,7 +66,6 @@ def _stage_group(stage: str | None, step: str | None) -> str:
 
 
 def _is_test_profile(snapshot: dict[str, Any]) -> bool:
-    """Detect short-step dry-run/test recipes without requiring extra helpers."""
     duration = snapshot.get("stage_duration_seconds")
     try:
         duration_f = float(duration) if duration is not None else 0.0
@@ -101,13 +95,14 @@ def _base_interval(group: str, test_profile: bool) -> int:
     return NORMAL_IDLE_INTERVAL
 
 
-def _active_runtime_interval(group: str, remaining: int, test_profile: bool) -> tuple[int, str]:
-    """Return active BrewTracker cadence for production/supervised runtime.
-
-    The old five-minute cadence is too slow for short mash/ramp steps. During
-    active mash/boil runtime, BA needs a fresh process position quickly enough to
-    drive BrewZilla through the normalized runtime path.
-    """
+def _active_runtime_interval(
+    group: str,
+    remaining: int,
+    test_profile: bool,
+    status_pausing: bool = False,
+) -> tuple[int, str]:
+    if status_pausing:
+        return PAUSING_INTERVAL, "pausing_transition"
     if 0 <= remaining <= ENDING_SOON_SECONDS:
         return ENDING_SOON_INTERVAL, "ending_soon"
     if 0 < remaining <= SHORT_STEP_SECONDS:
@@ -120,7 +115,6 @@ def _active_runtime_interval(group: str, remaining: int, test_profile: bool) -> 
 
 
 def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build refresh decision diagnostics without performing a refresh."""
     snapshot = build_core_snapshot(hass)
     store = _store(hass)
     now = _now()
@@ -129,11 +123,13 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     status = str(snapshot.get("status") or "").lower()
     runtime_state = str(snapshot.get("runtime_state") or "").lower()
     awaiting = bool(snapshot.get("awaiting_snapshot")) or runtime_state == "awaiting_snapshot" or status == "awaiting_snapshot"
+    status_pausing = status == "pausing" or runtime_state == "pausing"
     has_runtime_content = bool(snapshot.get("stage") or snapshot.get("step") or snapshot.get("target_temperature"))
     active = source == SOURCE_NAME and has_runtime_content and (
         status in ACTIVE_STATUSES
         or runtime_state in ACTIVE_RUNTIME_STATES
         or awaiting
+        or status_pausing
     )
 
     group = _stage_group(str(snapshot.get("stage") or ""), str(snapshot.get("step") or ""))
@@ -144,7 +140,7 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     interval = _base_interval(group, test_profile)
     reason = "inactive"
     if active:
-        interval, reason = _active_runtime_interval(group, remaining, test_profile)
+        interval, reason = _active_runtime_interval(group, remaining, test_profile, status_pausing)
         if awaiting:
             interval = AWAITING_SNAPSHOT_INTERVAL
             reason = "awaiting_snapshot"
@@ -180,6 +176,8 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "test_profile": test_profile,
         "remaining_seconds": remaining,
         "awaiting_snapshot": awaiting,
+        "status_pausing": status_pausing,
+        "pausing_refresh_interval_seconds": PAUSING_INTERVAL,
         "ending_soon": ending_soon,
         "short_active_step": bool(active and 0 < remaining <= SHORT_STEP_SECONDS),
         "active_runtime_fast_cadence": bool(active and group in {STAGE_GROUP_MASH, STAGE_GROUP_BOIL, STAGE_GROUP_OTHER}),
@@ -194,7 +192,6 @@ def build_refresh_policy_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def mark_refresh_performed(hass: HomeAssistant, *, reason: str) -> None:
-    """Record that BrewAssistant requested a Brewfather refresh."""
     store = _store(hass)
     now = _now()
     store["last_refresh_ts"] = now
@@ -212,7 +209,6 @@ def mark_refresh_performed(hass: HomeAssistant, *, reason: str) -> None:
 
 
 def mark_refresh_skipped(hass: HomeAssistant, *, reason: str) -> None:
-    """Record the most recent skipped refresh reason for diagnostics."""
     store = _store(hass)
     store["last_skip_reason"] = reason
     store["last_skip_ts"] = _now()
