@@ -1,0 +1,1 @@
+BrewTracker status PAUSING should use faster refresh cadence during transition to the next step. Target cadence: 30 seconds.
