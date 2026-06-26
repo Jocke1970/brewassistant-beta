@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
 
-from .brewzilla_orchestration import build_orchestration_snapshot
+from . import brewzilla_orchestration
 from ..const import DOMAIN
 from ..control_policy import build_control_policy_snapshot
 from ..coordinator import BrewAssistantCoordinator
@@ -71,7 +71,7 @@ class BrewAssistantBrewZillaOrchestrationSensor(BrewAssistantEntity, SensorEntit
     def _snapshot(self) -> dict[str, Any]:
         if self._policy_sensor:
             return build_control_policy_snapshot(self.coordinator.hass)
-        return build_orchestration_snapshot(self.coordinator.hass)
+        return brewzilla_orchestration.build_orchestration_snapshot(self.coordinator.hass)
 
     @property
     def native_value(self) -> Any:
