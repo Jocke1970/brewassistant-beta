@@ -1,5 +1,6 @@
 """BrewAssistant BrewZilla package."""
 
+from . import brewzilla_age_source as _age_source
 from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_freshness_guard as _freshness_guard
@@ -12,6 +13,7 @@ from . import brewzilla_stale_heat_guard as _stale_heat_guard
 from . import brewzilla_no_positive_gate as _no_positive_gate
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
+_age_source.install_last_reported_age_source()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 _advice_control.install_advice_control()
