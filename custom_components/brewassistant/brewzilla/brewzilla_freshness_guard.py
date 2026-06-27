@@ -33,6 +33,7 @@ _REFRESH_LAST_REQUESTED_AT: datetime | None = None
 _REFRESH_LAST_AGE_SECONDS: int | None = None
 _REFRESH_LAST_SOURCE: str | None = None
 _REFRESH_LAST_ENTITY_IDS: list[str] = []
+_REFRESH_LAST_ERROR: str | None = None
 
 
 def _runtime_active(state: Any) -> bool:
@@ -89,6 +90,10 @@ def _active_control_context(snapshot: dict[str, Any]) -> bool:
     )
 
 
+def _known_refresh_entity_ids(hass) -> list[str]:
+    return [entity_id for entity_id in RCL_REFRESH_ENTITY_IDS if hass.states.get(entity_id) is not None]
+
+
 def _refresh_state_attrs(requested: bool) -> dict[str, Any]:
     return {
         "rcl_refresh_requested": requested,
@@ -96,27 +101,43 @@ def _refresh_state_attrs(requested: bool) -> dict[str, Any]:
         "rcl_refresh_last_age_seconds": _REFRESH_LAST_AGE_SECONDS,
         "rcl_refresh_last_source": _REFRESH_LAST_SOURCE,
         "rcl_refresh_last_entity_ids": list(_REFRESH_LAST_ENTITY_IDS),
+        "rcl_refresh_last_error": _REFRESH_LAST_ERROR,
         "rcl_refresh_throttle_seconds": RCL_REFRESH_THROTTLE_SECONDS,
     }
 
 
 def _request_rcl_refresh(hass, age: int | None, source: str | None) -> dict[str, Any]:
-    global _REFRESH_LAST_REQUESTED_AT, _REFRESH_LAST_AGE_SECONDS, _REFRESH_LAST_SOURCE, _REFRESH_LAST_ENTITY_IDS
+    global _REFRESH_LAST_REQUESTED_AT, _REFRESH_LAST_AGE_SECONDS, _REFRESH_LAST_SOURCE, _REFRESH_LAST_ENTITY_IDS, _REFRESH_LAST_ERROR
 
     now = datetime.now(UTC)
-    requested = False
-    if _REFRESH_LAST_REQUESTED_AT is None or now - _REFRESH_LAST_REQUESTED_AT >= timedelta(seconds=RCL_REFRESH_THROTTLE_SECONDS):
-        for entity_id in RCL_REFRESH_ENTITY_IDS:
-            entity = hass.states.get(entity_id)
-            if entity is not None:
-                entity.async_update_ha_state(force_refresh=True)
-        _REFRESH_LAST_REQUESTED_AT = now
-        _REFRESH_LAST_AGE_SECONDS = int(age) if age is not None else None
-        _REFRESH_LAST_SOURCE = source
-        _REFRESH_LAST_ENTITY_IDS = list(RCL_REFRESH_ENTITY_IDS)
-        requested = True
+    if _REFRESH_LAST_REQUESTED_AT is not None and now - _REFRESH_LAST_REQUESTED_AT < timedelta(seconds=RCL_REFRESH_THROTTLE_SECONDS):
+        return _refresh_state_attrs(False)
 
-    return _refresh_state_attrs(requested)
+    entity_ids = _known_refresh_entity_ids(hass)
+    _REFRESH_LAST_REQUESTED_AT = now
+    _REFRESH_LAST_AGE_SECONDS = int(age) if age is not None else None
+    _REFRESH_LAST_SOURCE = source
+    _REFRESH_LAST_ENTITY_IDS = entity_ids
+
+    if not entity_ids:
+        _REFRESH_LAST_ERROR = "no_known_rcl_entities"
+        return _refresh_state_attrs(False)
+
+    try:
+        hass.async_create_task(
+            hass.services.async_call(
+                "homeassistant",
+                "update_entity",
+                {"entity_id": entity_ids},
+                blocking=False,
+            )
+        )
+    except Exception as exc:  # pragma: no cover - defensive HA runtime guard
+        _REFRESH_LAST_ERROR = f"{type(exc).__name__}: {exc}"
+        return _refresh_state_attrs(False)
+
+    _REFRESH_LAST_ERROR = None
+    return _refresh_state_attrs(True)
 
 
 def _staleness_source(snapshot: dict[str, Any]) -> tuple[str | None, int | None]:
