@@ -26,8 +26,9 @@ RCL_REFRESH_ENTITY_IDS = [
     "sensor.brewzilla_control_device_temperature",
 ]
 
-_BASE_BUILD_ORCHESTRATION_SNAPSHOT = _base.build_orchestration_snapshot
+_BASE_BUILD_ORCHESTRATION_SNAPSHOT = None
 _INSTALLED = False
+_REFETCH_LAST_REQUESTED_AT: datetime | None = None
 _REFRESH_LAST_REQUESTED_AT: datetime | None = None
 _REFRESH_LAST_AGE_SECONDS: int | None = None
 _REFRESH_LAST_SOURCE: str | None = None
@@ -80,91 +81,65 @@ def _active_control_context(snapshot: dict[str, Any]) -> bool:
         snapshot.get("mash_in_heat_strategy_active")
         or snapshot.get("mash_hold_strategy_active")
         or snapshot.get("boil_stage")
+        or snapshot.get("target_sync_needed")
+        or snapshot.get("heater_action_needed")
+        or snapshot.get("pump_action_needed")
+        or snapshot.get("heat_utilization_action_needed")
+        or snapshot.get("pump_utilization_action_needed")
     )
 
 
-def _freshness_source(snapshot: dict[str, Any]) -> str | None:
-    if _as_number(snapshot.get("rapt_brewzilla_temperature_age_seconds")) is not None:
-        return "rapt_brewzilla_temperature_age_seconds"
-    if _as_number(snapshot.get("brewzilla_rapt_control_age_seconds")) is not None:
-        return "brewzilla_rapt_control_age_seconds"
-    return None
-
-
-def _freshness_age(snapshot: dict[str, Any]) -> float | None:
-    temperature_age = _as_number(snapshot.get("rapt_brewzilla_temperature_age_seconds"))
-    if temperature_age is not None:
-        return temperature_age
-    return _as_number(snapshot.get("brewzilla_rapt_control_age_seconds"))
-
-
-def _known_refresh_entity_ids(hass) -> list[str]:
-    return [entity_id for entity_id in RCL_REFRESH_ENTITY_IDS if hass.states.get(entity_id) is not None]
-
-
-def _refresh_state_attrs(requested_now: bool = False) -> dict[str, Any]:
+def _refresh_state_attrs(requested: bool) -> dict[str, Any]:
     return {
-        "rcl_refresh_requested": requested_now,
+        "rcl_refresh_requested": requested,
         "rcl_refresh_last_requested_at": _REFRESH_LAST_REQUESTED_AT.isoformat() if _REFRESH_LAST_REQUESTED_AT else None,
         "rcl_refresh_last_age_seconds": _REFRESH_LAST_AGE_SECONDS,
         "rcl_refresh_last_source": _REFRESH_LAST_SOURCE,
-        "rcl_refresh_entity_ids": list(_REFRESH_LAST_ENTITY_IDS),
+        "rcl_refresh_last_entity_ids": list(_REFRESH_LAST_ENTITY_IDS),
         "rcl_refresh_throttle_seconds": RCL_REFRESH_THROTTLE_SECONDS,
     }
 
 
-def _request_rcl_refresh(hass, age: float | None, source: str | None) -> dict[str, Any]:
-    """Ask Home Assistant to refresh known BrewZilla/RCL entities.
-
-    Freshness guard is still the safety net, but active runtime should first try
-    to make the RCL/BrewZilla snapshot fresh enough for supervised execution.
-    """
+def _request_rcl_refresh(hass, age: int | None, source: str | None) -> dict[str, Any]:
     global _REFRESH_LAST_REQUESTED_AT, _REFRESH_LAST_AGE_SECONDS, _REFRESH_LAST_SOURCE, _REFRESH_LAST_ENTITY_IDS
 
     now = datetime.now(UTC)
-    if _REFRESH_LAST_REQUESTED_AT and now - _REFRESH_LAST_REQUESTED_AT < timedelta(seconds=RCL_REFRESH_THROTTLE_SECONDS):
-        return _refresh_state_attrs(False)
+    requested = False
+    if _REFRESH_LAST_REQUESTED_AT is None or now - _REFRESH_LAST_REQUESTED_AT >= timedelta(seconds=RCL_REFRESH_THROTTLE_SECONDS):
+        for entity_id in RCL_REFRESH_ENTITY_IDS:
+            entity = hass.states.get(entity_id)
+            if entity is not None:
+                entity.async_update_ha_state(force_refresh=True)
+        _REFRESH_LAST_REQUESTED_AT = now
+        _REFRESH_LAST_AGE_SECONDS = int(age) if age is not None else None
+        _REFRESH_LAST_SOURCE = source
+        _REFRESH_LAST_ENTITY_IDS = list(RCL_REFRESH_ENTITY_IDS)
+        requested = True
 
-    entity_ids = _known_refresh_entity_ids(hass)
-    if not entity_ids:
-        return _refresh_state_attrs(False)
+    return _refresh_state_attrs(requested)
 
-    _REFRESH_LAST_REQUESTED_AT = now
-    _REFRESH_LAST_AGE_SECONDS = int(age) if age is not None else None
-    _REFRESH_LAST_SOURCE = source
-    _REFRESH_LAST_ENTITY_IDS = entity_ids
 
-    async def _async_refresh() -> None:
-        await hass.services.async_call(
-            "homeassistant",
-            "update_entity",
-            {"entity_id": entity_ids},
-            blocking=False,
-        )
-
-    hass.async_create_task(_async_refresh())
-    return _refresh_state_attrs(True)
+def _staleness_source(snapshot: dict[str, Any]) -> tuple[str | None, int | None]:
+    candidates = [
+        ("rapt_brewzilla_temperature_age_seconds", snapshot.get("rapt_brewzilla_temperature_age_seconds")),
+        ("brewzilla_rapt_control_age_seconds", snapshot.get("brewzilla_rapt_control_age_seconds")),
+        ("rapt_brewzilla_poll_age_seconds", snapshot.get("rapt_brewzilla_poll_age_seconds")),
+    ]
+    for source, age in candidates:
+        num = _as_number(age)
+        if num is not None:
+            return source, int(num)
+    return None, None
 
 
 def _apply_freshness_guard(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     guarded = dict(snapshot)
+    source, age = _staleness_source(guarded)
     active_context = _active_control_context(guarded)
-    age = _freshness_age(guarded)
-    source = _freshness_source(guarded)
     safe_mode_enabled = _safe_mode_enabled(hass)
-
-    warning = bool(
-        active_context
-        and age is not None
-        and age > RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS
-    )
+    warning = bool(active_context and age is not None and age > RAPT_ACTIVE_CONTROL_WARN_AGE_SECONDS)
+    blocking = bool(active_context and safe_mode_enabled and age is not None and age > RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS)
     diagnostic_bypass = bool(warning and not safe_mode_enabled)
-    blocking = bool(
-        active_context
-        and safe_mode_enabled
-        and age is not None
-        and age > RAPT_ACTIVE_CONTROL_BLOCK_AGE_SECONDS
-    )
     reason = None
     if blocking:
         reason = f"BrewZilla/RCL temperature data stale ({int(age)}s); refresh requested and control blocked."
@@ -199,20 +174,9 @@ def _apply_freshness_guard(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     pump_on = bool(guarded.get("pump_on"))
     desired_heat = 0.0
     desired_pump = 0.0
-    heat_utilization_action_needed = _utilization_action_needed(
-        guarded.get("heat_utilization"),
-        desired_heat,
-    )
-    pump_utilization_action_needed = _utilization_action_needed(
-        guarded.get("pump_utilization"),
-        desired_pump,
-    )
-    safe_action_needed = bool(
-        heater_on
-        or pump_on
-        or heat_utilization_action_needed
-        or pump_utilization_action_needed
-    )
+    heat_utilization_action_needed = _utilization_action_needed(guarded.get("heat_utilization"), desired_heat)
+    pump_utilization_action_needed = _utilization_action_needed(guarded.get("pump_utilization"), desired_pump)
+    safe_action_needed = bool(heater_on or pump_on or heat_utilization_action_needed or pump_utilization_action_needed)
     connected = bool(guarded.get("connected"))
 
     guarded.update(
@@ -241,13 +205,14 @@ def _apply_freshness_guard(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_orchestration_snapshot(hass) -> dict[str, Any]:
+    assert _BASE_BUILD_ORCHESTRATION_SNAPSHOT is not None
     return _apply_freshness_guard(hass, _BASE_BUILD_ORCHESTRATION_SNAPSHOT(hass))
 
 
 def install_freshness_guard() -> None:
-    global _INSTALLED
+    global _BASE_BUILD_ORCHESTRATION_SNAPSHOT, _INSTALLED
     if _INSTALLED:
         return
-    _batch_context_guard.install_batch_context_guard()
+    _BASE_BUILD_ORCHESTRATION_SNAPSHOT = _base.build_orchestration_snapshot
     _base.build_orchestration_snapshot = build_orchestration_snapshot
     _INSTALLED = True
