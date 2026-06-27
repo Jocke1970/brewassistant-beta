@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 
 from . import brewzilla_orchestration as _base
 
-_BASE_ASYNC_APPLY_BREWZILLA_TARGET_IF_ALLOWED = _base.async_apply_brewzilla_target_if_allowed
+_BASE_ASYNC_APPLY_BREWZILLA_TARGET_IF_ALLOWED = None
 _INSTALLED = False
 
 STALE_MAINTAIN_HOLD_MARGIN_C = 1.0
@@ -115,6 +115,7 @@ async def _record_no_action(hass, snapshot: dict[str, Any], apply_result: str, *
 
 
 async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
+    assert _BASE_ASYNC_APPLY_BREWZILLA_TARGET_IF_ALLOWED is not None
     snapshot = _base.build_orchestration_snapshot(hass)
 
     if _runtime_paused(snapshot) and snapshot.get("ba_owned_control_active"):
@@ -177,8 +178,9 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
 
 
 def install_stale_safe_guard() -> None:
-    global _INSTALLED
+    global _BASE_ASYNC_APPLY_BREWZILLA_TARGET_IF_ALLOWED, _INSTALLED
     if _INSTALLED:
         return
+    _BASE_ASYNC_APPLY_BREWZILLA_TARGET_IF_ALLOWED = _base.async_apply_brewzilla_target_if_allowed
     _base.async_apply_brewzilla_target_if_allowed = async_apply_brewzilla_target_if_allowed
     _INSTALLED = True
