@@ -2,6 +2,11 @@ type: conditional
 conditions:
   - entity: switch.brewassistant_show_brewday
     state: "on"
+  - condition: or
+    conditions:
+      - condition: state
+        entity: sensor.brewzilla_connection
+        state: Connected
 card:
   type: vertical-stack
   cards:
