@@ -14,9 +14,15 @@ cards:
         - border-radius: 999px
         - padding: 8px 10px
         - background: |
-            [[[ return entity.state === 'on' ? 'rgba(255,193,7,.14)' : 'rgba(127,127,127,.07)'; ]]]
+            [[[
+              const on = states['switch.brewassistant_show_brewzilla_learning']?.state === 'on';
+              return on ? 'rgba(255,193,7,.14)' : 'rgba(127,127,127,.07)';
+            ]]]
         - border: |
-            [[[ return entity.state === 'on' ? '1px solid rgba(255,193,7,.30)' : '1px solid rgba(127,127,127,.15)'; ]]]
+            [[[
+              const on = states['switch.brewassistant_show_brewzilla_learning']?.state === 'on';
+              return on ? '1px solid rgba(255,193,7,.30)' : '1px solid rgba(127,127,127,.15)';
+            ]]]
       name:
         - font-size: 11px
         - font-weight: 950
@@ -37,9 +43,15 @@ cards:
         - border-radius: 999px
         - padding: 8px 10px
         - background: |
-            [[[ return entity.state === 'on' ? 'rgba(244,67,54,.14)' : 'rgba(127,127,127,.07)'; ]]]
+            [[[
+              const on = states['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+              return on ? 'rgba(244,67,54,.14)' : 'rgba(127,127,127,.07)';
+            ]]]
         - border: |
-            [[[ return entity.state === 'on' ? '1px solid rgba(244,67,54,.30)' : '1px solid rgba(127,127,127,.15)'; ]]]
+            [[[
+              const on = states['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+              return on ? '1px solid rgba(244,67,54,.30)' : '1px solid rgba(127,127,127,.15)';
+            ]]]
       name:
         - font-size: 11px
         - font-weight: 950

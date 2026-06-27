@@ -30,33 +30,32 @@ label: |
     const active = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'advice_local_profile_active') === true;
     const profile = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'advice_local_profile_heat_utilization');
     const reason = clean(st['sensor.brewassistant_brewzilla_learning_recommendation_reason']?.state) || clean(st['sensor.brewassistant_brewzilla_heat_strategy_reason']?.state) || 'No active recommendation.';
+    const attention = rec === 'pending' || suppressed || risk === 'high' || risk === 'active_overshoot' || confidence === 'unknown' || context === 'unknown' || active;
     return `
       <div style="line-height:1.25;min-width:0;">
-        <div style="font-size:12px;font-weight:850;opacity:.66;">visas automatiskt vid advice/risk · switch kan tvinga fram</div>
-        <div style="margin-top:7px;font-size:21px;font-weight:950;text-align:center;">${rec === 'pending' ? 'Rekommendation väntar' : suppressed ? 'Profil suppressad' : active ? 'Profil aktiv' : 'Advice monitor'}</div>
-        <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">context ${context} · confidence ${confidence} · risk ${risk}<br>profile ${profile ?? '—'}% · manual ${manual ? 'on' : 'off'}</div>
-        <div style="margin-top:10px;border-radius:14px;padding:8px 9px;background:rgba(255,193,7,.10);border:1px solid rgba(255,193,7,.22);font-size:11.5px;font-weight:800;opacity:.78;white-space:normal;">${String(reason).slice(0, 150)}</div>
+        <div style="font-size:12px;font-weight:850;opacity:.66;">${attention ? 'aktiv advice / diagnostik' : 'inga aktiva advice-varningar'} · switch ${manual ? 'on' : 'off'}</div>
+        <div style="margin-top:7px;font-size:21px;font-weight:950;text-align:center;">${rec === 'pending' ? 'Rekommendation väntar' : suppressed ? 'Profil suppressad' : active ? 'Profil aktiv' : 'Advice OK'}</div>
+        <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">context ${context} · confidence ${confidence} · risk ${risk}<br>profile ${profile ?? '—'}%</div>
+        <div style="margin-top:10px;border-radius:14px;padding:8px 9px;background:${attention ? 'rgba(255,193,7,.10)' : 'rgba(76,175,80,.08)'};border:1px solid ${attention ? 'rgba(255,193,7,.22)' : 'rgba(76,175,80,.18)'};font-size:11.5px;font-weight:800;opacity:.78;white-space:normal;">${String(reason).slice(0, 150)}</div>
       </div>`;
   ]]]
 styles:
   card:
-    - display: |
+    - border-radius: 22px
+    - padding: 14px
+    - background: |
         [[[
           const st = states;
-          const manual = st['switch.brewassistant_show_brewzilla_learning']?.state === 'on';
           const rec = String(st['sensor.brewassistant_brewzilla_learning_recommendation_state']?.state ?? '').toLowerCase();
           const risk = String(st['sensor.brewassistant_brewzilla_overshoot_risk']?.state ?? '').toLowerCase();
           const confidence = String(st['sensor.brewassistant_brewzilla_learning_confidence']?.state ?? '').toLowerCase();
           const context = String(st['select.brewassistant_brewzilla_learning_context']?.state ?? '').toLowerCase();
           const suppressed = st['sensor.brewassistant_brewzilla_orchestration_mode']?.attributes?.advice_local_profile_suppressed === true;
           const active = st['sensor.brewassistant_brewzilla_orchestration_mode']?.attributes?.advice_local_profile_active === true;
-          const show = manual || rec === 'pending' || suppressed || risk === 'high' || risk === 'active_overshoot' || confidence === 'unknown' || context === 'unknown' || active;
-          return show ? 'block' : 'none';
+          const attention = rec === 'pending' || suppressed || risk === 'high' || risk === 'active_overshoot' || confidence === 'unknown' || context === 'unknown' || active;
+          return attention ? 'linear-gradient(135deg, rgba(255,193,7,.10), rgba(127,127,127,.035))' : 'linear-gradient(135deg, rgba(76,175,80,.08), rgba(127,127,127,.035))';
         ]]]
-    - border-radius: 22px
-    - padding: 14px
-    - background: linear-gradient(135deg, rgba(255,193,7,.10), rgba(127,127,127,.035))
-    - border: 1px solid rgba(255,193,7,.20)
+    - border: 1px solid rgba(127,127,127,.18)
     - box-shadow: 0 2px 10px rgba(0,0,0,.08)
   grid:
     - grid-template-areas: "\"i n\" \"i l\""
