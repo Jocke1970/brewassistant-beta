@@ -267,9 +267,9 @@ card:
           - margin-top: 4px
     - type: conditional
       conditions:
-        - condition: numeric_state
-          entity: sensor.brewzilla_power
-          above: 0
+        - condition: state
+          entity: sensor.brewzilla_connection
+          state: Connected
       card:
         type: horizontal-stack
         cards:
@@ -387,9 +387,9 @@ card:
                 - white-space: normal
     - type: conditional
       conditions:
-        - condition: numeric_state
-          entity: sensor.brewzilla_power
-          above: 0
+        - condition: state
+          entity: sensor.brewzilla_connection
+          state: Connected
       card:
         type: horizontal-stack
         cards:
@@ -576,8 +576,8 @@ card:
                   {% set step =
                   states('sensor.brewassistant_brewday_runtime_step') %}
 
-                  {% if runtime in ['idle', 'inactive', 'unknown', 'unavailable',
-                  'none', ''] %}
+                  {% if runtime in ['idle', 'inactive', 'unknown',
+                  'unavailable', 'none', ''] %}
                     BrewZilla temperatur
                   {% elif stage not in ['unknown', 'unavailable', 'none', ''] %}
                     {{ stage }}{% if step not in ['unknown', 'unavailable', 'none', ''] %} · {{ step }}{% endif %}
@@ -767,8 +767,8 @@ card:
                   {% set step =
                   states('sensor.brewassistant_brewday_runtime_step') %}
 
-                  {% if runtime in ['idle', 'inactive', 'unknown', 'unavailable',
-                  'none', ''] %}
+                  {% if runtime in ['idle', 'inactive', 'unknown',
+                  'unavailable', 'none', ''] %}
                     BrewZilla kok
                   {% else %}
                     Boil{% if step not in ['unknown', 'unavailable', 'none', ''] %} · {{ step }}{% endif %}
@@ -854,9 +854,9 @@ card:
               entity: number.brewzilla_target_temperature
     - type: conditional
       conditions:
-        - condition: numeric_state
-          entity: sensor.brewzilla_power
-          above: 0
+        - condition: state
+          entity: sensor.brewzilla_connection
+          state: Connected
       card:
         type: custom:expander-card
         title-card:
