@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 
 from . import brewzilla_orchestration as base
 
-_BASE_BUILD = base.build_orchestration_snapshot
+_BASE_BUILD = None
 _INSTALLED = False
 STORE = "brewzilla_temp_filter"
 DROP_C = 4.0
@@ -117,12 +117,14 @@ def apply_temperature_filter(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_orchestration_snapshot(hass):
+    assert _BASE_BUILD is not None
     return apply_temperature_filter(hass, _BASE_BUILD(hass))
 
 
 def install_temp_filter() -> None:
-    global _INSTALLED
+    global _BASE_BUILD, _INSTALLED
     if _INSTALLED:
         return
+    _BASE_BUILD = base.build_orchestration_snapshot
     base.build_orchestration_snapshot = build_orchestration_snapshot
     _INSTALLED = True
