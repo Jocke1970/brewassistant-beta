@@ -8,6 +8,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfTemperature
 
 from . import brewzilla_orchestration
+from .brewzilla_temp_filter import apply_temperature_filter
 from ..const import DOMAIN
 from ..control_policy import build_control_policy_snapshot
 from ..coordinator import BrewAssistantCoordinator
@@ -71,7 +72,13 @@ class BrewAssistantBrewZillaOrchestrationSensor(BrewAssistantEntity, SensorEntit
     def _snapshot(self) -> dict[str, Any]:
         if self._policy_sensor:
             return build_control_policy_snapshot(self.coordinator.hass)
-        return brewzilla_orchestration.build_orchestration_snapshot(self.coordinator.hass)
+        snapshot = brewzilla_orchestration.build_orchestration_snapshot(self.coordinator.hass)
+        if snapshot.get("temperature_filter_active") is not True:
+            snapshot = apply_temperature_filter(self.coordinator.hass, snapshot)
+            snapshot["temperature_filter_sensor_fallback_active"] = True
+        else:
+            snapshot["temperature_filter_sensor_fallback_active"] = False
+        return snapshot
 
     @property
     def native_value(self) -> Any:
