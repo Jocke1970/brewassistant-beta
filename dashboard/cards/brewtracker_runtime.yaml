@@ -1,0 +1,103 @@
+type: conditional
+conditions:
+  - entity: binary_sensor.brewassistant_runtime_brewfather_available
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_brewday_runtime_summary
+      name: BrewTracker Runtime
+      icon: mdi:timer-play-outline
+      show_state: false
+      show_label: true
+      tap_action:
+        action: more-info
+      hold_action:
+        action: call-service
+        service: brewassistant.force_brewfather_refresh
+      label: |
+        [[[ 
+          const clean = (v) => {
+            if (v === undefined || v === null) return null;
+            const s = String(v);
+            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+          };
+          const num = (id) => {
+            const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+            return Number.isFinite(n) ? n : null;
+          };
+          const fmt = (n, u = '', d = 1) => Number.isFinite(n) ? `${n.toFixed(d)}${u ? ' ' + u : ''}` : '—';
+          const short = (v, m = 56) => String(v ?? '—').length > m ? String(v ?? '—').slice(0, m - 1) + '…' : String(v ?? '—');
+          const runtime = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
+          const status = clean(states['sensor.brewassistant_brewday_runtime_status']?.state) || runtime;
+          const bfStatus = clean(states['sensor.brewfather_brew_tracker_status']?.state) || '—';
+          const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
+          const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
+          const next = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
+          const progress = num('sensor.brewassistant_brewday_live_progress');
+          const remaining = num('sensor.brewassistant_brewday_live_time_remaining_minutes');
+          const age = num('sensor.brewassistant_brewday_snapshot_age_minutes');
+          const target = num('sensor.brewassistant_brewday_target_temperature');
+          return `
+            <div style="line-height:1.25;min-width:0;">
+              <div style="font-size:12px;font-weight:850;opacity:.66;">BrewTracker · aktivt steg · nästa steg</div>
+              <div style="margin-top:7px;font-size:22px;font-weight:950;letter-spacing:-.035em;text-align:center;">${short(step, 62)}</div>
+              <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">
+                ${runtime} / ${status} · BF ${bfStatus} · ${stage}<br>next ${short(next, 70)}
+              </div>
+              <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
+                <div style="border-radius:13px;padding:7px;background:rgba(33,150,243,.09);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmt(progress,'%',0)}</b><br><span style="font-size:10px;opacity:.65;">progress</span></div>
+                <div style="border-radius:13px;padding:7px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.22);text-align:center;"><b>${fmt(remaining,'min',0)}</b><br><span style="font-size:10px;opacity:.65;">remaining</span></div>
+                <div style="border-radius:13px;padding:7px;background:rgba(76,175,80,.10);border:1px solid rgba(76,175,80,.22);text-align:center;"><b>${fmt(target,'°C')}</b><br><span style="font-size:10px;opacity:.65;">target</span></div>
+                <div style="border-radius:13px;padding:7px;background:${Number.isFinite(age) && age > 2 ? 'rgba(255,193,7,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${fmt(age,'min')}</b><br><span style="font-size:10px;opacity:.65;">snapshot</span></div>
+              </div>
+            </div>`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 14px
+          - background: linear-gradient(135deg, rgba(33,150,243,.10), rgba(127,127,127,.035))
+          - border: 1px solid rgba(33,150,243,.20)
+          - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+        grid:
+          - grid-template-areas: "\"i n\" \"i l\""
+          - grid-template-columns: 42px minmax(0,1fr)
+          - column-gap: 12px
+        label:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
+    - type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          name: BF refresh
+          icon: mdi:refresh
+          tap_action:
+            action: call-service
+            service: brewassistant.force_brewfather_refresh
+          styles:
+            card:
+              - border-radius: 15px
+              - padding: 9px
+              - background: rgba(33,150,243,.09)
+              - border: 1px solid rgba(33,150,243,.22)
+            name:
+              - font-size: 11px
+              - font-weight: 950
+        - type: custom:button-card
+          entity: sensor.brewfather_brew_tracker_status
+          name: BrewTracker status
+          icon: mdi:cloud-sync-outline
+          tap_action:
+            action: more-info
+          styles:
+            card:
+              - border-radius: 15px
+              - padding: 9px
+              - background: rgba(76,175,80,.09)
+              - border: 1px solid rgba(76,175,80,.22)
+            name:
+              - font-size: 11px
+              - font-weight: 950
