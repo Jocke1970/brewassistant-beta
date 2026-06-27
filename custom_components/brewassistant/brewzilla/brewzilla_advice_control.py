@@ -1,4 +1,10 @@
-"""Brewday Advice heat recommendation bridge for BrewZilla."""
+"""Brewday Advice heat recommendation bridge for BrewZilla.
+
+The goal is to restore Brewday Advice as the heat decision source while keeping
+Direct action conservative enough for small-volume BrewZilla tests. Orchestration
+still owns target sync and pump actions, but heat utilization and heater on/off
+come from Advice with an extra conservative cap.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +29,39 @@ def _num(value: Any) -> float | None:
 
 def _active(state: Any) -> bool:
     return base._runtime_active(str(state or "idle"))
+
+
+def _heat_cap(stage_kind: str, delta: float | None) -> float:
+    """Return conservative max heat for Advice-backed Direct action.
+
+    Brewday Advice may suggest relatively high values for generic ramping. In a
+    small water-only BrewZilla test with slow RCL feedback, Direct action needs a
+    lower cap so it brakes before the following hold is consumed/overshot.
+    """
+    if delta is None:
+        return 40.0
+    if delta <= 0.1:
+        return 0.0
+
+    if stage_kind == "mash_hold":
+        if delta > 2.0:
+            return 35.0
+        if delta > 0.7:
+            return 25.0
+        return 15.0
+
+    if stage_kind == "ramp":
+        if delta > 5.0:
+            return 75.0
+        if delta > 3.0:
+            return 55.0
+        if delta > 1.5:
+            return 35.0
+        if delta > 0.7:
+            return 20.0
+        return 10.0
+
+    return 40.0
 
 
 def _heater_desired(heat: float | None, delta: float | None) -> bool | None:
@@ -50,6 +89,11 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         and suggested_heat is not None
     )
 
+    cap = _heat_cap(stage_kind, delta)
+    capped_heat = None
+    if suggested_heat is not None:
+        capped_heat = max(0.0, min(float(suggested_heat), cap))
+
     out.update(
         {
             "advice_heat_available": suggested_heat is not None,
@@ -59,6 +103,8 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             "advice_confidence": advice.get("confidence"),
             "advice_overshoot_risk": advice.get("overshoot_risk"),
             "advice_suggested_heat_utilization": suggested_heat,
+            "advice_capped_heat_utilization": capped_heat,
+            "advice_heat_cap": cap,
             "advice_delta_to_target": delta,
             "advice_temp_rate_c_per_min": advice.get("temp_rate_c_per_min"),
             "advice_learning_temperature": advice.get("learning_temperature"),
@@ -67,10 +113,10 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         }
     )
 
-    if not active:
+    if not active or capped_heat is None:
         return out
 
-    desired_heat = max(0.0, min(100.0, float(suggested_heat)))
+    desired_heat = max(0.0, min(100.0, float(capped_heat)))
     desired_heater = _heater_desired(desired_heat, delta)
     heat_util = _num(out.get("heat_utilization"))
     heater_on = bool(out.get("heater_on"))
@@ -111,7 +157,10 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         out["can_apply_target"] = bool(can_act and action_needed)
 
     reason = advice.get("strategy_reason") or "Brewday Advice heat recommendation is active."
-    out["control_reason"] = f"Brewday Advice heat: {reason}"
+    out["control_reason"] = (
+        f"Brewday Advice heat: {reason} "
+        f"Suggested {suggested_heat}%, capped to {desired_heat}% for Direct action."
+    )
     return out
 
 
