@@ -8,45 +8,47 @@ card:
     - type: markdown
       title: Brewfather Recipe
       content: >
-        {% set stage = 'sensor.brewfather_brew_tracker_stage' %}
-        {% set raw = 'sensor.brewfather_brew_tracker_raw' %}
-        {% set recipe = state_attr(stage, 'brew_tracker_recipe_name') or state_attr(raw, 'recipe_name') or state_attr(raw, 'brew_tracker_recipe_name') or '—' %}
-        {% set batch = state_attr(stage, 'brew_tracker_batch_name') or state_attr(raw, 'batch_name') or state_attr(raw, 'brew_tracker_batch_name') or '—' %}
-        {% set batch_id = state_attr(stage, 'brew_tracker_batch_id') or state_attr(raw, 'batch_id') or '—' %}
-        {% set current = state_attr(stage, 'current_step') %}
-        {% set nxt = state_attr(stage, 'next_step') %}
-        **{{ recipe }}**  
-        Batch: **{{ batch }}**  
-        Batch ID: `{{ batch_id }}`
+        {% set stage = 'sensor.brewfather_brew_tracker_stage' %} {% set raw =
+        'sensor.brewfather_brew_tracker_raw' %} {% set recipe =
+        state_attr(stage, 'brew_tracker_recipe_name') or state_attr(raw,
+        'recipe_name') or state_attr(raw, 'brew_tracker_recipe_name') or '—' %}
+        {% set batch = state_attr(stage, 'brew_tracker_batch_name') or
+        state_attr(raw, 'batch_name') or state_attr(raw,
+        'brew_tracker_batch_name') or '—' %} {% set batch_id = state_attr(stage,
+        'brew_tracker_batch_id') or state_attr(raw, 'batch_id') or '—' %} {% set
+        current = state_attr(stage, 'current_step') %} {% set nxt =
+        state_attr(stage, 'next_step') %} **{{ recipe }}**   Batch: **{{ batch
+        }}**   Batch ID: `{{ batch_id }}`
 
-        {% if current is mapping %}
-        **Aktuell instruktion:** {{ current.get('description') or current.get('tooltip') or current.get('name') or '—' }}
-        {% endif %}
+        {% if current is mapping %} **Aktuell instruktion:** {{
+        current.get('description') or current.get('tooltip') or
+        current.get('name') or '—' }} {% endif %}
 
-        {% if nxt is mapping %}
-        **Nästa instruktion:** {{ nxt.get('description') or nxt.get('tooltip') or nxt.get('name') or '—' }}
-        {% endif %}
-    - type: entities
+        {% if nxt is mapping %} **Nästa instruktion:** {{ nxt.get('description')
+        or nxt.get('tooltip') or nxt.get('name') or '—' }} {% endif %}
+    - type: custom:expander-card
       title: Brewfather recipe/source
-      show_header_toggle: false
-      entities:
-        - entity: sensor.brewfather_brew_tracker_stage
-          name: Brew Tracker stage
-        - entity: sensor.brewfather_brew_tracker_status
-          name: Brew Tracker status
-        - type: attribute
-          entity: sensor.brewfather_brew_tracker_stage
-          attribute: brew_tracker_recipe_name
-          name: Recipe
-        - type: attribute
-          entity: sensor.brewfather_brew_tracker_stage
-          attribute: brew_tracker_batch_name
-          name: Batch
-        - type: attribute
-          entity: sensor.brewfather_brew_tracker_stage
-          attribute: current_step
-          name: Current step payload
-        - type: attribute
-          entity: sensor.brewfather_brew_tracker_stage
-          attribute: next_step
-          name: Next step payload
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewfather_brew_tracker_stage
+              name: Brew Tracker stage
+            - entity: sensor.brewfather_brew_tracker_status
+              name: Brew Tracker status
+            - type: attribute
+              entity: sensor.brewfather_brew_tracker_stage
+              attribute: brew_tracker_recipe_name
+              name: Recipe
+            - type: attribute
+              entity: sensor.brewfather_brew_tracker_stage
+              attribute: brew_tracker_batch_name
+              name: Batch
+            - type: attribute
+              entity: sensor.brewfather_brew_tracker_stage
+              attribute: current_step
+              name: Current step payload
+            - type: attribute
+              entity: sensor.brewfather_brew_tracker_stage
+              attribute: next_step
+              name: Next step payload
