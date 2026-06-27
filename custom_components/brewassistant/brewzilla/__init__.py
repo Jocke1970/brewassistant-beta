@@ -1,5 +1,12 @@
 """BrewAssistant BrewZilla package."""
 
+from typing import Any
+
+from homeassistant.core import State
+from homeassistant.util import dt as dt_util
+
+from . import brewzilla_orchestration as _orchestration
+from . import brewzilla_learning as _learning
 from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_freshness_guard as _freshness_guard
@@ -11,6 +18,17 @@ from . import brewzilla_local_control_lease_v2 as _local_control_lease
 from . import brewzilla_stale_heat_guard as _stale_heat_guard
 from . import brewzilla_no_positive_gate as _no_positive_gate
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
+
+
+def _fresh_entity_age_seconds(entity_state: State | None) -> int | None:
+    if entity_state is None:
+        return None
+    timestamp: Any = getattr(entity_state, "last_reported", None) or entity_state.last_updated
+    return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
+
+
+_orchestration._entity_age_seconds = _fresh_entity_age_seconds
+_learning._age_seconds = _fresh_entity_age_seconds
 
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
