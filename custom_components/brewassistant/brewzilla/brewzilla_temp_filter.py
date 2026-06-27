@@ -33,7 +33,11 @@ def _store(hass) -> dict[str, Any]:
 
 
 def _hot(s: dict[str, Any]) -> bool:
-    return bool(base._runtime_active(str(s.get("brewday_state") or "idle")) and not s.get("completed_runtime") and (s.get("heater_on") or s.get("desired_heater_on") or s.get("heating_needed")))
+    return bool(
+        base._runtime_active(str(s.get("brewday_state") or "idle"))
+        and not s.get("completed_runtime")
+        and (s.get("heater_on") or s.get("desired_heater_on") or s.get("heating_needed"))
+    )
 
 
 def _apply_hold_recalc(s: dict[str, Any], temp: float) -> None:
@@ -47,11 +51,21 @@ def _apply_hold_recalc(s: dict[str, Any], temp: float) -> None:
         s["desired_heater_on"] = False
         s["heater_action_needed"] = False
         s["heater_stop_needed"] = bool(s.get("heater_on"))
-        s["heat_utilization_action_needed"] = base._utilization_action_needed(_num(s.get("heat_utilization")), 0.0)
+        s["heat_utilization_action_needed"] = base._utilization_action_needed(
+            _num(s.get("heat_utilization")),
+            0.0,
+        )
 
 
-def build_orchestration_snapshot(hass):
-    snap = _BASE_BUILD(hass)
+def apply_temperature_filter(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Return snapshot with raw/trusted temperature diagnostics.
+
+    This helper is intentionally callable from sensors as a defensive fallback.
+    The normal path still installs this module as an orchestration wrapper, but
+    the sensor should never lose the truth-model attributes just because a
+    wrapper reference was captured too early in Home Assistant's import flow.
+    """
+    snap = dict(snapshot)
     st = _store(hass)
     now = dt_util.utcnow().isoformat()
     raw = _num(snap.get("current_temperature"))
@@ -60,6 +74,7 @@ def build_orchestration_snapshot(hass):
     filtered = False
     reason = None
     delta = None
+
     if raw is None:
         filtered = trusted is not None
         reason = "raw_missing" if filtered else None
@@ -74,13 +89,18 @@ def build_orchestration_snapshot(hass):
     else:
         trusted = raw
         st.update({"trusted": raw, "trusted_at": now})
+
     st.update({"last_raw": raw, "last_raw_at": now})
     if filtered and trusted is not None:
         snap["raw_current_temperature"] = raw
         snap["current_temperature"] = trusted
         _apply_hold_recalc(snap, trusted)
-        snap["control_reason"] = f"Temp sample filtered ({reason}); using trusted {trusted:.2f}°C. {snap.get('control_reason')}"
+        snap["control_reason"] = (
+            f"Temp sample filtered ({reason}); using trusted {trusted:.2f}°C. "
+            f"{snap.get('control_reason')}"
+        )
         snap["rapt_critical_refresh_recommended"] = True
+
     snap.update({
         "temperature_raw": raw,
         "temperature_trusted": trusted,
@@ -94,6 +114,10 @@ def build_orchestration_snapshot(hass):
         "temperature_filter_max_trusted_age_seconds": MAX_AGE_S,
     })
     return snap
+
+
+def build_orchestration_snapshot(hass):
+    return apply_temperature_filter(hass, _BASE_BUILD(hass))
 
 
 def install_temp_filter() -> None:
