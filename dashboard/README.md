@@ -11,13 +11,19 @@ dashboard/
   brewassistant_sanity.yaml
   cards/
     brewassistant_hub.yaml
+    brewassistant_visibility_badges.yaml
     brewassistant_brewday.yaml
     brewassistant_brewday_bf_reload.yaml
     brewassistant_brewday_event_log.yaml
     brewassistant_manual_brewday.yaml
     brewassistant_source_health.yaml
     brewfather_feed.yaml
+    brewfather_recipe.yaml
+    brewtracker_runtime.yaml
     brewzilla.yaml
+    brewzilla_local_control.yaml
+    brewzilla_advice_auto.yaml
+    brewzilla_safety_rcl.yaml
     brewzilla_learning.yaml
     carbonation.yaml
     counterflow_chiller.yaml
@@ -29,15 +35,21 @@ dashboard/
 
 `cards/brewassistant_hub.yaml` is the daily mission-control card and should replace the existing BrewAssistant Hub card in the Home Assistant dashboard.
 
-The Hub card exposes:
+The Hub card exposes the main daily module toggles. Advanced diagnostic toggles can also be placed as compact badges using `cards/brewassistant_visibility_badges.yaml`.
+
+Important visibility switches include:
 
 ```text
 switch.brewzilla
 switch.brewassistant_show_brewday
 switch.brewassistant_show_manual_brewday
 switch.brewassistant_show_brewfather_feed
+switch.brewassistant_show_brewtracker_runtime
+switch.brewassistant_show_brewfather_recipe
 switch.brewassistant_show_brewzilla
+switch.brewassistant_show_brewzilla_local_control
 switch.brewassistant_show_brewzilla_learning
+switch.brewassistant_show_brewzilla_safety_rcl
 switch.brewassistant_show_event_log
 switch.brewassistant_show_cfc
 switch.brewassistant_show_source_health
@@ -53,18 +65,48 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | File | Purpose |
 | --- | --- |
 | `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
+| `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Brewday Advice and Safety/RCL cards. |
 | `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
 | `brewassistant_brewday_bf_reload.yaml` | Compact Brewfather/BrewTracker reload button for placement on or near the Brewday Runtime card. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
 | `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
 | `brewassistant_source_health.yaml` | Source/feed health and integration status overview. |
-| `brewfather_feed.yaml` | Brewfather/BrewTracker feed card; intended to be hidden when no active feed data exists. |
+| `brewfather_feed.yaml` | Legacy combined Brewfather/BrewTracker feed card. |
+| `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
+| `brewtracker_runtime.yaml` | BrewTracker live runtime card with current step, next step, progress and refresh action. |
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
-| `brewzilla_learning.yaml` | BrewZilla learning/advisory card. |
+| `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
+| `brewzilla_advice_auto.yaml` | Brewday Advice conditional card; auto-shows on advice/risk/unknown context or by switch. |
+| `brewzilla_safety_rcl.yaml` | Safety/RCL conditional card; auto-shows on warning/guard/filter/abort or by switch. |
+| `brewzilla_learning.yaml` | Full BrewZilla learning/advisory card for deep manual review. |
 | `carbonation.yaml` | Carbonation runtime/status/control card. |
 | `counterflow_chiller.yaml` | Counter Flow Chiller sanitation/ready controls. |
 | `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
 | `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
+
+## Brewfather / BrewTracker split
+
+The intended split is:
+
+```text
+Brewfather Recipe = recipe, batch, current/next instructions
+BrewTracker Runtime = current live step, next step, target, remaining time, progress, refresh
+```
+
+`brewfather_feed.yaml` remains for compatibility while the split cards are tested.
+
+## BrewZilla local-control split
+
+The intended split is:
+
+```text
+BrewZilla = operator/hardware cockpit
+BrewZilla Local Control = what BA handed to BZ and whether lease is active
+Brewday Advice = why BA selected a profile; hidden by default unless meaningful
+Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
+```
+
+`brewzilla_advice_auto.yaml` and `brewzilla_safety_rcl.yaml` use card-level display rules: they stay hidden during normal operation, but appear when there is a recommendation, warning, missing context, guard activity, or when the matching switch is enabled.
 
 ## Brewfather reload placement
 
