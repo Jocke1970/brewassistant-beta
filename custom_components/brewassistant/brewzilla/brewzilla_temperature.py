@@ -140,7 +140,7 @@ def _candidate_reject_reason(candidate: dict[str, Any], *, selected: str, intern
     control_telemetry = _looks_like_control_telemetry(candidate)
     distinct = _distinct_from_internal(candidate, internal)
 
-    if source == "RAPT BLE Thermometer" and control_telemetry and not distinct:
+    if selected == "Auto" and source == "RAPT BLE Thermometer" and control_telemetry and not distinct:
         return "ble_aliasing_internal_temperature"
 
     if selected == "Auto" and source == "BrewZilla Control Device" and control_telemetry and not distinct:
@@ -234,6 +234,7 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             "min_external_internal_delta_c": MIN_EXTERNAL_INTERNAL_DELTA_C,
             "auto_accepts_control_telemetry_when_distinct_from_internal": True,
             "auto_rejects_external_aliasing_internal_temperature": True,
+            "explicit_source_selection_overrides_aliasing_guard": True,
         },
         "ordered_candidates": ordered_diagnostics,
         "candidates": {
