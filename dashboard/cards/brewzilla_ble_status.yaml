@@ -34,14 +34,14 @@ card:
       };
       const fmt = (v) => Number.isFinite(v) ? `${v.toFixed(1)} °C` : '—';
       const source = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source']?.state) || clean(st['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_source) || 'unknown';
-      const entity = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state) || clean(st['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_entity) || '—';
+      const sourceEntity = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state) || clean(st['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_entity) || '—';
       const mash = num('sensor.brewassistant_brewzilla_mash_temperature');
       const wort = num('sensor.brewassistant_brewzilla_wort_temperature');
       const delta = num('sensor.brewassistant_brewzilla_temperature_delta_mash_wort');
       const ble = num('sensor.brewzilla_ble_thermometer_temperature');
       const ctl = num('sensor.brewzilla_control_device_temperature');
       const internal = num('sensor.brewzilla_temperature');
-      const active = entity === 'sensor.brewzilla_ble_thermometer_temperature' || entity === 'sensor.brewzilla_control_device_temperature' || source.includes('RAPT BLE') || source.includes('Control Device');
+      const active = sourceEntity === 'sensor.brewzilla_ble_thermometer_temperature' || sourceEntity === 'sensor.brewzilla_control_device_temperature' || source.includes('RAPT BLE') || source.includes('Control Device');
       return `
         <div style="display:flex;align-items:center;gap:10px;min-width:0;">
           <div style="width:12px;height:12px;border-radius:50%;background:${active ? 'rgb(76,175,80)' : 'rgb(244,67,54)'};box-shadow:0 0 0 4px ${active ? 'rgba(76,175,80,.14)' : 'rgba(244,67,54,.12)'};"></div>
