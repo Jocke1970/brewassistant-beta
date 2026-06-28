@@ -1,0 +1,79 @@
+type: conditional
+conditions:
+  - condition: state
+    entity: sensor.brewzilla_connection
+    state: Connected
+card:
+  type: custom:button-card
+  entity: sensor.brewassistant_brewzilla_mash_temperature
+  name: BLE thermometer
+  icon: mdi:thermometer-bluetooth
+  show_state: false
+  show_label: true
+  triggers_update:
+    - sensor.brewassistant_brewzilla_mash_temperature
+    - sensor.brewassistant_brewzilla_mash_temperature_source
+    - sensor.brewassistant_brewzilla_mash_temperature_source_entity
+    - sensor.brewassistant_brewzilla_wort_temperature
+    - sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+    - sensor.brewassistant_brewzilla_learning_status
+    - sensor.brewzilla_ble_thermometer_temperature
+    - sensor.brewzilla_control_device_temperature
+    - sensor.brewzilla_temperature
+  label: |
+    [[[
+      const st = states;
+      const clean = (v) => {
+        if (v === undefined || v === null) return null;
+        const s = String(v);
+        return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+      };
+      const num = (id) => {
+        const n = Number(String(st[id]?.state ?? '').replace(',', '.'));
+        return Number.isFinite(n) ? n : null;
+      };
+      const fmt = (v) => Number.isFinite(v) ? `${v.toFixed(1)} °C` : '—';
+      const source = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source']?.state) || clean(st['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_source) || 'unknown';
+      const entity = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state) || clean(st['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_entity) || '—';
+      const mash = num('sensor.brewassistant_brewzilla_mash_temperature');
+      const wort = num('sensor.brewassistant_brewzilla_wort_temperature');
+      const delta = num('sensor.brewassistant_brewzilla_temperature_delta_mash_wort');
+      const ble = num('sensor.brewzilla_ble_thermometer_temperature');
+      const ctl = num('sensor.brewzilla_control_device_temperature');
+      const internal = num('sensor.brewzilla_temperature');
+      const active = entity === 'sensor.brewzilla_ble_thermometer_temperature' || entity === 'sensor.brewzilla_control_device_temperature' || source.includes('RAPT BLE') || source.includes('Control Device');
+      return `
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <div style="width:12px;height:12px;border-radius:50%;background:${active ? 'rgb(76,175,80)' : 'rgb(244,67,54)'};box-shadow:0 0 0 4px ${active ? 'rgba(76,175,80,.14)' : 'rgba(244,67,54,.12)'};"></div>
+          <div style="min-width:0;line-height:1.22;">
+            <div style="font-size:12px;font-weight:950;">${active ? 'BLE/external mash active' : 'Internal fallback active'}</div>
+            <div style="font-size:11px;font-weight:800;opacity:.70;white-space:normal;">MASH ${fmt(mash)} · WORT ${fmt(wort)} · Δ ${fmt(delta)}<br>source ${source} · BLE ${fmt(ble)} · control ${fmt(ctl)} · internal ${fmt(internal)}</div>
+          </div>
+        </div>`;
+    ]]]
+  styles:
+    card:
+      - border-radius: 16px
+      - padding: 10px 12px
+      - background: |
+          [[[
+            const src = String(states['sensor.brewassistant_brewzilla_mash_temperature_source']?.state ?? states['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_source ?? '').toLowerCase();
+            const ent = String(states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state ?? states['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_entity ?? '').toLowerCase();
+            const active = ent.includes('ble') || ent.includes('control_device') || src.includes('ble') || src.includes('control device');
+            return active ? 'rgba(76,175,80,.09)' : 'rgba(244,67,54,.08)';
+          ]]]
+      - border: |
+          [[[
+            const src = String(states['sensor.brewassistant_brewzilla_mash_temperature_source']?.state ?? states['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_source ?? '').toLowerCase();
+            const ent = String(states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state ?? states['sensor.brewassistant_brewzilla_learning_status']?.attributes?.mash_temperature_entity ?? '').toLowerCase();
+            const active = ent.includes('ble') || ent.includes('control_device') || src.includes('ble') || src.includes('control device');
+            return active ? '1px solid rgba(76,175,80,.24)' : '1px solid rgba(244,67,54,.22)';
+          ]]]
+    grid:
+      - grid-template-areas: "\"i n\" \"i l\""
+      - grid-template-columns: 32px minmax(0,1fr)
+      - column-gap: 8px
+    label:
+      - justify-self: stretch
+      - text-align: left
+      - white-space: normal
