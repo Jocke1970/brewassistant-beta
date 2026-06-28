@@ -14,6 +14,10 @@ from .brewzilla.brewzilla_learning import (
     async_deny_brewzilla_learning_recommendation,
     build_brewzilla_learning_snapshot,
 )
+from .brewzilla.brewzilla_mash_in_gate import (
+    async_confirm_mash_in_complete,
+    build_mash_in_gate_snapshot,
+)
 from .brewzilla.brewzilla_owned_control import remember_owned_control_from_apply_result
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
@@ -38,6 +42,7 @@ async def async_setup_entry(
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
+            BrewAssistantBrewZillaMashInCompleteButton(coordinator),
             BrewAssistantBrewZillaLearningApplyButton(coordinator),
             BrewAssistantBrewZillaLearningDenyButton(coordinator),
         ]
@@ -117,6 +122,29 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEnti
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return CFC diagnostics."""
         return get_counterflow_chiller_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEntity):
+    """Confirm that manual mash-in is complete."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_mash_in_complete")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_complete"
+        self._attr_name = "BrewAssistant Mash-In Complete"
+        self._attr_icon = "mdi:barley"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_mash_in_complete"
+
+    async def async_press(self) -> None:
+        """Release the mash-in pump pause gate."""
+        await async_confirm_mash_in_complete(self.coordinator.hass)
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return mash-in gate diagnostics."""
+        return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantEntity, ButtonEntity):
