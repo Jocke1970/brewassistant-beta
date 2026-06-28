@@ -25,7 +25,7 @@ AUDIT_SENSORS: dict[str, dict[str, Any]] = {
 }
 
 
-HEAVY_ATTRIBUTE_KEYS = {"events"}
+HEAVY_ATTRIBUTE_KEYS = {"events", "recent_events"}
 
 
 def _display_name_from_key(key: str) -> str:
@@ -33,7 +33,7 @@ def _display_name_from_key(key: str) -> str:
 
 
 def _lightweight_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Return event-log diagnostics without repeating the full event list.
+    """Return event-log diagnostics without repeating event-list attributes.
 
     The summary sensor keeps the complete event list for dashboard/event-log UI.
     Secondary sensors expose the same counters/status diagnostics but omit heavy
