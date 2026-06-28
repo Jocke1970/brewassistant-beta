@@ -1,0 +1,244 @@
+type: conditional
+conditions:
+  - condition: state
+    entity: sensor.brewzilla_connection
+    state: Connected
+  - condition: state
+    entity: sensor.brewassistant_brewday_stage_group
+    state_not: boil
+  - condition: numeric_state
+    entity: sensor.brewzilla_power
+    above: 0
+card:
+  type: custom:gauge-card-pro
+  entity: sensor.brewassistant_brewzilla_mash_temperature
+  entity2: sensor.brewassistant_brewzilla_wort_temperature
+  min: 20
+  max: 80
+  needle: true
+  gradient: true
+  gradient_resolution: auto
+  round: full
+  animation_speed: normal
+  entity_id:
+    - sensor.brewassistant_brewzilla_mash_temperature
+    - sensor.brewassistant_brewzilla_mash_temperature_source
+    - sensor.brewassistant_brewzilla_mash_temperature_source_entity
+    - sensor.brewassistant_brewzilla_wort_temperature
+    - sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+    - sensor.brewassistant_brewzilla_runtime_target_temperature
+    - sensor.brewassistant_brewzilla_requested_target
+    - sensor.brewassistant_brewzilla_target_temperature
+    - sensor.brewassistant_brewzilla_device_target_temperature
+    - sensor.brewassistant_brewzilla_orchestration_mode
+    - sensor.brewassistant_brewzilla_safety_state
+    - sensor.brewassistant_brewday_runtime_state
+    - sensor.brewassistant_brewday_stage
+    - sensor.brewassistant_brewday_stage_group
+    - sensor.brewassistant_brewday_runtime_step
+    - number.brewzilla_target_temperature
+    - sensor.brewzilla_temperature
+    - sensor.brewzilla_ble_thermometer_temperature
+    - sensor.brewzilla_control_device_temperature
+  value: >
+    {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
+    {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
+    {% set internal = states('sensor.brewzilla_temperature') %}
+
+    {% if mash not in ['unknown', 'unavailable', 'none', ''] %}
+      {{ mash | float(0) }}
+    {% elif wort not in ['unknown', 'unavailable', 'none', ''] %}
+      {{ wort | float(0) }}
+    {% else %}
+      {{ internal | float(0) }}
+    {% endif %}
+  segments:
+    - from: 20
+      color: "#42a5f5"
+    - from: 35
+      color: "#26c6da"
+    - from: 50
+      color: "#66bb6a"
+    - from: 63
+      color: "#d4e157"
+    - from: 68
+      color: "#ffca28"
+    - from: 72
+      color: "#ff9800"
+    - from: 78
+      color: "#ef5350"
+  inner:
+    min: 20
+    max: 80
+    mode: needle
+    needle_color: rgba(0,188,212,.95)
+    segments:
+      - from: 20
+        color: rgba(66,165,245,.22)
+      - from: 35
+        color: rgba(38,198,218,.26)
+      - from: 50
+        color: rgba(102,187,106,.24)
+      - from: 63
+        color: rgba(212,225,87,.24)
+      - from: 68
+        color: rgba(255,202,40,.25)
+      - from: 72
+        color: rgba(255,152,0,.25)
+      - from: 78
+        color: rgba(239,83,80,.24)
+  setpoint:
+    type: template
+    value: >
+      {% set rt = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+      {% set req = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% set ba = states('sensor.brewassistant_brewzilla_target_temperature') %}
+      {% set dev = states('sensor.brewassistant_brewzilla_device_target_temperature') %}
+      {% set raw = states('number.brewzilla_target_temperature') %}
+
+      {% if rt not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ rt | float(0) }}
+      {% elif req not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ req | float(0) }}
+      {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ ba | float(0) }}
+      {% elif dev not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ dev | float(0) }}
+      {% elif raw not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ raw | float(0) }}
+      {% else %}
+        0
+      {% endif %}
+    color: "#ff1744"
+    label: true
+    precision: 1
+  min_indicator:
+    type: template
+    value: >
+      {% set target = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% endif %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+      {% endif %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('number.brewzilla_target_temperature') %}
+      {% endif %}
+
+      {{ (target | float(0)) - 0.5 }}
+    color: rgba(255,255,255,.45)
+    label: false
+    precision: 1
+  max_indicator:
+    type: template
+    value: >
+      {% set target = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% endif %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
+      {% endif %}
+
+      {% if target in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = states('number.brewzilla_target_temperature') %}
+      {% endif %}
+
+      {{ (target | float(0)) + 0.5 }}
+    color: rgba(255,255,255,.45)
+    label: false
+    precision: 1
+  titles:
+    primary:
+      value: >
+        {% set source = states('sensor.brewassistant_brewzilla_mash_temperature_source') %}
+        {% set runtime = states('sensor.brewassistant_brewday_runtime_state') %}
+        {% set stage = states('sensor.brewassistant_brewday_stage') %}
+        {% set step = states('sensor.brewassistant_brewday_runtime_step') %}
+
+        {% if source == 'RAPT BLE Thermometer' %}
+          Mash/BLE · RAPT BLE
+        {% elif source not in ['unknown', 'unavailable', 'none', ''] %}
+          Mash · {{ source }}
+        {% elif runtime in ['idle', 'inactive', 'unknown', 'unavailable', 'none', ''] %}
+          BrewZilla mash/wort
+        {% elif stage not in ['unknown', 'unavailable', 'none', ''] %}
+          {{ stage }}{% if step not in ['unknown', 'unavailable', 'none', ''] %} · {{ step }}{% endif %}
+        {% else %}
+          BrewZilla mash/wort
+        {% endif %}
+      font_size: 14px
+  value_texts:
+    primary:
+      value: >
+        {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
+
+        {% if mash not in ['unknown', 'unavailable', 'none', ''] %}
+          Mash {{ mash | float(0) | round(1) }}
+        {% else %}
+          Mash —
+        {% endif %}
+      unit_of_measurement: °C
+    secondary:
+      value: >
+        {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
+        {% set delta = states('sensor.brewassistant_brewzilla_temperature_delta_mash_wort') %}
+
+        {% if wort not in ['unknown', 'unavailable', 'none', ''] and delta not in ['unknown', 'unavailable', 'none', ''] %}
+          Internal/Wort {{ wort | float(0) | round(1) }} · Δ {{ delta | float(0) | round(1) }}
+        {% elif wort not in ['unknown', 'unavailable', 'none', ''] %}
+          Internal/Wort {{ wort | float(0) | round(1) }} · Δ —
+        {% else %}
+          Internal/Wort — · Δ —
+        {% endif %}
+      unit_of_measurement: °C
+  icons:
+    right:
+      type: template
+      value: >
+        {% set source = states('sensor.brewassistant_brewzilla_mash_temperature_source') %}
+        {% set delta_raw = states('sensor.brewassistant_brewzilla_temperature_delta_mash_wort') %}
+        {% set delta = delta_raw | float(0) %}
+        {% set mode = states('sensor.brewassistant_brewzilla_orchestration_mode') %}
+
+        {% if source == 'RAPT BLE Thermometer' %}
+          {% set icon = 'mdi:thermometer-bluetooth' %}
+          {% set color = 'rgb(76,175,80)' %}
+          {% set label = 'BLE mash' %}
+        {% elif source == 'BrewZilla Control Device' %}
+          {% set icon = 'mdi:thermometer-probe' %}
+          {% set color = 'rgb(33,150,243)' %}
+          {% set label = 'control' %}
+        {% elif delta_raw not in ['unknown', 'unavailable', 'none', ''] and delta | abs > 1.5 %}
+          {% set icon = 'mdi:thermometer-alert' %}
+          {% set color = 'rgb(255,193,7)' %}
+          {% set label = 'Δ high' %}
+        {% elif mode == 'blocked' %}
+          {% set icon = 'mdi:lock-outline' %}
+          {% set color = 'rgba(127,127,127,.85)' %}
+          {% set label = 'blocked' %}
+        {% else %}
+          {% set icon = 'mdi:kettle-steam-outline' %}
+          {% set color = 'rgb(33,150,243)' %}
+          {% set label = 'wort' %}
+        {% endif %}
+
+        {{
+          {
+            "icon": icon,
+            "color": color,
+            "label": label
+          }
+        }}
+  tap_action:
+    action: more-info
+    entity: sensor.brewassistant_brewzilla_mash_temperature
+  hold_action:
+    action: more-info
+    entity: sensor.brewassistant_brewzilla_wort_temperature
