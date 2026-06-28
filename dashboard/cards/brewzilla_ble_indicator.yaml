@@ -24,12 +24,12 @@ label: |
       return Number.isFinite(n) ? n : null;
     };
     const source = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source']?.state) || '—';
-    const entity = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state) || '—';
+    const sourceEntity = clean(st['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state) || '—';
     const mash = num('sensor.brewassistant_brewzilla_mash_temperature');
     const wort = num('sensor.brewassistant_brewzilla_wort_temperature');
     const delta = num('sensor.brewassistant_brewzilla_temperature_delta_mash_wort');
-    const active = source === 'RAPT BLE Thermometer' || entity === 'sensor.brewzilla_ble_thermometer_temperature';
-    const external = active || source === 'BrewZilla Control Device' || entity === 'sensor.brewzilla_control_device_temperature';
+    const active = source === 'RAPT BLE Thermometer' || sourceEntity === 'sensor.brewzilla_ble_thermometer_temperature';
+    const external = active || source === 'BrewZilla Control Device' || sourceEntity === 'sensor.brewzilla_control_device_temperature';
     const status = active ? 'BLE aktiv' : external ? 'Extern aktiv' : 'BLE ej aktiv';
     return `${status} · mash ${mash?.toFixed(1) ?? '—'}°C · wort ${wort?.toFixed(1) ?? '—'}°C · Δ ${delta?.toFixed(1) ?? '—'}°C`;
   ]]]
@@ -41,17 +41,17 @@ styles:
     - background: |
         [[[
           const source = states['sensor.brewassistant_brewzilla_mash_temperature_source']?.state;
-          const entity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
-          const active = source === 'RAPT BLE Thermometer' || entity === 'sensor.brewzilla_ble_thermometer_temperature';
-          const external = active || source === 'BrewZilla Control Device' || entity === 'sensor.brewzilla_control_device_temperature';
+          const sourceEntity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
+          const active = source === 'RAPT BLE Thermometer' || sourceEntity === 'sensor.brewzilla_ble_thermometer_temperature';
+          const external = active || source === 'BrewZilla Control Device' || sourceEntity === 'sensor.brewzilla_control_device_temperature';
           return active ? 'rgba(76,175,80,.13)' : external ? 'rgba(33,150,243,.11)' : 'rgba(244,67,54,.10)';
         ]]]
     - border: |
         [[[
           const source = states['sensor.brewassistant_brewzilla_mash_temperature_source']?.state;
-          const entity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
-          const active = source === 'RAPT BLE Thermometer' || entity === 'sensor.brewzilla_ble_thermometer_temperature';
-          const external = active || source === 'BrewZilla Control Device' || entity === 'sensor.brewzilla_control_device_temperature';
+          const sourceEntity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
+          const active = source === 'RAPT BLE Thermometer' || sourceEntity === 'sensor.brewzilla_ble_thermometer_temperature';
+          const external = active || source === 'BrewZilla Control Device' || sourceEntity === 'sensor.brewzilla_control_device_temperature';
           return active ? '1px solid rgba(76,175,80,.32)' : external ? '1px solid rgba(33,150,243,.28)' : '1px solid rgba(244,67,54,.26)';
         ]]]
   icon:
@@ -60,9 +60,9 @@ styles:
     - color: |
         [[[
           const source = states['sensor.brewassistant_brewzilla_mash_temperature_source']?.state;
-          const entity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
-          const active = source === 'RAPT BLE Thermometer' || entity === 'sensor.brewzilla_ble_thermometer_temperature';
-          const external = active || source === 'BrewZilla Control Device' || entity === 'sensor.brewzilla_control_device_temperature';
+          const sourceEntity = states['sensor.brewassistant_brewzilla_mash_temperature_source_entity']?.state;
+          const active = source === 'RAPT BLE Thermometer' || sourceEntity === 'sensor.brewzilla_ble_thermometer_temperature';
+          const external = active || source === 'BrewZilla Control Device' || sourceEntity === 'sensor.brewzilla_control_device_temperature';
           return active ? 'rgb(76,175,80)' : external ? 'rgb(33,150,243)' : 'rgb(244,67,54)';
         ]]]
   name:
