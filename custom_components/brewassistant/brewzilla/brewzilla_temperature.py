@@ -21,6 +21,7 @@ BREWZILLA_BLE_TEMP_SENSOR = "sensor.brewzilla_ble_thermometer_temperature"
 BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR = "sensor.brewzilla_control_device_temperature"
 
 MAX_EXTERNAL_MASH_TEMPERATURE_AGE_SECONDS = 180
+MIN_EXTERNAL_INTERNAL_DELTA_C = 0.75
 
 _BAD = {None, "unknown", "unavailable", "none", ""}
 
@@ -50,9 +51,11 @@ def _float_state(hass: HomeAssistant, entity_id: str | None) -> float | None:
 
 def _state_age_seconds(hass: HomeAssistant, entity_id: str | None) -> int | None:
     state = _state_obj(hass, entity_id)
-    if state is None or state.last_updated is None:
+    if state is None:
         return None
-    updated = state.last_updated
+    updated = getattr(state, "last_reported", None) or state.last_updated
+    if updated is None:
+        return None
     if updated.tzinfo is None:
         updated = updated.replace(tzinfo=UTC)
     return max(0, int(round((datetime.now(UTC) - updated).total_seconds())))
@@ -76,6 +79,24 @@ def _looks_like_control_telemetry(candidate: dict[str, Any]) -> bool:
         candidate.get("source_payload_key") == "controlDeviceTemperature"
         or candidate.get("selected_control_device_temperature_source") == "telemetry"
     )
+
+
+def _internal_delta_c(candidate: dict[str, Any], internal: dict[str, Any] | None) -> float | None:
+    if internal is None:
+        return None
+    value = candidate.get("value")
+    internal_value = internal.get("value")
+    if value is None or internal_value is None:
+        return None
+    try:
+        return round(abs(float(value) - float(internal_value)), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _distinct_from_internal(candidate: dict[str, Any], internal: dict[str, Any] | None) -> bool:
+    delta = _internal_delta_c(candidate, internal)
+    return bool(delta is not None and delta >= MIN_EXTERNAL_INTERNAL_DELTA_C)
 
 
 def _candidate(hass: HomeAssistant, entity_id: str, label: str) -> dict[str, Any]:
@@ -107,7 +128,7 @@ def _candidate(hass: HomeAssistant, entity_id: str, label: str) -> dict[str, Any
     }
 
 
-def _candidate_reject_reason(candidate: dict[str, Any], *, selected: str) -> str | None:
+def _candidate_reject_reason(candidate: dict[str, Any], *, selected: str, internal: dict[str, Any] | None) -> str | None:
     if not candidate["available"]:
         return "unavailable"
     if candidate.get("ba_value_rejected"):
@@ -117,24 +138,27 @@ def _candidate_reject_reason(candidate: dict[str, Any], *, selected: str) -> str
 
     source = candidate.get("source")
     control_telemetry = _looks_like_control_telemetry(candidate)
+    distinct = _distinct_from_internal(candidate, internal)
 
-    if source == "RAPT BLE Thermometer" and control_telemetry:
-        return "not_active_ble_thermometer_control_telemetry"
+    if source == "RAPT BLE Thermometer" and control_telemetry and not distinct:
+        return "ble_aliasing_internal_temperature"
 
-    if selected == "Auto" and source == "BrewZilla Control Device" and control_telemetry:
-        return "auto_rejects_control_device_telemetry_without_external_mash_probe"
+    if selected == "Auto" and source == "BrewZilla Control Device" and control_telemetry and not distinct:
+        return "control_device_aliasing_internal_temperature"
 
     return None
 
 
-def _eligible(candidate: dict[str, Any], *, selected: str) -> bool:
-    return _candidate_reject_reason(candidate, selected=selected) is None
+def _eligible(candidate: dict[str, Any], *, selected: str, internal: dict[str, Any] | None) -> bool:
+    return _candidate_reject_reason(candidate, selected=selected, internal=internal) is None
 
 
-def _with_diagnostics(candidate: dict[str, Any], *, selected: str) -> dict[str, Any]:
-    reject_reason = _candidate_reject_reason(candidate, selected=selected)
+def _with_diagnostics(candidate: dict[str, Any], *, selected: str, internal: dict[str, Any] | None) -> dict[str, Any]:
+    reject_reason = _candidate_reject_reason(candidate, selected=selected, internal=internal)
     return {
         **{k: v for k, v in candidate.items() if k != "attrs"},
+        "internal_delta_c": _internal_delta_c(candidate, internal),
+        "distinct_external_temperature": _distinct_from_internal(candidate, internal),
         "eligible": reject_reason is None,
         "reject_reason": reject_reason,
     }
@@ -155,8 +179,8 @@ def _resolve_mash_candidate(
     else:
         ordered = [ble, control, internal]
 
-    diagnostics = [_with_diagnostics(candidate, selected=selected) for candidate in ordered]
-    mash = next((candidate for candidate in ordered if _eligible(candidate, selected=selected)), None)
+    diagnostics = [_with_diagnostics(candidate, selected=selected, internal=internal) for candidate in ordered]
+    mash = next((candidate for candidate in ordered if _eligible(candidate, selected=selected, internal=internal)), None)
     return mash, diagnostics
 
 
@@ -165,8 +189,8 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     Wort/kettle temperature is always the BrewZilla internal thermometer.
     Mash temperature is operator-selectable. Auto prefers a valid, fresh external
-    mash probe, but falls back to BrewZilla internal when BLE/control telemetry is
-    stale or not a real external mash-temperature source.
+    mash temperature, but falls back to BrewZilla internal when the external
+    reading is stale, unavailable, or only aliases the internal value.
     """
     selected = selected_mash_source(hass)
 
@@ -204,16 +228,17 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "wort_temperature_source": "BrewZilla Internal",
         "wort_temperature_age_seconds": internal.get("age_seconds"),
         "temperature_delta_mash_wort": delta,
-        "auto_priority": "fresh external mash probe > BrewZilla Internal",
+        "auto_priority": "fresh distinct external mash temperature > BrewZilla Internal",
         "candidate_policy": {
             "max_external_mash_temperature_age_seconds": MAX_EXTERNAL_MASH_TEMPERATURE_AGE_SECONDS,
-            "auto_rejects_control_device_telemetry_without_external_mash_probe": True,
-            "auto_rejects_ble_aliasing_control_device_temperature": True,
+            "min_external_internal_delta_c": MIN_EXTERNAL_INTERNAL_DELTA_C,
+            "auto_accepts_control_telemetry_when_distinct_from_internal": True,
+            "auto_rejects_external_aliasing_internal_temperature": True,
         },
         "ordered_candidates": ordered_diagnostics,
         "candidates": {
-            "ble": _with_diagnostics(ble, selected=selected),
-            "control_device": _with_diagnostics(control, selected=selected),
-            "internal": _with_diagnostics(internal, selected=selected),
+            "ble": _with_diagnostics(ble, selected=selected, internal=internal),
+            "control_device": _with_diagnostics(control, selected=selected, internal=internal),
+            "internal": _with_diagnostics(internal, selected=selected, internal=internal),
         },
     }
