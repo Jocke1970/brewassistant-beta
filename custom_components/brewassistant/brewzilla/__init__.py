@@ -7,6 +7,7 @@ from homeassistant.util import dt as dt_util
 
 from . import brewzilla_orchestration as _orchestration
 from . import brewzilla_learning as _learning
+from . import brewzilla_temperature_roles as _temp_roles
 from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_freshness_guard as _freshness_guard
@@ -29,7 +30,7 @@ def _fresh_entity_age_seconds(entity_state: State | None) -> int | None:
 
 _orchestration._entity_age_seconds = _fresh_entity_age_seconds
 _learning._age_seconds = _fresh_entity_age_seconds
-
+_temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 _advice_control.install_advice_control()
