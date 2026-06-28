@@ -1,1 +1,0 @@
-Place dashboard/cards/brewzilla_ble_indicator.yaml directly below dashboard/cards/brewzilla.yaml while testing. If it works well, fold it into the main BrewZilla card header later.
