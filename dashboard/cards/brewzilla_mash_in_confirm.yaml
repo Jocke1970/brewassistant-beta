@@ -1,0 +1,29 @@
+type: custom:button-card
+entity: button.brewassistant_brewzilla_mash_in_complete
+name: Mash-in klar
+icon: mdi:barley
+show_state: false
+tap_action:
+  action: perform-action
+  perform_action: button.press
+  target:
+    entity_id: button.brewassistant_brewzilla_mash_in_complete
+styles:
+  card:
+    - border-radius: 16px
+    - padding: 14px
+    - background: rgba(255, 193, 7, 0.18)
+    - border: 1px solid rgba(255, 193, 7, 0.75)
+  icon:
+    - color: rgb(255, 193, 7)
+  name:
+    - font-weight: 800
+    - font-size: 16px
+    - color: var(--primary-text-color)
+  custom_fields:
+    hint:
+      - font-size: 12px
+      - opacity: 0.85
+      - padding-top: 4px
+custom_fields:
+  hint: Tryck när du är klar med mash-in. Pump-gaten släpps och notisen stängs.
