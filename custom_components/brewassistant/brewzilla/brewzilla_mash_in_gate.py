@@ -14,7 +14,10 @@ DATA_KEY = "brewzilla_mash_in_gate"
 NOTIFICATION_ID = "brewassistant_brewzilla_mash_in_ready"
 PUMP_OFF_UTILIZATION = 0.0
 UTILIZATION_TOLERANCE = 0.1
+READY_TOLERANCE_C = 0.3
+AWAITING_STATE = "awaiting_mash_in_complete"
 _READY_PHASES = {"mash_in_ready", "overshoot"}
+_EARLY_MASH_MAX_INDEX = 3
 _ORIGINAL_BUILD: Callable[[HomeAssistant], dict[str, Any]] | None = None
 
 
@@ -30,29 +33,108 @@ def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
             "last_stage": None,
             "last_step": None,
             "last_phase": None,
+            "last_trigger": None,
         },
     )
+
+
+def _num(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _text(snapshot: dict[str, Any], *keys: str) -> str:
+    return " ".join(str(snapshot.get(key) or "") for key in keys).lower()
+
+
+def _runtime_active_enough(snapshot: dict[str, Any]) -> bool:
+    state = str(snapshot.get("brewday_state") or "idle").lower()
+    return state not in {"idle", "inactive", "completed", "complete", "done"} and not snapshot.get("completed_runtime")
+
+
+def _temperature_for_gate(snapshot: dict[str, Any]) -> float | None:
+    for key in (
+        "current_temperature",
+        "mash_temperature",
+        "advice_learning_temperature",
+        "brewzilla_current_temp",
+    ):
+        value = _num(snapshot.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _target_for_gate(snapshot: dict[str, Any]) -> float | None:
+    for key in ("requested_target", "target_temperature", "tracker_target"):
+        value = _num(snapshot.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _early_mash_step(snapshot: dict[str, Any]) -> bool:
+    for key in ("runtime_raw_step_index", "raw_step_index", "runtime_resolved_step_index", "resolved_step_index"):
+        index = _num(snapshot.get(key))
+        if index is not None:
+            return index <= _EARLY_MASH_MAX_INDEX
+
+    text = _text(snapshot, "runtime_next_step", "next_step", "runtime_raw_step_name", "raw_step_name")
+    return any(word in text for word in ("mash-in", "mash in", "mäsk", "mäsktillsats"))
+
+
+def _legacy_strategy_ready(snapshot: dict[str, Any]) -> bool:
+    return bool(
+        snapshot.get("mash_in_confirmation_recommended")
+        and snapshot.get("mash_in_heat_strategy_active")
+        and snapshot.get("mash_in_heat_strategy_phase") in _READY_PHASES
+        and _target_for_gate(snapshot) is not None
+    )
+
+
+def _brewfather_advice_ready(snapshot: dict[str, Any]) -> bool:
+    if not _runtime_active_enough(snapshot):
+        return False
+
+    stage_text = _text(snapshot, "runtime_stage", "stage")
+    step_text = _text(snapshot, "runtime_step", "step", "runtime_raw_step_name", "raw_step_name")
+    if "mash" not in stage_text and "mäsk" not in stage_text:
+        return False
+    if not any(word in step_text for word in ("ramp", "hold", "mash", "mäsk")):
+        return False
+    if not _early_mash_step(snapshot):
+        return False
+
+    target = _target_for_gate(snapshot)
+    temperature = _temperature_for_gate(snapshot)
+    if target is None or temperature is None:
+        return False
+    return temperature >= target - READY_TOLERANCE_C
+
+
+def _ready_for_mash_in(snapshot: dict[str, Any]) -> bool:
+    return _legacy_strategy_ready(snapshot) or _brewfather_advice_ready(snapshot)
+
+
+def _trigger_phase(snapshot: dict[str, Any]) -> str:
+    if _legacy_strategy_ready(snapshot):
+        return str(snapshot.get("mash_in_heat_strategy_phase") or "legacy_mash_in_ready")
+    return "brewfather_advice_target_ready"
 
 
 def _gate_key(snapshot: dict[str, Any]) -> str:
     return "|".join(
         str(part or "")
         for part in (
-            snapshot.get("runtime_source"),
-            snapshot.get("runtime_raw_step_index"),
-            snapshot.get("runtime_stage"),
-            snapshot.get("runtime_step"),
-            snapshot.get("requested_target"),
+            snapshot.get("runtime_source") or snapshot.get("source"),
+            snapshot.get("runtime_stage") or snapshot.get("stage"),
+            _target_for_gate(snapshot),
+            "mash_in",
         )
-    )
-
-
-def _ready_for_mash_in(snapshot: dict[str, Any]) -> bool:
-    return bool(
-        snapshot.get("mash_in_confirmation_recommended")
-        and snapshot.get("mash_in_heat_strategy_active")
-        and snapshot.get("mash_in_heat_strategy_phase") in _READY_PHASES
-        and snapshot.get("requested_target") is not None
     )
 
 
@@ -63,7 +145,7 @@ def _ensure_gate_for_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> 
         store.update(
             {
                 "active_key": key,
-                "state": "awaiting_mash_in",
+                "state": AWAITING_STATE,
                 "notified_at": None,
                 "confirmed_at": None,
             }
@@ -71,10 +153,11 @@ def _ensure_gate_for_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> 
 
     store.update(
         {
-            "last_target": snapshot.get("requested_target"),
-            "last_stage": snapshot.get("runtime_stage"),
-            "last_step": snapshot.get("runtime_step"),
-            "last_phase": snapshot.get("mash_in_heat_strategy_phase"),
+            "last_target": _target_for_gate(snapshot),
+            "last_stage": snapshot.get("runtime_stage") or snapshot.get("stage"),
+            "last_step": snapshot.get("runtime_step") or snapshot.get("step"),
+            "last_phase": _trigger_phase(snapshot),
+            "last_trigger": _trigger_phase(snapshot),
         }
     )
     return store
@@ -89,6 +172,8 @@ def _reset_if_out_of_scope(hass: HomeAssistant, snapshot: dict[str, Any]) -> Non
 
 
 async def _create_ready_notification(hass: HomeAssistant, snapshot: dict[str, Any]) -> None:
+    temperature = _temperature_for_gate(snapshot)
+    target = _target_for_gate(snapshot)
     await hass.services.async_call(
         "persistent_notification",
         "create",
@@ -96,9 +181,9 @@ async def _create_ready_notification(hass: HomeAssistant, snapshot: dict[str, An
             "notification_id": NOTIFICATION_ID,
             "title": "🍺 BrewAssistant: dags för mash-in",
             "message": (
-                "Mash-in target är nådd. Pumpen hålls pausad medan du mäska in.\n\n"
-                f"Mäsktemperatur: {snapshot.get('current_temperature')} °C  \n"
-                f"Target: {snapshot.get('requested_target')} °C  \n\n"
+                "Mash-in target är nådd. Pumpen hålls pausad medan du mäskar in.\n\n"
+                f"Mäsktemperatur: {temperature} °C  \n"
+                f"Target: {target} °C  \n\n"
                 "När mash-in är klar: tryck på **BrewAssistant Mash-In Complete**."
             ),
         },
@@ -126,10 +211,11 @@ def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
         "pump_action_needed": False,
         "pump_stop_needed": pump_on,
         "pump_utilization_action_needed": pump_utilization_action_needed,
-        "mash_in_gate_state": "awaiting_mash_in_complete",
+        "mash_in_gate_state": AWAITING_STATE,
         "mash_in_gate_pending": True,
+        "mash_in_gate_trigger": _trigger_phase(snapshot),
         "mash_in_gate_notification_id": NOTIFICATION_ID,
-        "control_reason": f"{reason}; mash-in confirmation gate active, pump OFF until operator confirms mash-in complete.",
+        "control_reason": f"{reason}; mash-in confirmation gate active, pump OFF until mash-in complete is confirmed.",
     }
 
 
@@ -141,6 +227,7 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
             **snapshot,
             "mash_in_gate_state": store.get("state"),
             "mash_in_gate_pending": False,
+            "mash_in_gate_trigger": store.get("last_trigger"),
             "mash_in_gate_notification_id": NOTIFICATION_ID,
         }
 
@@ -150,6 +237,7 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
             **snapshot,
             "mash_in_gate_state": "mash_in_complete",
             "mash_in_gate_pending": False,
+            "mash_in_gate_trigger": store.get("last_trigger"),
             "mash_in_gate_notification_id": NOTIFICATION_ID,
         }
 
@@ -176,7 +264,7 @@ def build_mash_in_gate_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "source": "brewzilla_mash_in_gate",
         "state": store.get("state"),
-        "pending": store.get("state") == "awaiting_mash_in",
+        "pending": store.get("state") == AWAITING_STATE,
         "active_key": store.get("active_key"),
         "notified_at": store.get("notified_at"),
         "confirmed_at": store.get("confirmed_at"),
@@ -184,6 +272,7 @@ def build_mash_in_gate_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_stage": store.get("last_stage"),
         "last_step": store.get("last_step"),
         "last_phase": store.get("last_phase"),
+        "last_trigger": store.get("last_trigger"),
         "notification_id": NOTIFICATION_ID,
     }
 
