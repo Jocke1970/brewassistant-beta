@@ -57,10 +57,17 @@ def _runtime_active_enough(snapshot: dict[str, Any]) -> bool:
 
 
 def _temperature_for_gate(snapshot: dict[str, Any]) -> float | None:
+    """Return the temperature that should decide mash-in readiness.
+
+    Mash-in is an operator action for the mash, so prefer the selected mash/BLE
+    temperature role when available. The generic/current BrewZilla temperature
+    is usually the internal/wort fallback and can lag the mash role in the UI.
+    """
     for key in (
-        "current_temperature",
         "mash_temperature",
+        "brewzilla_mash_temperature",
         "advice_learning_temperature",
+        "current_temperature",
         "brewzilla_current_temp",
     ):
         value = _num(snapshot.get(key))
