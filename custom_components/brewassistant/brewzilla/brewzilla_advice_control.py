@@ -58,6 +58,8 @@ def _pump_profile(stage_kind: str, delta: float | None) -> tuple[bool | None, fl
         return None, None, None
     if delta is not None and delta <= -0.3:
         return True, 50.0, "overshoot_mix"
+    if stage_kind == "ramp":
+        return True, 70.0, "ramp_mix"
     return True, 50.0, "mash_mix"
 
 
