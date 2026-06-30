@@ -45,6 +45,7 @@ def _higher_guard_active(snapshot: dict[str, Any]) -> bool:
         or snapshot.get("rcl_freshness_guard_blocking")
         or snapshot.get("execution_desync")
         or snapshot.get("execution_desync_active")
+        or snapshot.get("mash_in_gate_pending")
     )
 
 
