@@ -16,6 +16,7 @@ PUMP_OFF_UTILIZATION = 0.0
 UTILIZATION_TOLERANCE = 0.1
 READY_TOLERANCE_C = 0.3
 AWAITING_STATE = "awaiting_mash_in_complete"
+_COMPLETE_STATE = "mash_in_complete"
 _READY_PHASES = {"mash_in_ready", "overshoot"}
 _EARLY_MASH_MAX_INDEX = 3
 _ORIGINAL_BUILD: Callable[[HomeAssistant], dict[str, Any]] | None = None
@@ -29,6 +30,7 @@ def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
             "state": "idle",
             "notified_at": None,
             "confirmed_at": None,
+            "completed_once": False,
             "last_target": None,
             "last_stage": None,
             "last_step": None,
@@ -53,7 +55,11 @@ def _text(snapshot: dict[str, Any], *keys: str) -> str:
 
 def _runtime_active_enough(snapshot: dict[str, Any]) -> bool:
     state = str(snapshot.get("brewday_state") or "idle").lower()
-    return state not in {"idle", "inactive", "completed", "complete", "done"} and not snapshot.get("completed_runtime")
+    return bool(
+        state not in {"idle", "inactive", "completed", "complete", "done"}
+        and not snapshot.get("completed_runtime")
+        and not snapshot.get("abort_lockout_active")
+    )
 
 
 def _temperature_for_gate(snapshot: dict[str, Any]) -> float | None:
@@ -172,10 +178,10 @@ def _ensure_gate_for_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> 
 
 def _reset_if_out_of_scope(hass: HomeAssistant, snapshot: dict[str, Any]) -> None:
     store = _gate_store(hass)
-    if store.get("state") == "idle":
+    if store.get("state") == "idle" and not store.get("completed_once"):
         return
     if snapshot.get("brewday_state") in {"idle", "completed"} or snapshot.get("completed_runtime"):
-        store.update({"state": "idle", "active_key": None})
+        store.update({"state": "idle", "active_key": None, "completed_once": False})
 
 
 async def _create_ready_notification(hass: HomeAssistant, snapshot: dict[str, Any]) -> None:
@@ -205,10 +211,22 @@ def _schedule_notification_if_needed(hass: HomeAssistant, snapshot: dict[str, An
     hass.async_create_task(_create_ready_notification(hass, snapshot))
 
 
+def _can_apply_gate(snapshot: dict[str, Any], *, action_needed: bool) -> bool:
+    return bool(
+        action_needed
+        and snapshot.get("connected", True)
+        and not snapshot.get("abort_lockout_active")
+        and _runtime_active_enough(snapshot)
+        and _target_for_gate(snapshot) is not None
+    )
+
+
 def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
     current_pump_utilization = snapshot.get("pump_utilization")
     pump_utilization_action_needed = current_pump_utilization is None or abs(float(current_pump_utilization)) > UTILIZATION_TOLERANCE
     pump_on = bool(snapshot.get("pump_on"))
+    action_needed = bool(pump_on or pump_utilization_action_needed)
+    can_apply_gate = _can_apply_gate(snapshot, action_needed=action_needed)
     reason = str(snapshot.get("control_reason") or "Direct production flow active")
     return {
         **snapshot,
@@ -218,6 +236,8 @@ def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
         "pump_action_needed": False,
         "pump_stop_needed": pump_on,
         "pump_utilization_action_needed": pump_utilization_action_needed,
+        "can_apply_target": can_apply_gate,
+        "orchestration_mode": "direct-control" if can_apply_gate else snapshot.get("orchestration_mode"),
         "mash_in_gate_state": AWAITING_STATE,
         "mash_in_gate_pending": True,
         "mash_in_gate_trigger": _trigger_phase(snapshot),
@@ -226,10 +246,24 @@ def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _completed_snapshot(snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **snapshot,
+        "mash_in_gate_state": _COMPLETE_STATE,
+        "mash_in_gate_pending": False,
+        "mash_in_gate_trigger": store.get("last_trigger"),
+        "mash_in_gate_notification_id": NOTIFICATION_ID,
+    }
+
+
 def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str, Any]:
+    store = _gate_store(hass)
+    if store.get("completed_once"):
+        _reset_if_out_of_scope(hass, snapshot)
+        return _completed_snapshot(snapshot, store)
+
     if not _ready_for_mash_in(snapshot):
         _reset_if_out_of_scope(hass, snapshot)
-        store = _gate_store(hass)
         return {
             **snapshot,
             "mash_in_gate_state": store.get("state"),
@@ -239,14 +273,9 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
         }
 
     store = _ensure_gate_for_snapshot(hass, snapshot)
-    if store.get("state") == "mash_in_complete":
-        return {
-            **snapshot,
-            "mash_in_gate_state": "mash_in_complete",
-            "mash_in_gate_pending": False,
-            "mash_in_gate_trigger": store.get("last_trigger"),
-            "mash_in_gate_notification_id": NOTIFICATION_ID,
-        }
+    if store.get("state") == _COMPLETE_STATE:
+        store["completed_once"] = True
+        return _completed_snapshot(snapshot, store)
 
     _schedule_notification_if_needed(hass, snapshot, store)
     return _force_pump_pause(snapshot)
@@ -255,7 +284,8 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
 async def async_confirm_mash_in_complete(hass: HomeAssistant) -> dict[str, Any]:
     """Mark the current mash-in gate as complete and allow pump control again."""
     store = _gate_store(hass)
-    store["state"] = "mash_in_complete"
+    store["state"] = _COMPLETE_STATE
+    store["completed_once"] = True
     store["confirmed_at"] = dt_util.utcnow().isoformat()
     await hass.services.async_call(
         "persistent_notification",
@@ -272,6 +302,7 @@ def build_mash_in_gate_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "source": "brewzilla_mash_in_gate",
         "state": store.get("state"),
         "pending": store.get("state") == AWAITING_STATE,
+        "completed_once": bool(store.get("completed_once")),
         "active_key": store.get("active_key"),
         "notified_at": store.get("notified_at"),
         "confirmed_at": store.get("confirmed_at"),
