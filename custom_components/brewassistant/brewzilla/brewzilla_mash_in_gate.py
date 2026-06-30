@@ -205,10 +205,22 @@ def _schedule_notification_if_needed(hass: HomeAssistant, snapshot: dict[str, An
     hass.async_create_task(_create_ready_notification(hass, snapshot))
 
 
+def _can_apply_gate(snapshot: dict[str, Any], *, action_needed: bool) -> bool:
+    return bool(
+        action_needed
+        and snapshot.get("connected", True)
+        and not snapshot.get("abort_lockout_active")
+        and _runtime_active_enough(snapshot)
+        and _target_for_gate(snapshot) is not None
+    )
+
+
 def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
     current_pump_utilization = snapshot.get("pump_utilization")
     pump_utilization_action_needed = current_pump_utilization is None or abs(float(current_pump_utilization)) > UTILIZATION_TOLERANCE
     pump_on = bool(snapshot.get("pump_on"))
+    action_needed = bool(pump_on or pump_utilization_action_needed)
+    can_apply_gate = _can_apply_gate(snapshot, action_needed=action_needed)
     reason = str(snapshot.get("control_reason") or "Direct production flow active")
     return {
         **snapshot,
@@ -218,6 +230,8 @@ def _force_pump_pause(snapshot: dict[str, Any]) -> dict[str, Any]:
         "pump_action_needed": False,
         "pump_stop_needed": pump_on,
         "pump_utilization_action_needed": pump_utilization_action_needed,
+        "can_apply_target": can_apply_gate,
+        "orchestration_mode": "direct-control" if can_apply_gate else snapshot.get("orchestration_mode"),
         "mash_in_gate_state": AWAITING_STATE,
         "mash_in_gate_pending": True,
         "mash_in_gate_trigger": _trigger_phase(snapshot),
