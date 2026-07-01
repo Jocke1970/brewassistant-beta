@@ -1,9 +1,10 @@
 """Compatibility wrapper for Brewday Runtime normalization.
 
 The public functions in this module are imported by Brewday Runtime sensors.
-The actual Brewfather resolver lives in brewday_runtime_core.py. Manual Brewday
-can now be routed through its Python engine adapter without changing the sensor
-platform.
+The actual Brewfather resolver lives in brewday_runtime_core.py and is adjusted
+by brewday_ramp_target_gate.py so temperature ramps do not advance before target.
+Manual Brewday can be routed through its Python engine adapter without changing
+the sensor platform.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .brewday_runtime_core import build_core_snapshot, core_attrs, source
+from .brewday_ramp_target_gate import build_core_snapshot, core_attrs, source
 from .manual_brewday_adapter import build_manual_engine_snapshot
 from .manual_brewday_runtime import ManualRuntimeState
 from .manual_brewday_store import get_manual_brewday_session
