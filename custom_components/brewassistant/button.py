@@ -139,6 +139,7 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEnti
     async def async_press(self) -> None:
         """Release the mash-in pump pause gate."""
         await async_confirm_mash_in_complete(self.coordinator.hass)
+        await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     @property
