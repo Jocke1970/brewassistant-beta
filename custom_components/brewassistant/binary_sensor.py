@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .brewday.brewday_runtime import build_brewday_runtime_snapshot
+from .brewzilla.brewzilla_mash_in_gate import build_mash_in_gate_snapshot
 from .carbonation import build_carbonation_snapshot
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
@@ -200,6 +201,7 @@ async def async_setup_entry(
         + [BrewAssistantSourceBinarySensor(coordinator, key) for key in SOURCE_BINARY_KEYS]
         + [BrewAssistantCarbonationBinarySensor(coordinator, key) for key in CARBONATION_BINARY_SENSORS]
         + [BrewAssistantRuntimeAvailableBinarySensor(coordinator)]
+        + [BrewAssistantBrewZillaMashInGatePendingBinarySensor(coordinator)]
     )
 
 
@@ -288,7 +290,6 @@ class BrewAssistantCarbonationBinarySensor(BrewAssistantEntity, BinarySensorEnti
     _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
-        """Initialize the carbonation binary sensor."""
         super().__init__(coordinator, key)
         self._key = key
         self._snapshot_key = CARBONATION_BINARY_SENSORS[key]
@@ -345,3 +346,25 @@ class BrewAssistantRuntimeAvailableBinarySensor(BrewAssistantEntity, BinarySenso
             "paused_freeze": snapshot.get("paused_freeze"),
             "refresh_recommended": snapshot.get("refresh_recommended"),
         }
+
+
+class BrewAssistantBrewZillaMashInGatePendingBinarySensor(BrewAssistantEntity, BinarySensorEntity):
+    """Read-only mash-in confirmation pending sensor."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:barley"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_mash_in_gate_pending")
+        self._attr_name = "BrewAssistant BrewZilla Mash-In Gate Pending"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_mash_in_gate_pending"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether BA is waiting for mash-in confirmation."""
+        return bool(build_mash_in_gate_snapshot(self.coordinator.hass).get("pending"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return mash-in gate diagnostics."""
+        return build_mash_in_gate_snapshot(self.coordinator.hass)
