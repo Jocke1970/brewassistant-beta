@@ -16,6 +16,7 @@ from .brewzilla.brewzilla_learning import (
 )
 from .brewzilla.brewzilla_mash_in_gate import (
     async_confirm_mash_in_complete,
+    async_start_mash_circulation,
     build_mash_in_gate_snapshot,
 )
 from .brewzilla.brewzilla_owned_control import remember_owned_control_from_apply_result
@@ -43,6 +44,7 @@ async def async_setup_entry(
             BrewAssistantCancelSupervisedApplyButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
             BrewAssistantBrewZillaMashInCompleteButton(coordinator),
+            BrewAssistantBrewZillaStartMashCirculationButton(coordinator),
             BrewAssistantBrewZillaLearningApplyButton(coordinator),
             BrewAssistantBrewZillaLearningDenyButton(coordinator),
         ]
@@ -125,7 +127,7 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEnti
 
 
 class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEntity):
-    """Confirm that manual mash-in is complete."""
+    """Confirm that manual mash-in is complete and start mash circulation."""
 
     _attr_has_entity_name = False
 
@@ -137,7 +139,7 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEnti
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_mash_in_complete"
 
     async def async_press(self) -> None:
-        """Release the mash-in pump pause gate."""
+        """Release the mash-in pump pause gate and start circulation."""
         await async_confirm_mash_in_complete(self.coordinator.hass)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
@@ -145,6 +147,30 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEnti
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return mash-in gate diagnostics."""
+        return build_mash_in_gate_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantEntity, ButtonEntity):
+    """Explicitly start BrewZilla mash circulation."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_start_mash_circulation")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_start_mash_circulation"
+        self._attr_name = "BrewAssistant Start Mash Circulation"
+        self._attr_icon = "mdi:pump"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_start_mash_circulation"
+
+    async def async_press(self) -> None:
+        """Set pump utilization and turn the pump on."""
+        await async_start_mash_circulation(self.coordinator.hass)
+        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return mash-in gate/circulation diagnostics."""
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
