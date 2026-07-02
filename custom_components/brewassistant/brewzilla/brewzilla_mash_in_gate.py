@@ -292,68 +292,58 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
     return _force_pump_pause(snapshot)
 
 
-def _confirmation_resume_allowed(snapshot: dict[str, Any]) -> bool:
-    stage_text = _text(snapshot, "runtime_stage", "stage")
-    state = str(snapshot.get("brewday_state") or "idle").lower()
-    return bool(
-        snapshot.get("connected", True)
-        and not snapshot.get("abort_lockout_active")
-        and not snapshot.get("completed_runtime")
-        and state in {"live", "running", "paused", "awaiting_confirm"}
-        and ("mash" in stage_text or "mäsk" in stage_text)
-    )
+def _hard_action_block(snapshot: dict[str, Any]) -> str | None:
+    if snapshot.get("abort_lockout_active"):
+        return "abort_lockout_active"
+    if snapshot.get("completed_runtime"):
+        return "completed_runtime"
+    return None
 
 
-async def _resume_mash_pump_after_confirmation(
+async def _start_mash_circulation(
     hass: HomeAssistant,
     snapshot: dict[str, Any],
+    *,
+    action_name: str,
 ) -> dict[str, Any]:
-    """Start mash circulation after the operator confirms mash-in is complete.
-
-    This is an explicit operator action, so it is intentionally allowed even if
-    the Brewfather runtime was paused for the mash-in event. The normal paused
-    guard only allows safe-down actions and would otherwise keep the pump off
-    until a later tick happens in a fully live state.
-    """
-    actions = ["mash_in_complete"]
-    resume_allowed = _confirmation_resume_allowed(snapshot)
+    """Set mash pump utilization and start the pump as an explicit operator action."""
+    actions = [action_name]
+    blocked_reason = _hard_action_block(snapshot)
     pump_utilization_changed = False
     pump_started = False
+    pump_utilization_entity_present = hass.states.get(_orchestration.BREWZILLA_PUMP_UTILIZATION) is not None
+    pump_switch_entity_present = hass.states.get(_orchestration.BREWZILLA_PUMP_SWITCH) is not None
 
-    if resume_allowed:
-        current_pump_utilization = _num(snapshot.get("pump_utilization"))
-        if current_pump_utilization is None:
-            current = hass.states.get(_orchestration.BREWZILLA_PUMP_UTILIZATION)
-            current_pump_utilization = _num(current.state if current is not None else None)
-
-        if (
-            hass.states.get(_orchestration.BREWZILLA_PUMP_UTILIZATION) is not None
-            and (
-                current_pump_utilization is None
-                or abs(current_pump_utilization - MASH_IN_RESUME_PUMP_UTILIZATION) > UTILIZATION_TOLERANCE
-            )
-        ):
+    if blocked_reason is None:
+        if pump_utilization_entity_present:
             if await _orchestration._set_number(
                 hass,
                 _orchestration.BREWZILLA_PUMP_UTILIZATION,
                 MASH_IN_RESUME_PUMP_UTILIZATION,
             ):
                 pump_utilization_changed = True
-                actions.append(f"mash_in_resume_pump_utilization:{MASH_IN_RESUME_PUMP_UTILIZATION}")
+                actions.append(f"set_pump_utilization:{MASH_IN_RESUME_PUMP_UTILIZATION}")
+            else:
+                actions.append("set_pump_utilization_failed_or_unchanged")
+        else:
+            actions.append("pump_utilization_entity_missing")
 
-        if hass.states.get(_orchestration.BREWZILLA_PUMP_SWITCH) is not None and not _bool_state(
-            hass,
-            _orchestration.BREWZILLA_PUMP_SWITCH,
-        ):
-            await _orchestration._call_switch(hass, "on", _orchestration.BREWZILLA_PUMP_SWITCH)
-            pump_started = True
-            actions.append("mash_in_resume_pump_on")
+        if pump_switch_entity_present:
+            if not _bool_state(hass, _orchestration.BREWZILLA_PUMP_SWITCH):
+                await _orchestration._call_switch(hass, "on", _orchestration.BREWZILLA_PUMP_SWITCH)
+                pump_started = True
+                actions.append("pump_on")
+            else:
+                actions.append("pump_already_on")
+        else:
+            actions.append("pump_switch_entity_missing")
 
+    applied = bool(blocked_reason is None and (pump_utilization_entity_present or pump_switch_entity_present))
     result = {
         **snapshot,
         "source": "brewzilla_mash_in_gate",
-        "applied": bool(resume_allowed),
-        "apply_result": "mash_in_confirmed_resume_applied" if resume_allowed else "mash_in_confirmed_no_resume",
+        "applied": applied,
+        "apply_result": "mash_circulation_started" if applied else f"mash_circulation_blocked:{blocked_reason}",
         "actions": actions,
         "target_changed": False,
         "heater_started": False,
@@ -361,18 +351,18 @@ async def _resume_mash_pump_after_confirmation(
         "pump_utilization_changed": pump_utilization_changed,
         "mash_in_gate_state": _COMPLETE_STATE,
         "mash_in_gate_pending": False,
-        "mash_in_gate_confirmed": True,
-        "mash_in_gate_confirmed_at": dt_util.utcnow().isoformat(),
-        "mash_in_resume_allowed": resume_allowed,
-        "desired_pump_on": True if resume_allowed else None,
-        "desired_pump_utilization": MASH_IN_RESUME_PUMP_UTILIZATION if resume_allowed else None,
-        "pump_recommended": bool(resume_allowed),
+        "mash_in_gate_confirmed": action_name == "mash_in_complete",
+        "mash_in_gate_confirmed_at": dt_util.utcnow().isoformat() if action_name == "mash_in_complete" else snapshot.get("mash_in_gate_confirmed_at"),
+        "mash_in_resume_allowed": blocked_reason is None,
+        "desired_pump_on": True if blocked_reason is None else None,
+        "desired_pump_utilization": MASH_IN_RESUME_PUMP_UTILIZATION if blocked_reason is None else None,
+        "pump_recommended": bool(blocked_reason is None),
         "pump_action_needed": False,
         "pump_stop_needed": False,
         "control_reason": (
-            "Mash-in confirmed by operator; pump resumed at mash circulation profile."
-            if resume_allowed
-            else "Mash-in confirmed by operator; pump resume skipped because runtime/BrewZilla was not in a resumable mash state."
+            "Operator action: mash circulation requested; pump utilization set and pump start sent."
+            if blocked_reason is None
+            else f"Operator action blocked: {blocked_reason}."
         ),
         "executed_at": dt_util.utcnow().isoformat(),
     }
@@ -380,8 +370,21 @@ async def _resume_mash_pump_after_confirmation(
     return result
 
 
+async def async_start_mash_circulation(hass: HomeAssistant) -> dict[str, Any]:
+    """Explicitly start mash circulation: pump utilization 50%, pump ON."""
+    snapshot = _orchestration.build_orchestration_snapshot(hass)
+    result = await _start_mash_circulation(hass, snapshot, action_name="start_mash_circulation")
+    await async_record_brewday_audit_event(
+        hass,
+        "mash_circulation_started",
+        brewzilla_result=result,
+        always_record=True,
+    )
+    return result
+
+
 async def async_confirm_mash_in_complete(hass: HomeAssistant) -> dict[str, Any]:
-    """Mark the current mash-in gate as complete and allow pump control again."""
+    """Mark the current mash-in gate as complete and start mash circulation."""
     store = _gate_store(hass)
     store["state"] = _COMPLETE_STATE
     store["completed_once"] = True
@@ -395,7 +398,7 @@ async def async_confirm_mash_in_complete(hass: HomeAssistant) -> dict[str, Any]:
     )
 
     snapshot = _orchestration.build_orchestration_snapshot(hass)
-    resume_result = await _resume_mash_pump_after_confirmation(hass, snapshot)
+    resume_result = await _start_mash_circulation(hass, snapshot, action_name="mash_in_complete")
     store["last_resume_result"] = {
         "apply_result": resume_result.get("apply_result"),
         "actions": resume_result.get("actions"),
