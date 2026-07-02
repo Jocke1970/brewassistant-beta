@@ -8,11 +8,13 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..brewday.brewday_audit import async_record_brewday_audit_event
 from . import brewzilla_orchestration as _orchestration
 
 DATA_KEY = "brewzilla_mash_in_gate"
 NOTIFICATION_ID = "brewassistant_brewzilla_mash_in_ready"
 PUMP_OFF_UTILIZATION = 0.0
+MASH_IN_RESUME_PUMP_UTILIZATION = 50.0
 UTILIZATION_TOLERANCE = 0.1
 READY_TOLERANCE_C = 0.3
 AWAITING_STATE = "awaiting_mash_in_complete"
@@ -36,6 +38,7 @@ def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
             "last_step": None,
             "last_phase": None,
             "last_trigger": None,
+            "last_resume_result": None,
         },
     )
 
@@ -47,6 +50,11 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _bool_state(hass: HomeAssistant, entity_id: str) -> bool:
+    state = hass.states.get(entity_id)
+    return bool(state is not None and str(state.state).lower() in {"on", "true", "yes"})
 
 
 def _text(snapshot: dict[str, Any], *keys: str) -> str:
@@ -161,6 +169,7 @@ def _ensure_gate_for_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> 
                 "state": AWAITING_STATE,
                 "notified_at": None,
                 "confirmed_at": None,
+                "last_resume_result": None,
             }
         )
 
@@ -253,6 +262,8 @@ def _completed_snapshot(snapshot: dict[str, Any], store: dict[str, Any]) -> dict
         "mash_in_gate_pending": False,
         "mash_in_gate_trigger": store.get("last_trigger"),
         "mash_in_gate_notification_id": NOTIFICATION_ID,
+        "mash_in_gate_confirmed_at": store.get("confirmed_at"),
+        "mash_in_resume_result": store.get("last_resume_result"),
     }
 
 
@@ -281,17 +292,123 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
     return _force_pump_pause(snapshot)
 
 
+def _confirmation_resume_allowed(snapshot: dict[str, Any]) -> bool:
+    stage_text = _text(snapshot, "runtime_stage", "stage")
+    state = str(snapshot.get("brewday_state") or "idle").lower()
+    return bool(
+        snapshot.get("connected", True)
+        and not snapshot.get("abort_lockout_active")
+        and not snapshot.get("completed_runtime")
+        and state in {"live", "running", "paused", "awaiting_confirm"}
+        and ("mash" in stage_text or "mäsk" in stage_text)
+    )
+
+
+async def _resume_mash_pump_after_confirmation(
+    hass: HomeAssistant,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Start mash circulation after the operator confirms mash-in is complete.
+
+    This is an explicit operator action, so it is intentionally allowed even if
+    the Brewfather runtime was paused for the mash-in event. The normal paused
+    guard only allows safe-down actions and would otherwise keep the pump off
+    until a later tick happens in a fully live state.
+    """
+    actions = ["mash_in_complete"]
+    resume_allowed = _confirmation_resume_allowed(snapshot)
+    pump_utilization_changed = False
+    pump_started = False
+
+    if resume_allowed:
+        current_pump_utilization = _num(snapshot.get("pump_utilization"))
+        if current_pump_utilization is None:
+            current = hass.states.get(_orchestration.BREWZILLA_PUMP_UTILIZATION)
+            current_pump_utilization = _num(current.state if current is not None else None)
+
+        if (
+            hass.states.get(_orchestration.BREWZILLA_PUMP_UTILIZATION) is not None
+            and (
+                current_pump_utilization is None
+                or abs(current_pump_utilization - MASH_IN_RESUME_PUMP_UTILIZATION) > UTILIZATION_TOLERANCE
+            )
+        ):
+            if await _orchestration._set_number(
+                hass,
+                _orchestration.BREWZILLA_PUMP_UTILIZATION,
+                MASH_IN_RESUME_PUMP_UTILIZATION,
+            ):
+                pump_utilization_changed = True
+                actions.append(f"mash_in_resume_pump_utilization:{MASH_IN_RESUME_PUMP_UTILIZATION}")
+
+        if hass.states.get(_orchestration.BREWZILLA_PUMP_SWITCH) is not None and not _bool_state(
+            hass,
+            _orchestration.BREWZILLA_PUMP_SWITCH,
+        ):
+            await _orchestration._call_switch(hass, "on", _orchestration.BREWZILLA_PUMP_SWITCH)
+            pump_started = True
+            actions.append("mash_in_resume_pump_on")
+
+    result = {
+        **snapshot,
+        "source": "brewzilla_mash_in_gate",
+        "applied": bool(resume_allowed),
+        "apply_result": "mash_in_confirmed_resume_applied" if resume_allowed else "mash_in_confirmed_no_resume",
+        "actions": actions,
+        "target_changed": False,
+        "heater_started": False,
+        "pump_started": pump_started,
+        "pump_utilization_changed": pump_utilization_changed,
+        "mash_in_gate_state": _COMPLETE_STATE,
+        "mash_in_gate_pending": False,
+        "mash_in_gate_confirmed": True,
+        "mash_in_gate_confirmed_at": dt_util.utcnow().isoformat(),
+        "mash_in_resume_allowed": resume_allowed,
+        "desired_pump_on": True if resume_allowed else None,
+        "desired_pump_utilization": MASH_IN_RESUME_PUMP_UTILIZATION if resume_allowed else None,
+        "pump_recommended": bool(resume_allowed),
+        "pump_action_needed": False,
+        "pump_stop_needed": False,
+        "control_reason": (
+            "Mash-in confirmed by operator; pump resumed at mash circulation profile."
+            if resume_allowed
+            else "Mash-in confirmed by operator; pump resume skipped because runtime/BrewZilla was not in a resumable mash state."
+        ),
+        "executed_at": dt_util.utcnow().isoformat(),
+    }
+    hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+    return result
+
+
 async def async_confirm_mash_in_complete(hass: HomeAssistant) -> dict[str, Any]:
     """Mark the current mash-in gate as complete and allow pump control again."""
     store = _gate_store(hass)
     store["state"] = _COMPLETE_STATE
     store["completed_once"] = True
     store["confirmed_at"] = dt_util.utcnow().isoformat()
+
     await hass.services.async_call(
         "persistent_notification",
         "dismiss",
         {"notification_id": NOTIFICATION_ID},
         blocking=False,
+    )
+
+    snapshot = _orchestration.build_orchestration_snapshot(hass)
+    resume_result = await _resume_mash_pump_after_confirmation(hass, snapshot)
+    store["last_resume_result"] = {
+        "apply_result": resume_result.get("apply_result"),
+        "actions": resume_result.get("actions"),
+        "pump_started": resume_result.get("pump_started"),
+        "pump_utilization_changed": resume_result.get("pump_utilization_changed"),
+        "resume_allowed": resume_result.get("mash_in_resume_allowed"),
+        "executed_at": resume_result.get("executed_at"),
+    }
+    await async_record_brewday_audit_event(
+        hass,
+        "mash_in_confirmed",
+        brewzilla_result=resume_result,
+        always_record=True,
     )
     return build_mash_in_gate_snapshot(hass)
 
@@ -311,6 +428,7 @@ def build_mash_in_gate_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_step": store.get("last_step"),
         "last_phase": store.get("last_phase"),
         "last_trigger": store.get("last_trigger"),
+        "last_resume_result": store.get("last_resume_result"),
         "notification_id": NOTIFICATION_ID,
     }
 
