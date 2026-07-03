@@ -70,10 +70,24 @@ cards:
       [[[
         const pump = states['switch.brewzilla_pump']?.state ?? '—';
         const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
-        return `Pump ${pump} · utilization ${util} %<br>Sätter 50 % och slår på pumpen`;
+        return `Pump ${pump} · utilization ${util} %<br>Visas bara efter mash-in tills pumpen är igång`;
       ]]]
     styles:
       card:
+        - display: >
+            [[[
+              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+              const pending = gate?.state === 'on';
+              const gateState = gate?.attributes?.state || '';
+              const completed = gate?.attributes?.completed_once === true || gateState === 'mash_in_complete' || !!gate?.attributes?.confirmed_at;
+
+              const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
+              const utilRaw = states['number.brewzilla_pump_utilization']?.state;
+              const util = Number.parseFloat(utilRaw);
+              const circulationOn = pumpOn && !Number.isNaN(util) && util > 0;
+
+              return (!pending && completed && !circulationOn) ? 'block' : 'none';
+            ]]]
         - min-height: 72px
         - padding: 11px
         - border-radius: 16px
