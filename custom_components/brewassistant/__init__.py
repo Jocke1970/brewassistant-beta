@@ -23,7 +23,6 @@ from .brewday.brewday_audit import (
     async_stop_brewday_audit_log,
 )
 from .brewday.brewday_refresh import request_manual_brewfather_refresh
-from .brewzilla.brewzilla_mash_in_gate import async_confirm_mash_in_complete, async_start_mash_circulation
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
 from .carbonation_backend.carbonation_runtime import (
     async_load_carbonation_runtime,
@@ -43,8 +42,6 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
 SERVICE_APPLY_BREWZILLA_TARGET = "apply_brewzilla_target"
 SERVICE_ABORT_BREWZILLA = "abort_brewzilla"
-SERVICE_MASH_IN_COMPLETE = "mash_in_complete"
-SERVICE_START_MASH_CIRCULATION = "start_mash_circulation"
 SERVICE_BREWDAY_AUDIT_START = "brewday_audit_start"
 SERVICE_BREWDAY_AUDIT_STOP = "brewday_audit_stop"
 SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
@@ -254,16 +251,6 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_runtime_sensors()
         _LOGGER.warning("BrewZilla ABORT executed: %s", result.get("actions"))
 
-    async def _handle_mash_in_complete(call: ServiceCall) -> None:
-        result = await async_confirm_mash_in_complete(hass)
-        await _refresh_runtime_sensors()
-        _LOGGER.warning("BrewZilla mash-in complete action executed: %s", result.get("last_resume_result"))
-
-    async def _handle_start_mash_circulation(call: ServiceCall) -> None:
-        result = await async_start_mash_circulation(hass)
-        await _refresh_runtime_sensors()
-        _LOGGER.warning("BrewZilla start mash circulation action executed: %s", result.get("last_resume_result"))
-
     async def _handle_brewday_audit_start(call: ServiceCall) -> None:
         await async_start_brewday_audit_log(hass, note=str(call.data.get("note") or ""))
         await _refresh_runtime_sensors()
@@ -348,8 +335,6 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
-    hass.services.async_register(DOMAIN, SERVICE_MASH_IN_COMPLETE, _handle_mash_in_complete)
-    hass.services.async_register(DOMAIN, SERVICE_START_MASH_CIRCULATION, _handle_start_mash_circulation)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_START, _handle_brewday_audit_start)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_STOP, _handle_brewday_audit_stop)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_CLEAR, _handle_brewday_audit_clear)
