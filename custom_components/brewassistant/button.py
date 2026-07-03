@@ -51,10 +51,24 @@ async def async_setup_entry(
     )
 
 
-class BrewAssistantSupervisedApplyButton(BrewAssistantEntity, ButtonEntity):
-    """Base supervised apply button."""
+class BrewAssistantButtonEntity(BrewAssistantEntity, ButtonEntity):
+    """Base class for BrewAssistant operator action buttons."""
 
     _attr_has_entity_name = False
+
+    @property
+    def available(self) -> bool:
+        """Return true for explicit operator action buttons.
+
+        Buttons are commands, not telemetry. They must remain pressable even if
+        the coordinator has a stale or failed refresh, otherwise recovery actions
+        such as mash circulation cannot be used exactly when they are needed.
+        """
+        return True
+
+
+class BrewAssistantSupervisedApplyButton(BrewAssistantButtonEntity):
+    """Base supervised apply button."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str, name: str, icon: str) -> None:
         super().__init__(coordinator, key)
@@ -103,10 +117,8 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
         self.async_write_ha_state()
 
 
-class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEntity):
+class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
     """Mark the Counter Flow Chiller as connected and start hot-wort circulation."""
-
-    _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "counterflow_chiller_ready")
@@ -126,10 +138,8 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantEntity, ButtonEnti
         return get_counterflow_chiller_snapshot(self.coordinator.hass)
 
 
-class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEntity):
+class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
     """Confirm that manual mash-in is complete and start mash circulation."""
-
-    _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_mash_in_complete")
@@ -150,10 +160,8 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantEntity, ButtonEnti
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
-class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantEntity, ButtonEntity):
+class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity):
     """Explicitly start BrewZilla mash circulation."""
-
-    _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_start_mash_circulation")
@@ -174,10 +182,8 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantEntity, Butt
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
-class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantEntity, ButtonEntity):
+class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantButtonEntity):
     """Apply current BrewZilla Learning recommendation."""
-
-    _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_learning_apply")
@@ -198,10 +204,8 @@ class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantEntity, ButtonEntit
         return build_brewzilla_learning_snapshot(self.coordinator.hass)
 
 
-class BrewAssistantBrewZillaLearningDenyButton(BrewAssistantEntity, ButtonEntity):
+class BrewAssistantBrewZillaLearningDenyButton(BrewAssistantButtonEntity):
     """Deny current BrewZilla Learning recommendation."""
-
-    _attr_has_entity_name = False
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_learning_deny")
