@@ -69,7 +69,28 @@ BREWZILLA_RESULT_FIELDS = (
     "target_changed",
     "heater_started",
     "pump_started",
+    "pump_utilization_changed",
     "actions",
+    # Mash-in confirmation gate diagnostics.
+    "mash_in_gate_state",
+    "mash_in_gate_pending",
+    "mash_in_gate_latched",
+    "mash_in_gate_active_key",
+    "mash_in_gate_trigger",
+    "mash_in_gate_notification_id",
+    "mash_in_gate_notified_at",
+    "mash_in_gate_confirmed",
+    "mash_in_gate_confirmed_at",
+    "mash_in_gate_last_target",
+    "mash_in_gate_last_stage",
+    "mash_in_gate_last_step",
+    "mash_in_gate_current_target",
+    "mash_in_gate_current_temperature",
+    "mash_in_resume_allowed",
+    "mash_in_resume_result",
+    "desired_pump_on",
+    "desired_pump_utilization",
+    "pump_stop_needed",
     "rapt_brewzilla_poll_age_seconds",
     "rapt_brewzilla_poll_age_minutes",
     "rapt_brewzilla_newest_entity",
@@ -132,12 +153,20 @@ ALWAYS_RECORD_EVENT_TYPES = {
     "manual_brewfather_refresh",
     "brewzilla_action",
     "ba_owned_reassert",
+    "mash_in_confirmed",
+    "mash_circulation_started",
     "abort",
     "warning",
     "error",
 }
 
-ACTION_EVENT_TYPES = {"brewzilla_action", "ba_owned_reassert", "abort"}
+ACTION_EVENT_TYPES = {
+    "brewzilla_action",
+    "ba_owned_reassert",
+    "mash_in_confirmed",
+    "mash_circulation_started",
+    "abort",
+}
 
 
 @dataclass(slots=True)
@@ -247,7 +276,7 @@ async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
 async def async_save_brewday_audit_log(hass: HomeAssistant) -> None:
     """Persist the current audit log."""
 
-    await _store(hass).async_save(_to_store(get_brewday_audit_log(hass)))
+    await _store(hass,).async_save(_to_store(get_brewday_audit_log(hass)))
 
 
 def get_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
@@ -339,6 +368,10 @@ def _event_signature(event: dict[str, Any]) -> str:
         "control_reason": event.get("control_reason"),
         "target_sync_needed": event.get("target_sync_needed"),
         "actions": event.get("actions"),
+        "mash_in_gate_state": event.get("mash_in_gate_state"),
+        "mash_in_gate_pending": event.get("mash_in_gate_pending"),
+        "mash_in_gate_latched": event.get("mash_in_gate_latched"),
+        "mash_in_gate_active_key": event.get("mash_in_gate_active_key"),
         "ba_owned_reassert_heat_utilization": event.get("ba_owned_reassert_heat_utilization"),
         "ba_owned_reassert_pump_utilization": event.get("ba_owned_reassert_pump_utilization"),
         "warning": event.get("rapt_brewzilla_poll_warning") or event.get("rapt_critical_refresh_recommended"),
@@ -428,6 +461,11 @@ def _merge_repeated_event(existing: dict[str, Any], event: dict[str, Any]) -> No
         "power_w",
         "heater_state",
         "pump_state",
+        "mash_in_gate_state",
+        "mash_in_gate_pending",
+        "mash_in_gate_latched",
+        "mash_in_gate_current_target",
+        "mash_in_gate_current_temperature",
         "rapt_brewzilla_poll_age_seconds",
         "rapt_brewzilla_poll_age_minutes",
         "rapt_brewzilla_dynamic_age_seconds",
@@ -581,6 +619,11 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_apply_result": last_action.get("apply_result") if last_action else None,
         "last_control_reason": last_event.get("control_reason") if last_event else None,
         "last_paused_target_rewind_blocked": last_event.get("paused_target_rewind_blocked") if last_event else None,
+        "last_mash_in_gate_state": last_event.get("mash_in_gate_state") if last_event else None,
+        "last_mash_in_gate_pending": last_event.get("mash_in_gate_pending") if last_event else None,
+        "last_mash_in_gate_latched": last_event.get("mash_in_gate_latched") if last_event else None,
+        "last_mash_in_gate_active_key": last_event.get("mash_in_gate_active_key") if last_event else None,
+        "last_mash_in_gate_trigger": last_event.get("mash_in_gate_trigger") if last_event else None,
         "last_ba_owned_reassert_heat_utilization": (
             last_action.get("ba_owned_reassert_heat_utilization") if last_action else None
         ),
