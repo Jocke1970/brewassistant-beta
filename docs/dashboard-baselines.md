@@ -1,46 +1,53 @@
-# Dashboard Card Baselines
+# Dashboard baselines
 
-This document records the current BrewAssistant dashboard/UI baseline used during the beta Home Assistant workflow.
+This document summarizes the current BrewAssistant dashboard baseline.
 
-The dashboard should remain presentation-focused. Runtime decisions, normalization, orchestration and safety checks belong in the Python integration. Lovelace cards may display state and call explicit operator actions, but they should not hide business logic.
+Dashboard YAML is a presentation and operator-action layer. Runtime interpretation, calculations, safety guards, BrewZilla orchestration and session state belong in the Python custom integration.
 
-## Current directory layout
+---
+
+## Current baseline directories
 
 ```text
 dashboard/
   brewassistant_sanity.yaml
   cards/
-    brewassistant_hub.yaml
-    brewassistant_brewday.yaml
-    brewassistant_brewday_event_log.yaml
-    brewassistant_manual_brewday.yaml
-    brewassistant_source_health.yaml
-    brewfather_feed.yaml
-    brewzilla.yaml
-    brewzilla_learning.yaml
-    carbonation.yaml
-    fermentation.yaml
-    kegerator.yaml
 ```
 
-The old plural `dashboards/` directory was removed during the clean baseline cleanup. The current source of truth is singular `dashboard/`.
+`dashboard/brewassistant_sanity.yaml` is a compact post-update smoke-test dashboard.
 
-## Current baseline cards
+`dashboard/cards/` contains reusable card snippets for the daily dashboard.
+
+The old plural `dashboards/` directory is not the current source of truth. Use singular `dashboard/`.
+
+---
+
+## Current reusable cards
 
 ```text
-BrewAssistant Hub
-BrewAssistant Brewday Runtime
-Brewday Event Log
-Manual Brewday
-Source Health
-Brewfather Feed
-BrewZilla
-BrewZilla Learning
-Carbonation
-Fermentation
-Kegerator
-Sanity dashboard
+dashboard/cards/brewassistant_hub.yaml
+dashboard/cards/brewassistant_visibility_badges.yaml
+dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_bf_reload.yaml
+dashboard/cards/brewassistant_brewday_event_log.yaml
+dashboard/cards/brewassistant_manual_brewday.yaml
+dashboard/cards/brewassistant_source_health.yaml
+dashboard/cards/brewfather_feed.yaml
+dashboard/cards/brewfather_recipe.yaml
+dashboard/cards/brewtracker_runtime.yaml
+dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_mash_in_confirm.yaml
+dashboard/cards/brewzilla_local_control.yaml
+dashboard/cards/brewzilla_advice_auto.yaml
+dashboard/cards/brewzilla_safety_rcl.yaml
+dashboard/cards/brewzilla_learning.yaml
+dashboard/cards/counterflow_chiller.yaml
+dashboard/cards/carbonation.yaml
+dashboard/cards/fermentation.yaml
+dashboard/cards/kegerator.yaml
 ```
+
+---
 
 ## BrewAssistant Hub
 
@@ -57,6 +64,8 @@ Current policy:
 - Prioritize active cooling, active fermentation/cold-crash, active brewday and carbonation-ready states.
 ```
 
+---
+
 ## Brewday Runtime
 
 File: `dashboard/cards/brewassistant_brewday.yaml`
@@ -71,6 +80,24 @@ Current policy:
 - Keep direct hardware actions explicit and supervised.
 - Debug/source details belong in expanders or source health cards.
 ```
+
+---
+
+## BrewTracker Runtime
+
+File: `dashboard/cards/brewtracker_runtime.yaml`
+
+Purpose: show BrewTracker live state, current/next step, stage, progress, refresh and batch status.
+
+Current policy:
+
+```text
+- Include brew_tracker_batch_status when available.
+- Keep batch status visible separately from paused/running tracker state.
+- Use this card for Brewfather/BrewTracker source visibility, not hidden backend logic.
+```
+
+---
 
 ## Brewday Event Log
 
@@ -87,155 +114,102 @@ Current policy:
 - Clear/reset actions should require confirmation.
 ```
 
-## Manual Brewday
+---
 
-File: `dashboard/cards/brewassistant_manual_brewday.yaml`
+## BrewZilla operator baseline
 
-Purpose: operator controls for manual brewday runtime.
-
-Current policy:
+Main files:
 
 ```text
-- Manual controls should use the same visual family as other BrewAssistant cards.
-- Manual Brewday is an operator runtime source, not a separate backend universe.
-- Direct jumps such as Mash, Boil, Hopstand and Chill should require deliberate operator actions.
+dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_mash_in_confirm.yaml
+dashboard/cards/brewzilla_local_control.yaml
+dashboard/cards/brewzilla_advice_auto.yaml
+dashboard/cards/brewzilla_safety_rcl.yaml
+dashboard/cards/brewzilla_learning.yaml
 ```
 
-## Source Health
-
-File: `dashboard/cards/brewassistant_source_health.yaml`
-
-Purpose: compact source/feed/integration health overview.
-
-Current policy:
+Purpose:
 
 ```text
-- Show whether expected feeds/entities are present and fresh.
-- Keep this card diagnostic/supportive rather than workflow-primary.
-- It is acceptable for this card to show installed-but-idle source state.
+BrewZilla = operator/hardware cockpit
+BrewZilla Mash-In Confirm = explicit mash-in completion and circulation action
+BrewZilla Local Control = what BA handed to BZ and whether lease is active
+Brewday Advice = why BA selected a profile; hidden by default unless meaningful
+Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
+BrewZilla Learning = full advisory/recommendation review
 ```
 
-## Brewfather Feed
+---
 
-File: `dashboard/cards/brewfather_feed.yaml`
+## BrewZilla mash-in operator baseline
 
-Purpose: show active Brewfather/BrewTracker feed state, runtime source, snapshot age and refresh controls.
+`dashboard/cards/brewzilla_mash_in_confirm.yaml` is the current beta.7 mash-in operator card.
 
-Current policy:
+It depends on:
 
 ```text
-- Hide the main card when Brewfather/BrewTracker is not actively sending data.
-- Installed/available source state may appear as a small badge/status elsewhere.
-- Force Refresh is allowed as an explicit operator/debug action.
-- Normal operation should rely on the smart Brewfather refresh policy.
+binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_brewzilla_start_mash_circulation
 ```
 
-## BrewZilla
-
-File: `dashboard/cards/brewzilla.yaml`
-
-Purpose: operator-facing hot-side BrewZilla orchestration card.
-
-Current UI policy:
+Expected behavior:
 
 ```text
-- When BrewZilla is off/disconnected, the top card is enough.
-- Apply/Deny and detailed BrewZilla controls should be hidden when BrewZilla is off.
-- Gauge cards should be hidden when BrewZilla is off.
-- The normal temperature gauge should be visible outside BOIL.
-- The boil-specific gauge should be visible during BOIL.
-- BrewZilla-specific hardware logic must remain in BrewZilla-specific backend code.
+1. Mash-in target is reached.
+2. BrewAssistant sets mash-in gate pending on.
+3. The conditional Mash-in button appears.
+4. Operator mashes in manually.
+5. Operator presses Mash-in klar & starta cirkulation.
+6. BrewAssistant confirms the gate and starts circulation using pump utilization plus pump switch.
 ```
 
-## BrewZilla Learning
+The fallback `Starta mäskcirkulation` button is a visible operator action for starting mash circulation. It should stay explicit and observable.
 
-File: `dashboard/cards/brewzilla_learning.yaml`
+---
 
-Purpose: advisory/learning view for BrewZilla heating and temperature behavior.
+## Button-action policy
 
-Current policy:
+Dashboard action cards should use BrewAssistant button entities for operator actions:
 
 ```text
-- Treat learning output as advisory, not authoritative control.
-- Prefer shared mash/wort resolver output instead of parsing raw hardware values in the card.
-- Hide when there is no active/meaningful BrewZilla or brewday context.
+button.press → button.brewassistant_*
 ```
 
-## Kegerator
+Do not create parallel workaround services for the same physical action. A single backend action path makes event logging, safety review and future cleanup easier.
 
-File: `dashboard/cards/kegerator.yaml`
+---
 
-Purpose: compact kegerator/cooling/fan-auto visibility.
+## Visibility policy
 
-Current UI policy:
+Daily dashboard sections can be hidden or shown with BrewAssistant visibility switches such as:
 
 ```text
-- Show compressor/fan/afterrun status from the Python kegerator fan backend.
-- Use switch.brewassistant_kegerator_fan_auto_enabled attributes as the main fan-auto diagnostic source.
-- Keep legacy kegerator YAML helpers out of the card.
-- Do not let the card control compressor behavior directly; climate.kegerator_kylskap owns target/cooling behavior.
+switch.brewassistant_show_brewday
+switch.brewassistant_show_brewzilla
+switch.brewassistant_show_brewzilla_learning
+switch.brewassistant_show_event_log
+switch.brewassistant_show_source_health
+switch.brewassistant_show_fermentation
+switch.brewassistant_show_carbonation
+switch.brewassistant_show_kegerator
 ```
 
-## Fermentation
+Diagnostic cards may also auto-show when risk, warning, missing context, guard activity or pending operator action is present.
 
-File: `dashboard/cards/fermentation.yaml`
+---
 
-Purpose: show fermentation chamber state, supervisor state, Pill/gravity context and recommendations without making OFF state noisy.
+## Frontend dependencies
 
-Current UI policy:
-
-```text
-- OFF means climate.fermentation_chamber is off.
-- OFF state should show only a compact top card.
-- Idle means the chamber/supervisor is ready but no active fermentation or cold-crash scope exists.
-- Active fermentation/cold-crash may show the full cockpit details.
-- Pill/gravity values should be treated carefully; unrealistic SG values should not be emphasized.
-- Current RAPT Pill gravity entity is sensor.yellow_pill_gravity.
-```
-
-## Carbonation
-
-File: `dashboard/cards/carbonation.yaml`
-
-Purpose: show carbonation runtime, target volumes, temperature, pressure recommendations and operator controls.
-
-Current UI policy:
+Install these Lovelace frontend cards through HACS before copying the dashboard examples:
 
 ```text
-- Use existing stable control entities without the _control suffix:
-  - select.brewassistant_carbonation_method
-  - number.brewassistant_carbonation_target_volumes
-  - number.brewassistant_carbonation_start_volumes
-  - number.brewassistant_carbonation_pressure_bar
-- Use Python runtime sensors for display:
-  - sensor.brewassistant_carbonation_status
-  - sensor.brewassistant_carbonation_method
-  - sensor.brewassistant_carbonation_target_volumes
-  - sensor.brewassistant_carbonation_temperature
-  - sensor.brewassistant_carbonation_recommended_pressure_bar
-- Keep quick targets human-readable; avoid exposing internal entity IDs in labels.
-- Show source labels as human-readable text, for example `kegerator temp` instead of raw entity IDs.
-```
-
-## Sanity dashboard
-
-File: `dashboard/brewassistant_sanity.yaml`
-
-Purpose: quick validation after Home Assistant restarts or BrewAssistant updates.
-
-Current policy:
-
-```text
-- Keep it compact and boring.
-- Focus on core version/module summary, kegerator guard/fan, event log and obvious runtime health.
-- This is not the full brewing UI.
-```
-
-## Deferred UI polish
-
-```text
-- Add navigation/subviews after core cards stabilize.
-- Decide final placement of source badges across Hub, Source Health and Brewfather Feed.
-- Validate card visibility behavior with real Brewfather active/idle snapshots.
-- Validate full fermentation/cold-crash card behavior during a real batch.
+custom:button-card
+custom:vertical-stack-in-card
+custom:mushroom-*
+custom:expander-card
+custom:gauge-card-pro
+custom:bar-card
+custom:apexcharts-card
 ```
