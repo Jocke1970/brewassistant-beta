@@ -14,7 +14,7 @@ Legacy local packages          = not part of mainline install
 
 ## Recommended install path: HACS custom repository
 
-After this GitHub repository has been made public, BrewAssistant Beta can be installed through HACS as a custom repository.
+BrewAssistant Beta can be installed through HACS as a custom repository.
 
 In Home Assistant:
 
@@ -48,7 +48,7 @@ Notes:
 
 ```text
 - HACS installs the integration under /config/custom_components/brewassistant/.
-- Dashboard YAML files under dashboards/ are examples and are not automatically installed as dashboards.
+- Dashboard YAML files under dashboard/ are examples and are not automatically installed as dashboards.
 - This beta should be treated as a HACS custom repository, not a default HACS repository.
 ```
 
@@ -108,7 +108,15 @@ sensor.brewassistant_carbonation_status
 switch.brewassistant_kegerator_fan_auto_enabled
 ```
 
-Some entity IDs may be prefixed by Home Assistant, depending on the integration/device/area naming.
+For beta.7 BrewZilla mash-in validation, also check:
+
+```text
+binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_brewzilla_start_mash_circulation
+```
+
+Some entity IDs may be prefixed by Home Assistant, depending on the integration/device/area naming. If dashboard actions do not work, confirm the actual entity IDs in Developer Tools → States before editing dashboard YAML.
 
 ---
 
@@ -119,6 +127,7 @@ Dashboard YAML is optional. It should display state and expose explicit operator
 Current dashboard baseline notes:
 
 ```text
+dashboard/README.md
 docs/dashboard-baselines.md
 ```
 
@@ -132,7 +141,24 @@ custom:vertical-stack-in-card
 custom:mushroom-*
 custom:expander-card
 custom:gauge-card-pro
+custom:bar-card
+custom:apexcharts-card
 ```
+
+Important beta.7 BrewZilla operator card:
+
+```text
+dashboard/cards/brewzilla_mash_in_confirm.yaml
+```
+
+That card uses the button entity path:
+
+```text
+UI → button.press → button.brewassistant_brewzilla_mash_in_complete → BrewAssistant backend
+UI → button.press → button.brewassistant_brewzilla_start_mash_circulation → BrewAssistant backend
+```
+
+Do not add duplicate service-workaround paths for these same actions.
 
 ---
 
@@ -157,12 +183,4 @@ Recommended policy:
 
 ## Safety scope
 
-BrewAssistant beta is intended for supervised use.
-
-```text
-- BrewZilla orchestration is not unattended autopilot.
-- Operator supervision is expected during brewday actions.
-- Kegerator fan-auto only controls the circulation fan, not compressor safety.
-- Compressor cycling remains owned by the Home Assistant climate/thermostat layer.
-- Pressure equipment must be used within rated limits.
-```
+BrewAssistant beta is intended for supervised use. Hot-side hardware actions should be monitored by the operator. Always verify heat, pump, power, water volume, pressure equipment, sanitation and transfer decisions manually.
