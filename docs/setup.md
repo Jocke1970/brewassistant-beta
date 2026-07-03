@@ -64,7 +64,21 @@ If Home Assistant keeps old entity IDs from the entity registry, verify the actu
 
 ---
 
-## 3. Add dashboard cards
+## 3. Post-update smoke test
+
+After a beta.7 update, verify the entities used by the latest BrewZilla mash-in flow:
+
+```text
+binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_brewzilla_start_mash_circulation
+```
+
+The two button entities are the intended operator-action path. Dashboard YAML should call `button.press` on those entities, not duplicate the backend action through separate workaround services.
+
+---
+
+## 4. Add dashboard cards
 
 Dashboard YAML is optional and should be treated as presentation only.
 
@@ -87,12 +101,20 @@ Current dashboard/card files:
 dashboard/brewassistant_sanity.yaml
 dashboard/cards/brewassistant_hub.yaml
 dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_bf_reload.yaml
 dashboard/cards/brewassistant_brewday_event_log.yaml
 dashboard/cards/brewassistant_manual_brewday.yaml
 dashboard/cards/brewassistant_source_health.yaml
 dashboard/cards/brewfather_feed.yaml
+dashboard/cards/brewfather_recipe.yaml
+dashboard/cards/brewtracker_runtime.yaml
 dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_mash_in_confirm.yaml
+dashboard/cards/brewzilla_local_control.yaml
+dashboard/cards/brewzilla_advice_auto.yaml
+dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
+dashboard/cards/counterflow_chiller.yaml
 dashboard/cards/carbonation.yaml
 dashboard/cards/fermentation.yaml
 dashboard/cards/kegerator.yaml
@@ -114,7 +136,7 @@ Install required frontend cards through HACS before using dashboard examples.
 
 ---
 
-## 4. Recommended integrations and source entities
+## 5. Recommended integrations and source entities
 
 BrewAssistant can run with different levels of connected hardware and data.
 
@@ -137,6 +159,9 @@ sensor.brewassistant_brewday_event_log_*
 sensor.brewassistant_brewzilla_*
 select.brewassistant_brewzilla_mash_temperature_source
 binary_sensor.brewassistant_runtime_brewfather_available
+binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_brewzilla_start_mash_circulation
 ```
 
 ### Kegerator / serving
@@ -160,116 +185,15 @@ select.brewassistant_kegerator_fan_mode
 number.brewassistant_kegerator_fan_afterrun_minutes
 ```
 
-Preferred entity IDs should use the clean BrewAssistant namespace without Home Assistant area/device prefixes. If Home Assistant creates prefixed entities locally, clean them through the Entity Registry UI before validating dashboards.
-
-### Fermentation
-
-Useful sources:
-
-```text
-climate.fermentation_chamber
-sensor.yellow_pill_gravity
-sensor.yellow_pill_temperature
-switch.fermentation_heat_mat
-sensor.fermentation_heat_mat_power
-```
-
-Main BrewAssistant areas:
-
-```text
-sensor.brewassistant_fermentation_*
-sensor.brewassistant_smart_*
-sensor.brewassistant_gravity
-```
-
-### Carbonation
-
-Main control entities:
-
-```text
-select.brewassistant_carbonation_method
-number.brewassistant_carbonation_target_volumes
-number.brewassistant_carbonation_start_volumes
-number.brewassistant_carbonation_pressure_bar
-```
-
-Main display sensors:
-
-```text
-sensor.brewassistant_carbonation_status
-sensor.brewassistant_carbonation_method
-sensor.brewassistant_carbonation_target_volumes
-sensor.brewassistant_carbonation_temperature
-sensor.brewassistant_carbonation_recommended_pressure_bar
-```
-
 ---
 
-## 5. Legacy local packages
-
-The `packages/` directory is no longer part of the main repository setup.
-
-Older Home Assistant installs may still have local BrewAssistant YAML packages under `/config/packages/` or `/config/packages_disabled/`. Treat those as legacy/local files only.
-
-Recommended cleanup policy:
+## 6. Operational policy
 
 ```text
-- Do not enable old package helpers together with the Python integration unless deliberately testing migration behavior.
-- Disable old kegerator/fermentation/carbonation package helpers after verifying dashboards no longer depend on them.
-- Use Developer Tools → States and the Entity Registry UI to remove orphaned unavailable entities.
-- Keep backup copies outside /config/custom_components/.
+- Python integration owns runtime normalization, calculations and hardware decisions.
+- Dashboard YAML owns presentation and explicit operator actions.
+- Avoid hidden workflow logic in dashboard templates.
+- Avoid duplicate action paths for the same physical action.
+- Keep old YAML packages disabled unless intentionally testing migration behavior.
+- Restart Home Assistant after integration updates.
 ```
-
----
-
-## 6. Basic verification after restart
-
-Useful checks:
-
-```text
-sensor.brewassistant_core_version
-sensor.brewassistant_next_action
-sensor.brewassistant_brewday_runtime_status
-sensor.brewassistant_brewday_stage
-sensor.brewassistant_brewday_event_log_summary
-sensor.brewassistant_brewzilla_wort_temperature
-switch.brewassistant_kegerator_guard_enabled
-switch.brewassistant_kegerator_fan_auto_enabled
-select.brewassistant_kegerator_fan_mode
-number.brewassistant_kegerator_fan_afterrun_minutes
-sensor.brewassistant_carbonation_status
-sensor.brewassistant_fermentation_chamber_air_temperature_average
-```
-
-Baseline checks should show:
-
-```text
-- no active prefixed BrewAssistant entity IDs
-- `sensor.brewassistant_brewday_event_log_summary` exists
-- old `sensor.brewassistant_brewday_audit_*` entities are gone or unknown
-- `climate.kegerator_kylskap` remains `cool` when serving cooling should be active
-- `switch.kegerator_fan` follows fan mode when fan-auto is enabled
-```
-
-For a compact post-restart UI check, use:
-
-```text
-dashboard/brewassistant_sanity.yaml
-```
-
----
-
-## 7. Updating
-
-Recommended update flow:
-
-```text
-1. Back up /config/custom_components/brewassistant/ to /config/brewassistant_backups/.
-2. Pull latest main from this repository.
-3. Sync custom_components/brewassistant/ into Home Assistant.
-4. Restart Home Assistant.
-5. Check logs.
-6. Verify key entities and dashboards.
-```
-
-Dashboard cards should be updated separately from backend installation.
