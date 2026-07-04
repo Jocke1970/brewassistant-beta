@@ -11,7 +11,7 @@ triggers_update:
   - sensor.brewassistant_brewzilla_control_reason
   - switch.brewassistant_brewzilla_safe_mode
 label: |
-  [[[ 
+  [[[
     const st = states;
     const attr = (id, key) => st[id]?.attributes?.[key];
     const clean = (v) => {
@@ -31,26 +31,44 @@ label: |
     const trust = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'target_trust_guard_suppressed_sync') === true;
     const critical = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rapt_critical_refresh_recommended') === true;
     const abort = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'abort_lockout_active') === true;
-    const warning = rclActive || rclBlocking || staleHeat || filtered || trust || critical || abort || safety.toLowerCase().includes('abort') || safety.toLowerCase().includes('blocked') || safety.toLowerCase().includes('warning');
+    const warning = rclActive || rclBlocking || staleHeat || filtered || trust || abort || safety.toLowerCase().includes('abort') || safety.toLowerCase().includes('blocked') || safety.toLowerCase().includes('warning');
     const headline = warning ? safety : 'Safety/RCL OK';
     const tone = warning ? 'rgba(244,67,54,.08)' : 'rgba(76,175,80,.08)';
     const border = warning ? 'rgba(244,67,54,.18)' : 'rgba(76,175,80,.18)';
+    const footer = critical && !warning
+      ? `${String(reason).slice(0, 120)} · RAPT refresh rekommenderad, men ingen Safety/RCL-blockering.`
+      : String(reason).slice(0, 150);
     return `
       <div style="line-height:1.25;min-width:0;">
         <div style="font-size:12px;font-weight:850;opacity:.66;">${warning ? 'aktiv varning / guard' : 'inga aktiva RCL-/safety-varningar'} · switch ${manual ? 'on' : 'off'}</div>
         <div style="margin-top:7px;font-size:21px;font-weight:950;text-align:center;">${headline}</div>
         <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">${mode} · RCL ${rclAge ?? '—'}s</div>
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
-          <div style="border-radius:13px;padding:7px;background:${rclBlocking ? 'rgba(244,67,54,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${rclBlocking ? 'BLOCK' : 'OK'}</b><br><span style="font-size:10px;opacity:.65;">RCL</span></div>
+          <div style="border-radius:13px;padding:7px;background:${rclBlocking ? 'rgba(244,67,54,.12)' : rclActive ? 'rgba(255,193,7,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${rclBlocking ? 'BLOCK' : rclActive ? 'ACTIVE' : 'OK'}</b><br><span style="font-size:10px;opacity:.65;">RCL</span></div>
           <div style="border-radius:13px;padding:7px;background:${staleHeat ? 'rgba(255,193,7,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${staleHeat ? 'ON' : 'off'}</b><br><span style="font-size:10px;opacity:.65;">stale heat</span></div>
           <div style="border-radius:13px;padding:7px;background:${filtered ? 'rgba(255,193,7,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${filtered ? 'YES' : 'no'}</b><br><span style="font-size:10px;opacity:.65;">filter</span></div>
           <div style="border-radius:13px;padding:7px;background:${abort ? 'rgba(244,67,54,.12)' : trust ? 'rgba(255,193,7,.12)' : 'rgba(127,127,127,.08)'};border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${abort ? 'ABORT' : trust ? 'TRUST' : 'OK'}</b><br><span style="font-size:10px;opacity:.65;">guard</span></div>
         </div>
-        <div style="margin-top:10px;border-radius:14px;padding:8px 9px;background:${tone};border:1px solid ${border};font-size:11.5px;font-weight:800;opacity:.78;white-space:normal;">${String(reason).slice(0, 150)}</div>
+        <div style="margin-top:10px;border-radius:14px;padding:8px 9px;background:${tone};border:1px solid ${border};font-size:11.5px;font-weight:800;opacity:.78;white-space:normal;">${footer}</div>
       </div>`;
   ]]]
 styles:
   card:
+    - display: |
+        [[[
+          const st = states;
+          const attr = (id, key) => st[id]?.attributes?.[key];
+          const manual = st['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+          const safety = String(st['sensor.brewassistant_brewzilla_safety_state']?.state ?? '').toLowerCase();
+          const issue = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_active') === true
+            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_blocking') === true
+            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'stale_heat_guard_active') === true
+            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'temperature_sample_filtered') === true
+            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'target_trust_guard_suppressed_sync') === true
+            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'abort_lockout_active') === true
+            || safety.includes('abort') || safety.includes('blocked') || safety.includes('warning');
+          return (manual || issue) ? 'block' : 'none';
+        ]]]
     - border-radius: 22px
     - padding: 14px
     - background: |
@@ -63,7 +81,6 @@ styles:
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'stale_heat_guard_active') === true
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'temperature_sample_filtered') === true
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'target_trust_guard_suppressed_sync') === true
-            || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rapt_critical_refresh_recommended') === true
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'abort_lockout_active') === true
             || safety.includes('abort') || safety.includes('blocked') || safety.includes('warning');
           return warning ? 'linear-gradient(135deg, rgba(244,67,54,.10), rgba(127,127,127,.035))' : 'linear-gradient(135deg, rgba(76,175,80,.08), rgba(127,127,127,.035))';
