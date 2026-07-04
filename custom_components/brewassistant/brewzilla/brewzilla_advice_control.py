@@ -11,24 +11,55 @@ _BASE_BUILD = None
 _INSTALLED = False
 _APPLICABLE_STAGES = {"ramp", "mash_hold"}
 
-
-# BrewZilla has meaningful thermal inertia, especially with small test volumes
-# and when the mash/BLE temperature is used as control context.  These profiles
-# are deliberately conservative: they are max-power/profile values, not a remote
-# thermostat output.  The goal is to taper before target instead of waiting for
-# the local regulator to overshoot and then recover.
-RAMP_HEAT_FAR = 45.0
-RAMP_HEAT_MID = 30.0
-RAMP_HEAT_APPROACH = 22.0
-RAMP_HEAT_NEAR = 15.0
-RAMP_HEAT_FINAL = 8.0
-RAMP_HEAT_FEATHER = 5.0
-HOLD_HEAT_RECOVERY = 15.0
-HOLD_HEAT_GENTLE = 10.0
-HOLD_HEAT_FEATHER = 5.0
-HEAT_OFF_PROFILE = 0.0
-FAST_RISE_RATE_C_PER_MIN = 0.20
-MODERATE_RISE_RATE_C_PER_MIN = 0.10
+BREWZILLA_BASE_PROFILE = {
+    "name": "brewzilla_35l_small_batch_default",
+    "description": "Built-in BrewZilla 35L small-batch profile.",
+    "heat": {
+        "off": 0.0,
+        "ramp_far": 45.0,
+        "ramp_mid": 30.0,
+        "ramp_approach": 22.0,
+        "ramp_near": 15.0,
+        "ramp_final": 8.0,
+        "ramp_feather": 5.0,
+        "hold_recovery": 15.0,
+        "hold_gentle": 10.0,
+        "hold_feather": 5.0,
+    },
+    "delta": {
+        "ramp_far": 5.0,
+        "ramp_mid": 3.0,
+        "ramp_approach": 2.0,
+        "ramp_near": 1.0,
+        "ramp_final": 0.5,
+        "ramp_feather": 0.2,
+        "hold_recovery": 2.0,
+        "hold_gentle": 0.7,
+        "hold_feather": 0.2,
+    },
+    "pump": {
+        "ramp": 70.0,
+        "hold": 50.0,
+        "overshoot": 50.0,
+        "thermal_mix": 80.0,
+    },
+    "rate": {
+        "fast_c_per_min": 0.20,
+        "moderate_c_per_min": 0.10,
+        "near_target_heat_cap": 5.0,
+    },
+    "thermal_mix": {
+        "enabled": True,
+        "min_mash_wort_delta_c": 0.3,
+        "wort_over_target_c": 0.2,
+        "mash_below_target_c": 0.7,
+        "high_wort_over_target_c": 1.0,
+        "large_mash_gap_c": 2.0,
+        "heat_cap": 5.0,
+        "high_heat_cap": 0.0,
+        "pump": 80.0,
+    },
+}
 
 
 def _num(value: Any) -> float | None:
@@ -40,77 +71,127 @@ def _num(value: Any) -> float | None:
         return None
 
 
+def _profile() -> dict[str, Any]:
+    return BREWZILLA_BASE_PROFILE
+
+
+def _p(path: str, fallback: float) -> float:
+    value: Any = _profile()
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return fallback
+        value = value.get(part)
+    parsed = _num(value)
+    return fallback if parsed is None else parsed
+
+
 def _active(state: Any) -> bool:
     return base._runtime_active(str(state or "idle"))
 
 
-def _rate_adjusted_heat(profile: float, *, delta: float | None, temp_rate: float | None) -> float:
-    """Cap heat more aggressively when temperature is still rising near target."""
+def _rate_adjusted_heat(profile_heat: float, *, delta: float | None, temp_rate: float | None) -> tuple[float, str | None]:
     if delta is None or temp_rate is None:
-        return profile
-    if delta <= 2.0 and temp_rate >= FAST_RISE_RATE_C_PER_MIN:
-        return min(profile, RAMP_HEAT_FEATHER)
-    if delta <= 1.0 and temp_rate >= MODERATE_RISE_RATE_C_PER_MIN:
-        return min(profile, RAMP_HEAT_FEATHER)
-    return profile
+        return profile_heat, None
+    cap = _p("rate.near_target_heat_cap", 5.0)
+    if delta <= 2.0 and temp_rate >= _p("rate.fast_c_per_min", 0.20):
+        return min(profile_heat, cap), "fast_rise_near_target"
+    if delta <= 1.0 and temp_rate >= _p("rate.moderate_c_per_min", 0.10):
+        return min(profile_heat, cap), "moderate_rise_final_approach"
+    return profile_heat, None
 
 
-def _heat_profile(stage_kind: str, delta: float | None, temp_rate: float | None = None) -> float | None:
-    """Return a conservative local BrewZilla heat profile.
-
-    The returned value is a profile/max-power setting, not a thermostat output.
-    Returning 0 is intentional at/above target: BA should reduce BrewZilla's heat
-    utilization instead of passively observing overshoot. Returning None means
-    the current stage is outside this advice bridge.
-    """
+def _base_heat_profile(stage_kind: str, delta: float | None, temp_rate: float | None = None) -> tuple[float | None, str | None]:
     if stage_kind not in _APPLICABLE_STAGES:
-        return None
+        return None, None
     if delta is not None and delta <= 0.0:
-        return HEAT_OFF_PROFILE
+        return _p("heat.off", 0.0), "at_or_above_target"
 
     if stage_kind == "mash_hold":
         if delta is None:
-            profile = HOLD_HEAT_GENTLE
-        elif delta > 2.0:
-            profile = HOLD_HEAT_RECOVERY
-        elif delta > 0.7:
-            profile = HOLD_HEAT_GENTLE
-        elif delta > 0.2:
-            profile = HOLD_HEAT_FEATHER
+            profile_heat, phase = _p("heat.hold_gentle", 10.0), "hold_unknown_delta"
+        elif delta > _p("delta.hold_recovery", 2.0):
+            profile_heat, phase = _p("heat.hold_recovery", 15.0), "hold_recovery"
+        elif delta > _p("delta.hold_gentle", 0.7):
+            profile_heat, phase = _p("heat.hold_gentle", 10.0), "hold_gentle"
+        elif delta > _p("delta.hold_feather", 0.2):
+            profile_heat, phase = _p("heat.hold_feather", 5.0), "hold_feather"
         else:
-            profile = HEAT_OFF_PROFILE
-        return _rate_adjusted_heat(profile, delta=delta, temp_rate=temp_rate)
+            profile_heat, phase = _p("heat.off", 0.0), "hold_at_target"
+        adjusted, modifier = _rate_adjusted_heat(profile_heat, delta=delta, temp_rate=temp_rate)
+        return adjusted, modifier or phase
 
     if stage_kind == "ramp":
         if delta is None:
-            profile = RAMP_HEAT_NEAR
-        elif delta > 5.0:
-            profile = RAMP_HEAT_FAR
-        elif delta > 3.0:
-            profile = RAMP_HEAT_MID
-        elif delta > 2.0:
-            profile = RAMP_HEAT_APPROACH
-        elif delta > 1.0:
-            profile = RAMP_HEAT_NEAR
-        elif delta > 0.5:
-            profile = RAMP_HEAT_FINAL
-        elif delta > 0.2:
-            profile = RAMP_HEAT_FEATHER
+            profile_heat, phase = _p("heat.ramp_near", 15.0), "ramp_unknown_delta"
+        elif delta > _p("delta.ramp_far", 5.0):
+            profile_heat, phase = _p("heat.ramp_far", 45.0), "ramp_far"
+        elif delta > _p("delta.ramp_mid", 3.0):
+            profile_heat, phase = _p("heat.ramp_mid", 30.0), "ramp_mid"
+        elif delta > _p("delta.ramp_approach", 2.0):
+            profile_heat, phase = _p("heat.ramp_approach", 22.0), "ramp_approach"
+        elif delta > _p("delta.ramp_near", 1.0):
+            profile_heat, phase = _p("heat.ramp_near", 15.0), "ramp_near"
+        elif delta > _p("delta.ramp_final", 0.5):
+            profile_heat, phase = _p("heat.ramp_final", 8.0), "ramp_final"
+        elif delta > _p("delta.ramp_feather", 0.2):
+            profile_heat, phase = _p("heat.ramp_feather", 5.0), "ramp_feather"
         else:
-            profile = HEAT_OFF_PROFILE
-        return _rate_adjusted_heat(profile, delta=delta, temp_rate=temp_rate)
+            profile_heat, phase = _p("heat.off", 0.0), "ramp_at_target"
+        adjusted, modifier = _rate_adjusted_heat(profile_heat, delta=delta, temp_rate=temp_rate)
+        return adjusted, modifier or phase
 
-    return None
+    return None, None
 
 
-def _pump_profile(stage_kind: str, delta: float | None) -> tuple[bool | None, float | None, str | None]:
+def _base_pump_profile(stage_kind: str, delta: float | None) -> tuple[bool | None, float | None, str | None]:
     if stage_kind not in _APPLICABLE_STAGES:
         return None, None, None
     if delta is not None and delta <= -0.3:
-        return True, 50.0, "overshoot_mix"
+        return True, _p("pump.overshoot", 50.0), "overshoot_mix"
     if stage_kind == "ramp":
-        return True, 70.0, "ramp_mix"
-    return True, 50.0, "mash_mix"
+        return True, _p("pump.ramp", 70.0), "ramp_mix"
+    return True, _p("pump.hold", 50.0), "mash_mix"
+
+
+def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_kind: str) -> dict[str, Any]:
+    cfg = _profile().get("thermal_mix", {})
+    if not isinstance(cfg, dict) or not bool(cfg.get("enabled", True)):
+        return {"active": False}
+
+    mash = _num(advice.get("mash_temperature"))
+    wort = _num(advice.get("wort_temperature"))
+    if stage_kind not in _APPLICABLE_STAGES or mash is None or wort is None or target is None:
+        return {"active": False}
+
+    mash_wort_delta = round(mash - wort, 2)
+    mash_gap = round(target - mash, 2)
+    wort_over = round(wort - target, 2)
+    separate_inputs = abs(mash_wort_delta) >= _p("thermal_mix.min_mash_wort_delta_c", 0.3)
+    active = bool(
+        separate_inputs
+        and wort_over > _p("thermal_mix.wort_over_target_c", 0.2)
+        and mash_gap > _p("thermal_mix.mash_below_target_c", 0.7)
+    )
+    high = bool(
+        active
+        and (
+            wort_over >= _p("thermal_mix.high_wort_over_target_c", 1.0)
+            or mash_gap >= _p("thermal_mix.large_mash_gap_c", 2.0)
+        )
+    )
+    return {
+        "active": active,
+        "separate_inputs": separate_inputs,
+        "mash_temperature": mash,
+        "wort_temperature": wort,
+        "mash_wort_delta": mash_wort_delta,
+        "mash_gap_to_target": mash_gap,
+        "wort_over_target": wort_over,
+        "heat_cap": (_p("thermal_mix.high_heat_cap", 0.0) if high else _p("thermal_mix.heat_cap", 5.0)) if active else None,
+        "pump_utilization": _p("thermal_mix.pump", 80.0) if active else None,
+        "severity": "high" if high else "active" if active else None,
+        "reason": "wort_above_target_mash_lagging" if active else None,
+    }
 
 
 def _arm_heat(delta: float | None, profile_heat: float | None) -> bool:
@@ -144,7 +225,6 @@ def _refresh_mode(out: dict[str, Any], runtime_state: str) -> None:
 
 
 def _clear_normal_heat_actions(out: dict[str, Any]) -> None:
-    """Prevent Advice from acting as a remote thermostat."""
     out["desired_heater_on"] = None
     out["heating_needed"] = False
     out["heater_stop_needed"] = False
@@ -160,6 +240,7 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     suggested_heat = _num(advice.get("suggested_heat_utilization"))
     delta = _num(advice.get("delta_to_target"))
     temp_rate = _num(advice.get("temp_rate_c_per_min"))
+    target = _num(out.get("requested_target"))
 
     active = bool(
         _active(runtime_state)
@@ -167,11 +248,24 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         and stage_kind in _APPLICABLE_STAGES
     )
 
-    profile_heat = _heat_profile(stage_kind, delta, temp_rate) if active else None
-    pump_on_profile, pump_util_profile, pump_phase = _pump_profile(stage_kind, delta)
+    profile_heat, profile_phase = _base_heat_profile(stage_kind, delta, temp_rate) if active else (None, None)
+    pump_on_profile, pump_util_profile, pump_phase = _base_pump_profile(stage_kind, delta)
+    thermal_mix = _thermal_mix_modifier(advice, target, stage_kind) if active else {"active": False}
+    if thermal_mix.get("active"):
+        heat_cap = _num(thermal_mix.get("heat_cap"))
+        if heat_cap is not None:
+            profile_heat = heat_cap if profile_heat is None else min(float(profile_heat), heat_cap)
+        pump_on_profile = True
+        mix_pump = _num(thermal_mix.get("pump_utilization"))
+        if mix_pump is not None:
+            pump_util_profile = mix_pump if pump_util_profile is None else max(float(pump_util_profile), mix_pump)
+        pump_phase = "thermal_mix"
+        profile_phase = "thermal_mix_heat_cap"
     profile_suppressed = False
 
     out.update({
+        "advice_profile_name": _profile().get("name"),
+        "advice_profile_source": "built_in",
         "advice_heat_available": suggested_heat is not None,
         "advice_heat_active": active,
         "advice_stage_kind": stage_kind,
@@ -181,6 +275,7 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         "advice_suggested_heat_utilization": suggested_heat,
         "advice_capped_heat_utilization": profile_heat,
         "advice_heat_cap": profile_heat,
+        "advice_heat_profile_phase": profile_phase,
         "advice_delta_to_target": delta,
         "advice_temp_rate_c_per_min": temp_rate,
         "advice_learning_temperature": advice.get("learning_temperature"),
@@ -194,6 +289,17 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         "advice_local_profile_heat_utilization": profile_heat,
         "advice_local_profile_suppressed": profile_suppressed,
         "advice_local_profile_suppressed_reason": None,
+        "advice_thermal_mix_active": bool(thermal_mix.get("active")),
+        "advice_thermal_mix_separate_inputs": bool(thermal_mix.get("separate_inputs")),
+        "advice_thermal_mix_severity": thermal_mix.get("severity"),
+        "advice_thermal_mix_mash_temperature": thermal_mix.get("mash_temperature"),
+        "advice_thermal_mix_wort_temperature": thermal_mix.get("wort_temperature"),
+        "advice_thermal_mix_mash_wort_delta": thermal_mix.get("mash_wort_delta"),
+        "advice_thermal_mix_mash_gap_to_target": thermal_mix.get("mash_gap_to_target"),
+        "advice_thermal_mix_wort_over_target": thermal_mix.get("wort_over_target"),
+        "advice_thermal_mix_heat_cap": thermal_mix.get("heat_cap"),
+        "advice_thermal_mix_pump_utilization": thermal_mix.get("pump_utilization"),
+        "advice_thermal_mix_reason": thermal_mix.get("reason"),
     })
 
     if not active:
@@ -224,14 +330,14 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     _refresh_mode(out, runtime_state)
 
     reason = advice.get("strategy_reason") or "Brewday Advice profile is active."
-    if profile_suppressed:
-        profile_text = "profile suppressed"
-    else:
-        profile_text = f"profile {profile_heat}%"
+    if thermal_mix.get("active"):
+        reason = f"{reason} Thermal mix modifier active: wort above target while mash lags."
+    profile_text = "profile suppressed" if profile_suppressed else f"profile {profile_heat}% ({profile_phase})"
     out["control_reason"] = (
         f"Brewday Advice local profile: {reason} "
-        f"Suggested {suggested_heat}%, {profile_text}; "
+        f"Base profile {_profile().get('name')}; suggested {suggested_heat}%, {profile_text}; "
         f"delta {delta}°C, rate {temp_rate}°C/min; "
+        f"mash {advice.get('mash_temperature')}°C, wort {advice.get('wort_temperature')}°C; "
         f"pump {pump_on_profile}/{pump_util_profile}% ({pump_phase}). "
         "BrewZilla regulates temperature locally."
     )
