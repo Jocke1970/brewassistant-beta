@@ -11,8 +11,11 @@ _BASE_APPLY = None
 _INSTALLED = False
 STORE = "brewzilla_local_control_lease"
 LEASE_MAX_AGE_SECONDS = 4 * 60 * 60
-SETUP_PREFIXES = ("set_target:", "set_heat_utilization:", "set_pump_utilization:", "heater_on", "pump_on")
+LEASE_PASSIVE_OBSERVE_SECONDS = 45
+SETUP_PREFIXES = ("set_target:",)
 CLEAR_PREFIXES = ("abort_", "abort_lockout_", "no_positive_gate_", "stale_rcl_")
+UTILIZATION_REASSERT_TOLERANCE = 0.1
+NEAR_TARGET_LEASE_BREAK_DELTA_C = 1.0
 
 
 def _num(value: Any) -> float | None:
@@ -66,14 +69,50 @@ def _has_prefix(actions: list[Any], prefixes: tuple[str, ...]) -> bool:
     return any(str(action).startswith(prefix) for action in actions for prefix in prefixes)
 
 
-def _lease_state(hass, snapshot: dict[str, Any]) -> tuple[dict[str, Any] | None, int | None, bool]:
+def _utilization_changed(current: Any, previous: Any) -> bool:
+    current_value = _num(current)
+    previous_value = _num(previous)
+    if current_value is None or previous_value is None:
+        return False
+    return abs(current_value - previous_value) > UTILIZATION_REASSERT_TOLERANCE
+
+
+def _lease_break_reason(snapshot: dict[str, Any], lease: dict[str, Any], age: int | None) -> str | None:
+    """Return why BA must retake control from a passive local-control lease."""
+    if age is not None and age > LEASE_PASSIVE_OBSERVE_SECONDS:
+        return "observe_window_elapsed"
+
+    if snapshot.get("advice_thermal_mix_active"):
+        return "thermal_mix_active"
+
+    phase = str(snapshot.get("advice_heat_profile_phase") or "")
+    if phase in {"thermal_mix_heat_cap", "fast_rise_near_target", "moderate_rise_final_approach"}:
+        return f"advice_phase:{phase}"
+
+    delta = _num(snapshot.get("advice_delta_to_target"))
+    if delta is not None and delta <= NEAR_TARGET_LEASE_BREAK_DELTA_C:
+        return "near_target_taper_zone"
+
+    if _utilization_changed(snapshot.get("desired_heat_utilization"), lease.get("heat_utilization")):
+        return "heat_profile_changed"
+
+    if _utilization_changed(snapshot.get("desired_pump_utilization"), lease.get("pump_utilization")):
+        return "pump_profile_changed"
+
+    if snapshot.get("heat_utilization_action_needed") or snapshot.get("pump_utilization_action_needed"):
+        return "utilization_action_needed"
+
+    return None
+
+
+def _lease_state(hass, snapshot: dict[str, Any]) -> tuple[dict[str, Any] | None, int | None, bool, str | None]:
     lease = _store(hass).get("lease")
     if not isinstance(lease, dict):
-        return None, None, False
+        return None, None, False, None
     age = _age(lease.get("created_at"))
     requested = _num(snapshot.get("requested_target"))
     target = _num(lease.get("target"))
-    active = bool(
+    base_active = bool(
         _runtime_ok(snapshot)
         and not _higher_guard_active(snapshot)
         and age is not None
@@ -83,14 +122,18 @@ def _lease_state(hass, snapshot: dict[str, Any]) -> tuple[dict[str, Any] | None,
         and abs(requested - target) <= base.TARGET_SYNC_TOLERANCE
         and lease.get("step_signature") == _signature(snapshot)
     )
-    return lease, age, active
+    break_reason = _lease_break_reason(snapshot, lease, age) if base_active else None
+    active = bool(base_active and break_reason is None)
+    return lease, age, active, break_reason
 
 
 def _apply_lease(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     out = dict(snapshot)
-    lease, age, active = _lease_state(hass, out)
+    lease, age, active, break_reason = _lease_state(hass, out)
     out.update({
         "local_control_lease_active": active,
+        "local_control_lease_break_reason": break_reason,
+        "local_control_lease_observe_seconds": LEASE_PASSIVE_OBSERVE_SECONDS,
         "local_control_lease_age_seconds": age,
         "local_control_lease_max_age_seconds": LEASE_MAX_AGE_SECONDS,
         "local_control_lease_step_signature": lease.get("step_signature") if lease else None,
@@ -132,6 +175,11 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
         store["cleared_at"] = dt_util.utcnow().isoformat()
         store["clear_reason"] = result.get("apply_result") or "runtime_not_active"
         return result
+    if result.get("local_control_lease_break_reason") and result.get("applied"):
+        store["previous_lease"] = store.get("lease")
+        store["lease"] = None
+        store["cleared_at"] = dt_util.utcnow().isoformat()
+        store["clear_reason"] = result.get("local_control_lease_break_reason")
     if result.get("applied") and _has_prefix(actions, SETUP_PREFIXES):
         target = _num(result.get("applied_target_value") or result.get("requested_target"))
         lease = {
