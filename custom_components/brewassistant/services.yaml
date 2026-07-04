@@ -10,6 +10,14 @@ abort_brewzilla:
   name: Abort BrewZilla
   description: Turn off BrewAssistant-controlled BrewZilla heater and pump outputs.
 
+mash_in_complete:
+  name: Mash-in complete
+  description: Confirm the active BrewZilla mash-in gate and start mash circulation using BrewAssistant pump utilization and pump switch logic.
+
+start_mash_circulation:
+  name: Start mash circulation
+  description: Explicitly start BrewZilla mash circulation using BrewAssistant pump utilization and pump switch logic.
+
 brewday_audit_start:
   name: Brewday audit start
   description: Start a Python-owned Brewday audit log and clear previous events.
