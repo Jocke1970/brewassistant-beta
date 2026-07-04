@@ -15,6 +15,20 @@ Legacy local packages      = local compatibility/cleanup only, not mainline repo
 
 ---
 
+## Documentation map
+
+Start here when trying to understand how the current backend behaves:
+
+| Area | Document |
+| --- | --- |
+| Backend documentation index | [`docs/backends/README.md`](docs/backends/README.md) |
+| BrewZilla backend responsibilities | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
+| BrewZilla Advice control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
+
+Backend documentation should explain intent, safety boundaries, event-log markers and dashboard dependencies, not just restate code structure.
+
+---
+
 ## AI-assisted development
 
 BrewAssistant is a hobby/beta project developed in close collaboration between Joachim Eriksson and ChatGPT.
@@ -82,4 +96,32 @@ Validated in the active beta baseline:
 ✅ Carbonation runtime card baseline
 ✅ BrewAssistant Hub card baseline
 ✅ Sanity dashboard baseline
+```
+
+Active BrewZilla/Brewday Advice test focus:
+
+```text
+🧪 Built-in BrewZilla 35L small-batch advice profile
+🧪 Thermal mix modifier: cap heat and raise pump when wort is above target while mash lags
+🧪 Paused mash-hold maintenance: limited heat/pump corrections while Brewfather reports paused hold
+🧪 Mash circulation floor after mash-in: keep pump at or above 50 % unless a safety/gate/abort guard blocks it
+🧪 Local-control lease break reasons: retake control when Advice sees thermal mix, near-target taper or profile changes
+🧪 Recommended supervised test recipe: 5 min ramps, unchanged hold times
+```
+
+---
+
+## Documentation TODO
+
+The backend documentation index lists planned per-backend documents for Brewday Runtime, Event Log, Fermentation, Kegerator, Carbonation and Notifications.
+
+The preferred documentation pattern is one focused `.md` per backend area, with:
+
+```text
+purpose
+read/write entities
+safety boundaries
+event-log proof markers
+dashboard dependencies
+known test focus
 ```
