@@ -144,9 +144,9 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_mash_in_complete")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_complete"
-        self._attr_name = "BrewAssistant BrewZilla Mash-In Complete"
+        self._attr_name = "BrewAssistant Mash-In Complete"
         self._attr_icon = "mdi:barley"
-        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_mash_in_complete"
+        self._attr_suggested_object_id = f"{DOMAIN}_mash_in_complete"
 
     async def async_press(self) -> None:
         """Release the mash-in pump pause gate and start circulation."""
@@ -166,9 +166,9 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_start_mash_circulation")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_start_mash_circulation"
-        self._attr_name = "BrewAssistant BrewZilla Start Mash Circulation"
+        self._attr_name = "BrewAssistant Start Mash Circulation"
         self._attr_icon = "mdi:pump"
-        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_start_mash_circulation"
+        self._attr_suggested_object_id = f"{DOMAIN}_start_mash_circulation"
 
     async def async_press(self) -> None:
         """Set pump utilization and turn the pump on."""
