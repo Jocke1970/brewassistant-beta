@@ -1,0 +1,276 @@
+# BrewZilla Backend
+
+Status: active development / supervised hot-side testing  
+Last synced: 2026-07-04
+
+This document explains the backend responsibilities for BrewAssistant's BrewZilla/RAPT hot-side control path.
+
+For the detailed heat/pump profile and current tuning values, see [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md).
+
+## Purpose
+
+The BrewZilla backend connects normalized Brewday Runtime intent to BrewZilla/RAPT hardware control.
+
+It is responsible for:
+
+```text
+- reading normalized Brewday Runtime target/stage/step state
+- reading BrewZilla temperature, target, heater, pump and utilization state
+- reading mash/wort temperature sources
+- deciding whether BrewAssistant should observe, suggest, block or apply
+- applying safe direct-control actions when allowed
+- recording enough event-log data to debug the decision afterwards
+```
+
+It is not intended to be unattended autopilot. Hot-side actions must remain supervised.
+
+## Main control path
+
+The current high-level path is:
+
+```text
+Brewday Runtime resolver
+  -> BrewZilla orchestration snapshot
+  -> Brewday Advice control profile
+  -> safety/guard layers
+  -> async_apply_brewzilla_target_if_allowed
+  -> Brewday Event Log
+```
+
+## Important backend files
+
+| File | Responsibility |
+| --- | --- |
+| `brewzilla_orchestration.py` | Core orchestration snapshot and direct apply path for target, heat utilization, pump utilization, heater and pump. |
+| `brewzilla_advice_control.py` | Brewday Advice profile bridge. Converts stage/delta/rate/mash-wort state into desired heat and pump utilization. |
+| `brewzilla_temperature.py` | Mash/wort/control temperature resolver and source selection. |
+| `brewzilla_mash_in_gate.py` | Operator confirmation gate before mash circulation starts. |
+| `brewzilla_paused_guard.py` | Safe-down and limited paused mash-hold maintenance while Brewfather reports paused. |
+| `brewzilla_local_control_lease_v2.py` | Short passive observation lease after target changes, with early break on Advice risk. |
+| `brewzilla_freshness_guard.py` | RAPT/BrewZilla telemetry freshness diagnostics and guard state. |
+| `brewzilla_no_positive_gate.py` | Blocks positive control when runtime is not in a trusted active state. |
+| `brewzilla_execution_guard.py` | Detects execution desync or unsafe execution state. |
+| `brewzilla_target_trust_guard.py` | Prevents unsafe or stale target rewinds. |
+| `brewzilla_learning.py` | Brewday Advice learning snapshot and recommendation context. |
+
+## Read-only vs direct action
+
+BrewZilla control is intentionally guarded.
+
+Direct actions are only expected when runtime and safety context are trusted. Otherwise BrewAssistant should observe or safe-down.
+
+Typical modes seen in event logs:
+
+```text
+monitor        -> BA is observing; no action required
+local-control  -> short passive lease after target application
+direct-control -> BA has an allowed action to apply
+blocked        -> higher guard blocks positive control
+```
+
+## Brewday Advice profile bridge
+
+`brewzilla_advice_control.py` owns the current built-in profile:
+
+```text
+brewzilla_35l_small_batch_default
+```
+
+It computes:
+
+```text
+desired_heat_utilization
+desired_heater_on
+desired_pump_utilization
+desired_pump_on
+heat_utilization_action_needed
+pump_utilization_action_needed
+```
+
+The profile is conservative by design. It should prefer smaller heat corrections and more circulation rather than chasing target aggressively.
+
+## Mash-in gate
+
+Before mash-in is confirmed, BrewAssistant can stop pump circulation and hold pump utilization at 0 %.
+
+Expected pre-confirmation behavior:
+
+```yaml
+mash_in_gate_state: awaiting_mash_in_complete
+mash_in_gate_pending: true
+desired_pump_on: false
+desired_pump_utilization: 0
+```
+
+Expected confirmation behavior:
+
+```yaml
+apply_result: mash_circulation_started
+actions:
+  - mash_in_complete
+  - set_pump_utilization:50.0
+  - pump_on
+mash_in_gate_state: mash_in_complete
+```
+
+After confirmation, normal mash circulation should continue unless a higher safety guard stops it.
+
+## Mash circulation floor
+
+After mash-in is complete, BrewAssistant applies an explicit circulation floor during ramp and mash-hold stages:
+
+```text
+pump_on = true
+pump_utilization >= 50 %
+```
+
+Thermal mix may temporarily raise pump utilization to 80 %. When thermal mix is no longer active, the pump should return to at least the 50 % floor.
+
+Expected diagnostics:
+
+```yaml
+advice_mash_circulation_floor_active: true
+advice_mash_circulation_floor_utilization: 50
+advice_desired_pump_on: true
+desired_pump_utilization: 50
+```
+
+## Thermal mix
+
+Thermal mix is the stratification guard.
+
+It is active when BrewAssistant sees separate mash and wort/internal values and the wort/internal side is above target while mash still lags behind.
+
+Expected behavior:
+
+```text
+heat utilization -> 0 % or 5 %
+pump utilization -> 80 %
+```
+
+Expected diagnostics:
+
+```yaml
+advice_thermal_mix_active: true
+advice_heat_profile_phase: thermal_mix_heat_cap
+advice_pump_phase: thermal_mix
+```
+
+## Paused mash-hold maintenance
+
+Brewfather can report a mash hold as paused even though the brewer still expects the target to be maintained.
+
+The paused guard allows a narrow positive-control exception for mash hold maintenance when:
+
+```text
+- runtime_state is paused
+- target is already synced
+- stage is mash_hold
+- no abort/RCL/execution/mash-in gate block is active
+- requested heat and pump values are within safe maintenance caps
+```
+
+Expected event-log marker:
+
+```yaml
+apply_result: paused_hold_maintenance_applied
+```
+
+Example actions:
+
+```yaml
+actions:
+  - paused_hold_set_heat_utilization:10.0
+  - paused_hold_set_pump_utilization:50.0
+```
+
+or during thermal mix:
+
+```yaml
+actions:
+  - paused_hold_set_heat_utilization:0.0
+  - paused_hold_set_pump_utilization:80.0
+```
+
+## Local-control lease
+
+The local-control lease is a short observe window after BrewAssistant changes the BrewZilla target.
+
+Current intent:
+
+```text
+After set_target:
+  observe briefly while BrewZilla reacts locally
+
+But break early if Advice sees risk or a meaningful heat/pump profile change.
+```
+
+Expected break diagnostics:
+
+```yaml
+local_control_lease_break_reason: thermal_mix_active
+```
+
+or:
+
+```yaml
+local_control_lease_break_reason: near_target_taper_zone
+```
+
+Long stretches of local-control should be treated as suspicious during testing if heat/pump corrections are needed.
+
+## Freshness and RAPT/Shelly telemetry
+
+The backend tracks telemetry ages separately for RAPT/BrewZilla entities and local Shelly power data.
+
+Important event-log fields:
+
+```yaml
+rapt_brewzilla_poll_age_seconds: ...
+rapt_brewzilla_dynamic_age_seconds: ...
+rapt_brewzilla_temperature_age_seconds: ...
+rapt_brewzilla_power_age_seconds: ...
+rapt_critical_refresh_recommended: true
+rapt_brewzilla_poll_warning: false
+```
+
+A critical refresh recommendation is a diagnostic warning. It should not automatically mean a safety block unless the freshness guard says it is blocking.
+
+## Safe-down behavior
+
+The ABORT path and higher guards must always win over Advice.
+
+Expected abort/safe state:
+
+```text
+heater off
+pump off
+heat utilization 0
+pump utilization 0
+abort lockout active
+```
+
+No backend should re-enable heat or pump during abort lockout.
+
+## Test recipe recommendation
+
+For BrewAssistant/BrewZilla tests:
+
+```text
+Ramp between targets: 5 min
+Hold time: unchanged
+```
+
+Two-minute ramps are useful stress tests, but they can cause Brewfather target transitions before the mash/wort temperatures and cloud telemetry have stabilized.
+
+## What to verify in next event log
+
+```yaml
+apply_result: paused_hold_maintenance_applied
+advice_mash_circulation_floor_active: true
+advice_thermal_mix_active: true
+local_control_lease_break_reason: thermal_mix_active
+local_control_lease_break_reason: near_target_taper_zone
+```
+
+Also verify that pump remains on after mash-in and does not fall below the mash circulation floor unless a safety/gate/abort guard is active.
