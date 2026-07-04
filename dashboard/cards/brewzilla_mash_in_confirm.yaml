@@ -7,14 +7,16 @@ cards:
         state: "on"
     card:
       type: custom:button-card
-      entity: binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+      entity: button.brewassistant_mash_in_complete
       name: Mash-in klar & starta cirkulation
       icon: mdi:barley
       show_state: false
       show_label: true
       tap_action:
         action: perform-action
-        perform_action: brewassistant.mash_in_complete
+        perform_action: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_complete
       hold_action:
         action: more-info
       label: |
@@ -22,7 +24,9 @@ cards:
           const pending = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
           const target = pending?.attributes?.last_target ?? '—';
           const step = pending?.attributes?.last_step ?? 'Mash-in';
-          return `${step} · target ${target} °C<br>Tryck: kvittera + pump 50 % + ON`;
+          const button = states['button.brewassistant_mash_in_complete'];
+          const buttonState = button ? 'button ready' : 'button saknas';
+          return `${step} · target ${target} °C<br>Tryck: kvittera + pump 50 % + ON · ${buttonState}`;
         ]]]
       styles:
         card:
@@ -52,21 +56,25 @@ cards:
           - opacity: 0.82
 
   - type: custom:button-card
-    entity: switch.brewzilla_pump
+    entity: button.brewassistant_start_mash_circulation
     name: Starta mäskcirkulation
     icon: mdi:pump
     show_state: false
     show_label: true
     tap_action:
       action: perform-action
-      perform_action: brewassistant.start_mash_circulation
+      perform_action: button.press
+      target:
+        entity_id: button.brewassistant_start_mash_circulation
     hold_action:
       action: more-info
     label: |
       [[[
         const pump = states['switch.brewzilla_pump']?.state ?? '—';
         const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
-        return `Pump ${pump} · utilization ${util} %<br>Visas bara efter mash-in tills pumpen är igång`;
+        const button = states['button.brewassistant_start_mash_circulation'];
+        const buttonState = button ? 'button ready' : 'button saknas';
+        return `Pump ${pump} · utilization ${util} %<br>Visas bara efter mash-in tills pumpen är igång · ${buttonState}`;
       ]]]
     styles:
       card:
