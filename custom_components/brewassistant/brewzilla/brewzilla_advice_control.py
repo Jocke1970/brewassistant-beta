@@ -59,6 +59,10 @@ BREWZILLA_BASE_PROFILE = {
         "high_heat_cap": 0.0,
         "pump": 80.0,
     },
+    "mash_circulation": {
+        "enabled": True,
+        "floor_after_mash_in": 50.0,
+    },
 }
 
 
@@ -194,6 +198,25 @@ def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_ki
     }
 
 
+def _mash_circulation_floor(snapshot: dict[str, Any], stage_kind: str) -> float | None:
+    cfg = _profile().get("mash_circulation", {})
+    if not isinstance(cfg, dict) or not bool(cfg.get("enabled", True)):
+        return None
+    if stage_kind not in _APPLICABLE_STAGES:
+        return None
+    if snapshot.get("mash_in_gate_pending") or snapshot.get("mash_in_gate_latched"):
+        return None
+    gate_state = str(snapshot.get("mash_in_gate_state") or "").lower()
+    mash_in_done = bool(
+        gate_state == "mash_in_complete"
+        or snapshot.get("mash_in_resume_allowed")
+        or snapshot.get("mash_in_resume_result")
+    )
+    if not mash_in_done:
+        return None
+    return _p("mash_circulation.floor_after_mash_in", 50.0)
+
+
 def _arm_heat(delta: float | None, profile_heat: float | None) -> bool:
     return bool(profile_heat is not None and profile_heat > 0.0 and (delta is None or delta > 0.5))
 
@@ -261,6 +284,18 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             pump_util_profile = mix_pump if pump_util_profile is None else max(float(pump_util_profile), mix_pump)
         pump_phase = "thermal_mix"
         profile_phase = "thermal_mix_heat_cap"
+
+    mash_circulation_floor = _mash_circulation_floor(out, stage_kind) if active else None
+    mash_circulation_floor_active = mash_circulation_floor is not None
+    if mash_circulation_floor_active:
+        pump_on_profile = True
+        if pump_util_profile is None:
+            pump_util_profile = mash_circulation_floor
+        else:
+            pump_util_profile = max(float(pump_util_profile), float(mash_circulation_floor))
+        if pump_phase is None:
+            pump_phase = "mash_circulation_floor"
+
     profile_suppressed = False
 
     out.update({
@@ -285,6 +320,8 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         "advice_desired_pump_on": pump_on_profile,
         "advice_desired_pump_utilization": pump_util_profile,
         "advice_pump_phase": pump_phase,
+        "advice_mash_circulation_floor_active": mash_circulation_floor_active,
+        "advice_mash_circulation_floor_utilization": mash_circulation_floor,
         "advice_local_profile_active": active,
         "advice_local_profile_heat_utilization": profile_heat,
         "advice_local_profile_suppressed": profile_suppressed,
@@ -332,6 +369,8 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     reason = advice.get("strategy_reason") or "Brewday Advice profile is active."
     if thermal_mix.get("active"):
         reason = f"{reason} Thermal mix modifier active: wort above target while mash lags."
+    if mash_circulation_floor_active:
+        reason = f"{reason} Mash circulation floor active after mash-in."
     profile_text = "profile suppressed" if profile_suppressed else f"profile {profile_heat}% ({profile_phase})"
     out["control_reason"] = (
         f"Brewday Advice local profile: {reason} "
