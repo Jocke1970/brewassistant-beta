@@ -10,6 +10,10 @@ abort_brewzilla:
   name: Abort BrewZilla
   description: Turn off BrewAssistant-controlled BrewZilla heater and pump outputs.
 
+mash_in_started:
+  name: Mash-in started
+  description: Mark that malt addition has started, release the strike target toward the next mash target, keep pump OFF and allow low anti-drop heat.
+
 mash_in_complete:
   name: Mash-in complete
   description: Confirm the active BrewZilla mash-in gate and start mash circulation using BrewAssistant pump utilization and pump switch logic.
