@@ -1,0 +1,88 @@
+type: conditional
+conditions:
+  - entity: switch.brewzilla
+    state: "on"
+card:
+  type: horizontal-stack
+  cards:
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_started
+      name: MASH-IN STARTED
+      icon: mdi:barley
+      show_state: false
+      show_label: true
+      label: |
+        [[[
+          const a = states['button.brewassistant_mash_in_started']?.attributes || {};
+          const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
+          const next = a.next_target ?? a.mash_in_next_target ?? '—';
+          return `Släpp strike-target · effective ${target}°C · next ${next}°C`;
+        ]]]
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_started
+        confirmation:
+          text: >-
+            Börjar du mäska in nu? BA släpper strike-target, håller pumpen av
+            och siktar på nästa mash-target med låg anti-drop heat.
+      styles:
+        card:
+          - display: |
+              [[[
+                const a = states['button.brewassistant_mash_in_started']?.attributes || {};
+                return a.mash_in_started_visible ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 12px
+          - background: rgba(255,193,7,.12)
+          - border: 1px solid rgba(255,193,7,.28)
+        name:
+          - font-size: 12px
+          - font-weight: 950
+        label:
+          - white-space: normal
+          - font-size: 10.5px
+          - font-weight: 750
+          - opacity: 0.74
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_complete
+      name: MASH-IN COMPLETE
+      icon: mdi:pump
+      show_state: false
+      show_label: true
+      label: |
+        [[[
+          const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
+          const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
+          return `Starta cirkulation · target ${target}°C · pump 50%`;
+        ]]]
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_complete
+        confirmation:
+          text: >-
+            Är malten inrörd och bädden redo? BA startar mash-cirkulation med
+            pump 50% och går tillbaka till normal Real mash-logik.
+      styles:
+        card:
+          - display: |
+              [[[
+                const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
+                return a.mash_in_complete_visible ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 12px
+          - background: rgba(76,175,80,.12)
+          - border: 1px solid rgba(76,175,80,.26)
+        name:
+          - font-size: 12px
+          - font-weight: 950
+        label:
+          - white-space: normal
+          - font-size: 10.5px
+          - font-weight: 750
+          - opacity: 0.74
