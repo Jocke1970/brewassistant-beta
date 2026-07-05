@@ -3,26 +3,32 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..brewday.brewday_audit import async_record_brewday_audit_event
+from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
 from . import brewzilla_orchestration as _orchestration
 
 DATA_KEY = "brewzilla_mash_in_gate"
 NOTIFICATION_ID = "brewassistant_brewzilla_mash_in_ready"
 PUMP_OFF_UTILIZATION = 0.0
 MASH_IN_RESUME_PUMP_UTILIZATION = 50.0
+MASH_IN_STARTED_MAX_HEAT_UTILIZATION = 15.0
+MASH_IN_STARTED_COAST_HEAT_UTILIZATION = 10.0
+MASH_IN_STARTED_FEATHER_HEAT_UTILIZATION = 5.0
 UTILIZATION_TOLERANCE = 0.1
 READY_TOLERANCE_C = 0.3
-AWAITING_STATE = "awaiting_mash_in_complete"
+READY_STATE = "ready_for_mash_in"
+STARTED_STATE = "mash_in_started"
 _COMPLETE_STATE = "mash_in_complete"
-_READY_PHASES = {"mash_in_ready", "overshoot"}
-_EARLY_MASH_MAX_INDEX = 3
 _TERMINAL_STATES = {"idle", "inactive", "completed", "complete", "done"}
+_EARLY_MASH_MAX_INDEX = 3
 _ORIGINAL_BUILD: Callable[[HomeAssistant], dict[str, Any]] | None = None
+_TEMP_RE = re.compile(r"(-?\d+(?:[\.,]\d+)?)\s*(?:°\s*)?c", re.I)
 
 
 def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
@@ -32,6 +38,7 @@ def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
             "active_key": None,
             "state": "idle",
             "notified_at": None,
+            "started_at": None,
             "confirmed_at": None,
             "completed_once": False,
             "last_target": None,
@@ -39,6 +46,11 @@ def _gate_store(hass: HomeAssistant) -> dict[str, Any]:
             "last_step": None,
             "last_phase": None,
             "last_trigger": None,
+            "next_target": None,
+            "next_target_source": None,
+            "effective_target": None,
+            "effective_target_source": None,
+            "last_start_result": None,
             "last_resume_result": None,
         },
     )
@@ -111,6 +123,70 @@ def _target_for_gate(snapshot: dict[str, Any]) -> float | None:
     return None
 
 
+def _parse_temperature_from_text(value: Any) -> float | None:
+    text = str(value or "")
+    match = _TEMP_RE.search(text)
+    if not match:
+        return None
+    return _num(match.group(1).replace(",", "."))
+
+
+def _next_temperature_target(hass: HomeAssistant) -> tuple[float | None, str | None]:
+    """Return the next upcoming Brew Tracker temperature target.
+
+    Brewfather often inserts an event step for malt additions between strike and
+    the actual mash hold.  The runtime timeline lets BA skip non-temperature
+    event steps and find the next ramp/mash step with a numeric value.
+    """
+    runtime = build_brewday_runtime_snapshot(hass)
+
+    for key in ("next_step_target_temperature", "next_target_temperature"):
+        value = _num(runtime.get(key))
+        if value is not None:
+            return value, key
+
+    parsed = _parse_temperature_from_text(runtime.get("next_step"))
+    if parsed is not None:
+        return parsed, "next_step_text"
+
+    timeline = runtime.get("timeline")
+    if not isinstance(timeline, list):
+        return None, None
+
+    seen_active = False
+    for stage in timeline:
+        if not isinstance(stage, dict):
+            continue
+        steps = stage.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            if step.get("active"):
+                seen_active = True
+                continue
+            if not seen_active and not step.get("upcoming"):
+                continue
+            value = _num(step.get("value"))
+            if value is None:
+                value = _parse_temperature_from_text(step.get("name"))
+            if value is None:
+                continue
+            kind = str(step.get("type") or "").lower()
+            if kind in {"mash", "ramp", "temperature"} or "ramp" in str(step.get("name") or "").lower() or "hold" in str(step.get("name") or "").lower():
+                return value, "runtime_timeline"
+    return None, None
+
+
+def _effective_mash_in_target(hass: HomeAssistant, snapshot: dict[str, Any]) -> tuple[float | None, str | None, float | None, str | None]:
+    current_target = _target_for_gate(snapshot)
+    next_target, next_source = _next_temperature_target(hass)
+    if current_target is not None and next_target is not None and next_target <= current_target:
+        return next_target, "next_mash_step", next_target, next_source
+    return current_target, "current_step", next_target, next_source
+
+
 def _early_mash_step(snapshot: dict[str, Any]) -> bool:
     for key in ("runtime_raw_step_index", "raw_step_index", "runtime_resolved_step_index", "resolved_step_index"):
         index = _num(snapshot.get(key))
@@ -125,7 +201,7 @@ def _legacy_strategy_ready(snapshot: dict[str, Any]) -> bool:
     return bool(
         snapshot.get("mash_in_confirmation_recommended")
         and snapshot.get("mash_in_heat_strategy_active")
-        and snapshot.get("mash_in_heat_strategy_phase") in _READY_PHASES
+        and snapshot.get("mash_in_heat_strategy_phase") in {"mash_in_ready", "overshoot"}
         and _target_for_gate(snapshot) is not None
     )
 
@@ -205,9 +281,16 @@ def _ensure_gate_for_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> 
         store.update(
             {
                 "active_key": key,
-                "state": AWAITING_STATE,
+                "state": READY_STATE,
                 "notified_at": None,
+                "started_at": None,
                 "confirmed_at": None,
+                "completed_once": False,
+                "next_target": None,
+                "next_target_source": None,
+                "effective_target": None,
+                "effective_target_source": None,
+                "last_start_result": None,
                 "last_resume_result": None,
             }
         )
@@ -227,7 +310,13 @@ def _reset_if_out_of_scope(hass: HomeAssistant, snapshot: dict[str, Any]) -> boo
                 "active_key": None,
                 "completed_once": False,
                 "notified_at": None,
+                "started_at": None,
                 "confirmed_at": None,
+                "next_target": None,
+                "next_target_source": None,
+                "effective_target": None,
+                "effective_target_source": None,
+                "last_start_result": None,
                 "last_resume_result": None,
             }
         )
@@ -238,6 +327,7 @@ def _reset_if_out_of_scope(hass: HomeAssistant, snapshot: dict[str, Any]) -> boo
 async def _create_ready_notification(hass: HomeAssistant, snapshot: dict[str, Any]) -> None:
     temperature = _temperature_for_gate(snapshot)
     target = _target_for_gate(snapshot)
+    effective, effective_source, next_target, next_source = _effective_mash_in_target(hass, snapshot)
     await hass.services.async_call(
         "persistent_notification",
         "create",
@@ -245,10 +335,12 @@ async def _create_ready_notification(hass: HomeAssistant, snapshot: dict[str, An
             "notification_id": NOTIFICATION_ID,
             "title": "🍺 BrewAssistant: dags för mash-in",
             "message": (
-                "Mash-in target är nådd. Pumpen hålls pausad medan du mäskar in.\n\n"
+                "Mash-in target är nådd. Pumpen hålls pausad.\n\n"
                 f"Mäsktemperatur: {temperature} °C  \n"
-                f"Target: {target} °C  \n\n"
-                "När mash-in är klar: tryck på **BrewAssistant Mash-In Complete**."
+                f"Strike/current target: {target} °C  \n"
+                f"Nästa/effective target: {effective} °C ({effective_source}, next={next_target}, source={next_source})\n\n"
+                "Tryck först **BrewAssistant Mash-In Started** när du börjar hälla i malten. "
+                "När malten är inrörd och bädden är redo: tryck **BrewAssistant Mash-In Complete**."
             ),
         },
         blocking=False,
@@ -273,20 +365,30 @@ def _can_apply_gate(snapshot: dict[str, Any], *, action_needed: bool) -> bool:
 
 
 def _gate_fields(store: dict[str, Any], snapshot: dict[str, Any], *, pending: bool) -> dict[str, Any]:
+    state = store.get("state")
     return {
-        "mash_in_gate_state": store.get("state"),
+        "mash_in_gate_state": state,
         "mash_in_gate_pending": pending,
-        "mash_in_gate_latched": store.get("state") == AWAITING_STATE,
+        "mash_in_gate_latched": state in {READY_STATE, STARTED_STATE},
         "mash_in_gate_active_key": store.get("active_key"),
         "mash_in_gate_trigger": store.get("last_trigger"),
         "mash_in_gate_notification_id": NOTIFICATION_ID,
         "mash_in_gate_notified_at": store.get("notified_at"),
+        "mash_in_gate_started_at": store.get("started_at"),
         "mash_in_gate_confirmed_at": store.get("confirmed_at"),
         "mash_in_gate_last_target": store.get("last_target"),
         "mash_in_gate_last_stage": store.get("last_stage"),
         "mash_in_gate_last_step": store.get("last_step"),
         "mash_in_gate_current_target": _target_for_gate(snapshot),
         "mash_in_gate_current_temperature": _temperature_for_gate(snapshot),
+        "mash_in_next_target": store.get("next_target"),
+        "mash_in_next_target_source": store.get("next_target_source"),
+        "mash_in_effective_target": store.get("effective_target"),
+        "mash_in_effective_target_source": store.get("effective_target_source"),
+        "mash_in_started_visible": state == READY_STATE,
+        "mash_in_complete_visible": state == STARTED_STATE,
+        "mash_in_started_active": state == STARTED_STATE,
+        "mash_in_start_result": store.get("last_start_result"),
         "mash_in_resume_result": store.get("last_resume_result"),
     }
 
@@ -309,7 +411,108 @@ def _force_pump_pause(snapshot: dict[str, Any], store: dict[str, Any]) -> dict[s
         "can_apply_target": can_apply_gate,
         "orchestration_mode": "direct-control" if can_apply_gate else snapshot.get("orchestration_mode"),
         **_gate_fields(store, snapshot, pending=True),
-        "control_reason": f"{reason}; mash-in confirmation gate active, pump OFF until mash-in complete is confirmed.",
+        "control_reason": f"{reason}; mash-in ready gate active, pump OFF until Mash-In Started is pressed.",
+    }
+
+
+def _mash_in_started_hold_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
+    if store.get("effective_target") is None:
+        effective, effective_source, next_target, next_source = _effective_mash_in_target(hass, snapshot)
+        store["effective_target"] = effective
+        store["effective_target_source"] = effective_source
+        store["next_target"] = next_target
+        store["next_target_source"] = next_source
+
+    effective_target = _num(store.get("effective_target"))
+    current = _temperature_for_gate(snapshot)
+    applied = _num(snapshot.get("applied_target"))
+    heat_utilization = _num(snapshot.get("heat_utilization"))
+    pump_utilization = _num(snapshot.get("pump_utilization"))
+    heater_on = bool(snapshot.get("heater_on"))
+    pump_on = bool(snapshot.get("pump_on"))
+
+    if effective_target is None or current is None:
+        desired_heat = 0.0
+        desired_heater_on = False
+        delta_to_effective = None
+        phase = "unknown_target"
+    else:
+        delta_to_effective = round(effective_target - current, 2)
+        if delta_to_effective > 1.0:
+            desired_heat = MASH_IN_STARTED_MAX_HEAT_UTILIZATION
+            desired_heater_on = True
+            phase = "anti_drop_recovery"
+        elif delta_to_effective > 0.2:
+            desired_heat = MASH_IN_STARTED_COAST_HEAT_UTILIZATION
+            desired_heater_on = True
+            phase = "anti_drop_coast"
+        elif delta_to_effective >= -0.3:
+            desired_heat = MASH_IN_STARTED_FEATHER_HEAT_UTILIZATION
+            desired_heater_on = True
+            phase = "anti_drop_feather"
+        else:
+            desired_heat = 0.0
+            desired_heater_on = False
+            phase = "above_effective_target"
+
+    target_delta = None
+    target_sync_needed = False
+    if effective_target is not None and applied is not None:
+        target_delta = round(effective_target - applied, 2)
+        target_sync_needed = abs(target_delta) > _orchestration.TARGET_SYNC_TOLERANCE
+
+    heat_action_needed = _orchestration._utilization_action_needed(heat_utilization, desired_heat)
+    pump_utilization_action_needed = _orchestration._utilization_action_needed(pump_utilization, PUMP_OFF_UTILIZATION)
+    pump_stop_needed = pump_on
+    heater_action_needed = bool(desired_heater_on and not heater_on)
+    heater_stop_needed = bool(desired_heater_on is False and heater_on)
+    action_needed = bool(
+        target_sync_needed
+        or heat_action_needed
+        or pump_utilization_action_needed
+        or pump_stop_needed
+        or heater_action_needed
+        or heater_stop_needed
+    )
+    can_apply = bool(
+        snapshot.get("connected", True)
+        and action_needed
+        and not snapshot.get("abort_lockout_active")
+        and _runtime_active_enough(snapshot)
+        and effective_target is not None
+    )
+
+    reason = str(snapshot.get("control_reason") or "Direct production flow active")
+    return {
+        **snapshot,
+        "requested_target": effective_target,
+        "requested_target_source": "mash_in_started_effective_target",
+        "target_delta": target_delta,
+        "target_sync_needed": target_sync_needed,
+        "paused_target_rewind_blocked": False,
+        "heating_needed": bool(desired_heater_on),
+        "desired_heat_utilization": desired_heat,
+        "desired_heater_on": desired_heater_on,
+        "heat_utilization_action_needed": heat_action_needed,
+        "heater_action_needed": heater_action_needed,
+        "heater_stop_needed": heater_stop_needed,
+        "pump_recommended": False,
+        "desired_pump_on": False,
+        "desired_pump_utilization": PUMP_OFF_UTILIZATION,
+        "pump_action_needed": False,
+        "pump_stop_needed": pump_stop_needed,
+        "pump_utilization_action_needed": pump_utilization_action_needed,
+        "mash_in_started_hold_active": True,
+        "mash_in_started_hold_phase": phase,
+        "mash_in_started_delta_to_effective_target": delta_to_effective,
+        "can_apply_target": can_apply,
+        "orchestration_mode": "direct-control" if can_apply else "monitor",
+        **_gate_fields(store, snapshot, pending=False),
+        "control_reason": (
+            f"{reason}; mash-in has started. Strike target released; effective mash target "
+            f"{effective_target}°C ({store.get('effective_target_source')}). Pump remains OFF; "
+            f"anti-drop heat {desired_heat}% ({phase}) until Mash-In Complete is pressed."
+        ),
     }
 
 
@@ -327,6 +530,8 @@ def _completed_snapshot(snapshot: dict[str, Any], store: dict[str, Any]) -> dict
         "mash_in_gate_state": _COMPLETE_STATE,
         "mash_in_gate_pending": False,
         "mash_in_gate_latched": False,
+        "mash_in_started_visible": False,
+        "mash_in_complete_visible": False,
         "mash_in_gate_confirmed_at": store.get("confirmed_at"),
         "mash_in_resume_result": store.get("last_resume_result"),
     }
@@ -335,12 +540,18 @@ def _completed_snapshot(snapshot: dict[str, Any], store: dict[str, Any]) -> dict
 def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str, Any]:
     store = _gate_store(hass)
 
-    if store.get("state") == AWAITING_STATE:
+    if store.get("state") == READY_STATE:
         if _reset_if_out_of_scope(hass, snapshot):
             return _idle_snapshot(snapshot, store)
-        _update_gate_context(store, snapshot, trigger=store.get("last_trigger") or "latched_mash_in")
+        _update_gate_context(store, snapshot, trigger=store.get("last_trigger") or "ready_for_mash_in")
         _schedule_notification_if_needed(hass, snapshot, store)
         return _force_pump_pause(snapshot, store)
+
+    if store.get("state") == STARTED_STATE:
+        if _reset_if_out_of_scope(hass, snapshot):
+            return _idle_snapshot(snapshot, store)
+        _update_gate_context(store, snapshot, trigger=store.get("last_trigger") or STARTED_STATE)
+        return _mash_in_started_hold_snapshot(hass, snapshot, store)
 
     if store.get("completed_once"):
         if _reset_if_out_of_scope(hass, snapshot):
@@ -428,6 +639,8 @@ async def _start_mash_circulation(
         "pump_recommended": bool(blocked_reason is None),
         "pump_action_needed": False,
         "pump_stop_needed": False,
+        "mash_in_started_visible": False,
+        "mash_in_complete_visible": False,
         "control_reason": (
             "Operator action: mash circulation requested; pump utilization set and pump start sent."
             if blocked_reason is None
@@ -437,6 +650,45 @@ async def _start_mash_circulation(
     }
     hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
     return result
+
+
+async def async_mark_mash_in_started(hass: HomeAssistant) -> dict[str, Any]:
+    """Mark that malt addition has started, release strike target and keep pump paused."""
+    snapshot = _orchestration.build_orchestration_snapshot(hass)
+    store = _gate_store(hass)
+    effective, effective_source, next_target, next_source = _effective_mash_in_target(hass, snapshot)
+    store.update(
+        {
+            "state": STARTED_STATE,
+            "started_at": dt_util.utcnow().isoformat(),
+            "completed_once": False,
+            "effective_target": effective,
+            "effective_target_source": effective_source,
+            "next_target": next_target,
+            "next_target_source": next_source,
+            "last_start_result": None,
+        }
+    )
+    _update_gate_context(store, snapshot, trigger=STARTED_STATE)
+
+    apply_result = await _orchestration.async_apply_brewzilla_target_if_allowed(hass)
+    store["last_start_result"] = {
+        "apply_result": apply_result.get("apply_result"),
+        "actions": apply_result.get("actions"),
+        "target_changed": apply_result.get("target_changed"),
+        "effective_target": effective,
+        "effective_target_source": effective_source,
+        "next_target": next_target,
+        "next_target_source": next_source,
+        "executed_at": apply_result.get("executed_at"),
+    }
+    await async_record_brewday_audit_event(
+        hass,
+        "mash_in_started",
+        brewzilla_result=apply_result,
+        always_record=True,
+    )
+    return build_mash_in_gate_snapshot(hass)
 
 
 async def async_start_mash_circulation(hass: HomeAssistant) -> dict[str, Any]:
@@ -490,16 +742,25 @@ def build_mash_in_gate_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "source": "brewzilla_mash_in_gate",
         "state": store.get("state"),
-        "pending": store.get("state") == AWAITING_STATE,
+        "pending": store.get("state") == READY_STATE,
+        "started": store.get("state") == STARTED_STATE,
         "completed_once": bool(store.get("completed_once")),
         "active_key": store.get("active_key"),
         "notified_at": store.get("notified_at"),
+        "started_at": store.get("started_at"),
         "confirmed_at": store.get("confirmed_at"),
         "last_target": store.get("last_target"),
         "last_stage": store.get("last_stage"),
         "last_step": store.get("last_step"),
         "last_phase": store.get("last_phase"),
         "last_trigger": store.get("last_trigger"),
+        "next_target": store.get("next_target"),
+        "next_target_source": store.get("next_target_source"),
+        "effective_target": store.get("effective_target"),
+        "effective_target_source": store.get("effective_target_source"),
+        "mash_in_started_visible": store.get("state") == READY_STATE,
+        "mash_in_complete_visible": store.get("state") == STARTED_STATE,
+        "last_start_result": store.get("last_start_result"),
         "last_resume_result": store.get("last_resume_result"),
         "notification_id": NOTIFICATION_ID,
     }
