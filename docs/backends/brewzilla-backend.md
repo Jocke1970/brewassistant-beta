@@ -32,7 +32,7 @@ The current high-level path is:
 Brewday Runtime resolver
   -> BrewZilla orchestration snapshot
   -> Brewday Advice control profile
-  -> safety/guard layers
+  -> mash-in gate / safety guard layers
   -> async_apply_brewzilla_target_if_allowed
   -> Brewday Event Log
 ```
@@ -44,7 +44,8 @@ Brewday Runtime resolver
 | `brewzilla_orchestration.py` | Core orchestration snapshot and direct apply path for target, heat utilization, pump utilization, heater and pump. |
 | `brewzilla_advice_control.py` | Brewday Advice profile bridge. Converts stage/delta/rate/mash-wort state into desired heat and pump utilization. |
 | `brewzilla_temperature.py` | Mash/wort/control temperature resolver and source selection. |
-| `brewzilla_mash_in_gate.py` | Operator confirmation gate before mash circulation starts. |
+| `brewzilla_mash_in_gate.py` | Two-step operator gate: Mash-In Started releases strike target; Mash-In Complete starts circulation. |
+| `brewzilla_mash_in_started_guard.py` | Narrow apply bridge for Mash-In Started anti-drop heat and target release while pump remains OFF. |
 | `brewzilla_paused_guard.py` | Safe-down and limited paused mash-hold maintenance while Brewfather reports paused. |
 | `brewzilla_local_control_lease_v2.py` | Short passive observation lease after target changes, with early break on Advice risk. |
 | `brewzilla_freshness_guard.py` | RAPT/BrewZilla telemetry freshness diagnostics and guard state. |
@@ -111,20 +112,54 @@ Real mash  -> conservative malt-pipe circulation
 Unknown    -> conservative malt-pipe circulation
 ```
 
-## Mash-in gate
+## Two-step mash-in gate
 
-Before mash-in is confirmed, BrewAssistant can stop pump circulation and hold pump utilization at 0 %.
+Mash-in is split into two explicit operator actions.
 
-Expected pre-confirmation behavior:
+### 1. Mash-In Started
+
+Visible only while the mash-in gate is ready:
 
 ```yaml
-mash_in_gate_state: awaiting_mash_in_complete
-mash_in_gate_pending: true
-desired_pump_on: false
-desired_pump_utilization: 0
+mash_in_gate_state: ready_for_mash_in
+mash_in_started_visible: true
+mash_in_complete_visible: false
 ```
 
-Expected confirmation behavior:
+When pressed, BA:
+
+```text
+- records event_type: mash_in_started
+- scans Brew Tracker timeline for the next temperature-bearing mash/ramp step
+- releases the strike target if that next mash target is lower
+- keeps pump OFF / pump utilization 0
+- allows only low anti-drop heat up to 15 %
+```
+
+For a realistic 69/66 mash-in:
+
+```yaml
+mash_in_gate_state: mash_in_started
+mash_in_started_hold_active: true
+mash_in_effective_target: 66.0
+mash_in_complete_visible: true
+actions:
+  - mash_in_started_set_target:66.0
+  - mash_in_started_set_heat_utilization:10.0
+  - mash_in_started_set_pump_utilization:0.0
+```
+
+### 2. Mash-In Complete
+
+Visible only after Mash-In Started:
+
+```yaml
+mash_in_gate_state: mash_in_started
+mash_in_started_visible: false
+mash_in_complete_visible: true
+```
+
+When pressed, BA starts circulation:
 
 ```yaml
 apply_result: mash_circulation_started
@@ -133,6 +168,8 @@ actions:
   - set_pump_utilization:50.0
   - pump_on
 mash_in_gate_state: mash_in_complete
+mash_in_started_visible: false
+mash_in_complete_visible: false
 ```
 
 After confirmation, normal mash circulation should continue unless a higher safety guard stops it.
@@ -297,6 +334,8 @@ For BrewAssistant/BrewZilla tests:
 ```text
 Ramp between targets: 5 min
 Hold time: unchanged
+Strike / mash-in target: 69°C
+Mash target after grain: 66°C
 ```
 
 Two-minute ramps are useful stress tests, but they can cause Brewfather target transitions before the mash/wort temperatures and cloud telemetry have stabilized.
@@ -304,7 +343,14 @@ Two-minute ramps are useful stress tests, but they can cause Brewfather target t
 ## What to verify in next event log
 
 ```yaml
-apply_result: paused_hold_maintenance_applied
+mash_in_gate_state: ready_for_mash_in
+mash_in_started_visible: true
+event_type: mash_in_started
+mash_in_started_hold_active: true
+mash_in_effective_target: 66.0
+apply_result: mash_in_started_hold_applied
+event_type: mash_in_confirmed
+apply_result: mash_circulation_started
 advice_mash_circulation_floor_active: true
 advice_thermal_mix_active: true
 advice_thermal_mix_reason: wort_near_target_mash_lagging
