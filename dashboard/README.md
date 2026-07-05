@@ -22,6 +22,7 @@ dashboard/
     brewtracker_runtime.yaml
     brewzilla.yaml
     brewzilla_mash_in_confirm.yaml
+    brewzilla_mash_in_controls.yaml
     brewzilla_local_control.yaml
     brewzilla_advice_auto.yaml
     brewzilla_safety_rcl.yaml
@@ -76,7 +77,8 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
 | `brewtracker_runtime.yaml` | BrewTracker live runtime card with current step, next step, batch status, progress and refresh action. |
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
-| `brewzilla_mash_in_confirm.yaml` | Mash-in confirmation and explicit mash-circulation action card. |
+| `brewzilla_mash_in_confirm.yaml` | Legacy mash-in confirmation and explicit mash-circulation action card. |
+| `brewzilla_mash_in_controls.yaml` | Two-step mash-in operator controls: Mash-In Started, then Mash-In Complete. |
 | `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
 | `brewzilla_advice_auto.yaml` | Brewday Advice conditional card; auto-shows on advice/risk/unknown context or by switch. |
 | `brewzilla_safety_rcl.yaml` | Safety/RCL conditional card; auto-shows on warning/guard/filter/abort or by switch. |
@@ -97,28 +99,32 @@ BrewTracker Runtime = current live step, next step, batch status, target, remain
 
 `brewfather_feed.yaml` remains for compatibility while the split cards are tested.
 
-## BrewZilla mash-in confirmation
+## BrewZilla two-step mash-in controls
 
-`cards/brewzilla_mash_in_confirm.yaml` is the explicit operator card for the mash-in handoff.
+`cards/brewzilla_mash_in_controls.yaml` is the preferred explicit operator card for the mash-in handoff.
 
 Expected flow:
 
 ```text
-1. BrewAssistant detects mash-in target reached.
-2. BrewAssistant exposes binary_sensor.brewassistant_brewzilla_mash_in_gate_pending = on.
-3. The conditional Mash-in button is shown.
-4. Operator mashes in manually.
-5. Operator presses button.brewassistant_brewzilla_mash_in_complete.
-6. BrewAssistant marks the gate complete and starts mash circulation using pump utilization plus pump switch.
+1. BrewAssistant detects mash-in/strike readiness.
+2. Only button.brewassistant_mash_in_started is visible.
+3. Operator starts adding malt and presses Mash-In Started.
+4. BA releases strike target toward the next mash target, keeps pump OFF and allows low anti-drop heat.
+5. Only button.brewassistant_mash_in_complete is visible.
+6. Operator finishes stirring/settling the malt bed and presses Mash-In Complete.
+7. BA starts mash circulation using pump utilization 50 % plus pump switch.
+8. Both mash-in buttons disappear.
 ```
 
 Entities used:
 
 ```text
-binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_mash_in_started
+button.brewassistant_mash_in_complete
 button.brewassistant_brewzilla_start_mash_circulation
 ```
+
+The legacy `cards/brewzilla_mash_in_confirm.yaml` remains for compatibility during migration, but the two-step card should be used for realistic 69°C strike / 66°C mash-in tests.
 
 The fallback `Starta mäskcirkulation` button is intentionally explicit. It sets mash pump utilization and turns the pump on through the BrewAssistant button entity. It should not be replaced with duplicate service workarounds.
 
@@ -128,7 +134,7 @@ The intended split is:
 
 ```text
 BrewZilla = operator/hardware cockpit
-BrewZilla Mash-In Confirm = explicit mash-in completion and circulation action
+BrewZilla Mash-In Controls = explicit two-step mash-in handoff
 BrewZilla Local Control = what BA handed to BZ and whether lease is active
 Brewday Advice = why BA selected a profile; hidden by default unless meaningful
 Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
