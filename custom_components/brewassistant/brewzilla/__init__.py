@@ -20,6 +20,7 @@ from . import brewzilla_target_trust_guard as _target_trust_guard
 from . import brewzilla_local_control_lease_v2 as _local_control_lease
 from . import brewzilla_stale_heat_guard as _stale_heat_guard
 from . import brewzilla_no_positive_gate as _no_positive_gate
+from . import brewzilla_mash_in_started_guard as _mash_in_started_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -46,3 +47,4 @@ _target_trust_guard.install_target_trust_guard()
 _local_control_lease.install_local_control_lease()
 _stale_heat_guard.install_stale_heat_guard()
 _no_positive_gate.install_no_positive_gate()
+_mash_in_started_guard.install_mash_in_started_guard()
