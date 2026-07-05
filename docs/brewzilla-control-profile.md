@@ -1,7 +1,7 @@
 # BrewZilla Advice Control Profile
 
 Status: active development / test notes  
-Last synced: 2026-07-04
+Last synced: 2026-07-05
 
 This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker tests.
 
@@ -43,14 +43,61 @@ Mash hold:
   <=0.2°C / over target -> 0 %
 ```
 
-Current pump profile:
+Current real-mash pump profile:
+
+```text
+Ramp:                 50 %
+Mash hold:            50 %
+Overshoot mix:        45 %
+Thermal mix:          70 %
+Mash circulation floor after mash-in: 40 %
+```
+
+Water-only tests may still use the stronger water-test pump profile:
 
 ```text
 Ramp:                 70 %
 Mash hold:            50 %
 Overshoot mix:        50 %
 Thermal mix:          80 %
-Mash circulation floor after mash-in: 50 %
+```
+
+The selected learning context controls which pump profile is used:
+
+```text
+select.brewassistant_brewzilla_learning_context = Water only -> water-test pump profile
+select.brewassistant_brewzilla_learning_context = Real mash  -> real-mash pump profile
+Unknown                                                   -> real-mash conservative profile
+```
+
+## Positive-control gate
+
+Brewday Advice must not resurrect stale targets when Brewday Runtime is idle, inactive, completed or otherwise outside an active control state.
+
+If positive control is blocked, BrewAssistant may only issue safe-down actions:
+
+```text
+target_sync_needed = false
+desired_heat_utilization = 0 %
+desired_pump_utilization = 0 %
+desired_heater_on = false
+desired_pump_on = false
+```
+
+Expected diagnostics when this gate catches stale runtime/advice state:
+
+```yaml
+advice_positive_control_blocked: true
+advice_positive_control_blocked_reason: brewday_runtime_not_active
+```
+
+A stale Idle/Inactive runtime must not produce:
+
+```yaml
+actions:
+  - set_target:...
+  - set_heat_utilization:...
+  - set_pump_utilization:...
 ```
 
 ## Mash-in gate
@@ -81,16 +128,16 @@ If mash_in_gate_state == mash_in_complete
 and stage_kind is ramp or mash_hold
 and no safety/gate/abort guard is active:
   pump_on = true
-  pump_utilization >= 50 %
+  pump_utilization >= 40 %
 ```
 
-Thermal mix may temporarily raise the pump to 80 %. When thermal mix no longer applies, pump utilization should return to at least the 50 % mash circulation floor, not drop below it.
+Normal ramp/hold profile still requests 50 %. The 40 % floor only prevents the pump from dropping too low when another modifier would otherwise lower it. Thermal mix may temporarily raise pump utilization to 70 % during real mash or 80 % during water-only tests.
 
 Expected diagnostics:
 
 ```yaml
 advice_mash_circulation_floor_active: true
-advice_mash_circulation_floor_utilization: 50
+advice_mash_circulation_floor_utilization: 40
 advice_desired_pump_on: true
 desired_pump_utilization: 50
 ```
@@ -107,21 +154,39 @@ mash temperature is still below target
 mash and wort/internal are meaningfully different
 ```
 
-Current effect:
+There is also an earlier approach trigger:
+
+```text
+wort/internal temperature is within 1.0°C below target
+mash temperature is at least 1.5°C below target
+mash and wort/internal are meaningfully different
+```
+
+This lets BrewAssistant cap heat before the wort/internal side overshoots while the mash is still lagging.
+
+Current real-mash effect:
 
 ```text
 heat utilization capped to 5 % or 0 %
-pump utilization raised to 80 %
+pump utilization raised to 70 %
 ```
+
+Water-only thermal mix may still raise pump utilization to 80 %.
 
 Expected event-log markers:
 
 ```yaml
 advice_thermal_mix_active: true
 advice_heat_profile_phase: thermal_mix_heat_cap
-desired_heat_utilization: 0
-advice_desired_pump_utilization: 80
-advice_pump_phase: thermal_mix
+advice_thermal_mix_reason: wort_near_target_mash_lagging
+```
+
+or after the wort/internal side has passed target:
+
+```yaml
+advice_thermal_mix_active: true
+advice_heat_profile_phase: thermal_mix_heat_cap
+advice_thermal_mix_reason: wort_above_target_mash_lagging
 ```
 
 ## Paused mash-hold maintenance
@@ -133,7 +198,7 @@ Current limits:
 ```text
 max paused hold heat utilization: 15 %
 max paused hold pump utilization: 80 %
-max positive heat when more than 2.0°C below target: blocked
+max positive heat below target window: 6.0°C
 ```
 
 Expected event-log markers:
@@ -151,7 +216,7 @@ or during thermal mix:
 apply_result: paused_hold_maintenance_applied
 actions:
   - paused_hold_set_heat_utilization:0.0
-  - paused_hold_set_pump_utilization:80.0
+  - paused_hold_set_pump_utilization:70.0
 ```
 
 ## Local-control lease
@@ -222,6 +287,8 @@ For the next supervised test, check for:
 apply_result: paused_hold_maintenance_applied
 advice_mash_circulation_floor_active: true
 advice_thermal_mix_active: true
+advice_thermal_mix_reason: wort_near_target_mash_lagging
+advice_positive_control_blocked: true   # only after runtime goes idle/inactive
 local_control_lease_break_reason: thermal_mix_active
 local_control_lease_break_reason: near_target_taper_zone
 ```
