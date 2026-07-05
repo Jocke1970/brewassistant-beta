@@ -23,7 +23,11 @@ from .brewday.brewday_audit import (
     async_stop_brewday_audit_log,
 )
 from .brewday.brewday_refresh import request_manual_brewfather_refresh
-from .brewzilla.brewzilla_mash_in_gate import async_confirm_mash_in_complete, async_start_mash_circulation
+from .brewzilla.brewzilla_mash_in_gate import (
+    async_confirm_mash_in_complete,
+    async_mark_mash_in_started,
+    async_start_mash_circulation,
+)
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
 from .carbonation_backend.carbonation_runtime import (
     async_load_carbonation_runtime,
@@ -43,6 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
 SERVICE_APPLY_BREWZILLA_TARGET = "apply_brewzilla_target"
 SERVICE_ABORT_BREWZILLA = "abort_brewzilla"
+SERVICE_MASH_IN_STARTED = "mash_in_started"
 SERVICE_MASH_IN_COMPLETE = "mash_in_complete"
 SERVICE_START_MASH_CIRCULATION = "start_mash_circulation"
 SERVICE_BREWDAY_AUDIT_START = "brewday_audit_start"
@@ -172,6 +177,8 @@ def _register_services(hass: HomeAssistant) -> None:
                 "sensor.brewassistant_brewzilla_runtime_state",
                 "sensor.brewassistant_brewzilla_runtime_summary",
                 "binary_sensor.brewassistant_brewzilla_mash_in_gate_pending",
+                "button.brewassistant_mash_in_started",
+                "button.brewassistant_mash_in_complete",
             ]},
             blocking=False,
         )
@@ -253,6 +260,11 @@ def _register_services(hass: HomeAssistant) -> None:
         await async_record_brewday_audit_event(hass, "abort", brewzilla_result=result, always_record=True)
         await _refresh_runtime_sensors()
         _LOGGER.warning("BrewZilla ABORT executed: %s", result.get("actions"))
+
+    async def _handle_mash_in_started(call: ServiceCall) -> None:
+        result = await async_mark_mash_in_started(hass)
+        await _refresh_runtime_sensors()
+        _LOGGER.warning("BrewZilla mash-in started executed: %s", result.get("last_start_result"))
 
     async def _handle_mash_in_complete(call: ServiceCall) -> None:
         result = await async_confirm_mash_in_complete(hass)
@@ -348,6 +360,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
+    hass.services.async_register(DOMAIN, SERVICE_MASH_IN_STARTED, _handle_mash_in_started)
     hass.services.async_register(DOMAIN, SERVICE_MASH_IN_COMPLETE, _handle_mash_in_complete)
     hass.services.async_register(DOMAIN, SERVICE_START_MASH_CIRCULATION, _handle_start_mash_circulation)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_START, _handle_brewday_audit_start)
