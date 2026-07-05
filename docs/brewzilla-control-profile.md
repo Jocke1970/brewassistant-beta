@@ -100,13 +100,61 @@ actions:
   - set_pump_utilization:...
 ```
 
-## Mash-in gate
+## Two-step mash-in gate
 
-Before mash-in is confirmed, BrewAssistant may stop circulation and hold pump utilization at 0 %. This is intentional: it prevents automatic circulation before the operator confirms that grain has been added and the mash is safe to circulate.
+Mash-in is split into two explicit operator actions:
 
-After the operator confirms mash-in, BrewAssistant starts mash circulation and applies a 50 % pump utilization baseline.
+```text
+1. Mash-In Started
+2. Mash-In Complete
+```
 
-Expected event-log markers:
+Before any button is pressed, BrewAssistant may stop circulation and hold pump utilization at 0 %. Only the **Mash-In Started** button should be visible.
+
+Expected ready state:
+
+```yaml
+mash_in_gate_state: ready_for_mash_in
+mash_in_started_visible: true
+mash_in_complete_visible: false
+desired_pump_on: false
+desired_pump_utilization: 0
+```
+
+When **Mash-In Started** is pressed, BrewAssistant releases the strike target. It scans Brew Tracker's runtime/timeline for the next temperature-bearing mash step, skipping event-only steps such as malt additions. If the next target is lower than the strike/current target, that next target becomes the effective control target.
+
+Example:
+
+```text
+Current/strike target: 69°C
+Next mash target:      66°C
+Effective BA target:   66°C
+```
+
+During `mash_in_started`, pump remains OFF and BA may use low anti-drop heat only:
+
+```text
+far below effective target: 15 %
+slightly below target:     10 %
+near target:                5 %
+above target:               0 %
+```
+
+Expected event-log markers after **Mash-In Started**:
+
+```yaml
+event_type: mash_in_started
+mash_in_gate_state: mash_in_started
+mash_in_started_hold_active: true
+mash_in_complete_visible: true
+mash_in_started_set_target: 66.0   # when next mash target is lower than strike target
+mash_in_started_set_heat_utilization:10.0
+mash_in_started_set_pump_utilization:0.0
+```
+
+When **Mash-In Complete** is pressed, BrewAssistant starts mash circulation and applies a 50 % pump utilization baseline. After that, both mash-in buttons should be hidden.
+
+Expected event-log markers after **Mash-In Complete**:
 
 ```yaml
 apply_result: mash_circulation_started
@@ -115,6 +163,8 @@ actions:
   - set_pump_utilization:50.0
   - pump_on
 mash_in_gate_state: mash_in_complete
+mash_in_started_visible: false
+mash_in_complete_visible: false
 ```
 
 ## Mash circulation floor
@@ -269,22 +319,28 @@ Ramp between targets: 5 min
 Hold/stable time: unchanged
 ```
 
-Interpretation:
+For a realistic mash-in test:
 
 ```text
-Ramp 66 -> 72°C: 5 min
-Hold 72°C: 30 min
-Total elapsed for that transition: 35 min
+Strike / mash-in target: 69°C
+Mash target after grain: 66°C
 ```
 
-The ramp is not dead time; mash enzymes still work during the ramp. However, a recipe hold time should be interpreted as time at or near the target temperature after the ramp step.
+BA should show **Mash-In Started** at strike readiness, then use the next mash target as effective control target after the button is pressed.
 
 ## What to check in event logs
 
 For the next supervised test, check for:
 
 ```yaml
-apply_result: paused_hold_maintenance_applied
+mash_in_gate_state: ready_for_mash_in
+mash_in_started_visible: true
+event_type: mash_in_started
+mash_in_started_hold_active: true
+mash_in_effective_target: 66.0
+apply_result: mash_in_started_hold_applied
+event_type: mash_in_confirmed
+apply_result: mash_circulation_started
 advice_mash_circulation_floor_active: true
 advice_thermal_mix_active: true
 advice_thermal_mix_reason: wort_near_target_mash_lagging
