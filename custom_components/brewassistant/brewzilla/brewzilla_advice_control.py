@@ -10,6 +10,7 @@ from .brewzilla_learning import build_brewzilla_learning_snapshot
 _BASE_BUILD = None
 _INSTALLED = False
 _APPLICABLE_STAGES = {"ramp", "mash_hold"}
+_NO_POSITIVE_STATES = {"", "idle", "inactive", "unknown", "unavailable", "none"}
 
 BREWZILLA_BASE_PROFILE = {
     "name": "brewzilla_35l_small_batch_default",
@@ -37,7 +38,15 @@ BREWZILLA_BASE_PROFILE = {
         "hold_gentle": 0.7,
         "hold_feather": 0.2,
     },
+    # Conservative default for real mash / malt pipe flow.
     "pump": {
+        "ramp": 50.0,
+        "hold": 50.0,
+        "overshoot": 45.0,
+        "thermal_mix": 70.0,
+    },
+    # Water-only tests can still use stronger circulation because there is no malt bed.
+    "water_only_pump": {
         "ramp": 70.0,
         "hold": 50.0,
         "overshoot": 50.0,
@@ -53,15 +62,17 @@ BREWZILLA_BASE_PROFILE = {
         "min_mash_wort_delta_c": 0.3,
         "wort_over_target_c": 0.2,
         "mash_below_target_c": 0.7,
+        "wort_near_target_c": 1.0,
+        "approach_mash_gap_c": 1.5,
         "high_wort_over_target_c": 1.0,
         "large_mash_gap_c": 2.0,
         "heat_cap": 5.0,
+        "approach_heat_cap": 5.0,
         "high_heat_cap": 0.0,
-        "pump": 80.0,
     },
     "mash_circulation": {
         "enabled": True,
-        "floor_after_mash_in": 50.0,
+        "floor_after_mash_in": 40.0,
     },
 }
 
@@ -89,8 +100,72 @@ def _p(path: str, fallback: float) -> float:
     return fallback if parsed is None else parsed
 
 
+def _context(advice: dict[str, Any]) -> str:
+    context = str(advice.get("learning_context") or "Unknown")
+    return context if context in {"Water only", "Real mash"} else "Unknown"
+
+
+def _pump_p(advice: dict[str, Any], key: str, fallback: float) -> float:
+    context = _context(advice)
+    profile_key = "water_only_pump" if context == "Water only" else "pump"
+    return _p(f"{profile_key}.{key}", fallback)
+
+
 def _active(state: Any) -> bool:
     return base._runtime_active(str(state or "idle"))
+
+
+def _positive_utilization(value: Any) -> bool:
+    parsed = _num(value)
+    return bool(parsed is not None and parsed > base.UTILIZATION_TOLERANCE)
+
+
+def _positive_control_blocked(snapshot: dict[str, Any], runtime_state: str) -> bool:
+    state = str(runtime_state or "idle").lower()
+    runtime_stage = str(snapshot.get("runtime_stage") or "").lower()
+    runtime_source = str(snapshot.get("runtime_source") or "").lower()
+    return bool(
+        state in _NO_POSITIVE_STATES
+        or snapshot.get("completed_runtime")
+        or snapshot.get("no_positive_control_gate_active")
+        or (runtime_stage == "idle" and runtime_source in {"", "none", "unknown"})
+    )
+
+
+def _apply_positive_control_block(snapshot: dict[str, Any]) -> None:
+    heater_on = bool(snapshot.get("heater_on"))
+    pump_on = bool(snapshot.get("pump_on"))
+    heat_zero_needed = _positive_utilization(snapshot.get("heat_utilization"))
+    pump_zero_needed = _positive_utilization(snapshot.get("pump_utilization"))
+    safe_down_needed = bool(heater_on or pump_on or heat_zero_needed or pump_zero_needed)
+    connected = bool(snapshot.get("connected"))
+
+    snapshot.update(
+        {
+            "advice_positive_control_blocked": True,
+            "advice_positive_control_blocked_reason": "brewday_runtime_not_active",
+            "target_sync_needed": False,
+            "heating_needed": False,
+            "pump_recommended": False,
+            "desired_heat_utilization": 0.0,
+            "desired_pump_utilization": 0.0,
+            "desired_heater_on": False,
+            "desired_pump_on": False,
+            "heater_action_needed": False,
+            "pump_action_needed": False,
+            "heater_stop_needed": heater_on,
+            "pump_stop_needed": pump_on,
+            "heat_utilization_action_needed": heat_zero_needed,
+            "pump_utilization_action_needed": pump_zero_needed,
+            "ba_owned_reassert_action_needed": False,
+            "can_apply_target": connected and safe_down_needed,
+            "orchestration_mode": "direct-control" if connected and safe_down_needed else "blocked",
+            "control_reason": (
+                "Brewday Advice positive-control gate active; Brewday Runtime is not in an active control state. "
+                "Only safe-down BrewZilla actions are allowed."
+            ),
+        }
+    )
 
 
 def _rate_adjusted_heat(profile_heat: float, *, delta: float | None, temp_rate: float | None) -> tuple[float, str | None]:
@@ -147,14 +222,14 @@ def _base_heat_profile(stage_kind: str, delta: float | None, temp_rate: float | 
     return None, None
 
 
-def _base_pump_profile(stage_kind: str, delta: float | None) -> tuple[bool | None, float | None, str | None]:
+def _base_pump_profile(advice: dict[str, Any], stage_kind: str, delta: float | None) -> tuple[bool | None, float | None, str | None]:
     if stage_kind not in _APPLICABLE_STAGES:
         return None, None, None
     if delta is not None and delta <= -0.3:
-        return True, _p("pump.overshoot", 50.0), "overshoot_mix"
+        return True, _pump_p(advice, "overshoot", 45.0), "overshoot_mix"
     if stage_kind == "ramp":
-        return True, _p("pump.ramp", 70.0), "ramp_mix"
-    return True, _p("pump.hold", 50.0), "mash_mix"
+        return True, _pump_p(advice, "ramp", 50.0), "ramp_mix"
+    return True, _pump_p(advice, "hold", 50.0), "mash_mix"
 
 
 def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_kind: str) -> dict[str, Any]:
@@ -170,19 +245,45 @@ def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_ki
     mash_wort_delta = round(mash - wort, 2)
     mash_gap = round(target - mash, 2)
     wort_over = round(wort - target, 2)
+    wort_gap = round(target - wort, 2)
     separate_inputs = abs(mash_wort_delta) >= _p("thermal_mix.min_mash_wort_delta_c", 0.3)
-    active = bool(
+
+    over_target_active = bool(
         separate_inputs
         and wort_over > _p("thermal_mix.wort_over_target_c", 0.2)
         and mash_gap > _p("thermal_mix.mash_below_target_c", 0.7)
     )
+    approach_active = bool(
+        separate_inputs
+        and 0.0 <= wort_gap <= _p("thermal_mix.wort_near_target_c", 1.0)
+        and mash_gap >= _p("thermal_mix.approach_mash_gap_c", 1.5)
+    )
+    active = over_target_active or approach_active
     high = bool(
-        active
+        over_target_active
         and (
             wort_over >= _p("thermal_mix.high_wort_over_target_c", 1.0)
             or mash_gap >= _p("thermal_mix.large_mash_gap_c", 2.0)
         )
     )
+
+    if not active:
+        heat_cap = None
+        severity = None
+        reason = None
+    elif high:
+        heat_cap = _p("thermal_mix.high_heat_cap", 0.0)
+        severity = "high"
+        reason = "wort_above_target_mash_lagging"
+    elif approach_active and not over_target_active:
+        heat_cap = _p("thermal_mix.approach_heat_cap", 5.0)
+        severity = "approach"
+        reason = "wort_near_target_mash_lagging"
+    else:
+        heat_cap = _p("thermal_mix.heat_cap", 5.0)
+        severity = "active"
+        reason = "wort_above_target_mash_lagging"
+
     return {
         "active": active,
         "separate_inputs": separate_inputs,
@@ -190,11 +291,12 @@ def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_ki
         "wort_temperature": wort,
         "mash_wort_delta": mash_wort_delta,
         "mash_gap_to_target": mash_gap,
+        "wort_gap_to_target": wort_gap,
         "wort_over_target": wort_over,
-        "heat_cap": (_p("thermal_mix.high_heat_cap", 0.0) if high else _p("thermal_mix.heat_cap", 5.0)) if active else None,
-        "pump_utilization": _p("thermal_mix.pump", 80.0) if active else None,
-        "severity": "high" if high else "active" if active else None,
-        "reason": "wort_above_target_mash_lagging" if active else None,
+        "heat_cap": heat_cap,
+        "pump_utilization": _pump_p(advice, "thermal_mix", 70.0) if active else None,
+        "severity": severity,
+        "reason": reason,
     }
 
 
@@ -214,7 +316,7 @@ def _mash_circulation_floor(snapshot: dict[str, Any], stage_kind: str) -> float 
     )
     if not mash_in_done:
         return None
-    return _p("mash_circulation.floor_after_mash_in", 50.0)
+    return _p("mash_circulation.floor_after_mash_in", 40.0)
 
 
 def _arm_heat(delta: float | None, profile_heat: float | None) -> bool:
@@ -234,7 +336,7 @@ def _action_needed(out: dict[str, Any]) -> bool:
 
 
 def _refresh_mode(out: dict[str, Any], runtime_state: str) -> None:
-    if out.get("orchestration_mode") == "blocked":
+    if out.get("orchestration_mode") == "blocked" or out.get("advice_positive_control_blocked"):
         return
     can_act = bool(
         out.get("connected")
@@ -264,15 +366,17 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     delta = _num(advice.get("delta_to_target"))
     temp_rate = _num(advice.get("temp_rate_c_per_min"))
     target = _num(out.get("requested_target"))
+    positive_control_blocked = _positive_control_blocked(out, runtime_state)
 
     active = bool(
-        _active(runtime_state)
+        not positive_control_blocked
+        and _active(runtime_state)
         and not out.get("completed_runtime")
         and stage_kind in _APPLICABLE_STAGES
     )
 
     profile_heat, profile_phase = _base_heat_profile(stage_kind, delta, temp_rate) if active else (None, None)
-    pump_on_profile, pump_util_profile, pump_phase = _base_pump_profile(stage_kind, delta)
+    pump_on_profile, pump_util_profile, pump_phase = _base_pump_profile(advice, stage_kind, delta) if active else (None, None, None)
     thermal_mix = _thermal_mix_modifier(advice, target, stage_kind) if active else {"active": False}
     if thermal_mix.get("active"):
         heat_cap = _num(thermal_mix.get("heat_cap"))
@@ -301,6 +405,7 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     out.update({
         "advice_profile_name": _profile().get("name"),
         "advice_profile_source": "built_in",
+        "advice_learning_context": advice.get("learning_context"),
         "advice_heat_available": suggested_heat is not None,
         "advice_heat_active": active,
         "advice_stage_kind": stage_kind,
@@ -333,11 +438,18 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         "advice_thermal_mix_wort_temperature": thermal_mix.get("wort_temperature"),
         "advice_thermal_mix_mash_wort_delta": thermal_mix.get("mash_wort_delta"),
         "advice_thermal_mix_mash_gap_to_target": thermal_mix.get("mash_gap_to_target"),
+        "advice_thermal_mix_wort_gap_to_target": thermal_mix.get("wort_gap_to_target"),
         "advice_thermal_mix_wort_over_target": thermal_mix.get("wort_over_target"),
         "advice_thermal_mix_heat_cap": thermal_mix.get("heat_cap"),
         "advice_thermal_mix_pump_utilization": thermal_mix.get("pump_utilization"),
         "advice_thermal_mix_reason": thermal_mix.get("reason"),
+        "advice_positive_control_blocked": positive_control_blocked,
+        "advice_positive_control_blocked_reason": "brewday_runtime_not_active" if positive_control_blocked else None,
     })
+
+    if positive_control_blocked:
+        _apply_positive_control_block(out)
+        return out
 
     if not active:
         return out
@@ -368,13 +480,18 @@ def _with_advice(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
 
     reason = advice.get("strategy_reason") or "Brewday Advice profile is active."
     if thermal_mix.get("active"):
-        reason = f"{reason} Thermal mix modifier active: wort above target while mash lags."
+        thermal_reason = thermal_mix.get("reason") or "wort_above_target_mash_lagging"
+        if thermal_reason == "wort_near_target_mash_lagging":
+            reason = f"{reason} Thermal mix approach active: wort near target while mash lags."
+        else:
+            reason = f"{reason} Thermal mix modifier active: wort above target while mash lags."
     if mash_circulation_floor_active:
         reason = f"{reason} Mash circulation floor active after mash-in."
     profile_text = "profile suppressed" if profile_suppressed else f"profile {profile_heat}% ({profile_phase})"
     out["control_reason"] = (
         f"Brewday Advice local profile: {reason} "
-        f"Base profile {_profile().get('name')}; suggested {suggested_heat}%, {profile_text}; "
+        f"Base profile {_profile().get('name')}; context {_context(advice)}; "
+        f"suggested {suggested_heat}%, {profile_text}; "
         f"delta {delta}°C, rate {temp_rate}°C/min; "
         f"mash {advice.get('mash_temperature')}°C, wort {advice.get('wort_temperature')}°C; "
         f"pump {pump_on_profile}/{pump_util_profile}% ({pump_phase}). "
