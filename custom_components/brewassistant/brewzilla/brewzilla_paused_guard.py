@@ -13,7 +13,7 @@ _INSTALLED = False
 
 PAUSED_HOLD_MAINTAIN_MAX_HEAT_UTILIZATION = 15.0
 PAUSED_HOLD_MAINTAIN_MAX_PUMP_UTILIZATION = 80.0
-PAUSED_HOLD_MAINTAIN_MAX_BELOW_TARGET_C = 2.0
+PAUSED_HOLD_MAINTAIN_MAX_BELOW_TARGET_C = 6.0
 
 
 def _paused(s: dict[str, Any]) -> bool:
@@ -52,9 +52,14 @@ def _paused_hold_maintenance_allowed(s: dict[str, Any]) -> bool:
     """Allow narrow temperature maintenance during paused Brewfather mash holds.
 
     Brewfather can report a mash hold as paused while the brewer still wants the
-    kettle to maintain the already-applied hold target.  Full positive control is
-    still blocked while paused; this exception only permits small hold/recovery
+    kettle to maintain the already-applied hold target. Full positive control is
+    still blocked while paused; this exception permits small hold/recovery
     utilization changes and circulation when the target is already synced.
+
+    The below-target allowance is intentionally wider than a normal hold deadband
+    because Brewfather can move from ramp to hold before the mash sensor has
+    thermally caught up.  The heat cap remains low, so this behaves as supervised
+    recovery rather than full ramp control.
     """
     if not _paused(s) or s.get("completed_runtime") or s.get("abort_lockout_active"):
         return False
@@ -84,10 +89,11 @@ def _paused_hold_maintenance_allowed(s: dict[str, Any]) -> bool:
     if desired_pump is not None and desired_pump > PAUSED_HOLD_MAINTAIN_MAX_PUMP_UTILIZATION:
         return False
 
+    below_target_c = None if current is None else round(requested - current, 2)
     if _positive(desired_heat):
         if current is None:
             return False
-        if requested - current > PAUSED_HOLD_MAINTAIN_MAX_BELOW_TARGET_C:
+        if below_target_c is not None and below_target_c > PAUSED_HOLD_MAINTAIN_MAX_BELOW_TARGET_C:
             return False
 
     return bool(
@@ -135,6 +141,9 @@ async def _apply_hold_maintenance(hass, s: dict[str, Any]) -> dict[str, Any]:
     actions: list[str] = []
     desired_heat = _num(s.get("desired_heat_utilization"))
     desired_pump = _num(s.get("desired_pump_utilization"))
+    requested = _num(s.get("requested_target"))
+    current = _num(s.get("current_temperature"))
+    below_target_c = None if requested is None or current is None else round(requested - current, 2)
 
     heat_utilization_changed = False
     if s.get("heat_utilization_action_needed") and desired_heat is not None:
@@ -190,6 +199,7 @@ async def _apply_hold_maintenance(hass, s: dict[str, Any]) -> dict[str, Any]:
         "paused_hold_maintenance_max_heat_utilization": PAUSED_HOLD_MAINTAIN_MAX_HEAT_UTILIZATION,
         "paused_hold_maintenance_max_pump_utilization": PAUSED_HOLD_MAINTAIN_MAX_PUMP_UTILIZATION,
         "paused_hold_maintenance_max_below_target_c": PAUSED_HOLD_MAINTAIN_MAX_BELOW_TARGET_C,
+        "paused_hold_maintenance_below_target_c": below_target_c,
         "paused_up_control_blocked": False,
         "executed_at": dt_util.utcnow().isoformat(),
     }
