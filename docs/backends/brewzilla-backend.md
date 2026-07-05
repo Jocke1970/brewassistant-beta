@@ -1,7 +1,7 @@
 # BrewZilla Backend
 
 Status: active development / supervised hot-side testing  
-Last synced: 2026-07-04
+Last synced: 2026-07-05
 
 This document explains the backend responsibilities for BrewAssistant's BrewZilla/RAPT hot-side control path.
 
@@ -68,6 +68,20 @@ direct-control -> BA has an allowed action to apply
 blocked        -> higher guard blocks positive control
 ```
 
+## Positive-control gate
+
+Brewday Advice must not apply stale target, heat or pump commands when Brewday Runtime is idle, inactive, completed, unknown or otherwise outside an active trusted control state.
+
+Expected stale/idle behavior:
+
+```yaml
+advice_positive_control_blocked: true
+advice_positive_control_blocked_reason: brewday_runtime_not_active
+target_sync_needed: false
+```
+
+Only safe-down actions may be allowed in this state.
+
 ## Brewday Advice profile bridge
 
 `brewzilla_advice_control.py` owns the current built-in profile:
@@ -87,7 +101,15 @@ heat_utilization_action_needed
 pump_utilization_action_needed
 ```
 
-The profile is conservative by design. It should prefer smaller heat corrections and more circulation rather than chasing target aggressively.
+The profile is conservative by design. It should prefer smaller heat corrections and controlled circulation rather than chasing target aggressively.
+
+Learning context affects pump behavior:
+
+```text
+Water only -> stronger test circulation
+Real mash  -> conservative malt-pipe circulation
+Unknown    -> conservative malt-pipe circulation
+```
 
 ## Mash-in gate
 
@@ -121,16 +143,18 @@ After mash-in is complete, BrewAssistant applies an explicit circulation floor d
 
 ```text
 pump_on = true
-pump_utilization >= 50 %
+pump_utilization >= 40 %
 ```
 
-Thermal mix may temporarily raise pump utilization to 80 %. When thermal mix is no longer active, the pump should return to at least the 50 % floor.
+Normal real-mash ramp/hold profile asks for 50 %. The 40 % floor only prevents circulation from falling too low if another modifier would otherwise lower it.
+
+Thermal mix may temporarily raise pump utilization to 70 % during real mash or 80 % during water-only tests. When thermal mix is no longer active, the pump should return to the normal ramp/hold profile or at least the floor.
 
 Expected diagnostics:
 
 ```yaml
 advice_mash_circulation_floor_active: true
-advice_mash_circulation_floor_utilization: 50
+advice_mash_circulation_floor_utilization: 40
 advice_desired_pump_on: true
 desired_pump_utilization: 50
 ```
@@ -139,21 +163,35 @@ desired_pump_utilization: 50
 
 Thermal mix is the stratification guard.
 
-It is active when BrewAssistant sees separate mash and wort/internal values and the wort/internal side is above target while mash still lags behind.
+It is active when BrewAssistant sees separate mash and wort/internal values and either:
 
-Expected behavior:
+```text
+- wort/internal is above target while mash still lags behind, or
+- wort/internal is within 1.0°C below target while mash is at least 1.5°C behind
+```
+
+Expected real-mash behavior:
 
 ```text
 heat utilization -> 0 % or 5 %
-pump utilization -> 80 %
+pump utilization -> 70 %
 ```
+
+Water-only tests may still use 80 % pump utilization for thermal mix.
 
 Expected diagnostics:
 
 ```yaml
 advice_thermal_mix_active: true
 advice_heat_profile_phase: thermal_mix_heat_cap
+advice_thermal_mix_reason: wort_near_target_mash_lagging
 advice_pump_phase: thermal_mix
+```
+
+or:
+
+```yaml
+advice_thermal_mix_reason: wort_above_target_mash_lagging
 ```
 
 ## Paused mash-hold maintenance
@@ -184,12 +222,12 @@ actions:
   - paused_hold_set_pump_utilization:50.0
 ```
 
-or during thermal mix:
+or during real-mash thermal mix:
 
 ```yaml
 actions:
   - paused_hold_set_heat_utilization:0.0
-  - paused_hold_set_pump_utilization:80.0
+  - paused_hold_set_pump_utilization:70.0
 ```
 
 ## Local-control lease
@@ -269,6 +307,8 @@ Two-minute ramps are useful stress tests, but they can cause Brewfather target t
 apply_result: paused_hold_maintenance_applied
 advice_mash_circulation_floor_active: true
 advice_thermal_mix_active: true
+advice_thermal_mix_reason: wort_near_target_mash_lagging
+advice_positive_control_blocked: true
 local_control_lease_break_reason: thermal_mix_active
 local_control_lease_break_reason: near_target_taper_zone
 ```
