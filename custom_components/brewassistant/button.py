@@ -16,6 +16,7 @@ from .brewzilla.brewzilla_learning import (
 )
 from .brewzilla.brewzilla_mash_in_gate import (
     async_confirm_mash_in_complete,
+    async_mark_mash_in_started,
     async_start_mash_circulation,
     build_mash_in_gate_snapshot,
 )
@@ -43,6 +44,7 @@ async def async_setup_entry(
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
+            BrewAssistantBrewZillaMashInStartedButton(coordinator),
             BrewAssistantBrewZillaMashInCompleteButton(coordinator),
             BrewAssistantBrewZillaStartMashCirculationButton(coordinator),
             BrewAssistantBrewZillaLearningApplyButton(coordinator),
@@ -138,6 +140,28 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
         return get_counterflow_chiller_snapshot(self.coordinator.hass)
 
 
+class BrewAssistantBrewZillaMashInStartedButton(BrewAssistantButtonEntity):
+    """Mark that malt addition has started and release strike target."""
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_mash_in_started")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_started"
+        self._attr_name = "BrewAssistant Mash-In Started"
+        self._attr_icon = "mdi:barley"
+        self._attr_suggested_object_id = f"{DOMAIN}_mash_in_started"
+
+    async def async_press(self) -> None:
+        """Release strike target and hold pump paused while grain is added."""
+        await async_mark_mash_in_started(self.coordinator.hass)
+        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return mash-in gate diagnostics."""
+        return build_mash_in_gate_snapshot(self.coordinator.hass)
+
+
 class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
     """Confirm that manual mash-in is complete and start mash circulation."""
 
@@ -145,7 +169,7 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
         super().__init__(coordinator, "brewzilla_mash_in_complete")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_complete"
         self._attr_name = "BrewAssistant Mash-In Complete"
-        self._attr_icon = "mdi:barley"
+        self._attr_icon = "mdi:pump"
         self._attr_suggested_object_id = f"{DOMAIN}_mash_in_complete"
 
     async def async_press(self) -> None:
