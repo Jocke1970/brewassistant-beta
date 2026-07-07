@@ -13,10 +13,6 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .brewfather_active_gate import install_brewfather_active_gate as _install_brewfather_active_gate
-
-_install_brewfather_active_gate()
-
 from .brewday_ramp_target_gate import build_core_snapshot, core_attrs, source
 from .manual_brewday_adapter import build_manual_engine_snapshot
 from .manual_brewday_runtime import ManualRuntimeState
