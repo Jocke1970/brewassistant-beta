@@ -22,13 +22,13 @@ card:
         **Mode:** `{{ mode }}`  
         **Lease:** {{ 'aktiv' if lease else 'inte aktiv' }}  
         **RCL:** {{ 'degraded / control blocked' if rcl_degraded else 'ok' }}  
-        **Target:** {{ target if target is not none else '—' }} °C  
-        **Heat profile:** {{ heat if heat is not none else '—' }} %  
-        **Pump profile:** {{ pump if pump is not none else '—' }} %  
+        **BA target:** {{ target if target is not none else '—' }} °C  
+        **BA heat profile:** {{ heat if heat is not none else '—' }} %  
+        **BA pump profile:** {{ pump if pump is not none else '—' }} %  
         **Heatstrike:** strike {{ strike if strike is not none else '—' }} °C · BZ {{ control if control is not none else '—' }} °C · next {{ next if next is not none else '—' }} °C  
         **Reason:** {{ states('sensor.brewassistant_brewzilla_control_reason') }}
     - type: custom:expander-card
-      title: BZ handoff / local regulator
+      title: BA control model
       cards:
         - type: entities
           show_header_toggle: false
@@ -103,3 +103,25 @@ card:
               entity: sensor.brewassistant_brewzilla_orchestration_mode
               attribute: local_control_lease_pump_utilization
               name: Lease pump profile
+    - type: custom:expander-card
+      title: BrewZilla/RCL raw readback
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewzilla_connection
+              name: RCL connection
+            - entity: sensor.brewzilla_temperature
+              name: BrewZilla internal temperature
+            - entity: number.brewzilla_target_temperature
+              name: BrewZilla target readback
+            - entity: sensor.brewzilla_power
+              name: BrewZilla power
+            - entity: switch.brewzilla_heater
+              name: Heater output
+            - entity: switch.brewzilla_pump
+              name: Pump output
+            - entity: number.brewzilla_heat_utilization
+              name: Heat utilization readback
+            - entity: number.brewzilla_pump_utilization
+              name: Pump utilization readback
