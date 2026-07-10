@@ -1,13 +1,10 @@
 type: conditional
 conditions:
   - condition: state
-    entity: sensor.brewzilla_connection
-    state: Connected
-  - condition: state
     entity: sensor.brewassistant_brewday_stage_group
     state_not: boil
   - condition: numeric_state
-    entity: sensor.brewzilla_power
+    entity: sensor.brewassistant_brewzilla_wort_temperature
     above: 0
 card:
   type: custom:gauge-card-pro
@@ -36,21 +33,20 @@ card:
     - sensor.brewassistant_brewday_stage
     - sensor.brewassistant_brewday_stage_group
     - sensor.brewassistant_brewday_runtime_step
-    - number.brewzilla_target_temperature
-    - sensor.brewzilla_temperature
-    - sensor.brewzilla_ble_thermometer_temperature
-    - sensor.brewzilla_control_device_temperature
   value: >
-    {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
+    {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+    {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
     {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
-    {% set internal = states('sensor.brewzilla_temperature') %}
+    {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
 
-    {% if mash not in ['unknown', 'unavailable', 'none', ''] %}
+    {% if heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
+      {{ wort | float(0) }}
+    {% elif mash not in ['unknown', 'unavailable', 'none', ''] %}
       {{ mash | float(0) }}
     {% elif wort not in ['unknown', 'unavailable', 'none', ''] %}
       {{ wort | float(0) }}
     {% else %}
-      {{ internal | float(0) }}
+      0
     {% endif %}
   segments:
     - from: 20
@@ -90,22 +86,24 @@ card:
   setpoint:
     type: template
     value: >
-      {% set rt = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
-      {% set req = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+      {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+      {% set strike = state_attr(orch, 'heat_strike_target') %}
+      {% set requested = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% set runtime = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
       {% set ba = states('sensor.brewassistant_brewzilla_target_temperature') %}
-      {% set dev = states('sensor.brewassistant_brewzilla_device_target_temperature') %}
-      {% set raw = states('number.brewzilla_target_temperature') %}
+      {% set device = states('sensor.brewassistant_brewzilla_device_target_temperature') %}
 
-      {% if rt not in ['unknown', 'unavailable', 'none', ''] %}
-        {{ rt | float(0) }}
-      {% elif req not in ['unknown', 'unavailable', 'none', ''] %}
-        {{ req | float(0) }}
+      {% if heatstrike and strike is not none %}
+        {{ strike | float(0) }}
+      {% elif requested not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ requested | float(0) }}
+      {% elif runtime not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ runtime | float(0) }}
       {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
         {{ ba | float(0) }}
-      {% elif dev not in ['unknown', 'unavailable', 'none', ''] %}
-        {{ dev | float(0) }}
-      {% elif raw not in ['unknown', 'unavailable', 'none', ''] %}
-        {{ raw | float(0) }}
+      {% elif device not in ['unknown', 'unavailable', 'none', ''] %}
+        {{ device | float(0) }}
       {% else %}
         0
       {% endif %}
@@ -115,54 +113,72 @@ card:
   min_indicator:
     type: template
     value: >
-      {% set target = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+      {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+      {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+      {% set strike = state_attr(orch, 'heat_strike_target') %}
+      {% set requested = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% set runtime = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+      {% set ba = states('sensor.brewassistant_brewzilla_target_temperature') %}
 
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% if heatstrike and strike is not none %}
+        {% set target = strike | float(0) %}
+      {% elif requested not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = requested | float(0) %}
+      {% elif runtime not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = runtime | float(0) %}
+      {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = ba | float(0) %}
+      {% else %}
+        {% set target = 0 %}
       {% endif %}
-
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
-      {% endif %}
-
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('number.brewzilla_target_temperature') %}
-      {% endif %}
-
-      {{ (target | float(0)) - 0.5 }}
+      {{ target - 0.5 }}
     color: rgba(255,255,255,.45)
     label: false
     precision: 1
   max_indicator:
     type: template
     value: >
-      {% set target = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+      {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+      {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+      {% set strike = state_attr(orch, 'heat_strike_target') %}
+      {% set requested = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% set runtime = states('sensor.brewassistant_brewzilla_runtime_target_temperature') %}
+      {% set ba = states('sensor.brewassistant_brewzilla_target_temperature') %}
 
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('sensor.brewassistant_brewzilla_requested_target') %}
+      {% if heatstrike and strike is not none %}
+        {% set target = strike | float(0) %}
+      {% elif requested not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = requested | float(0) %}
+      {% elif runtime not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = runtime | float(0) %}
+      {% elif ba not in ['unknown', 'unavailable', 'none', ''] %}
+        {% set target = ba | float(0) %}
+      {% else %}
+        {% set target = 0 %}
       {% endif %}
-
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('sensor.brewassistant_brewzilla_target_temperature') %}
-      {% endif %}
-
-      {% if target in ['unknown', 'unavailable', 'none', ''] %}
-        {% set target = states('number.brewzilla_target_temperature') %}
-      {% endif %}
-
-      {{ (target | float(0)) + 0.5 }}
+      {{ target + 0.5 }}
     color: rgba(255,255,255,.45)
     label: false
     precision: 1
   titles:
     primary:
       value: >
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+        {% set phase = state_attr(orch, 'advice_physical_phase') %}
+        {% set degraded = state_attr(orch, 'rcl_degraded') or state_attr(orch, 'heat_strike_rcl_degraded') %}
         {% set source = states('sensor.brewassistant_brewzilla_mash_temperature_source') %}
         {% set runtime = states('sensor.brewassistant_brewday_runtime_state') %}
         {% set stage = states('sensor.brewassistant_brewday_stage') %}
         {% set step = states('sensor.brewassistant_brewday_runtime_step') %}
 
-        {% if source == 'RAPT BLE Thermometer' %}
+        {% if degraded %}
+          RCL degraded · kontroll blockerad
+        {% elif heatstrike and phase == 'pre_mash_in_paused_wait' %}
+          Heatstrike · väntar på mash-in
+        {% elif heatstrike %}
+          Heatstrike · strike water
+        {% elif source == 'RAPT BLE Thermometer' %}
           Mash/BLE · RAPT BLE
         {% elif source not in ['unknown', 'unavailable', 'none', ''] %}
           Mash · {{ source }}
@@ -177,9 +193,14 @@ card:
   value_texts:
     primary:
       value: >
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+        {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
         {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
 
-        {% if mash not in ['unknown', 'unavailable', 'none', ''] %}
+        {% if heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
+          Strike {{ wort | float(0) | round(1) }}
+        {% elif mash not in ['unknown', 'unavailable', 'none', ''] %}
           Mash {{ mash | float(0) | round(1) }}
         {% else %}
           Mash —
@@ -187,10 +208,17 @@ card:
       unit_of_measurement: °C
     secondary:
       value: >
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+        {% set strike = state_attr(orch, 'heat_strike_target') %}
+        {% set control = state_attr(orch, 'heat_strike_control_target') %}
+        {% set next = state_attr(orch, 'heat_strike_next_mash_target') %}
         {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
         {% set delta = states('sensor.brewassistant_brewzilla_temperature_delta_mash_wort') %}
 
-        {% if wort not in ['unknown', 'unavailable', 'none', ''] and delta not in ['unknown', 'unavailable', 'none', ''] %}
+        {% if heatstrike %}
+          Strike target {{ strike | float(0) | round(1) if strike is not none else '—' }} · BZ {{ control | float(0) | round(1) if control is not none else '—' }} · next {{ next | float(0) | round(1) if next is not none else '—' }}
+        {% elif wort not in ['unknown', 'unavailable', 'none', ''] and delta not in ['unknown', 'unavailable', 'none', ''] %}
           Internal/Wort {{ wort | float(0) | round(1) }} · Δ {{ delta | float(0) | round(1) }}
         {% elif wort not in ['unknown', 'unavailable', 'none', ''] %}
           Internal/Wort {{ wort | float(0) | round(1) }} · Δ —
@@ -202,12 +230,23 @@ card:
     right:
       type: template
       value: >
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set heatstrike = state_attr(orch, 'heat_strike_latch_active') %}
+        {% set degraded = state_attr(orch, 'rcl_degraded') or state_attr(orch, 'heat_strike_rcl_degraded') %}
         {% set source = states('sensor.brewassistant_brewzilla_mash_temperature_source') %}
         {% set delta_raw = states('sensor.brewassistant_brewzilla_temperature_delta_mash_wort') %}
         {% set delta = delta_raw | float(0) %}
         {% set mode = states('sensor.brewassistant_brewzilla_orchestration_mode') %}
 
-        {% if source == 'RAPT BLE Thermometer' %}
+        {% if degraded %}
+          {% set icon = 'mdi:connection' %}
+          {% set color = 'rgb(244,67,54)' %}
+          {% set label = 'RCL degraded' %}
+        {% elif heatstrike %}
+          {% set icon = 'mdi:kettle-steam-outline' %}
+          {% set color = 'rgb(255,152,0)' %}
+          {% set label = 'heatstrike' %}
+        {% elif source == 'RAPT BLE Thermometer' %}
           {% set icon = 'mdi:thermometer-bluetooth' %}
           {% set color = 'rgb(76,175,80)' %}
           {% set label = 'BLE mash' %}
