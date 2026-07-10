@@ -1,27 +1,32 @@
 type: conditional
 conditions:
-  - condition: state
-    entity: sensor.brewzilla_connection
-    state: Connected
+  - condition: state_not
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state: unavailable
 card:
   type: vertical-stack
   cards:
     - type: markdown
       title: BrewZilla Local Control
       content: >
-        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %} {%
-        set mode = states(orch) %} {% set lease = state_attr(orch,
-        'local_control_lease_active') %} {% set target = state_attr(orch,
-        'local_control_lease_target') or state_attr(orch, 'requested_target') %}
-        {% set heat = state_attr(orch, 'local_control_lease_heat_utilization')
-        or state_attr(orch, 'desired_heat_utilization') %} {% set pump =
-        state_attr(orch, 'local_control_lease_pump_utilization') or
-        state_attr(orch, 'desired_pump_utilization') %} **Mode:** `{{ mode }}`  
-        **Lease:** {{ 'aktiv' if lease else 'inte aktiv' }}   **Target:** {{
-        target if target is not none else '—' }} °C   **Heat profile:** {{ heat
-        if heat is not none else '—' }} %   **Pump profile:** {{ pump if pump is
-        not none else '—' }} %   **Reason:** {{
-        states('sensor.brewassistant_brewzilla_control_reason') }}
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set mode = states(orch) %}
+        {% set lease = state_attr(orch, 'local_control_lease_active') %}
+        {% set target = state_attr(orch, 'local_control_lease_target') or state_attr(orch, 'requested_target') %}
+        {% set heat = state_attr(orch, 'local_control_lease_heat_utilization') or state_attr(orch, 'desired_heat_utilization') %}
+        {% set pump = state_attr(orch, 'local_control_lease_pump_utilization') or state_attr(orch, 'desired_pump_utilization') %}
+        {% set rcl_degraded = state_attr(orch, 'rcl_degraded') or state_attr(orch, 'heat_strike_rcl_degraded') %}
+        {% set strike = state_attr(orch, 'heat_strike_target') %}
+        {% set control = state_attr(orch, 'heat_strike_control_target') %}
+        {% set next = state_attr(orch, 'heat_strike_next_mash_target') %}
+        **Mode:** `{{ mode }}`  
+        **Lease:** {{ 'aktiv' if lease else 'inte aktiv' }}  
+        **RCL:** {{ 'degraded / control blocked' if rcl_degraded else 'ok' }}  
+        **Target:** {{ target if target is not none else '—' }} °C  
+        **Heat profile:** {{ heat if heat is not none else '—' }} %  
+        **Pump profile:** {{ pump if pump is not none else '—' }} %  
+        **Heatstrike:** strike {{ strike if strike is not none else '—' }} °C · BZ {{ control if control is not none else '—' }} °C · next {{ next if next is not none else '—' }} °C  
+        **Reason:** {{ states('sensor.brewassistant_brewzilla_control_reason') }}
     - type: custom:expander-card
       title: BZ handoff / local regulator
       cards:
@@ -30,6 +35,58 @@ card:
           entities:
             - entity: sensor.brewassistant_brewzilla_orchestration_mode
               name: Orchestration mode
+            - entity: sensor.brewassistant_brewzilla_safety_state
+              name: Safety state
+            - entity: sensor.brewassistant_brewzilla_control_reason
+              name: Control reason
+            - entity: sensor.brewassistant_brewzilla_requested_target
+              name: Requested/control target
+            - entity: sensor.brewassistant_brewzilla_applied_target
+              name: Applied BrewZilla target
+            - entity: sensor.brewassistant_brewzilla_target_delta
+              name: Target delta
+            - entity: sensor.brewassistant_brewzilla_target_sync_needed
+              name: Target sync needed
+            - entity: sensor.brewassistant_brewzilla_can_apply_target
+              name: Can apply target
+            - entity: sensor.brewassistant_brewzilla_wort_temperature
+              name: BA wort / kettle temperature
+            - entity: sensor.brewassistant_brewzilla_mash_temperature
+              name: BA mash temperature
+            - entity: sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+              name: BA mash/wort delta
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_latch_active
+              name: Heat-strike latch active
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_target
+              name: Heat-strike target
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_control_target
+              name: Heat-strike BrewZilla control target
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_next_mash_target
+              name: Next mash target
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: desired_heat_utilization
+              name: Desired heat utilization
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: desired_pump_utilization
+              name: Desired pump utilization
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: rcl_degraded
+              name: RCL degraded
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: rcl_degraded_missing
+              name: RCL degraded missing fields
             - type: attribute
               entity: sensor.brewassistant_brewzilla_orchestration_mode
               attribute: local_control_lease_active
@@ -46,17 +103,3 @@ card:
               entity: sensor.brewassistant_brewzilla_orchestration_mode
               attribute: local_control_lease_pump_utilization
               name: Lease pump profile
-            - entity: number.brewzilla_target_temperature
-              name: BrewZilla target
-            - entity: sensor.brewzilla_temperature
-              name: BrewZilla internal temp
-            - entity: sensor.brewzilla_power
-              name: Power
-            - entity: switch.brewzilla_heater
-              name: Heater enabled
-            - entity: switch.brewzilla_pump
-              name: Pump enabled
-            - entity: number.brewzilla_heat_utilization
-              name: Heat utilization
-            - entity: number.brewzilla_pump_utilization
-              name: Pump utilization
