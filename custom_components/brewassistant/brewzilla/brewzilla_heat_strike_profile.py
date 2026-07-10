@@ -30,6 +30,7 @@ _MASH_IN_STARTED_STATES = {"mash_in_started", "mash_in_complete"}
 _PRE_MASH_IN_STATES = {"", "idle", "ready_for_mash_in", "pending", "waiting", "awaiting_mash_in"}
 _ACTIVE_OR_PAUSED_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 _TERMINAL_STATES = {"", "idle", "inactive", "completed", "complete", "done", "unknown", "unavailable", "none"}
+_BAD_VALUE_STRINGS = {"", "none", "unknown", "unavailable"}
 
 _STRIKE_BOOST_FAR_C = 5.0
 _STRIKE_BOOST_APPROACH_C = 3.0
@@ -39,6 +40,18 @@ _STRIKE_CAPTURE_DELTA_C = 0.5
 _STRIKE_OVERSHOOT_MARGIN_C = 0.3
 _STRIKE_FAST_FINAL_RATE_C_PER_MIN = 0.8
 _STRIKE_PUMP_UTILIZATION = 50.0
+_STRIKE_CAPTURE_HEAT_UTILIZATION = 75.0
+_STRIKE_READY_HOLD_HEAT_UTILIZATION = 40.0
+_STRIKE_READY_FAST_COAST_HEAT_UTILIZATION = 20.0
+_STRIKE_OVERSHOOT_COAST_HEAT_UTILIZATION = 0.0
+_RCL_DEGRADED_REQUIRED_FIELDS = {
+    "current_temperature": "temperature",
+    "applied_target": "target",
+    "heat_utilization": "heat_utilization",
+    "pump_utilization": "pump_utilization",
+    "heater_on": "heater_state",
+    "pump_on": "pump_state",
+}
 
 
 def _num(value: Any) -> float | None:
@@ -48,6 +61,14 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _present(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str) and value.strip().lower() in _BAD_VALUE_STRINGS:
+        return False
+    return True
 
 
 def _mash_in_gate_state(hass: HomeAssistant) -> str:
@@ -208,12 +229,67 @@ def _heat_strike_control_profile(
     if delta > _STRIKE_APPROACH_DELTA_C:
         return round(strike_target + _STRIKE_BOOST_APPROACH_C, 1), 100.0, True, "strike_approach_boost", delta
     if delta > _STRIKE_CAPTURE_DELTA_C:
-        return round(strike_target, 1), 75.0, True, "strike_capture", delta
+        return round(strike_target, 1), _STRIKE_CAPTURE_HEAT_UTILIZATION, True, "strike_capture", delta
     if delta >= -_STRIKE_OVERSHOOT_MARGIN_C:
         if temp_rate is not None and temp_rate > _STRIKE_FAST_FINAL_RATE_C_PER_MIN:
-            return round(strike_target, 1), 0.0, False, "strike_ready_fast_rise_coast", delta
-        return round(strike_target, 1), 40.0, True, "strike_ready_hold", delta
-    return round(strike_target, 1), 0.0, False, "strike_overshoot_coast", delta
+            return (
+                round(strike_target, 1),
+                _STRIKE_READY_FAST_COAST_HEAT_UTILIZATION,
+                True,
+                "strike_ready_fast_rise_min_hold",
+                delta,
+            )
+        return round(strike_target, 1), _STRIKE_READY_HOLD_HEAT_UTILIZATION, True, "strike_ready_hold", delta
+    return round(strike_target, 1), _STRIKE_OVERSHOOT_COAST_HEAT_UTILIZATION, False, "strike_overshoot_coast", delta
+
+
+def _rcl_degraded(out: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Return true when the BrewZilla command/observation surface is partial.
+
+    A partial RAPT Cloud Link snapshot is more dangerous than a clean disconnect:
+    power may still be visible while temperature, target, utilization or switch
+    states are missing. In that state BA should not start new positive actions.
+    """
+    if not out.get("connected"):
+        return True, ["connection"]
+
+    missing = [label for key, label in _RCL_DEGRADED_REQUIRED_FIELDS.items() if not _present(out.get(key))]
+    return bool(missing), missing
+
+
+def _apply_rcl_degraded_guard(
+    out: dict[str, Any],
+    *,
+    missing: list[str],
+    physical_phase: str,
+    strike_target: float,
+) -> dict[str, Any]:
+    reason = str(out.get("control_reason") or "BrewZilla control surface degraded.")
+    out.update(
+        {
+            "rcl_degraded": True,
+            "rcl_degraded_missing": missing,
+            "heat_strike_rcl_degraded": True,
+            "heat_strike_latch_active": True,
+            "heat_strike_target": round(float(strike_target), 1),
+            "heat_strike_gate_target": round(float(strike_target), 1),
+            "advice_physical_phase": physical_phase,
+            "target_sync_needed": False,
+            "heating_needed": False,
+            "heater_action_needed": False,
+            "pump_action_needed": False,
+            "heat_utilization_action_needed": False,
+            "pump_utilization_action_needed": False,
+            "can_apply_target": False,
+            "orchestration_mode": "blocked",
+            "control_reason": (
+                f"RCL degraded during {physical_phase}; missing {', '.join(missing)}. "
+                "BA blocks new positive BrewZilla control until a complete fresh snapshot is available. "
+                f"Latched strike target remains {round(float(strike_target), 1)}°C. {reason}"
+            ),
+        }
+    )
+    return out
 
 
 def _heat_strike_thermal_mix_modifier(
@@ -299,6 +375,10 @@ def _apply_pre_mash_in_heat_strike_profile(hass: HomeAssistant, out: dict[str, A
     paused_wait = bool(state in {"paused", "awaiting_confirm", "prepared", "awaiting_snapshot"} and stage_kind != "ramp")
     physical_phase = "pre_mash_in_paused_wait" if paused_wait else "pre_mash_in"
 
+    degraded, missing = _rcl_degraded(out)
+    if degraded:
+        return _apply_rcl_degraded_guard(out, missing=missing, physical_phase=physical_phase, strike_target=float(strike_target))
+
     current_temperature = _strike_current_temperature(out)
     temp_rate = advice_control._num(out.get("advice_temp_rate_c_per_min"))
     control_target, profile_heat, desired_heater_on, profile_phase, strike_delta = _heat_strike_control_profile(
@@ -348,6 +428,9 @@ def _apply_pre_mash_in_heat_strike_profile(hass: HomeAssistant, out: dict[str, A
     reason = str(out.get("control_reason") or "Brewday Advice profile is active.")
     out.update(
         {
+            "rcl_degraded": False,
+            "rcl_degraded_missing": [],
+            "heat_strike_rcl_degraded": False,
             "requested_target": control_target,
             "requested_target_source": "pre_mash_in_strike_control_boost" if control_target != round(float(strike_target), 1) else "pre_mash_in_strike_control",
             "target_delta": target_delta,
