@@ -16,6 +16,7 @@ from . import brewzilla_mash_in_gate as _mash_in_gate
 from . import brewzilla_freshness_guard as _freshness_guard
 from . import brewzilla_stale_safe_guard as _runtime_safety
 from . import brewzilla_paused_guard as _paused_guard
+from . import brewzilla_paused_heatstrike_guard as _paused_heatstrike_guard
 from . import brewzilla_execution_guard as _gate
 from . import brewzilla_target_trust_guard as _target_trust_guard
 from . import brewzilla_local_control_lease_v2 as _local_control_lease
@@ -44,6 +45,7 @@ _mash_in_gate.install_mash_in_gate()
 _freshness_guard.install_freshness_guard()
 _runtime_safety.install_stale_safe_guard()
 _paused_guard.install_paused_guard()
+_paused_heatstrike_guard.install_paused_heatstrike_guard()
 _gate.install_execution_guard()
 _target_trust_guard.install_target_trust_guard()
 _local_control_lease.install_local_control_lease()
