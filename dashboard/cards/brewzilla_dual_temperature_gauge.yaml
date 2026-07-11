@@ -39,7 +39,9 @@ card:
     {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
     {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
 
-    {% if heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
+    {% if heatstrike and mash not in ['unknown', 'unavailable', 'none', ''] %}
+      {{ mash | float(0) }}
+    {% elif heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
       {{ wort | float(0) }}
     {% elif mash not in ['unknown', 'unavailable', 'none', ''] %}
       {{ mash | float(0) }}
@@ -198,7 +200,9 @@ card:
         {% set wort = states('sensor.brewassistant_brewzilla_wort_temperature') %}
         {% set mash = states('sensor.brewassistant_brewzilla_mash_temperature') %}
 
-        {% if heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
+        {% if heatstrike and mash not in ['unknown', 'unavailable', 'none', ''] %}
+          Strike {{ mash | float(0) | round(1) }}
+        {% elif heatstrike and wort not in ['unknown', 'unavailable', 'none', ''] %}
           Strike {{ wort | float(0) | round(1) }}
         {% elif mash not in ['unknown', 'unavailable', 'none', ''] %}
           Mash {{ mash | float(0) | round(1) }}
