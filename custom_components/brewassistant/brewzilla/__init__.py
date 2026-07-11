@@ -11,6 +11,7 @@ from . import brewzilla_temperature_roles as _temp_roles
 from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
+from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
 from . import brewzilla_freshness_guard as _freshness_guard
@@ -39,6 +40,7 @@ _temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 _heat_strike_profile.install_heat_strike_profile()
+_pre_mash_in_strike_sensor.install_pre_mash_in_strike_sensor_guard()
 _advice_control.install_advice_control()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
