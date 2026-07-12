@@ -1,10 +1,15 @@
-"""Safe-down bridge after confirmed BrewZilla mash-in.
+"""Safe-down bridge around the BrewZilla mash-in transition.
 
-When the brewer confirms Mash-In Complete, BrewAssistant should be allowed to
-lower the BrewZilla target from the latched strike temperature to the real mash
-hold target even if Brewfather is still paused.  This is a safe-down operation,
-not positive heating, and it avoids leaving the unit parked at strike target
-while the brewer is expected to resume Brewfather manually.
+When the brewer starts mash-in, BrewAssistant should stop treating the strike
+water target as the active target.  The BrewZilla target may be lowered to the
+real mash hold target while the pump remains paused for malt addition.
+
+When the brewer confirms Mash-In Complete, BrewAssistant should also be allowed
+to lower the BrewZilla target from any remaining latched strike temperature to
+the real mash hold target even if Brewfather is still paused.  These are
+safe-down operations, not positive heating, and they avoid leaving the unit
+parked at strike target while the brewer is expected to resume Brewfather
+manually.
 """
 
 from __future__ import annotations
@@ -19,6 +24,10 @@ from . import brewzilla_orchestration as base
 _INSTALLED = False
 _ORIGINAL_APPLY = None
 _ORIGINAL_START_MASH_CIRCULATION = None
+_ORIGINAL_EFFECTIVE_MASH_IN_TARGET = None
+
+_MASH_STAGE_WORDS = ("mash", "mäsk")
+_MASH_HOLD_WORDS = ("hold", "mash", "mäsk")
 
 
 def _num(value: Any) -> float | None:
@@ -28,6 +37,10 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _text(snapshot: dict[str, Any], *keys: str) -> str:
+    return " ".join(str(snapshot.get(key) or "") for key in keys).lower()
 
 
 def _runtime_allows_operator_safe_down(snapshot: dict[str, Any]) -> bool:
@@ -40,6 +53,61 @@ def _runtime_allows_operator_safe_down(snapshot: dict[str, Any]) -> bool:
         and not snapshot.get("rcl_degraded")
         and not snapshot.get("heat_strike_rcl_degraded")
         and not snapshot.get("rcl_freshness_guard_blocking")
+    )
+
+
+def _current_brewfather_mash_target(snapshot: dict[str, Any]) -> tuple[float | None, str | None]:
+    """Return the active BF mash target when it is safer than the strike latch.
+
+    During the pre-mash-in pause BA may still have a requested/latched strike
+    target such as 71.8°C, while Brewfather's active step has already moved to
+    the real mash hold target such as 66°C.  Once the operator starts mash-in,
+    that lower current BF target is the safe target to hand BrewZilla to.
+    """
+    stage_text = _text(snapshot, "runtime_stage", "stage")
+    if not any(word in stage_text for word in _MASH_STAGE_WORDS):
+        return None, None
+
+    step_text = _text(snapshot, "runtime_step", "step", "runtime_raw_step_name", "raw_step_name")
+    if step_text and not any(word in step_text for word in _MASH_HOLD_WORDS):
+        return None, None
+
+    for key in (
+        "target_temperature",
+        "tracker_target",
+        "runtime_target_temperature",
+        "runtime_tracker_target",
+    ):
+        value = _num(snapshot.get(key))
+        if value is not None:
+            return value, key
+    return None, None
+
+
+def _patched_effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | None, str | None, float | None, str | None]:
+    assert _ORIGINAL_EFFECTIVE_MASH_IN_TARGET is not None
+    effective, effective_source, next_target, next_source = _ORIGINAL_EFFECTIVE_MASH_IN_TARGET(hass, snapshot)
+
+    requested = _num(snapshot.get("requested_target"))
+    current_bf_target, current_bf_source = _current_brewfather_mash_target(snapshot)
+    if current_bf_target is None:
+        return effective, effective_source, next_target, next_source
+
+    # Only override when this is a target downshift from a remaining strike or
+    # boosted control target.  Raising target still follows the original logic.
+    reference = requested if requested is not None else effective
+    if reference is None:
+        return effective, effective_source, next_target, next_source
+    if current_bf_target > reference + base.TARGET_SYNC_TOLERANCE:
+        return effective, effective_source, next_target, next_source
+    if reference - current_bf_target <= base.TARGET_SYNC_TOLERANCE:
+        return effective, effective_source, next_target, next_source
+
+    return (
+        round(current_bf_target, 1),
+        "current_brewfather_mash_step",
+        round(current_bf_target, 1),
+        current_bf_source,
     )
 
 
@@ -147,13 +215,15 @@ async def _patched_apply(hass) -> dict[str, Any]:
 
 
 def install_mash_in_complete_safe_down_guard() -> None:
-    """Install safe-down handling after mash-in completion."""
-    global _INSTALLED, _ORIGINAL_APPLY, _ORIGINAL_START_MASH_CIRCULATION
+    """Install safe-down handling around the mash-in transition."""
+    global _INSTALLED, _ORIGINAL_APPLY, _ORIGINAL_START_MASH_CIRCULATION, _ORIGINAL_EFFECTIVE_MASH_IN_TARGET
     if _INSTALLED:
         return
 
     _ORIGINAL_APPLY = base.async_apply_brewzilla_target_if_allowed
     _ORIGINAL_START_MASH_CIRCULATION = mash_in_gate._start_mash_circulation
+    _ORIGINAL_EFFECTIVE_MASH_IN_TARGET = mash_in_gate._effective_mash_in_target
     base.async_apply_brewzilla_target_if_allowed = _patched_apply
     mash_in_gate._start_mash_circulation = _patched_start_mash_circulation
+    mash_in_gate._effective_mash_in_target = _patched_effective_mash_in_target
     _INSTALLED = True
