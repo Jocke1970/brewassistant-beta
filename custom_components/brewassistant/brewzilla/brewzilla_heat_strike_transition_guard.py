@@ -6,6 +6,10 @@ control target.  In that handoff window BrewAssistant should refresh the RCL
 surface and stop using boosted strike targets aggressively.  Mash/BLE may still
 be useful for the ready gate, but the hottest available kettle/wort reading must
 be allowed to brake heating early.
+
+When mash-in has been completed and BA is handing BrewZilla to the real mash
+hold, BA should also force a fresh RCL readback so the new mash target, pump
+state and heat state are visible before normal mash control continues.
 """
 
 from __future__ import annotations
@@ -77,25 +81,33 @@ def _known_refresh_entity_ids(hass: HomeAssistant) -> list[str]:
     return [entity_id for entity_id in _RCL_REFRESH_ENTITY_IDS if hass.states.get(entity_id) is not None]
 
 
-def _transition_key(out: dict[str, Any]) -> str:
+def _transition_key(out: dict[str, Any], reason: str) -> str:
     return "|".join(
-        str(out.get(key) or "")
-        for key in (
-            "source",
-            "runtime_stage",
-            "runtime_step",
-            "target_temperature",
-            "tracker_target",
-            "heat_strike_target",
-            "heat_strike_next_mash_target",
-        )
+        [
+            reason,
+            *(
+                str(out.get(key) or "")
+                for key in (
+                    "source",
+                    "runtime_stage",
+                    "runtime_step",
+                    "target_temperature",
+                    "tracker_target",
+                    "heat_strike_target",
+                    "heat_strike_next_mash_target",
+                    "mash_in_gate_state",
+                    "requested_target",
+                    "applied_target",
+                )
+            ),
+        ]
     )
 
 
-def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any]) -> dict[str, Any]:
+def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any], *, reason: str) -> dict[str, Any]:
     store = _rcl_store(hass)
     now = datetime.now(UTC)
-    key = _transition_key(out)
+    key = _transition_key(out, reason)
     last_requested = store.get("last_requested_at")
     recently_requested = bool(
         isinstance(last_requested, datetime)
@@ -106,6 +118,7 @@ def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any]) ->
         return {
             "rcl_transition_refresh_requested": False,
             "rcl_transition_refresh_reason": "already_requested",
+            "rcl_transition_refresh_trigger": reason,
             "rcl_transition_refresh_last_requested_at": last_requested.isoformat() if last_requested else None,
             "rcl_transition_refresh_entity_ids": list(store.get("last_entity_ids") or []),
             "rcl_transition_refresh_error": store.get("last_error"),
@@ -121,6 +134,7 @@ def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any]) ->
         return {
             "rcl_transition_refresh_requested": False,
             "rcl_transition_refresh_reason": "no_known_rcl_entities",
+            "rcl_transition_refresh_trigger": reason,
             "rcl_transition_refresh_last_requested_at": now.isoformat(),
             "rcl_transition_refresh_entity_ids": [],
             "rcl_transition_refresh_error": store["last_error"],
@@ -140,6 +154,7 @@ def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any]) ->
         return {
             "rcl_transition_refresh_requested": False,
             "rcl_transition_refresh_reason": "service_error",
+            "rcl_transition_refresh_trigger": reason,
             "rcl_transition_refresh_last_requested_at": now.isoformat(),
             "rcl_transition_refresh_entity_ids": entity_ids,
             "rcl_transition_refresh_error": store["last_error"],
@@ -148,7 +163,8 @@ def _request_transition_rcl_refresh(hass: HomeAssistant, out: dict[str, Any]) ->
     store["last_error"] = None
     return {
         "rcl_transition_refresh_requested": True,
-        "rcl_transition_refresh_reason": "brewfather_left_strike_ramp",
+        "rcl_transition_refresh_reason": reason,
+        "rcl_transition_refresh_trigger": reason,
         "rcl_transition_refresh_last_requested_at": now.isoformat(),
         "rcl_transition_refresh_entity_ids": entity_ids,
         "rcl_transition_refresh_error": None,
@@ -203,6 +219,45 @@ def _transition_brake_active(out: dict[str, Any]) -> bool:
     )
 
 
+def _post_mash_in_refresh_active(out: dict[str, Any]) -> bool:
+    gate_state = str(out.get("mash_in_gate_state") or "").lower()
+    runtime_state = str(out.get("brewday_state") or "idle").lower()
+    stage_text = " ".join(str(out.get(key) or "") for key in ("runtime_stage", "runtime_step", "runtime_raw_step_name")).lower()
+    return bool(
+        gate_state == "mash_in_complete"
+        and runtime_state in {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
+        and not out.get("abort_lockout_active")
+        and not out.get("completed_runtime")
+        and out.get("connected", True)
+        and (not stage_text or "mash" in stage_text or "mäsk" in stage_text)
+    )
+
+
+def _apply_post_mash_in_refresh_guard(hass: HomeAssistant, out: dict[str, Any]) -> dict[str, Any]:
+    if not _post_mash_in_refresh_active(out):
+        return out
+
+    guarded = dict(out)
+    refresh_attrs = _request_transition_rcl_refresh(
+        hass,
+        guarded,
+        reason="mash_in_complete_mash_control_handoff",
+    )
+    original_reason = str(guarded.get("control_reason") or "BrewZilla mash control handoff active.")
+    guarded.update(
+        {
+            **refresh_attrs,
+            "rcl_post_mash_in_refresh_active": True,
+            "rcl_post_mash_in_refresh_reason": "mash_in_complete_mash_control_handoff",
+            "control_reason": (
+                f"{original_reason} Post mash-in RCL refresh: Mash-In Complete is active and BA is handing BrewZilla "
+                "to real mash control; a fresh RCL readback was requested for target, pump, heat and temperature echo."
+            ),
+        }
+    )
+    return guarded
+
+
 def _apply_transition_guard(hass: HomeAssistant, out: dict[str, Any]) -> dict[str, Any]:
     if not _transition_brake_active(out):
         return out
@@ -212,7 +267,11 @@ def _apply_transition_guard(hass: HomeAssistant, out: dict[str, Any]) -> dict[st
         return out
 
     guarded = dict(out)
-    refresh_attrs = _request_transition_rcl_refresh(hass, guarded)
+    refresh_attrs = _request_transition_rcl_refresh(
+        hass,
+        guarded,
+        reason="brewfather_left_strike_ramp",
+    )
 
     requested_target = _num(guarded.get("requested_target"))
     control_target = min(requested_target, strike_target) if requested_target is not None else strike_target
@@ -310,7 +369,9 @@ def _apply_transition_guard(hass: HomeAssistant, out: dict[str, Any]) -> dict[st
 
 def _patched_apply_pre_mash_in_heat_strike_profile(hass: HomeAssistant, out: dict[str, Any]) -> dict[str, Any]:
     assert _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE is not None
-    return _apply_transition_guard(hass, _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE(hass, out))
+    after_heat_strike = _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE(hass, out)
+    after_transition_brake = _apply_transition_guard(hass, after_heat_strike)
+    return _apply_post_mash_in_refresh_guard(hass, after_transition_brake)
 
 
 def install_heat_strike_transition_guard() -> None:
