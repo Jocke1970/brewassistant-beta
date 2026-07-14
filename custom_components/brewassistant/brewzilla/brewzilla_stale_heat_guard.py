@@ -1,4 +1,10 @@
-"""Late BrewZilla heat guard for stale temperature samples."""
+"""Late BrewZilla heat guard for stale temperature samples.
+
+A stale RCL temperature should make BA cautious about *new* heat decisions, but
+it must not turn BrewZilla heating off after BA has already handed BrewZilla a
+valid target.  BrewZilla regulates locally against its target; BA's stale-data
+response is to observe/request refresh, not to zero the heat channel.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +31,23 @@ def _positive(value: Any) -> bool:
     return bool(num is not None and num > base.UTILIZATION_TOLERANCE)
 
 
+def _valid_target(value: Any) -> bool:
+    target = _num(value)
+    return bool(target is not None and base.MIN_TARGET_TEMP <= target <= base.MAX_TARGET_TEMP)
+
+
+def _local_target_known(snapshot: dict[str, Any]) -> bool:
+    """Return true when BrewZilla has, or should already have, a valid target."""
+    return bool(
+        _valid_target(snapshot.get("applied_target"))
+        or _valid_target(snapshot.get("brewzilla_device_target"))
+        or (
+            not snapshot.get("target_sync_needed")
+            and _valid_target(snapshot.get("requested_target"))
+        )
+    )
+
+
 def _temp_age(snapshot: dict[str, Any]) -> int | None:
     for key in (
         "rapt_brewzilla_temperature_age_seconds",
@@ -48,6 +71,17 @@ def _wants_heat(snapshot: dict[str, Any]) -> bool:
     )
 
 
+def _action_needed_without_stale_heat_change(snapshot: dict[str, Any]) -> bool:
+    return bool(
+        snapshot.get("target_sync_needed")
+        or snapshot.get("heater_action_needed")
+        or snapshot.get("pump_action_needed")
+        or snapshot.get("pump_stop_needed")
+        or snapshot.get("pump_utilization_action_needed")
+        or snapshot.get("ba_owned_reassert_action_needed")
+    )
+
+
 def _apply_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
     guarded = dict(snapshot)
     age = _temp_age(guarded)
@@ -67,6 +101,28 @@ def _apply_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
     if not active:
         return guarded
 
+    if _local_target_known(guarded):
+        action_needed = _action_needed_without_stale_heat_change(guarded)
+        connected = bool(guarded.get("connected"))
+        original_reason = str(guarded.get("control_reason") or "Direct production flow active")
+        guarded.update(
+            {
+                "stale_heat_guard_mode": "preserve_brewzilla_local_regulation",
+                "stale_heat_guard_local_target_known": True,
+                "stale_heat_guard_preserved_heat": True,
+                "stale_heat_guard_prevented_heat_zero": False,
+                "ba_owned_reassert_action_needed": bool(guarded.get("ba_owned_reassert_action_needed")),
+                "can_apply_target": connected and action_needed,
+                "orchestration_mode": "direct-control" if connected and action_needed else "local-control",
+                "rapt_critical_refresh_recommended": True,
+                "control_reason": (
+                    f"{original_reason} RCL temperature is stale ({age}s), but BrewZilla already has a valid local target. "
+                    "BA preserves BrewZilla local heat regulation and does not force heat to 0% or turn the heater off."
+                ),
+            }
+        )
+        return guarded
+
     heater_on = bool(guarded.get("heater_on"))
     desired_heat = 0.0
     heat_action_needed = base._utilization_action_needed(_num(guarded.get("heat_utilization")), desired_heat)
@@ -76,6 +132,8 @@ def _apply_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     guarded.update(
         {
+            "stale_heat_guard_mode": "block_new_heat_without_local_target",
+            "stale_heat_guard_local_target_known": False,
             "heating_needed": False,
             "desired_heat_utilization": desired_heat,
             "desired_heater_on": False,
@@ -86,8 +144,8 @@ def _apply_guard(snapshot: dict[str, Any]) -> dict[str, Any]:
             "can_apply_target": connected and needed,
             "orchestration_mode": "direct-control" if connected and needed else "monitor",
             "control_reason": (
-                f"BrewZilla temperature is stale ({age}s). Heat is held at 0% until temperature is fresh. "
-                "Target sync and heater-off remain allowed."
+                f"BrewZilla temperature is stale ({age}s) and no trusted local target is known. "
+                "New heat is blocked until temperature or target readback is fresh."
             ),
         }
     )
