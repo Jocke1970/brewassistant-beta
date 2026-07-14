@@ -12,6 +12,7 @@ from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
 from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_guard
+from . import brewzilla_rcl_value_recovery_guard as _rcl_value_recovery_guard
 from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
 from . import brewzilla_strike_ready_hold_guard as _strike_ready_hold_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
@@ -33,7 +34,10 @@ from .brewzilla_temp_filter import install_temp_filter as _install_temp
 def _fresh_entity_age_seconds(entity_state: State | None) -> int | None:
     if entity_state is None:
         return None
-    timestamp: Any = getattr(entity_state, "last_reported", None) or entity_state.last_updated
+    # Use last_updated rather than last_reported. RCL may report/refresh an old
+    # value without changing the actual temperature, target or utilization. For
+    # BrewZilla control freshness we need value freshness, not only report traffic.
+    timestamp: Any = entity_state.last_updated
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
 
 
@@ -44,6 +48,7 @@ _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 _heat_strike_profile.install_heat_strike_profile()
 _heat_strike_transition_guard.install_heat_strike_transition_guard()
+_rcl_value_recovery_guard.install_rcl_value_recovery_guard()
 _pre_mash_in_strike_sensor.install_pre_mash_in_strike_sensor_guard()
 _strike_ready_hold_guard.install_strike_ready_hold_guard()
 _advice_control.install_advice_control()
