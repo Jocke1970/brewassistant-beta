@@ -1,10 +1,11 @@
-"""Runtime patch for mash-in target resolution and anti-drop heat behavior.
+"""Runtime patch for mash-in target resolution and pump/anti-drop behavior.
 
-This patch is intentionally small and late-bound.  The original mash-in gate is
-kept as the owner of the two-button flow, while this module fixes the target
-choice after Mash-In Started:
+This patch is intentionally small and late-bound. The original mash-in gate is
+kept as the owner of the two-button flow, while this module fixes the process
+logic around the gate:
 
-* pre mash-in / ready: strike/current target may remain active
+* ready for mash-in: keep the pump running/circulating until the operator
+  presses Mash-In Started
 * after Mash-In Started: prefer the active mash step target from Brewfather
   (`target_temperature` / `tracker_target`) over any latched strike target
 * while mash-in is started and pump is paused: never apply anti-drop heat when
@@ -21,7 +22,9 @@ from . import brewzilla_orchestration as orchestration
 _INSTALLED = False
 _ORIGINAL_EFFECTIVE_TARGET = None
 _ORIGINAL_STARTED_HOLD = None
+_ORIGINAL_FORCE_PUMP_PAUSE = None
 _TARGET_TOLERANCE_C = 0.05
+READY_PUMP_UTILIZATION = 50.0
 
 
 def _num(value: Any) -> float | None:
@@ -41,7 +44,7 @@ def _current_mash_step_target(snapshot: dict[str, Any]) -> tuple[float | None, s
     """Return the active mash step target, not the latched strike target.
 
     BrewAssistant may keep `requested_target` on a strike/boost value while the
-    Brewfather runtime has already advanced to the first real mash hold.  In the
+    Brewfather runtime has already advanced to the first real mash hold. In the
     event log this looked like `requested_target: 71.8` while the actual step was
     `Hold 66°C` with `target_temperature: 66` / `tracker_target: 66`.
     """
@@ -86,6 +89,45 @@ def _effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | N
     return current_target, "current_step", next_target, next_source
 
 
+def _force_pump_run_until_mash_in_started(snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
+    """Keep pump ON while strike temp is reached and BA waits for mash-in start.
+
+    The original gate paused the pump as soon as mash-in was ready. That made the
+    strike water stratify while waiting for the operator. Desired process:
+
+    * heat strike / ready_for_mash_in: pump ON, circulate normally
+    * Mash-In Started pressed: pump OFF while malt is added
+    * Mash-In Complete pressed: pump ON again
+    """
+    current_pump_utilization = _num(snapshot.get("pump_utilization"))
+    pump_on = bool(snapshot.get("pump_on"))
+    pump_utilization_action_needed = bool(
+        current_pump_utilization is None
+        or abs(float(current_pump_utilization) - READY_PUMP_UTILIZATION) > gate.UTILIZATION_TOLERANCE
+    )
+    pump_action_needed = not pump_on
+    action_needed = bool(pump_action_needed or pump_utilization_action_needed)
+    can_apply_gate = gate._can_apply_gate(snapshot, action_needed=action_needed)
+    reason = str(snapshot.get("control_reason") or "Direct production flow active")
+
+    return {
+        **snapshot,
+        "pump_recommended": True,
+        "desired_pump_on": True,
+        "desired_pump_utilization": READY_PUMP_UTILIZATION,
+        "pump_action_needed": pump_action_needed,
+        "pump_stop_needed": False,
+        "pump_utilization_action_needed": pump_utilization_action_needed,
+        "can_apply_target": can_apply_gate,
+        "orchestration_mode": "direct-control" if can_apply_gate else snapshot.get("orchestration_mode"),
+        **gate._gate_fields(store, snapshot, pending=True),
+        "control_reason": (
+            f"{reason}; mash-in ready gate active, pump remains ON/circulating until "
+            "Mash-In Started is pressed."
+        ),
+    }
+
+
 def _mash_in_started_hold_snapshot(hass, snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
     assert _ORIGINAL_STARTED_HOLD is not None
     out = _ORIGINAL_STARTED_HOLD(hass, snapshot, store)
@@ -98,7 +140,7 @@ def _mash_in_started_hold_snapshot(hass, snapshot: dict[str, Any], store: dict[s
     if effective_target is None or current is None:
         return out
 
-    # Anti-drop heat is only allowed when the mash is below target.  At or above
+    # Anti-drop heat is only allowed when the mash is below target. At or above
     # target, explicitly suppress heat and stop the heater if needed.
     if current < effective_target:
         return out
@@ -144,13 +186,15 @@ def _mash_in_started_hold_snapshot(hass, snapshot: dict[str, Any], store: dict[s
 
 
 def install_mash_in_target_patch() -> None:
-    """Install late-bound mash-in target/heat corrections."""
-    global _INSTALLED, _ORIGINAL_EFFECTIVE_TARGET, _ORIGINAL_STARTED_HOLD
+    """Install late-bound mash-in target/pump/heat corrections."""
+    global _INSTALLED, _ORIGINAL_EFFECTIVE_TARGET, _ORIGINAL_STARTED_HOLD, _ORIGINAL_FORCE_PUMP_PAUSE
     if _INSTALLED:
         return
 
     _ORIGINAL_EFFECTIVE_TARGET = gate._effective_mash_in_target
     _ORIGINAL_STARTED_HOLD = gate._mash_in_started_hold_snapshot
+    _ORIGINAL_FORCE_PUMP_PAUSE = gate._force_pump_pause
     gate._effective_mash_in_target = _effective_mash_in_target
     gate._mash_in_started_hold_snapshot = _mash_in_started_hold_snapshot
+    gate._force_pump_pause = _force_pump_run_until_mash_in_started
     _INSTALLED = True
