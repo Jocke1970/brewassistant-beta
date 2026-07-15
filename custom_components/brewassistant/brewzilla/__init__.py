@@ -17,6 +17,7 @@ from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_s
 from . import brewzilla_strike_ready_hold_guard as _strike_ready_hold_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
+from . import brewzilla_mash_in_target_patch as _mash_in_target_patch
 from . import brewzilla_freshness_guard as _freshness_guard
 from . import brewzilla_stale_safe_guard as _runtime_safety
 from . import brewzilla_paused_guard as _paused_guard
@@ -55,6 +56,7 @@ _strike_ready_hold_guard.install_strike_ready_hold_guard()
 _advice_control.install_advice_control()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
+_mash_in_target_patch.install_mash_in_target_patch()
 _freshness_guard.install_freshness_guard()
 _runtime_safety.install_stale_safe_guard()
 _paused_guard.install_paused_guard()
