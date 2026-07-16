@@ -1,7 +1,7 @@
 # BrewZilla Advice Control Profile
 
 Status: active development / test notes  
-Last synced: 2026-07-05
+Last synced: 2026-07-06
 
 This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker tests.
 
@@ -14,7 +14,7 @@ BrewAssistant does not treat Brewday Advice as a standalone controller. The curr
 3. Safety / guard modifiers
 4. Direct-control apply
 
-The base profile provides conservative default heat and pump levels. Brewday Advice then adjusts those values based on target delta, temperature rate, mash/wort separation and stage context.
+The base profile now leans more on BrewZilla's local controller: BrewAssistant sets target temperature plus heat and pump utilization, then lets BrewZilla regulate locally while BA supervises and corrects when needed.
 
 ## Base profile
 
@@ -27,20 +27,28 @@ brewzilla_35l_small_batch_default
 Current heat profile:
 
 ```text
-Ramp:
-  >5.0°C below target   -> 45 %
-  3.0-5.0°C             -> 30 %
-  2.0-3.0°C             -> 22 %
-  1.0-2.0°C             -> 15 %
-  0.5-1.0°C             -> 8 %
-  0.2-0.5°C             -> 5 %
-  <=0.2°C / over target -> 0 %
+Ramp / strike / step ramp:
+  >20.0°C below target  -> 100 %
+  10.0-20.0°C           -> 75 %
+  5.0-10.0°C            -> 60 %
+  3.0-5.0°C             -> 45 %
+  1.0-3.0°C             -> 25 %
+  0.3-1.0°C             -> 10 %
+  <=0.3°C / over target -> 0 %
 
-Mash hold:
-  >2.0°C below target   -> 15 %
-  0.7-2.0°C             -> 10 %
-  0.2-0.7°C             -> 5 %
+Mash hold / recovery:
+  >2.0°C below target   -> 75 %
+  0.7-2.0°C             -> 50 %
+  0.2-0.7°C             -> 25 %
   <=0.2°C / over target -> 0 %
+```
+
+Rationale:
+
+```text
+Pre-mash strike water has no malt bed, so it should heat fast.
+Step ramps in BrewZilla can also use higher utilization while the pump keeps circulation moving.
+BrewZilla still regulates locally at the target temperature.
 ```
 
 Current real-mash pump profile:
@@ -217,8 +225,9 @@ This lets BrewAssistant cap heat before the wort/internal side overshoots while 
 Current real-mash effect:
 
 ```text
-heat utilization capped to 5 % or 0 %
-pump utilization raised to 70 %
+approach thermal mix: heat capped to 15 %, pump 70 %
+active thermal mix:   heat capped to 10 %, pump 70 %
+high thermal mix:     heat capped to 5 %, pump 70 %
 ```
 
 Water-only thermal mix may still raise pump utilization to 80 %.
@@ -265,7 +274,7 @@ or during thermal mix:
 ```yaml
 apply_result: paused_hold_maintenance_applied
 actions:
-  - paused_hold_set_heat_utilization:0.0
+  - paused_hold_set_heat_utilization:10.0
   - paused_hold_set_pump_utilization:70.0
 ```
 
@@ -333,6 +342,8 @@ BA should show **Mash-In Started** at strike readiness, then use the next mash t
 For the next supervised test, check for:
 
 ```yaml
+advice_heat_profile_phase: ramp_far
+advice_capped_heat_utilization: 100.0
 mash_in_gate_state: ready_for_mash_in
 mash_in_started_visible: true
 event_type: mash_in_started
