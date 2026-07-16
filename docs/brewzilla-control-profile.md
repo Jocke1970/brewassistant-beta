@@ -1,20 +1,45 @@
 # BrewZilla Advice Control Profile
 
-Status: active development / test notes  
-Last synced: 2026-07-06
+Status: active development / supervised hot-side testing  
+Last synced: 2026-07-16
 
 This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker tests.
 
+The design target is **supervised apply**, not unattended autopilot. BrewAssistant may set targets, heat utilization and pump utilization when the current runtime and safety context allow it, but the brewer remains the operator.
+
+## Core principles
+
+```text
+BA reads Brewfather/Brewday intent.
+BA sets BrewZilla target/utilization when allowed.
+BrewZilla regulates locally against the target it has received.
+BA observes, refreshes stale telemetry, and corrects only when a trusted rule says it should.
+```
+
+Important control philosophy:
+
+```text
+If BrewZilla already has a valid active target,
+BA must not kill heat merely because RCL telemetry is stale/degraded.
+
+RCL trouble should trigger refresh/reload diagnostics and warnings,
+not silent heat starvation.
+```
+
+Explicit ABORT, runtime completed, and manual emergency stop still win and may safe-down heat/pump.
+
 ## Control layers
 
-BrewAssistant does not treat Brewday Advice as a standalone controller. The current design is layered:
+The current BrewZilla path is layered:
 
-1. BrewZilla base profile
-2. Brewday Advice modifiers
-3. Safety / guard modifiers
-4. Direct-control apply
-
-The base profile now leans more on BrewZilla's local controller: BrewAssistant sets target temperature plus heat and pump utilization, then lets BrewZilla regulate locally while BA supervises and corrects when needed.
+1. Brewday Runtime resolver
+2. BrewZilla orchestration snapshot
+3. Brewday Advice control profile
+4. Heat-strike / mash-in / thermal-mix guards
+5. Freshness / RCL recovery / execution / target-trust guards
+6. Local BrewZilla regulation preservation
+7. Direct-control apply
+8. Equipment learning evidence layer
 
 ## Base profile
 
@@ -24,7 +49,7 @@ The built-in profile is currently named:
 brewzilla_35l_small_batch_default
 ```
 
-Current heat profile:
+Current base heat profile:
 
 ```text
 Ramp / strike / step ramp:
@@ -34,43 +59,37 @@ Ramp / strike / step ramp:
   3.0-5.0°C             -> 45 %
   1.0-3.0°C             -> 25 %
   0.3-1.0°C             -> 10 %
-  <=0.3°C / over target -> 0 %
+  <=0.3°C / over target -> 0 % base profile
 
 Mash hold / recovery:
   >2.0°C below target   -> 75 %
   0.7-2.0°C             -> 50 %
   0.2-0.7°C             -> 25 %
-  <=0.2°C / over target -> 0 %
+  <=0.2°C / over target -> 0 % base profile
 ```
 
-Rationale:
-
-```text
-Pre-mash strike water has no malt bed, so it should heat fast.
-Step ramps in BrewZilla can also use higher utilization while the pump keeps circulation moving.
-BrewZilla still regulates locally at the target temperature.
-```
+The 0% rows are profile recommendations, not a license for stale/RCL guards to turn off BrewZilla local regulation after BA has already given BZ a valid target.
 
 Current real-mash pump profile:
 
 ```text
-Ramp:                 50 %
-Mash hold:            50 %
-Overshoot mix:        45 %
-Thermal mix:          70 %
-Mash circulation floor after mash-in: 40 %
+Ramp:                         50 %
+Mash hold:                    50 %
+Overshoot mix:                45 %
+Thermal mix:                  70 %
+Mash circulation floor:       40 % after mash-in complete
 ```
 
-Water-only tests may still use the stronger water-test pump profile:
+Water-only tests may still use stronger circulation because there is no malt bed:
 
 ```text
-Ramp:                 70 %
-Mash hold:            50 %
-Overshoot mix:        50 %
-Thermal mix:          80 %
+Ramp:                         70 %
+Mash hold:                    50 %
+Overshoot mix:                50 %
+Thermal mix:                  80 %
 ```
 
-The selected learning context controls which pump profile is used:
+The selected learning context controls pump profile selection:
 
 ```text
 select.brewassistant_brewzilla_learning_context = Water only -> water-test pump profile
@@ -78,209 +97,148 @@ select.brewassistant_brewzilla_learning_context = Real mash  -> real-mash pump p
 Unknown                                                   -> real-mash conservative profile
 ```
 
-## Positive-control gate
+## Heat-strike and mash-in handoff
 
-Brewday Advice must not resurrect stale targets when Brewday Runtime is idle, inactive, completed or otherwise outside an active control state.
+Heat-strike and mash-in are deliberately split from normal mash control.
 
-If positive control is blocked, BrewAssistant may only issue safe-down actions:
+During pre-mash-in strike heating, BA may hold a strike-water target higher than the upcoming mash target. The goal is to account for grain addition drop.
 
-```text
-target_sync_needed = false
-desired_heat_utilization = 0 %
-desired_pump_utilization = 0 %
-desired_heater_on = false
-desired_pump_on = false
-```
+At the Brewfather Hold/mash-addition transition, BA should avoid holding boosted heat-strike targets too long when wort/internal is already near or above strike. The heat-strike transition guard may refresh RCL and brake the transition profile.
 
-Expected diagnostics when this gate catches stale runtime/advice state:
-
-```yaml
-advice_positive_control_blocked: true
-advice_positive_control_blocked_reason: brewday_runtime_not_active
-```
-
-A stale Idle/Inactive runtime must not produce:
-
-```yaml
-actions:
-  - set_target:...
-  - set_heat_utilization:...
-  - set_pump_utilization:...
-```
-
-## Two-step mash-in gate
-
-Mash-in is split into two explicit operator actions:
+When **Mash-In Started** is pressed:
 
 ```text
-1. Mash-In Started
-2. Mash-In Complete
+BA releases the latched strike target.
+BA resolves the active Brewfather mash target directly from Brewday Runtime.
+BZ target should become the real mash target, for example 66.0°C.
+Pump remains OFF while malt is being mixed in.
+Heat is not forcibly killed; BZ keeps regulating locally.
 ```
 
-Before any button is pressed, BrewAssistant may stop circulation and hold pump utilization at 0 %. Only the **Mash-In Started** button should be visible.
-
-Expected ready state:
+Expected markers:
 
 ```yaml
-mash_in_gate_state: ready_for_mash_in
-mash_in_started_visible: true
-mash_in_complete_visible: false
-desired_pump_on: false
-desired_pump_utilization: 0
-```
-
-When **Mash-In Started** is pressed, BrewAssistant releases the strike target. It scans Brew Tracker's runtime/timeline for the next temperature-bearing mash step, skipping event-only steps such as malt additions. If the next target is lower than the strike/current target, that next target becomes the effective control target.
-
-Example:
-
-```text
-Current/strike target: 69°C
-Next mash target:      66°C
-Effective BA target:   66°C
-```
-
-During `mash_in_started`, pump remains OFF and BA may use low anti-drop heat only:
-
-```text
-far below effective target: 15 %
-slightly below target:     10 %
-near target:                5 %
-above target:               0 %
-```
-
-Expected event-log markers after **Mash-In Started**:
-
-```yaml
-event_type: mash_in_started
 mash_in_gate_state: mash_in_started
 mash_in_started_hold_active: true
 mash_in_complete_visible: true
-mash_in_started_set_target: 66.0   # when next mash target is lower than strike target
-mash_in_started_set_heat_utilization:10.0
-mash_in_started_set_pump_utilization:0.0
+mash_in_started_set_target: 66.0
+mash_in_started_set_pump_utilization: 0.0
 ```
 
-When **Mash-In Complete** is pressed, BrewAssistant starts mash circulation and applies a 50 % pump utilization baseline. After that, both mash-in buttons should be hidden.
+When **Mash-In Complete** is pressed:
 
-Expected event-log markers after **Mash-In Complete**:
+```text
+BA starts mash circulation.
+BA keeps/safely downs target to the active mash target.
+BA requests fresh RCL readback around the mash-control handoff.
+```
+
+Expected markers:
 
 ```yaml
-apply_result: mash_circulation_started
+apply_result: mash_circulation_started_safe_down_applied
 actions:
   - mash_in_complete
   - set_pump_utilization:50.0
   - pump_on
+  - mash_in_complete_safe_down_set_target:66.0
 mash_in_gate_state: mash_in_complete
-mash_in_started_visible: false
-mash_in_complete_visible: false
 ```
 
 ## Mash circulation floor
 
-After mash-in is complete, BrewAssistant should keep a minimum pump utilization floor during ramp and mash-hold stages.
-
-Current rule:
+After mash-in is complete, BA should keep circulation alive during ramp and mash-hold stages unless a higher safety/gate/abort guard is active.
 
 ```text
 If mash_in_gate_state == mash_in_complete
-and stage_kind is ramp or mash_hold
-and no safety/gate/abort guard is active:
+and stage_kind is ramp or mash_hold:
   pump_on = true
   pump_utilization >= 40 %
 ```
 
-Normal ramp/hold profile still requests 50 %. The 40 % floor only prevents the pump from dropping too low when another modifier would otherwise lower it. Thermal mix may temporarily raise pump utilization to 70 % during real mash or 80 % during water-only tests.
-
-Expected diagnostics:
-
-```yaml
-advice_mash_circulation_floor_active: true
-advice_mash_circulation_floor_utilization: 40
-advice_desired_pump_on: true
-desired_pump_utilization: 50
-```
+Normal ramp/hold profile still requests 50%. The 40% floor only prevents another modifier from dropping circulation too low.
 
 ## Thermal mix modifier
 
-Thermal mix is active when BrewAssistant has separate mash and wort/internal temperatures and the values indicate stratification.
+Thermal mix is the stratification guard. It is active when BA has separate mash and wort/internal temperatures and the values indicate uneven temperature distribution.
 
-Current trigger intent:
-
-```text
-wort/internal temperature is above target
-mash temperature is still below target
-mash and wort/internal are meaningfully different
-```
-
-There is also an earlier approach trigger:
+Trigger intent:
 
 ```text
-wort/internal temperature is within 1.0°C below target
-mash temperature is at least 1.5°C below target
-mash and wort/internal are meaningfully different
+wort/internal temperature is above target while mash still lags, or
+wort/internal is near target while mash is still significantly below target.
 ```
 
-This lets BrewAssistant cap heat before the wort/internal side overshoots while the mash is still lagging.
-
-Current real-mash effect:
+Current real-mash behavior is mash-priority with wort/internal as limiter:
 
 ```text
-approach thermal mix: heat capped to 15 %, pump 70 %
-active thermal mix:   heat capped to 10 %, pump 70 %
-high thermal mix:     heat capped to 5 %, pump 70 %
+Mash/BLE temperature is the primary ramp/hold control signal.
+Wort/internal remains a safety limiter.
 ```
 
-Water-only thermal mix may still raise pump utilization to 80 %.
+Thermal mix no longer treats large mash lag as a reason to collapse real-mash ramp heat to 5% by default.
 
-Expected event-log markers:
+Current real-mash cap behavior:
 
-```yaml
-advice_thermal_mix_active: true
-advice_heat_profile_phase: thermal_mix_heat_cap
-advice_thermal_mix_reason: wort_near_target_mash_lagging
+```text
+approach thermal mix:       heat cap 15 %, pump 70 %
+active thermal mix:         heat cap 10 %, pump 70 %
+high/extreme thermal mix:   heat cap 5 %,  pump 70 %
+
+real mash ramp, mash >=2°C below target,
+wort/internal < target + 5°C:
+  heat cap floor 45 %, pump 70 %
+
+real mash hold, mash >=2°C below target,
+wort/internal < target + 5°C:
+  heat cap floor 30 %, pump 70 %
 ```
 
-or after the wort/internal side has passed target:
+This keeps warm wort/internal readings as a limiter, but lets the actual mash reach target instead of stalling several degrees low.
+
+Expected diagnostics:
 
 ```yaml
 advice_thermal_mix_active: true
 advice_heat_profile_phase: thermal_mix_heat_cap
 advice_thermal_mix_reason: wort_above_target_mash_lagging
+advice_mash_priority_thermal_mix_active: true
+advice_mash_priority_thermal_mix_floor: 45.0
 ```
 
-## Paused mash-hold maintenance
+## RCL freshness and stale value recovery
 
-Brewfather Brew Tracker can report a mash hold as paused while the brewer still expects the current target to be maintained. BrewAssistant now allows narrow positive control during paused mash-hold states, but only when the target is already synced and the requested action is a limited hold-maintenance action.
+RAPT Cloud Link can sometimes report or refresh an entity without changing the actual temperature value. BA therefore treats value freshness as important, not only report traffic.
 
-Current limits:
+During active heat-strike/ramp/mash control, stale RCL values should trigger:
 
 ```text
-max paused hold heat utilization: 15 %
-max paused hold pump utilization: 80 %
-max positive heat below target window: 6.0°C
+homeassistant.update_entity on relevant RCL/BrewZilla entities
+possible guarded config-entry reload
+clear diagnostic/audit fields
 ```
 
-Expected event-log markers:
+But stale RCL must not automatically mean:
 
-```yaml
-apply_result: paused_hold_maintenance_applied
-actions:
-  - paused_hold_set_heat_utilization:10.0
-  - paused_hold_set_pump_utilization:50.0
+```text
+set_heat_utilization:0
+heater_off
 ```
 
-or during thermal mix:
+when BZ already has a valid active target.
+
+Expected diagnostics may include:
 
 ```yaml
-apply_result: paused_hold_maintenance_applied
-actions:
-  - paused_hold_set_heat_utilization:10.0
-  - paused_hold_set_pump_utilization:70.0
+rcl_value_stale_guard_active: true
+rcl_value_stale_guard_refresh_requested: true
+rcl_value_stale_guard_reload_requested: true
+local_regulation_heat_guard_active: true
 ```
 
 ## Local-control lease
 
-The local-control lease is a short passive observation window after BrewAssistant changes the BrewZilla target. It exists because BrewZilla regulates temperature locally once target and utilization have been applied.
+The local-control lease is a short passive observation window after BA changes the BrewZilla target. It exists because BrewZilla regulates locally once target and utilization have been applied.
 
 Current behavior:
 
@@ -289,7 +247,7 @@ passive observe window: 45 seconds
 lease is created only after set_target
 ```
 
-The lease is broken early when Brewday Advice sees risk or meaningful profile changes.
+The lease is broken early when Advice sees risk or meaningful profile changes.
 
 Break reasons include:
 
@@ -305,21 +263,54 @@ utilization_action_needed
 observe_window_elapsed
 ```
 
-Expected event-log marker:
+## Positive-control gate
+
+Brewday Advice must not resurrect stale targets when Brewday Runtime is idle, inactive, completed or otherwise outside an active control state.
+
+If positive control is blocked, BA may only issue safe-down actions when there is no valid active BrewZilla target that should be preserved by local regulation.
+
+Expected diagnostics:
 
 ```yaml
-local_control_lease_break_reason: thermal_mix_active
+advice_positive_control_blocked: true
+advice_positive_control_blocked_reason: brewday_runtime_not_active
 ```
 
-or:
+## Equipment learning layer
 
-```yaml
-local_control_lease_break_reason: near_target_taper_zone
+The BrewZilla equipment learning layer is separate from the live advice/control profile.
+
+```text
+Analysis / Advice:
+  What is happening right now?
+
+Equipment Learning:
+  What has this specific BrewZilla repeatedly shown over time?
+
+Profile Suggestion:
+  What profile adjustment should be proposed for operator review later?
 ```
+
+The learning model records evidence and creates candidate suggestions. It does not auto-apply learned changes.
+
+Current v1 suggestion target:
+
+```text
+Real mash + thermal mix active
+mash >=2°C below target
+profile heat cap <=10 %
+wort/internal only moderately above target
+
+Candidate profile suggestion:
+  thermal_mix.ramp_mash_priority_floor -> 45 %
+  thermal_mix.mash_hold_mash_priority_floor -> 30 %
+```
+
+See [`brewzilla-equipment-learning.md`](brewzilla-equipment-learning.md) for model details.
 
 ## Recommended Brewfather test recipe settings
 
-For BrewAssistant/BrewZilla control testing, short 2-minute ramps are useful as stress tests but can make the integration look unstable because target transitions happen before temperatures and telemetry have settled.
+For BrewAssistant/BrewZilla control testing, short 2-minute ramps are useful stress tests but can make the integration look unstable because target transitions happen before temperatures and telemetry have settled.
 
 Recommended test settings:
 
@@ -331,36 +322,35 @@ Hold/stable time: unchanged
 For a realistic mash-in test:
 
 ```text
-Strike / mash-in target: 69°C
-Mash target after grain: 66°C
+Strike / mash-in target: 69-72°C depending on recipe and grain temperature
+Mash target after grain: real first mash rest target, for example 66°C
 ```
 
-BA should show **Mash-In Started** at strike readiness, then use the next mash target as effective control target after the button is pressed.
+BA should show **Mash-In Started** at strike readiness, then use the active Brewfather mash target as effective control target after the button is pressed.
 
 ## What to check in event logs
 
 For the next supervised test, check for:
 
 ```yaml
-advice_heat_profile_phase: ramp_far
-advice_capped_heat_utilization: 100.0
 mash_in_gate_state: ready_for_mash_in
 mash_in_started_visible: true
 event_type: mash_in_started
 mash_in_started_hold_active: true
-mash_in_effective_target: 66.0
+mash_in_started_set_target: 66.0
 apply_result: mash_in_started_hold_applied
 event_type: mash_in_confirmed
-apply_result: mash_circulation_started
+apply_result: mash_circulation_started_safe_down_applied
 advice_mash_circulation_floor_active: true
 advice_thermal_mix_active: true
-advice_thermal_mix_reason: wort_near_target_mash_lagging
-advice_positive_control_blocked: true   # only after runtime goes idle/inactive
-local_control_lease_break_reason: thermal_mix_active
-local_control_lease_break_reason: near_target_taper_zone
+advice_mash_priority_thermal_mix_active: true
+rcl_value_stale_guard_refresh_requested: true   # only if RCL value actually stalls
+local_regulation_heat_guard_active: true        # only when a stale/guard layer tries to kill heat despite valid target
+brewzilla_equipment_learning_observations: ...
+brewzilla_equipment_learning_suggestion: ...    # optional candidate, not auto-applied
 ```
 
-Also watch that long stretches of:
+Also verify that long stretches of:
 
 ```text
 BrewZilla local-control lease active; BA observes while BrewZilla regulates locally.
