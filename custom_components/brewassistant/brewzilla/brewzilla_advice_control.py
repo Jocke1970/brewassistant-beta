@@ -17,23 +17,23 @@ BREWZILLA_BASE_PROFILE = {
     "description": "Built-in BrewZilla 35L small-batch profile.",
     "heat": {
         "off": 0.0,
-        "ramp_far": 45.0,
-        "ramp_mid": 30.0,
-        "ramp_approach": 22.0,
-        "ramp_near": 15.0,
-        "ramp_final": 8.0,
-        "ramp_feather": 5.0,
-        "hold_recovery": 15.0,
-        "hold_gentle": 10.0,
-        "hold_feather": 5.0,
+        "ramp_far": 100.0,
+        "ramp_mid": 75.0,
+        "ramp_approach": 60.0,
+        "ramp_near": 45.0,
+        "ramp_final": 25.0,
+        "ramp_feather": 10.0,
+        "hold_recovery": 75.0,
+        "hold_gentle": 50.0,
+        "hold_feather": 25.0,
     },
     "delta": {
-        "ramp_far": 5.0,
-        "ramp_mid": 3.0,
-        "ramp_approach": 2.0,
-        "ramp_near": 1.0,
-        "ramp_final": 0.5,
-        "ramp_feather": 0.2,
+        "ramp_far": 20.0,
+        "ramp_mid": 10.0,
+        "ramp_approach": 5.0,
+        "ramp_near": 3.0,
+        "ramp_final": 1.0,
+        "ramp_feather": 0.3,
         "hold_recovery": 2.0,
         "hold_gentle": 0.7,
         "hold_feather": 0.2,
@@ -55,7 +55,7 @@ BREWZILLA_BASE_PROFILE = {
     "rate": {
         "fast_c_per_min": 0.20,
         "moderate_c_per_min": 0.10,
-        "near_target_heat_cap": 5.0,
+        "near_target_heat_cap": 25.0,
     },
     "thermal_mix": {
         "enabled": True,
@@ -66,9 +66,9 @@ BREWZILLA_BASE_PROFILE = {
         "approach_mash_gap_c": 1.5,
         "high_wort_over_target_c": 1.0,
         "large_mash_gap_c": 2.0,
-        "heat_cap": 5.0,
-        "approach_heat_cap": 5.0,
-        "high_heat_cap": 0.0,
+        "heat_cap": 10.0,
+        "approach_heat_cap": 15.0,
+        "high_heat_cap": 5.0,
     },
     "mash_circulation": {
         "enabled": True,
@@ -171,7 +171,7 @@ def _apply_positive_control_block(snapshot: dict[str, Any]) -> None:
 def _rate_adjusted_heat(profile_heat: float, *, delta: float | None, temp_rate: float | None) -> tuple[float, str | None]:
     if delta is None or temp_rate is None:
         return profile_heat, None
-    cap = _p("rate.near_target_heat_cap", 5.0)
+    cap = _p("rate.near_target_heat_cap", 25.0)
     if delta <= 2.0 and temp_rate >= _p("rate.fast_c_per_min", 0.20):
         return min(profile_heat, cap), "fast_rise_near_target"
     if delta <= 1.0 and temp_rate >= _p("rate.moderate_c_per_min", 0.10):
@@ -187,13 +187,13 @@ def _base_heat_profile(stage_kind: str, delta: float | None, temp_rate: float | 
 
     if stage_kind == "mash_hold":
         if delta is None:
-            profile_heat, phase = _p("heat.hold_gentle", 10.0), "hold_unknown_delta"
+            profile_heat, phase = _p("heat.hold_gentle", 50.0), "hold_unknown_delta"
         elif delta > _p("delta.hold_recovery", 2.0):
-            profile_heat, phase = _p("heat.hold_recovery", 15.0), "hold_recovery"
+            profile_heat, phase = _p("heat.hold_recovery", 75.0), "hold_recovery"
         elif delta > _p("delta.hold_gentle", 0.7):
-            profile_heat, phase = _p("heat.hold_gentle", 10.0), "hold_gentle"
+            profile_heat, phase = _p("heat.hold_gentle", 50.0), "hold_gentle"
         elif delta > _p("delta.hold_feather", 0.2):
-            profile_heat, phase = _p("heat.hold_feather", 5.0), "hold_feather"
+            profile_heat, phase = _p("heat.hold_feather", 25.0), "hold_feather"
         else:
             profile_heat, phase = _p("heat.off", 0.0), "hold_at_target"
         adjusted, modifier = _rate_adjusted_heat(profile_heat, delta=delta, temp_rate=temp_rate)
@@ -201,19 +201,19 @@ def _base_heat_profile(stage_kind: str, delta: float | None, temp_rate: float | 
 
     if stage_kind == "ramp":
         if delta is None:
-            profile_heat, phase = _p("heat.ramp_near", 15.0), "ramp_unknown_delta"
-        elif delta > _p("delta.ramp_far", 5.0):
-            profile_heat, phase = _p("heat.ramp_far", 45.0), "ramp_far"
-        elif delta > _p("delta.ramp_mid", 3.0):
-            profile_heat, phase = _p("heat.ramp_mid", 30.0), "ramp_mid"
-        elif delta > _p("delta.ramp_approach", 2.0):
-            profile_heat, phase = _p("heat.ramp_approach", 22.0), "ramp_approach"
-        elif delta > _p("delta.ramp_near", 1.0):
-            profile_heat, phase = _p("heat.ramp_near", 15.0), "ramp_near"
-        elif delta > _p("delta.ramp_final", 0.5):
-            profile_heat, phase = _p("heat.ramp_final", 8.0), "ramp_final"
-        elif delta > _p("delta.ramp_feather", 0.2):
-            profile_heat, phase = _p("heat.ramp_feather", 5.0), "ramp_feather"
+            profile_heat, phase = _p("heat.ramp_near", 45.0), "ramp_unknown_delta"
+        elif delta > _p("delta.ramp_far", 20.0):
+            profile_heat, phase = _p("heat.ramp_far", 100.0), "ramp_far"
+        elif delta > _p("delta.ramp_mid", 10.0):
+            profile_heat, phase = _p("heat.ramp_mid", 75.0), "ramp_mid"
+        elif delta > _p("delta.ramp_approach", 5.0):
+            profile_heat, phase = _p("heat.ramp_approach", 60.0), "ramp_approach"
+        elif delta > _p("delta.ramp_near", 3.0):
+            profile_heat, phase = _p("heat.ramp_near", 45.0), "ramp_near"
+        elif delta > _p("delta.ramp_final", 1.0):
+            profile_heat, phase = _p("heat.ramp_final", 25.0), "ramp_final"
+        elif delta > _p("delta.ramp_feather", 0.3):
+            profile_heat, phase = _p("heat.ramp_feather", 10.0), "ramp_feather"
         else:
             profile_heat, phase = _p("heat.off", 0.0), "ramp_at_target"
         adjusted, modifier = _rate_adjusted_heat(profile_heat, delta=delta, temp_rate=temp_rate)
@@ -272,15 +272,15 @@ def _thermal_mix_modifier(advice: dict[str, Any], target: float | None, stage_ki
         severity = None
         reason = None
     elif high:
-        heat_cap = _p("thermal_mix.high_heat_cap", 0.0)
+        heat_cap = _p("thermal_mix.high_heat_cap", 5.0)
         severity = "high"
         reason = "wort_above_target_mash_lagging"
     elif approach_active and not over_target_active:
-        heat_cap = _p("thermal_mix.approach_heat_cap", 5.0)
+        heat_cap = _p("thermal_mix.approach_heat_cap", 15.0)
         severity = "approach"
         reason = "wort_near_target_mash_lagging"
     else:
-        heat_cap = _p("thermal_mix.heat_cap", 5.0)
+        heat_cap = _p("thermal_mix.heat_cap", 10.0)
         severity = "active"
         reason = "wort_above_target_mash_lagging"
 
