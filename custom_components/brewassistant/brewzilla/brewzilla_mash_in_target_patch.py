@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
 from . import brewzilla_mash_in_gate as gate
 from . import brewzilla_orchestration as orchestration
 
@@ -40,35 +41,59 @@ def _text(snapshot: dict[str, Any], *keys: str) -> str:
     return " ".join(str(snapshot.get(key) or "") for key in keys).lower()
 
 
-def _current_mash_step_target(snapshot: dict[str, Any]) -> tuple[float | None, str | None]:
+def _current_mash_step_target(hass, snapshot: dict[str, Any]) -> tuple[float | None, str | None]:
     """Return the active mash step target, not the latched strike target.
 
     BrewAssistant may keep `requested_target` on a strike/boost value while the
     Brewfather runtime has already advanced to the first real mash hold. In the
-    event log this looked like `requested_target: 71.8` while the actual step was
-    `Hold 66°C` with `target_temperature: 66` / `tracker_target: 66`.
+    event log this looked like `requested_target: 71.8` while the actual audit
+    runtime step was `Hold 66°C` with `target_temperature: 66`.
+
+    Important nuance: the orchestration snapshot does not always carry the raw
+    Brewfather `target_temperature`. The audit layer can show it because it is
+    recorded from Brewday Runtime separately. Therefore this function reads the
+    current Brewday Runtime snapshot directly before falling back to fields that
+    happen to be present in the orchestration snapshot.
     """
-    stage_text = _text(snapshot, "runtime_stage", "stage")
+    runtime = build_brewday_runtime_snapshot(hass)
+
+    stage_text = _text(snapshot, "runtime_stage", "stage") or _text(runtime, "stage")
     if stage_text and "mash" not in stage_text and "mäsk" not in stage_text:
         return None, None
 
-    step_text = _text(snapshot, "runtime_step", "step", "runtime_raw_step_name", "raw_step_name")
+    step_text = " ".join(
+        part
+        for part in (
+            _text(snapshot, "runtime_step", "step", "runtime_raw_step_name", "raw_step_name"),
+            _text(runtime, "step", "raw_step_name"),
+        )
+        if part
+    )
     requested = _num(snapshot.get("requested_target"))
 
-    for key in ("target_temperature", "tracker_target"):
-        value = _num(snapshot.get(key))
+    candidates: tuple[tuple[Any, str], ...] = (
+        (runtime.get("target_temperature"), "brewday_runtime:target_temperature"),
+        (runtime.get("tracker_target"), "brewday_runtime:tracker_target"),
+        (snapshot.get("target_temperature"), "target_temperature"),
+        (snapshot.get("tracker_target"), "tracker_target"),
+        (snapshot.get("runtime_target_temperature"), "runtime_target_temperature"),
+        (snapshot.get("runtime_tracker_target"), "runtime_tracker_target"),
+    )
+
+    for raw_value, source in candidates:
+        value = _num(raw_value)
         if value is None:
             continue
 
         # A lower active Brewfather target is almost certainly the real mash
         # target after strike water has been reached.
         if requested is None or value < requested - _TARGET_TOLERANCE_C:
-            return value, key
+            return value, source
 
         # Hold/mash steps should trust the runtime target even if it happens to
         # equal the requested value.
         if any(word in step_text for word in ("hold", "mash", "mäsk")):
-            return value, key
+            return value, source
 
     return None, None
 
@@ -76,7 +101,7 @@ def _current_mash_step_target(snapshot: dict[str, Any]) -> tuple[float | None, s
 def _effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | None, str | None, float | None, str | None]:
     assert _ORIGINAL_EFFECTIVE_TARGET is not None
 
-    step_target, step_source = _current_mash_step_target(snapshot)
+    step_target, step_source = _current_mash_step_target(hass, snapshot)
     current_target = gate._target_for_gate(snapshot)
     next_target, next_source = gate._next_temperature_target(hass)
 
