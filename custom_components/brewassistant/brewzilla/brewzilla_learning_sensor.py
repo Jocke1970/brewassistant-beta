@@ -85,6 +85,17 @@ BREWZILLA_LEARNING_SENSORS: dict[str, dict[str, Any]] = {
     },
     "brewzilla_overshoot_risk": {"field": "overshoot_risk"},
     "brewzilla_heat_strategy_reason": {"field": "strategy_reason"},
+    "brewzilla_equipment_learning_summary": {"field": "equipment_learning_summary"},
+    "brewzilla_equipment_learning_observations": {
+        "field": "equipment_learning_observations_total",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_equipment_learning_segments": {
+        "field": "equipment_learning_segment_count",
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "brewzilla_equipment_learning_profile_key": {"field": "equipment_learning_current_profile_key"},
+    "brewzilla_equipment_learning_suggestion": {"field": "equipment_learning_suggestion_summary"},
 }
 
 
