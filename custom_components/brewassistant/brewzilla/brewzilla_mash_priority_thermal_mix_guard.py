@@ -68,7 +68,7 @@ def _hold_cap_for_gap(mash_gap: float) -> tuple[float | None, str | None]:
     if mash_gap >= MASH_PRIORITY_HOLD_MID_GAP_C:
         return MASH_PRIORITY_HOLD_MID_HEAT_CAP, "hold_mid_mash_gap"
     if mash_gap >= MASH_PRIORITY_HOLD_NEAR_GAP_C:
-        return MASH_PRIORITY_HOLD_NEAT_HEAT_CAP, "hold_near_mash_gap"
+        return MASH_PRIORITY_HOLD_NEAR_HEAT_CAP, "hold_near_mash_gap"
     return None, None
 
 
