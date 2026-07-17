@@ -48,6 +48,16 @@ MASH_PRIORITY_RAMP_VERY_SLOW_MAX_CAP = 90.0
 MASH_PRIORITY_RAMP_FAST_CAP = 45.0
 MASH_PRIORITY_RAMP_VERY_FAST_CAP = 25.0
 
+# Thermal-mix should also increase circulation when the internal/wort side is
+# hot.  During a hot-wort / mash-lag condition, more pump usually helps collapse
+# stratification and lets the mash probe tell us whether the target is really
+# reached.  This is still only used when the base thermal-mix modifier is active.
+MASH_PRIORITY_THERMAL_MIX_PUMP_UTILIZATION = 85.0
+MASH_PRIORITY_HOT_WORT_MIX_PUMP_UTILIZATION = 100.0
+MASH_PRIORITY_NEAR_TARGET_FAST_MIX_PUMP_UTILIZATION = 90.0
+MASH_PRIORITY_HOT_WORT_OVER_TARGET_C = 1.0
+MASH_PRIORITY_NEAR_TARGET_MASH_GAP_C = 2.0
+
 # Holds should recover more gently than ramps, but still not collapse to a 5-10%
 # cap while the measured mash remains several degrees below target.
 MASH_PRIORITY_HOLD_FAR_GAP_C = 5.0
@@ -107,6 +117,25 @@ def _rate_adjusted_ramp_cap(
     return floor, None
 
 
+def _thermal_mix_pump_for_conditions(
+    *,
+    stage_kind: str,
+    mash_gap: float,
+    wort_over: float,
+    temp_rate: float | None,
+) -> tuple[float, str]:
+    if wort_over >= MASH_PRIORITY_HOT_WORT_OVER_TARGET_C:
+        return MASH_PRIORITY_HOT_WORT_MIX_PUMP_UTILIZATION, "hot_wort_mix"
+    if (
+        stage_kind == "ramp"
+        and mash_gap <= MASH_PRIORITY_NEAR_TARGET_MASH_GAP_C
+        and temp_rate is not None
+        and temp_rate >= MASH_PRIORITY_RAMP_FAST_RATE_C_PER_MIN
+    ):
+        return MASH_PRIORITY_NEAR_TARGET_FAST_MIX_PUMP_UTILIZATION, "near_target_fast_mix"
+    return MASH_PRIORITY_THERMAL_MIX_PUMP_UTILIZATION, "thermal_mix"
+
+
 def _hold_cap_for_gap(mash_gap: float) -> tuple[float | None, str | None]:
     if mash_gap >= MASH_PRIORITY_HOLD_FAR_GAP_C:
         return MASH_PRIORITY_HOLD_FAR_HEAT_CAP, "hold_far_mash_gap"
@@ -124,13 +153,20 @@ def _raise_cap(
     severity: str,
     reason: str,
     temp_rate: float | None,
+    pump_utilization: float | None = None,
+    pump_reason: str | None = None,
     rate_reason: str | None = None,
 ) -> dict[str, Any]:
     original_cap = _num(result.get("heat_cap"))
     cap = floor if original_cap is None else max(original_cap, floor)
+    original_pump = _num(result.get("pump_utilization"))
+    pump = original_pump
+    if pump_utilization is not None:
+        pump = pump_utilization if original_pump is None else max(original_pump, pump_utilization)
     return {
         **result,
         "heat_cap": cap,
+        "pump_utilization": pump,
         "severity": severity,
         "reason": reason,
         "mash_priority_heat_cap_active": True,
@@ -139,6 +175,9 @@ def _raise_cap(
         "mash_priority_dynamic_floor": floor,
         "mash_priority_rate_c_per_min": temp_rate,
         "mash_priority_rate_reason": rate_reason,
+        "mash_priority_pump_utilization": pump,
+        "mash_priority_original_pump_utilization": original_pump,
+        "mash_priority_pump_reason": pump_reason,
     }
 
 
@@ -164,6 +203,13 @@ def _mash_priority_cap(
             "mash_priority_rate_c_per_min": temp_rate,
         }
 
+    pump_utilization, pump_reason = _thermal_mix_pump_for_conditions(
+        stage_kind=stage_kind,
+        mash_gap=mash_gap,
+        wort_over=wort_over,
+        temp_rate=temp_rate,
+    )
+
     if stage_kind == "ramp":
         floor, band = _ramp_cap_for_gap(mash_gap)
         if floor is not None and band is not None:
@@ -175,6 +221,8 @@ def _mash_priority_cap(
                 severity=severity,
                 reason="mash_priority_ramp_mix",
                 temp_rate=temp_rate,
+                pump_utilization=pump_utilization,
+                pump_reason=pump_reason,
                 rate_reason=rate_reason,
             )
 
@@ -187,6 +235,8 @@ def _mash_priority_cap(
                 severity=f"mash_priority_{band}",
                 reason="mash_priority_hold_mix",
                 temp_rate=temp_rate,
+                pump_utilization=pump_utilization,
+                pump_reason=pump_reason,
             )
 
     return {
