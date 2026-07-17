@@ -16,14 +16,31 @@ from . import brewzilla_advice_control as advice_control
 _INSTALLED = False
 _ORIGINAL_THERMAL_MIX_MODIFIER = None
 
-# Only extreme internal/wort heat should keep the very low 5% cap while the mash
-# is still far below target.  Smaller wort overshoots during a real mash ramp are
-# usually stratification/malt-pipe lag and should mainly request more mixing.
+# Only extreme internal/wort heat should keep the very low original 5-10% cap
+# while the mash is still far below target.  Smaller wort overshoots during a
+# real mash ramp are usually stratification/malt-pipe lag and should mainly
+# request more mixing.
 EXTREME_WORT_OVER_TARGET_C = 5.0
-MASH_PRIORITY_RAMP_GAP_C = 2.0
-MASH_PRIORITY_HOLD_GAP_C = 2.0
-MASH_PRIORITY_RAMP_HEAT_CAP = 45.0
-MASH_PRIORITY_HOLD_HEAT_CAP = 30.0
+
+# Dynamic real-mash ramp floor.  Heat can be high early in a ramp while the mash
+# is far from target, then taper as the mash approaches target.  BrewZilla still
+# regulates locally at the target temperature; this only prevents BA's
+# thermal-mix safety layer from collapsing heat too early.
+MASH_PRIORITY_RAMP_FAR_GAP_C = 5.0
+MASH_PRIORITY_RAMP_MID_GAP_C = 3.0
+MASH_PRIORITY_RAMP_NEAR_GAP_C = 2.0
+MASH_PRIORITY_RAMP_FAR_HEAT_CAP = 75.0
+MASH_PRIORITY_RAMP_MID_HEAT_CAP = 60.0
+MASH_PRIORITY_RAMP_NEAR_HEAT_CAP = 45.0
+
+# Holds should recover more gently than ramps, but still not collapse to a 5-10%
+# cap while the measured mash remains several degrees below target.
+MASH_PRIORITY_HOLD_FAR_GAP_C = 5.0
+MASH_PRIORITY_HOLD_MID_GAP_C = 3.0
+MASH_PRIORITY_HOLD_NEAR_GAP_C = 2.0
+MASH_PRIORITY_HOLD_FAR_HEAT_CAP = 50.0
+MASH_PRIORITY_HOLD_MID_HEAT_CAP = 40.0
+MASH_PRIORITY_HOLD_NEAR_HEAT_CAP = 30.0
 
 
 def _num(value: Any) -> float | None:
@@ -33,6 +50,41 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _ramp_cap_for_gap(mash_gap: float) -> tuple[float | None, str | None]:
+    if mash_gap >= MASH_PRIORITY_RAMP_FAR_GAP_C:
+        return MASH_PRIORITY_RAMP_FAR_HEAT_CAP, "ramp_far_mash_gap"
+    if mash_gap >= MASH_PRIORITY_RAMP_MID_GAP_C:
+        return MASH_PRIORITY_RAMP_MID_HEAT_CAP, "ramp_mid_mash_gap"
+    if mash_gap >= MASH_PRIORITY_RAMP_NEAR_GAP_C:
+        return MASH_PRIORITY_RAMP_NEAR_HEAT_CAP, "ramp_near_mash_gap"
+    return None, None
+
+
+def _hold_cap_for_gap(mash_gap: float) -> tuple[float | None, str | None]:
+    if mash_gap >= MASH_PRIORITY_HOLD_FAR_GAP_C:
+        return MASH_PRIORITY_HOLD_FAR_HEAT_CAP, "hold_far_mash_gap"
+    if mash_gap >= MASH_PRIORITY_HOLD_MID_GAP_C:
+        return MASH_PRIORITY_HOLD_MID_HEAT_CAP, "hold_mid_mash_gap"
+    if mash_gap >= MASH_PRIORITY_HOLD_NEAR_GAP_C:
+        return MASH_PRIORITY_HOLD_NEAT_HEAT_CAP, "hold_near_mash_gap"
+    return None, None
+
+
+def _raise_cap(result: dict[str, Any], *, floor: float, severity: str, reason: str) -> dict[str, Any]:
+    original_cap = _num(result.get("heat_cap"))
+    cap = floor if original_cap is None else max(original_cap, floor)
+    return {
+        **result,
+        "heat_cap": cap,
+        "severity": severity,
+        "reason": reason,
+        "mash_priority_heat_cap_active": True,
+        "mash_priority_heat_cap_reason": "mash_temperature_lags_more_than_wort_safety_requires",
+        "mash_priority_original_heat_cap": original_cap,
+        "mash_priority_dynamic_floor": floor,
+    }
 
 
 def _mash_priority_cap(
@@ -55,31 +107,15 @@ def _mash_priority_cap(
             "mash_priority_heat_cap_reason": "extreme_wort_over_target_kept_original_cap",
         }
 
-    if stage_kind == "ramp" and mash_gap >= MASH_PRIORITY_RAMP_GAP_C:
-        original_cap = _num(result.get("heat_cap"))
-        cap = MASH_PRIORITY_RAMP_HEAT_CAP if original_cap is None else max(original_cap, MASH_PRIORITY_RAMP_HEAT_CAP)
-        return {
-            **result,
-            "heat_cap": cap,
-            "severity": "mash_priority_ramp",
-            "reason": "mash_priority_ramp_mix",
-            "mash_priority_heat_cap_active": True,
-            "mash_priority_heat_cap_reason": "mash_temperature_lags_during_ramp",
-            "mash_priority_original_heat_cap": original_cap,
-        }
+    if stage_kind == "ramp":
+        floor, band = _ramp_cap_for_gap(mash_gap)
+        if floor is not None and band is not None:
+            return _raise_cap(result, floor=floor, severity=f"mash_priority_{band}", reason="mash_priority_ramp_mix")
 
-    if stage_kind == "mash_hold" and mash_gap >= MASH_PRIORITY_HOLD_GAP_C:
-        original_cap = _num(result.get("heat_cap"))
-        cap = MASH_PRIORITY_HOLD_HEAT_CAP if original_cap is None else max(original_cap, MASH_PRIORITY_HOLD_HEAT_CAP)
-        return {
-            **result,
-            "heat_cap": cap,
-            "severity": "mash_priority_hold",
-            "reason": "mash_priority_hold_mix",
-            "mash_priority_heat_cap_active": True,
-            "mash_priority_heat_cap_reason": "mash_temperature_lags_during_hold",
-            "mash_priority_original_heat_cap": original_cap,
-        }
+    if stage_kind == "mash_hold":
+        floor, band = _hold_cap_for_gap(mash_gap)
+        if floor is not None and band is not None:
+            return _raise_cap(result, floor=floor, severity=f"mash_priority_{band}", reason="mash_priority_hold_mix")
 
     return {
         **result,
