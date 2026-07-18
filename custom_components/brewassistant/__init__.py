@@ -22,6 +22,7 @@ from .brewday.brewday_audit import (
     async_start_brewday_audit_log,
     async_stop_brewday_audit_log,
 )
+from .brewday.brewday_audit_autostart import async_setup_brewday_audit_autostart
 from .brewday.brewday_refresh import request_manual_brewfather_refresh
 from .brewzilla.brewzilla_mash_in_gate import (
     async_confirm_mash_in_complete,
@@ -86,6 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    entry.async_on_unload(async_setup_brewday_audit_autostart(hass))
     _register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
