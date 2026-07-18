@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .brewday_audit import async_start_brewday_audit_log, get_brewday_audit_log
@@ -19,6 +19,14 @@ _LOGGER = logging.getLogger(__name__)
 
 BREWFATHER_STATUS_ENTITY = "sensor.brewfather_brew_tracker_status"
 PLANNING_STATUS = "planning"
+
+# Brewfather/RAPT may expose the live tracker state as "paused" while the batch
+# itself is still in Planning.  The autostart gate must therefore resolve
+# Planning from both the entity state and the batch-status attributes.
+BREWFATHER_BATCH_STATUS_ATTRIBUTES = (
+    "brew_tracker_batch_status",
+    "batch_status",
+)
 
 # Use the upstream/RCL BrewZilla entities rather than BA-derived sensors so the
 # feature only activates when the actual BrewZilla backend/integration is present.
@@ -38,6 +46,11 @@ INITIAL_CHECK_DELAY_SECONDS = 10
 RETRY_CHECK_DELAYS_SECONDS = (30, 60, 120, 180, 300)
 
 
+def _normalize_status(value: Any) -> str | None:
+    status = str(value or "").strip().lower()
+    return status or None
+
+
 def _state_available(hass: HomeAssistant, entity_id: str) -> bool:
     state = hass.states.get(entity_id)
     return bool(state is not None and str(state.state).lower() not in {"unknown", "unavailable"})
@@ -51,11 +64,31 @@ def _brewzilla_backend_available(hass: HomeAssistant) -> bool:
     return any(_state_available(hass, entity_id) for entity_id in BREWZILLA_BACKEND_ENTITY_CANDIDATES)
 
 
-def _brewfather_status(hass: HomeAssistant) -> str | None:
-    state = hass.states.get(BREWFATHER_STATUS_ENTITY)
+def _brewfather_status_from_state(state: State | None) -> tuple[str | None, str | None]:
     if state is None:
-        return None
-    return str(state.state or "").strip().lower()
+        return None, None
+
+    raw_state = _normalize_status(getattr(state, "state", None))
+    if raw_state == PLANNING_STATUS:
+        return PLANNING_STATUS, "state"
+
+    attributes = getattr(state, "attributes", {}) or {}
+    for attribute_name in BREWFATHER_BATCH_STATUS_ATTRIBUTES:
+        attribute_status = _normalize_status(attributes.get(attribute_name))
+        if attribute_status == PLANNING_STATUS:
+            return PLANNING_STATUS, attribute_name
+
+    return raw_state, "state" if raw_state is not None else None
+
+
+def _brewfather_status(hass: HomeAssistant) -> str | None:
+    status, _source = _brewfather_status_from_state(hass.states.get(BREWFATHER_STATUS_ENTITY))
+    return status
+
+
+def _brewfather_status_source(hass: HomeAssistant) -> str | None:
+    _status, source = _brewfather_status_from_state(hass.states.get(BREWFATHER_STATUS_ENTITY))
+    return source
 
 
 def _autostart_allowed(hass: HomeAssistant) -> tuple[bool, str]:
@@ -84,18 +117,24 @@ async def async_maybe_autostart_brewday_audit_log(
             "reason": reason,
             "trigger": trigger,
             "brewfather_status": _brewfather_status(hass),
+            "brewfather_status_source": _brewfather_status_source(hass),
             "brewfather_backend_available": _brewfather_backend_available(hass),
             "brewzilla_backend_available": _brewzilla_backend_available(hass),
         }
 
-    note = "Auto-started: Brewfather status Planning and BrewZilla/Brewfather backends are available."
+    note = "Auto-started: Brewfather batch status Planning and BrewZilla/Brewfather backends are available."
     snapshot = await async_start_brewday_audit_log(hass, note=note)
-    _LOGGER.info("Brewday audit auto-started from Brewfather Planning (%s)", trigger)
+    _LOGGER.info(
+        "Brewday audit auto-started from Brewfather Planning (%s, source=%s)",
+        trigger,
+        _brewfather_status_source(hass),
+    )
     return {
         "started": True,
         "reason": reason,
         "trigger": trigger,
         "brewfather_status": _brewfather_status(hass),
+        "brewfather_status_source": _brewfather_status_source(hass),
         "brewfather_backend_available": True,
         "brewzilla_backend_available": True,
         "snapshot": snapshot,
@@ -118,8 +157,8 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
     def _status_changed(event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        old_status = str(getattr(old_state, "state", "") or "").strip().lower()
-        new_status = str(getattr(new_state, "state", "") or "").strip().lower()
+        old_status, _old_source = _brewfather_status_from_state(old_state)
+        new_status, _new_source = _brewfather_status_from_state(new_state)
         if old_status == new_status or new_status != PLANNING_STATUS:
             return
         hass.async_create_task(_check("brewfather_status_changed"))
