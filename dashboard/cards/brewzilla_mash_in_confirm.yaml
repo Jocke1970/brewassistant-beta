@@ -8,7 +8,7 @@ cards:
     card:
       type: custom:button-card
       entity: button.brewassistant_mash_in_complete
-      name: Mash-in klar & starta cirkulation
+      name: Mash-in startad · vänta på BF FORTSÄTT
       icon: mdi:barley
       show_state: false
       show_label: true
@@ -17,6 +17,11 @@ cards:
         perform_action: button.press
         target:
           entity_id: button.brewassistant_mash_in_complete
+        confirmation:
+          text: >-
+            Manuell fallback. I normalflödet trycker du FORTSÄTT i Brewfather
+            när mash-in är klar. BA känner då BF Running och gör Mash-In Complete
+            automatiskt. Använd denna knapp bara om BF inte triggar.
       hold_action:
         action: more-info
       label: |
@@ -25,16 +30,16 @@ cards:
           const target = pending?.attributes?.last_target ?? '—';
           const step = pending?.attributes?.last_step ?? 'Mash-in';
           const button = states['button.brewassistant_mash_in_complete'];
-          const buttonState = button ? 'button ready' : 'button saknas';
-          return `${step} · target ${target} °C<br>Tryck: kvittera + pump 50 % + ON · ${buttonState}`;
+          const buttonState = button ? 'fallback ready' : 'button saknas';
+          return `${step} · target ${target} °C<br>Primärt: tryck FORTSÄTT i Brewfather. BA gör Mash-In Complete + pump/cirkulation automatiskt.<br>Manuell fallback: ${buttonState}`;
         ]]]
       styles:
         card:
-          - min-height: 78px
+          - min-height: 88px
           - padding: 12px
           - border-radius: 16px
-          - background: rgba(255,193,7,.18)
-          - border: 1px solid rgba(255,193,7,.55)
+          - background: rgba(255,193,7,.12)
+          - border: 1px solid rgba(255,193,7,.42)
         grid:
           - grid-template-areas: '"i n" "i l"'
           - grid-template-columns: 34px minmax(0,1fr)
