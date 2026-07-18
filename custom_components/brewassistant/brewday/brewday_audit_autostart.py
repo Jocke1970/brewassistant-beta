@@ -32,7 +32,10 @@ BREWZILLA_BACKEND_ENTITY_CANDIDATES = (
     "switch.brewzilla_pump",
 )
 
+# Initial setup can race RAPT/RCL entity availability after HA restart/update.
+# Keep retrying briefly and also react when one of the backend candidates changes.
 INITIAL_CHECK_DELAY_SECONDS = 10
+RETRY_CHECK_DELAYS_SECONDS = (30, 60, 120, 180, 300)
 
 
 def _state_available(hass: HomeAssistant, entity_id: str) -> bool:
@@ -121,18 +124,49 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
             return
         hass.async_create_task(_check("brewfather_status_changed"))
 
-    def _initial_check(_: Any) -> None:
-        hass.async_create_task(_check("initial_check"))
+    def _backend_candidate_changed(event: Event) -> None:
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        old_available = old_state is not None and str(getattr(old_state, "state", "") or "").lower() not in {
+            "unknown",
+            "unavailable",
+        }
+        new_available = new_state is not None and str(getattr(new_state, "state", "") or "").lower() not in {
+            "unknown",
+            "unavailable",
+        }
+        if old_available == new_available and _brewfather_status(hass) != PLANNING_STATUS:
+            return
+        hass.async_create_task(_check(f"backend_candidate_changed:{event.data.get('entity_id')}"))
 
-    remove_state_listener = async_track_state_change_event(
+    def _scheduled_check(trigger: str) -> Callable[[Any], None]:
+        def _run(_: Any) -> None:
+            hass.async_create_task(_check(trigger))
+
+        return _run
+
+    remove_brewfather_listener = async_track_state_change_event(
         hass,
         [BREWFATHER_STATUS_ENTITY],
         _status_changed,
     )
-    remove_initial_check = async_call_later(hass, INITIAL_CHECK_DELAY_SECONDS, _initial_check)
+    remove_backend_listener = async_track_state_change_event(
+        hass,
+        [BREWFATHER_STATUS_ENTITY, *BREWZILLA_BACKEND_ENTITY_CANDIDATES],
+        _backend_candidate_changed,
+    )
+    remove_scheduled_checks = [
+        async_call_later(hass, INITIAL_CHECK_DELAY_SECONDS, _scheduled_check("initial_check"))
+    ]
+    remove_scheduled_checks.extend(
+        async_call_later(hass, delay, _scheduled_check(f"retry_check_{delay}s"))
+        for delay in RETRY_CHECK_DELAYS_SECONDS
+    )
 
     def _unsub() -> None:
-        remove_state_listener()
-        remove_initial_check()
+        remove_brewfather_listener()
+        remove_backend_listener()
+        for remove_scheduled_check in remove_scheduled_checks:
+            remove_scheduled_check()
 
     return _unsub
