@@ -26,7 +26,7 @@ card:
           const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
           const gateState = clean(a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state) || 'idle';
           const startedVisible = a.mash_in_started_visible === true;
-          const completeVisible = a.mash_in_complete_visible === true;
+          const completeVisible = a.mash_in_complete_visible === true || gateState === 'mash_in_started';
           const effective = clean(a.effective_target || a.mash_in_effective_target || gate?.attributes?.effective_target || gate?.attributes?.mash_in_effective_target) || '—';
           const next = clean(a.next_target || a.mash_in_next_target || gate?.attributes?.next_target || gate?.attributes?.mash_in_next_target) || '—';
           const startOk = !!start;
@@ -35,11 +35,11 @@ card:
           if (!startOk || !completeOk) {
             msg = 'Nya knapp-entities saknas ännu — kör pull + full HA-restart.';
           } else if (startedVisible) {
-            msg = 'Tryck Mash-In Started när du börjar hälla i malten.';
+            msg = 'Tryck MASH-IN STARTED i BA när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.';
           } else if (completeVisible) {
-            msg = 'Tryck Mash-In Complete när malten är inrörd och bädden är redo.';
+            msg = 'Mash-in startad. Tillsätt malt och rör om. När du är klar: tryck FORTSÄTT i Brewfather. BA kör Mash-In Complete och startar cirkulation automatiskt.';
           } else if (gateState === 'mash_in_complete') {
-            msg = 'Mash-in är klar. Knapparna är dolda enligt flödet.';
+            msg = 'Mash-in complete. Brewfather är igång och BA har släppt vidare till normal mäskcirkulation.';
           }
           return `${msg}<br>state ${gateState} · effective ${effective}°C · next ${next}°C`;
         ]]]
@@ -92,7 +92,8 @@ card:
             confirmation:
               text: >-
                 Börjar du mäska in nu? BA släpper strike-target, håller pumpen av
-                och siktar på nästa mash-target med låg anti-drop heat.
+                och siktar på nästa mash-target med låg anti-drop heat. När malten
+                är inrörd fortsätter du normalt med FORTSÄTT i Brewfather.
           styles:
             card:
               - display: |
@@ -117,7 +118,7 @@ card:
               - opacity: 0.74
         - type: custom:button-card
           entity: button.brewassistant_mash_in_complete
-          name: MASH-IN COMPLETE
+          name: MANUELL MASH-IN COMPLETE
           icon: mdi:pump
           show_state: false
           show_label: true
@@ -125,7 +126,7 @@ card:
             [[[
               const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
               const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
-              return `Starta cirkulation · target ${target}°C · pump 50%`;
+              return `Fallback · normalt: tryck FORTSÄTT i Brewfather · target ${target}°C · pump 50%`;
             ]]]
           tap_action:
             action: call-service
@@ -134,8 +135,9 @@ card:
               entity_id: button.brewassistant_mash_in_complete
             confirmation:
               text: >-
-                Är malten inrörd och bädden redo? BA startar mash-cirkulation med
-                pump 50% och går tillbaka till normal Real mash-logik.
+                Manuell fallback. I normalflödet trycker du FORTSÄTT i Brewfather
+                efter mash-in, så gör BA Mash-In Complete automatiskt. Använd denna
+                knapp bara om BF-flödet inte triggar.
           styles:
             card:
               - display: |

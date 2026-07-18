@@ -39,13 +39,20 @@ card:
           const remaining = num('sensor.brewassistant_brewday_live_time_remaining_minutes');
           const age = num('sensor.brewassistant_brewday_snapshot_age_minutes');
           const target = num('sensor.brewassistant_brewday_target_temperature');
+          const progressWidth = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
+          const paused = String(bfStatus).toLowerCase() === 'paused' || String(status).toLowerCase() === 'paused';
+          const statusText = paused ? 'PAUSED · väntar på operatör/BF FORTSÄTT' : `BF ${bfStatus} · ${runtime} / ${status} · ${stage}`;
           return `
             <div style="line-height:1.25;min-width:0;">
-              <div style="font-size:12px;font-weight:850;opacity:.66;">BrewTracker · aktivt steg · nästa steg</div>
-              <div style="margin-top:7px;font-size:22px;font-weight:950;letter-spacing:-.035em;text-align:center;">${short(step, 62)}</div>
-              <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">
-                ${runtime} / ${status} · BF ${bfStatus} · ${stage}<br>next ${short(next, 70)}
+              <div style="font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.62;text-transform:uppercase;">BrewTracker runtime</div>
+              <div style="margin-top:6px;font-size:11px;font-weight:850;opacity:.76;text-align:center;">${statusText}</div>
+              <div style="margin-top:10px;font-size:10px;font-weight:950;letter-spacing:.08em;opacity:.70;text-align:center;text-transform:uppercase;">AKTIVT NU</div>
+              <div style="margin-top:3px;font-size:24px;font-weight:950;letter-spacing:-.04em;text-align:center;">${short(step, 64)}</div>
+              <div style="margin:10px auto 0;max-width:320px;height:7px;border-radius:999px;background:rgba(127,127,127,.18);overflow:hidden;">
+                <div style="width:${progressWidth}%;height:7px;border-radius:999px;background:rgba(33,150,243,.78);"></div>
               </div>
+              <div style="margin-top:7px;font-size:12px;font-weight:800;opacity:.72;text-align:center;">Nuvarande steg · ${fmt(progress,'%',0)} · ${fmt(remaining,'min',0)} kvar</div>
+              <div style="margin-top:8px;border-radius:14px;padding:8px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.13);font-size:12px;font-weight:800;opacity:.78;text-align:center;">Nästa: ${short(next, 72)}</div>
               <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
                 <div style="border-radius:13px;padding:7px;background:rgba(33,150,243,.09);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmt(progress,'%',0)}</b><br><span style="font-size:10px;opacity:.65;">progress</span></div>
                 <div style="border-radius:13px;padding:7px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.22);text-align:center;"><b>${fmt(remaining,'min',0)}</b><br><span style="font-size:10px;opacity:.65;">remaining</span></div>
