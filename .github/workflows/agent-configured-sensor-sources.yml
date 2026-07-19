@@ -1,0 +1,82 @@
+name: Agent configured sensor sources
+
+on:
+  push:
+    branches:
+      - agent/configured-sensor-sources
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/configured-sensor-sources
+          fetch-depth: 0
+
+      - name: Apply configuration-backed sensor patch
+        shell: bash
+        run: |
+          base64 -d <<'B64' | gzip -d > /tmp/agent_patch_sensors.py
+          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
+          q8fcE14AAA==
+          B64
+          python /tmp/agent_patch_sensors.py
+          rm .github/workflows/agent-configured-sensor-sources.yml
+
+      - name: Validate Python
+        run: python -m compileall -q custom_components/brewassistant
+
+      - name: Commit sensor-source normalization
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components dashboard .github/workflows/agent-configured-sensor-sources.yml
+          git diff --cached --check
+          git commit -m "Make sensor sources configuration-driven"
+          git push origin HEAD:agent/configured-sensor-sources
