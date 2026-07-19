@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/tmp/agent_sensor_cleanup.py", line 219, in <module>
+    raise RuntimeError("fermentation.yaml: expected one Pill status entity row")
+RuntimeError: fermentation.yaml: expected one Pill status entity row
