@@ -1,0 +1,30 @@
+Decoded script excerpt:
+    "    CONF_KEGERATOR_POWER_ENTITY: DEFAULT_KEGERATOR_POWER_ENTITY,\n"
+    "    CONF_KEGERATOR_FAN_POWER_ENTITY: DEFAULT_KEGERATOR_FAN_POWER_ENTITY,\n"
+    "    CONF_FERMENTATION_HEAT_POWER_ENTITY: DEFAULT_FERMENTATION_HEAT_POWER_ENTITY,\n",
+    maximum=1,
+)
+
+replace_once("custom_components/brewassistant/coordinator.py", "    CONF_GRAVITY_ENTITY,\n", config_import_conf)
+replace_once("custom_components/brewassistant/coordinator.py", "    DEFAULT_GRAVITY_ENTITY,\n", config_import_defaults)
+replace(
+    "custom_components/brewassistant/coordinator.py",
+    "            CONF_GRAVITY_ENTITY: _entity_from_entry(\n"
+    "                self.config_entry,\n"
+    "                CONF_GRAVITY_ENTITY,\n"
+    "                DEFAULT_GRAVITY_ENTITY,\n"
+    "            ),\n"
+    "        }\n",
+    "            CONF_GRAVITY_ENTITY: _entity_from_entry(\n"
+    "                self.config_entry,\n"
+    "                CONF_GRAVITY_ENTITY,\n"
+    "                DEFAULT_GRAVITY_ENTITY,\n"
+    "            ),\n"
+    "            CONF_KEGERATOR_AIR_TEMP_ENTITY: _entity_from_entry(\n"
+    "                self.config_entry,\n"
+
+Patch output:
+Traceback (most recent call last):
+  File "/tmp/agent_patch_sensors.py", line 540, in <module>
+    raise RuntimeError(f"{path}: raw configured sensor IDs remain: {hits}")
+RuntimeError: dashboard/cards/kegerator.yaml: raw configured sensor IDs remain: ['sensor.kegerator_power']
