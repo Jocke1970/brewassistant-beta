@@ -18,22 +18,11 @@ jobs:
           ref: agent/configured-sensor-sources
           fetch-depth: 0
 
-      - name: Decode cleanup patch
-        run: |
-          python - <<'PY'
-          import base64
-          import gzip
-          from pathlib import Path
-
-          payload = Path('.github/scripts/agent_sensor_cleanup.py.gz.b64').read_text().strip()
-          Path('/tmp/agent_sensor_cleanup.py').write_bytes(gzip.decompress(base64.b64decode(payload)))
-          PY
-
       - name: Apply normalized sensor cleanup
         id: apply
         continue-on-error: true
         shell: bash
-        run: python /tmp/agent_sensor_cleanup.py > /tmp/agent_sensor_cleanup.log 2>&1
+        run: python .github/scripts/agent_sensor_cleanup.py > /tmp/agent_sensor_cleanup.log 2>&1
 
       - name: Capture patch failure
         if: steps.apply.outcome == 'failure'
@@ -80,6 +69,7 @@ jobs:
         shell: bash
         run: |
           rm -f .github/workflows/agent-configured-sensor-cleanup.yml
+          rm -f .github/scripts/agent_sensor_cleanup.py
           rm -f .github/scripts/agent_sensor_cleanup.py.gz.b64
           rm -f agent-sensor-cleanup-error.txt
           git config user.name "github-actions[bot]"
