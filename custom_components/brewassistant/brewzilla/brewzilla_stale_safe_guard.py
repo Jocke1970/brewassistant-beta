@@ -40,6 +40,65 @@ def _desired_positive(value: Any) -> bool:
     return bool(num is not None and num > _base.UTILIZATION_TOLERANCE)
 
 
+def _utilization_reduction(current: Any, desired: Any) -> bool:
+    current_num = _num(current)
+    desired_num = _num(desired)
+    if current_num is None or desired_num is None:
+        return False
+    return desired_num < current_num - _base.UTILIZATION_TOLERANCE
+
+
+def _utilization_not_increase(current: Any, desired: Any) -> bool:
+    current_num = _num(current)
+    desired_num = _num(desired)
+    if current_num is None or desired_num is None:
+        return False
+    return desired_num <= current_num + _base.UTILIZATION_TOLERANCE
+
+
+def _heat_strike_paused_context(snapshot: dict[str, Any]) -> bool:
+    phase = str(snapshot.get("advice_physical_phase") or "").lower()
+    return bool(
+        snapshot.get("heat_strike_latch_active")
+        or snapshot.get("mash_in_heat_strategy_active")
+        or phase.startswith("pre_mash_in")
+    )
+
+
+def _paused_heat_safety_reduction_allowed(snapshot: dict[str, Any]) -> bool:
+    if not _heat_strike_paused_context(snapshot):
+        return False
+    if snapshot.get("heater_stop_needed"):
+        return True
+    if not snapshot.get("heat_utilization_action_needed"):
+        return False
+    return _utilization_reduction(
+        snapshot.get("heat_utilization"),
+        snapshot.get("desired_heat_utilization"),
+    ) or not _desired_positive(snapshot.get("desired_heat_utilization"))
+
+
+def _paused_pump_safety_change_allowed(snapshot: dict[str, Any]) -> bool:
+    """Allow safe pump changes while paused in heat-strike/mash-in wait.
+
+    Pump circulation is not a heat source.  During pre-mash-in it is used to
+    equalize kettle/wort temperature and reduce overshoot risk.  The paused gate
+    should still block unrelated pump starts, but it must not block heat-strike
+    mixing or pump reductions.
+    """
+    if not _heat_strike_paused_context(snapshot):
+        return False
+    if snapshot.get("pump_stop_needed"):
+        return True
+    if snapshot.get("pump_action_needed") and snapshot.get("desired_pump_on") is True:
+        return True
+    if not snapshot.get("pump_utilization_action_needed"):
+        return False
+    desired = snapshot.get("desired_pump_utilization")
+    current = snapshot.get("pump_utilization")
+    return _desired_positive(desired) or _utilization_not_increase(current, desired)
+
+
 def _stale_guard_active(snapshot: dict[str, Any]) -> bool:
     return bool(
         snapshot.get("rcl_freshness_guard_blocking")
@@ -79,22 +138,43 @@ def _stale_maintain_hold_allowed(snapshot: dict[str, Any]) -> bool:
 
 
 def _paused_blocks_new_positive_control(snapshot: dict[str, Any]) -> bool:
-    """Paused BrewTracker must not start/reassert new heat or pump actions."""
+    """Paused BrewTracker must not start/reassert new heat actions.
+
+    Safety reductions are different from positive control.  When BF pauses at
+    the post-strike mash-in/additions step, BA must still be able to reduce heat
+    utilization, turn the heater off, and increase pump circulation for mixing.
+    Otherwise an earlier full-power heat-strike command can remain latched until
+    BrewZilla local regulation catches up.
+    """
     if not _runtime_paused(snapshot) or snapshot.get("completed_runtime"):
         return False
-    return bool(
-        snapshot.get("heater_action_needed")
-        or snapshot.get("pump_action_needed")
-        or snapshot.get("ba_owned_reassert_action_needed")
-        or (
-            snapshot.get("heat_utilization_action_needed")
-            and _desired_positive(snapshot.get("desired_heat_utilization"))
-        )
-        or (
-            snapshot.get("pump_utilization_action_needed")
-            and _desired_positive(snapshot.get("desired_pump_utilization"))
-        )
-    )
+
+    blocked = False
+
+    if snapshot.get("heater_action_needed") and not _paused_heat_safety_reduction_allowed(snapshot):
+        blocked = True
+
+    if snapshot.get("heater_stop_needed") and _heat_strike_paused_context(snapshot):
+        blocked = blocked or False
+
+    if snapshot.get("pump_action_needed") and not _paused_pump_safety_change_allowed(snapshot):
+        blocked = True
+
+    if snapshot.get("pump_stop_needed") and not _paused_pump_safety_change_allowed(snapshot):
+        blocked = True
+
+    if snapshot.get("ba_owned_reassert_action_needed"):
+        blocked = True
+
+    if snapshot.get("heat_utilization_action_needed"):
+        if not _paused_heat_safety_reduction_allowed(snapshot) and _desired_positive(snapshot.get("desired_heat_utilization")):
+            blocked = True
+
+    if snapshot.get("pump_utilization_action_needed"):
+        if not _paused_pump_safety_change_allowed(snapshot) and _desired_positive(snapshot.get("desired_pump_utilization")):
+            blocked = True
+
+    return blocked
 
 
 async def _record_no_action(hass, snapshot: dict[str, Any], apply_result: str, **extra: Any) -> dict[str, Any]:
@@ -128,8 +208,18 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
             snapshot,
             "paused_runtime_positive_control_blocked",
             paused_control_blocked=True,
-            paused_control_block_reason="BrewTracker paused; BA will not start/reassert heat or pump.",
+            paused_control_block_reason="BrewTracker paused; BA will not start/reassert heat or unrelated pump actions.",
+            paused_heat_safety_reduction_allowed=_paused_heat_safety_reduction_allowed(snapshot),
+            paused_pump_safety_change_allowed=_paused_pump_safety_change_allowed(snapshot),
         )
+
+    if _runtime_paused(snapshot) and _heat_strike_paused_context(snapshot):
+        snapshot = {
+            **snapshot,
+            "paused_control_blocked": False,
+            "paused_heat_safety_reduction_allowed": _paused_heat_safety_reduction_allowed(snapshot),
+            "paused_pump_safety_change_allowed": _paused_pump_safety_change_allowed(snapshot),
+        }
 
     if _stale_guard_active(snapshot):
         if _stale_maintain_hold_allowed(snapshot):
