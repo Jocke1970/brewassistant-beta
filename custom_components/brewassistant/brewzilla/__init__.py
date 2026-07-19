@@ -13,6 +13,7 @@ from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_mash_priority_thermal_mix_guard as _mash_priority_thermal_mix_guard
 from . import brewzilla_mash_wort_delta_pump_guard as _mash_wort_delta_pump_guard
 from . import brewzilla_heat_strike_pump_mix_guard as _heat_strike_pump_mix_guard
+from . import brewzilla_heat_strike_target_clamp_guard as _heat_strike_target_clamp_guard
 from . import brewzilla_equipment_learning_patch as _equipment_learning_patch
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
 from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_guard
@@ -53,6 +54,7 @@ _temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 _heat_strike_profile.install_heat_strike_profile()
+_heat_strike_target_clamp_guard.install_heat_strike_target_clamp_guard()
 _heat_strike_transition_guard.install_heat_strike_transition_guard()
 _rcl_value_recovery_guard.install_rcl_value_recovery_guard()
 _pre_mash_in_strike_sensor.install_pre_mash_in_strike_sensor_guard()
