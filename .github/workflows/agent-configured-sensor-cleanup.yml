@@ -19,7 +19,15 @@ jobs:
           fetch-depth: 0
 
       - name: Decode cleanup patch
-        run: base64 -d .github/scripts/agent_sensor_cleanup.py.gz.b64 | gzip -d > /tmp/agent_sensor_cleanup.py
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          payload = Path('.github/scripts/agent_sensor_cleanup.py.gz.b64').read_text().strip()
+          Path('/tmp/agent_sensor_cleanup.py').write_bytes(gzip.decompress(base64.b64decode(payload)))
+          PY
 
       - name: Apply normalized sensor cleanup
         id: apply
