@@ -10,12 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from ..configured_entities import configured_entity
+from ..const import CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY
+
 DATA_KEY = "carbonation_runtime"
 STORE_DATA_KEY = "carbonation_runtime_store"
 STORAGE_KEY = "brewassistant_carbonation_runtime"
 STORAGE_VERSION = 1
 
-LOCAL_TEMPERATURE_ENTITY = "sensor.kyl_temperatur_4"
 FALLBACK_TEMPERATURE_ENTITY = "sensor.brewassistant_liquid_temperature"
 
 DEFAULT_METHOD = "Set-and-forget"
@@ -247,9 +249,14 @@ def _resolved_pressure_bar(runtime: CarbonationRuntime) -> tuple[float | None, s
 def _resolved_temperature_c(hass: HomeAssistant, runtime: CarbonationRuntime) -> tuple[float | None, str | None]:
     if runtime.temperature_c is not None:
         return runtime.temperature_c, "python_runtime"
-    local = _float_state(hass, LOCAL_TEMPERATURE_ENTITY)
+    local_temperature_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    local = _float_state(hass, local_temperature_entity)
     if local is not None:
-        return local, LOCAL_TEMPERATURE_ENTITY
+        return local, local_temperature_entity
     fallback = _float_state(hass, FALLBACK_TEMPERATURE_ENTITY)
     if fallback is not None:
         return fallback, FALLBACK_TEMPERATURE_ENTITY

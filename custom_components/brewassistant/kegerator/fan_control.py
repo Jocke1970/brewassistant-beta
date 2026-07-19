@@ -24,18 +24,21 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN
+from ..configured_entities import configured_entity
+from ..const import (
+    CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    CONF_KEGERATOR_FAN_POWER_ENTITY,
+    CONF_KEGERATOR_POWER_ENTITY,
+    DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
+    DEFAULT_KEGERATOR_POWER_ENTITY,
+    DOMAIN,
+)
 from ..control_policy import SOURCE_BACKEND, request_action, section_policy
 
 CLIMATE = "climate.kegerator_kylskap"
-AIR_TEMP = "sensor.kyl_temperatur_4"
 AIR_STATS = "sensor.brewassistant_kegerator_air_temperature_average"
-POWER_CANDIDATES = (
-    "sensor.brewassistant_kegerator_power_w",
-    "sensor.kegerator_power",
-)
 FAN = "switch.kegerator_fan"
-FAN_POWER = "sensor.kegerator_fan_power"
 FAN_MODE_SELECT = "select.brewassistant_kegerator_fan_mode"
 AFTER_RUN_NUMBER = "number.brewassistant_kegerator_fan_afterrun_minutes"
 
@@ -256,10 +259,26 @@ def _climate_enabled(state: str | None) -> bool:
 
 
 def _read_inputs(hass: HomeAssistant) -> FanInputs:
+    air_temp_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    power_entity_config = configured_entity(
+        hass,
+        CONF_KEGERATOR_POWER_ENTITY,
+        DEFAULT_KEGERATOR_POWER_ENTITY,
+    )
+    fan_power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_FAN_POWER_ENTITY,
+        DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
+    )
+
     climate_state = _state(hass, CLIMATE)
     hvac_action = _attr(hass, CLIMATE, "hvac_action")
 
-    current = _num_state(hass, AIR_TEMP)
+    current = _num_state(hass, air_temp_entity)
     if current is None:
         current = _num_attr(hass, CLIMATE, "current_temperature")
 
@@ -271,11 +290,11 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
     avg15 = _num_attr(hass, AIR_STATS, "average_15m")
     temp_summary = _attr(hass, AIR_STATS, "summary")
 
-    power, power_entity = _first_num_state(hass, POWER_CANDIDATES)
+    power, power_entity = _first_num_state(hass, (power_entity_config,))
     compressor = power is not None and power > COMPRESSOR_W
 
     fan_state = _state(hass, FAN)
-    fan_power = _num_state(hass, FAN_POWER)
+    fan_power = _num_state(hass, fan_power_entity)
     fan_running = fan_state == "on" or (fan_power is not None and fan_power > FAN_W)
 
     return FanInputs(
@@ -296,9 +315,9 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
         fan_running=fan_running,
         climate_enabled=_climate_enabled(climate_state),
         fan_switch_ok=_available(hass, FAN),
-        temperature_sensor_ok=_available(hass, AIR_TEMP) or _num_attr(hass, CLIMATE, "current_temperature") is not None,
+        temperature_sensor_ok=_available(hass, air_temp_entity) or _num_attr(hass, CLIMATE, "current_temperature") is not None,
         power_sensor_ok=power_entity is not None,
-        fan_power_sensor_ok=_available(hass, FAN_POWER),
+        fan_power_sensor_ok=_available(hass, fan_power_entity),
     )
 
 

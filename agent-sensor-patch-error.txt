@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/tmp/agent_patch_sensors.py", line 94, in <module>
-    replace("custom_components/brewassistant/coordinator.py", "    CONF_GRAVITY_ENTITY,\n", config_import_conf, maximum=1)
-  File "/tmp/agent_patch_sensors.py", line 18, in replace
-    raise RuntimeError(f"{path}: expected at most {maximum} matches for {old!r}, found {count}")
-RuntimeError: custom_components/brewassistant/coordinator.py: expected at most 1 matches for '    CONF_GRAVITY_ENTITY,\n', found 3

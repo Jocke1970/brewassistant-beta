@@ -170,6 +170,7 @@ def _smart_data(coordinator: BrewAssistantCoordinator) -> SmartRecommendationDat
         chamber_temp=data.chamber_temperature,
         fallback_active=data.fallback_active,
         source=data.liquid_temperature_source,
+        liquid_temp_entity=data.liquid_temperature_entity,
     )
 
 

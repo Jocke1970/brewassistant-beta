@@ -71,10 +71,10 @@ card:
           const fan = states['switch.brewassistant_kegerator_fan_auto_enabled'];
           const guard = states['switch.brewassistant_kegerator_guard_enabled'];
 
-          const temp = n('sensor.kyl_temperatur_4');
+          const temp = n('sensor.brewassistant_kegerator_air_temperature_average');
           const target = Number(climate?.attributes?.temperature);
-          const power = n('sensor.kegerator_power');
-          const fanPower = n('sensor.kegerator_fan_power');
+          const power = attrNum('sensor.brewassistant_source_health_summary', 'kegerator_power_entity_state');
+          const fanPower = attrNum('sensor.brewassistant_source_health_summary', 'kegerator_fan_power_entity_state');
 
           const climateState = clean(climate?.state) || '—';
           const hvac = clean(climate?.attributes?.hvac_action) || climateState;
@@ -298,12 +298,12 @@ card:
               return r.replaceAll('_', ' ');
             }
             const fan = states['switch.brewassistant_kegerator_fan_auto_enabled'];
-            const temp = states['sensor.kyl_temperatur_4']?.state ?? '—';
+            const temp = states['sensor.brewassistant_kegerator_air_temperature_average']?.state ?? '—';
             const target = states['climate.kegerator_kylskap']?.attributes?.temperature ?? '—';
             const status = fan?.attributes?.status ?? 'standby';
             const reason = shortReason(fan?.attributes?.fan_reason ?? '—');
             const fanState = states['switch.kegerator_fan']?.state ?? '—';
-            const power = states['sensor.kegerator_power']?.state ?? '—';
+            const power = states['sensor.brewassistant_source_health_summary']?.attributes?.kegerator_power_entity_state ?? '—';
             return `${status} · ${temp} → ${target} °C · fan ${fanState} · effekt ${power} W · ${reason}`;
           ]]]
         styles:

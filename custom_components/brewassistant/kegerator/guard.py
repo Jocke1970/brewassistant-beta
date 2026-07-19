@@ -9,6 +9,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from ..configured_entities import configured_entity
+from ..const import CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY
 from ..control_policy import SOURCE_BACKEND, request_action, section_policy
 
 DOMAIN_DATA = "brewassistant"
@@ -23,7 +25,6 @@ CONTROL_OWNER = "kegerator_guard"
 
 GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 KEGERATOR_SWITCH = "switch.kegerator"
-AIR_TEMP_ENTITY = "sensor.kyl_temperatur_4"
 CARBONATION_STATUS_ENTITY = "sensor.brewassistant_carbonation_status"
 CARBONATION_TEMP_ENTITY = "sensor.brewassistant_carbonation_temperature"
 KEGERATOR_CLIMATE_ENTITY = "climate.kegerator_kylskap"
@@ -218,7 +219,12 @@ async def async_restore_kegerator_climate_if_needed(
 def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build current kegerator guard state."""
     enabled = _guard_enabled(hass)
-    air_temp = _float_state(hass, AIR_TEMP_ENTITY)
+    air_temperature_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    air_temp = _float_state(hass, air_temperature_entity)
     carbonation_temp = _float_state(hass, CARBONATION_TEMP_ENTITY)
     carbonation_status = _state(hass, CARBONATION_STATUS_ENTITY) or "unknown"
     kegerator_state = _state(hass, KEGERATOR_SWITCH)
@@ -242,7 +248,7 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         status = "disabled"
     elif air_temp is None:
         status = "unavailable"
-        reason = f"missing air temperature source {AIR_TEMP_ENTITY}"
+        reason = f"missing air temperature source {air_temperature_entity}"
     elif not switch_available:
         status = "unavailable"
         reason = f"missing kegerator switch {KEGERATOR_SWITCH}"
@@ -308,7 +314,7 @@ def build_kegerator_guard_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "kegerator_state": kegerator_state,
         "on_minutes": on_minutes,
         "off_minutes": off_minutes,
-        "air_temperature_entity": AIR_TEMP_ENTITY,
+        "air_temperature_entity": air_temperature_entity,
         "kegerator_switch_entity": KEGERATOR_SWITCH,
         "carbonation_status": carbonation_status,
         "carbonation_temperature": carbonation_temp,

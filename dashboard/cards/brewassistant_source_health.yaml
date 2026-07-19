@@ -118,7 +118,7 @@ cards:
           const core = clean(states['sensor.brewassistant_core_version']?.state);
           const runtime = clean(states['sensor.brewassistant_brewday_runtime_status']?.state);
           const stage = clean(states['sensor.brewassistant_brewday_stage']?.state);
-          const kegTemp = num('sensor.kyl_temperatur_4');
+          const kegTemp = num('sensor.brewassistant_kegerator_air_temperature_average');
           const fanStatus = clean(states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.status);
           const carb = clean(states['sensor.brewassistant_carbonation_status']?.state);
 
@@ -360,8 +360,8 @@ cards:
               return Number.isFinite(n) ? n : null;
             }
             const climate = states['climate.kegerator_kylskap']?.state ?? 'unknown';
-            const temp = num('sensor.kyl_temperatur_4');
-            const power = num('sensor.kegerator_power');
+            const temp = num('sensor.brewassistant_kegerator_air_temperature_average');
+            const power = Number(states['sensor.brewassistant_source_health_summary']?.attributes?.kegerator_power_entity_state);
             const fanAuto = states['switch.brewassistant_kegerator_fan_auto_enabled']?.state ?? states['switch.brewassistant_kegerator_fan_auto_enabled']?.state ?? 'unknown';
             const fanStatus = states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.status ?? '—';
             return `${climate} · ${Number.isFinite(temp) ? temp.toFixed(1) + ' °C' : '—'} · ${Number.isFinite(power) ? power.toFixed(1) + ' W' : '—'} · auto ${fanAuto} · ${fanStatus}`;

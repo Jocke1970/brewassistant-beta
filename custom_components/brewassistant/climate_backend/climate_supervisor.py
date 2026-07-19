@@ -14,6 +14,9 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..configured_entities import configured_entity
+from ..const import CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY
+
 DOMAIN_DATA = "brewassistant"
 SUPERVISOR_ENABLED_KEY = "climate_supervisor_enabled_runtime"
 SUPERVISOR_BASE_TARGET_KEY = "climate_supervisor_base_target"
@@ -24,7 +27,6 @@ SUPERVISOR_SWITCH = "switch.brewassistant_climate_supervisor_enabled"
 LEGACY_KEGERATOR_GUARD_SWITCH = "switch.brewassistant_kegerator_guard_enabled"
 
 KEGERATOR_CLIMATE = "climate.kegerator_kylskap"
-KEGERATOR_AIR_TEMP = "sensor.kyl_temperatur_4"
 CARBONATION_STATUS = "sensor.brewassistant_carbonation_status"
 CARBONATION_TEMP = "sensor.brewassistant_carbonation_temperature"
 
@@ -144,7 +146,12 @@ def build_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     enabled = _supervisor_enabled(hass)
     carbonation_active = _carbonation_active(hass)
     carbonation_status = _state(hass, CARBONATION_STATUS) or "unknown"
-    air_temp = _float_state(hass, KEGERATOR_AIR_TEMP)
+    air_temperature_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    air_temp = _float_state(hass, air_temperature_entity)
     carbonation_temp = _float_state(hass, CARBONATION_TEMP)
     climate_state = _state(hass, KEGERATOR_CLIMATE)
     current_climate_target = _float_attr(hass, KEGERATOR_CLIMATE, "temperature")
@@ -166,7 +173,7 @@ def build_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         mode = "carbonation_serving"
         if air_temp is None:
             status = "unavailable"
-            reason = f"missing air temperature source {KEGERATOR_AIR_TEMP}"
+            reason = f"missing air temperature source {air_temperature_entity}"
         elif climate_state is None:
             status = "unavailable"
             reason = f"missing climate controller {KEGERATOR_CLIMATE}"
@@ -195,7 +202,7 @@ def build_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "controller_state": climate_state,
         "controller_target_temperature": current_climate_target,
         "target_delta": target_delta,
-        "air_temperature_entity": KEGERATOR_AIR_TEMP,
+        "air_temperature_entity": air_temperature_entity,
         "carbonation_active": carbonation_active,
         "carbonation_status": carbonation_status,
         "carbonation_temperature": carbonation_temp,
