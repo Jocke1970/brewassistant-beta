@@ -173,6 +173,58 @@ Remaining:
 
 ---
 
+## Deferred: UI localization and translations
+
+Full UI localization is intentionally deferred until BrewAssistant is a functionally complete and stable Home Assistant integration. Translation work must not delay BrewZilla, Brewday Runtime, fermentation, cooling, carbonation or installation validation.
+
+### Architecture rules during ongoing development
+
+```text
+Backend code, entity IDs, unique IDs, attribute keys and internal states remain stable English.
+Backend logic must never compare translated or user-facing text.
+User-facing entity names, state labels, controls, actions and descriptions become translatable later.
+Dashboard-specific hard-coded text remains a separate presentation-layer concern.
+```
+
+Each functional backend owns a dedicated translation-key namespace:
+
+```text
+core / shared          -> core_*, source_*, runtime_*
+brewday/               -> brewday_*
+brewzilla/             -> brewzilla_*
+fermentation/          -> fermentation_*
+kegerator/             -> kegerator_*
+cooling/               -> cooling_*, counterflow_chiller_*
+carbonation_backend/   -> carbonation_*
+climate_backend/       -> climate_supervisor_*
+```
+
+Home Assistant still receives one complete translation file per language:
+
+```text
+custom_components/brewassistant/translations/en.json
+custom_components/brewassistant/translations/sv.json
+```
+
+Separate per-backend source fragments may be introduced later and merged into the complete Home Assistant language files by a validation/build script.
+
+Planned localization work:
+
+```text
+[ ] Inventory all user-facing text in Python entities, services/actions and config/options flows
+[ ] Add stable translation_key values for sensors, binary sensors, switches, buttons, selects and numbers
+[ ] Keep entity IDs, unique IDs and backend state values unchanged during UI-name migration
+[ ] Normalize translatable select/state values to stable English snake_case machine values where needed
+[ ] Add compatibility handling for previously restored English display-value states
+[ ] Update and language-review complete English and Swedish translation files
+[ ] Translate service/action names, descriptions and field labels
+[ ] Add automated parity checks so en.json and sv.json contain matching keys
+[ ] Add validation that new operator-facing entities do not introduce unnecessary hard-coded display names
+[ ] Review dashboards separately and remove hard-coded names where the translated entity name should be used
+```
+
+---
+
 ## Later cleanup backlog
 
 ```text
