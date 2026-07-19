@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfPower, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -29,7 +29,11 @@ from .const import (
     ATTR_SOURCE_ENTITY,
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_MODE,
+    CONF_FERMENTATION_HEAT_POWER_ENTITY,
     CONF_GRAVITY_ENTITY,
+    CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    CONF_KEGERATOR_FAN_POWER_ENTITY,
+    CONF_KEGERATOR_POWER_ENTITY,
     CONF_RUNTIME_COLD_CRASH_TARGET_ENTITY,
     CONF_RUNTIME_PRIMARY_TARGET_ENTITY,
     CONF_RUNTIME_RECIPE_NAME_ENTITY,
@@ -86,6 +90,21 @@ def _entry_entity(coordinator: BrewAssistantCoordinator, key: str, default: str)
     """Return a configured entity id from options/data/default."""
     entry = coordinator.config_entry
     return str(entry.options.get(key) or entry.data.get(key) or default)
+
+
+def _configured_numeric_source_value(
+    coordinator: BrewAssistantCoordinator,
+    config_key: str,
+) -> float | None:
+    """Return a numeric value from one configured external source entity."""
+    entity_id = coordinator.configured_entities.get(config_key)
+    state = coordinator.hass.states.get(entity_id) if entity_id else None
+    if state is None or str(state.state).lower() in {"unknown", "unavailable", "none", ""}:
+        return None
+    try:
+        return float(str(state.state).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
 
 
 def _runtime_entities(coordinator: BrewAssistantCoordinator) -> dict[str, str]:
@@ -506,6 +525,34 @@ CARBONATION_SENSORS = {
 }
 
 
+CONFIGURED_SOURCE_VALUE_SENSORS = {
+    "kegerator_air_temperature": {
+        "config_key": CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        "unit": UnitOfTemperature.CELSIUS,
+        "device_class": SensorDeviceClass.TEMPERATURE,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "kegerator_power": {
+        "config_key": CONF_KEGERATOR_POWER_ENTITY,
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "kegerator_fan_power": {
+        "config_key": CONF_KEGERATOR_FAN_POWER_ENTITY,
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+    "fermentation_heat_power": {
+        "config_key": CONF_FERMENTATION_HEAT_POWER_ENTITY,
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+    },
+}
+
+
 BREWZILLA_TEMPERATURE_SENSORS = {
     "brewzilla_mash_temperature": {
         "field": "mash_temperature",
@@ -541,6 +588,10 @@ async def async_setup_entry(
         [BrewAssistantSensor(coordinator, description) for description in SENSORS]
         + [BrewAssistantSmartSensor(coordinator, description) for description in SMART_SENSORS]
         + [BrewAssistantSourceSensor(coordinator, key) for key in SOURCE_SENSORS]
+        + [
+            BrewAssistantConfiguredSourceValueSensor(coordinator, key)
+            for key in CONFIGURED_SOURCE_VALUE_SENSORS
+        ]
         + [BrewAssistantRuntimeSensor(coordinator, key) for key in RUNTIME_SENSORS]
         + [BrewAssistantCarbonationSensor(coordinator, key) for key in CARBONATION_SENSORS]
         + [BrewAssistantBrewZillaTemperatureSensor(coordinator, key) for key in BREWZILLA_TEMPERATURE_SENSORS]
@@ -612,6 +663,39 @@ class BrewAssistantSmartSensor(BrewAssistantEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return smart recommendation attributes."""
         return _smart_attrs(_smart_data(self.coordinator))
+
+
+class BrewAssistantConfiguredSourceValueSensor(BrewAssistantEntity, SensorEntity):
+    """Normalized numeric mirror of one configured external sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        super().__init__(coordinator, key)
+        config = CONFIGURED_SOURCE_VALUE_SENSORS[key]
+        self._key = key
+        self._config_key = str(config["config_key"])
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        self._attr_native_unit_of_measurement = config.get("unit")
+        self._attr_device_class = config.get("device_class")
+        self._attr_state_class = config.get("state_class")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the configured external sensor value."""
+        return _configured_numeric_source_value(self.coordinator, self._config_key)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose the selected source entity for diagnostics."""
+        entity_id = self.coordinator.configured_entities.get(self._config_key)
+        state = self.coordinator.hass.states.get(entity_id) if entity_id else None
+        return {
+            "source_entity": entity_id,
+            "source_state": state.state if state is not None else None,
+            "source_available": self.native_value is not None,
+        }
 
 
 class BrewAssistantBrewZillaTemperatureSensor(BrewAssistantEntity, SensorEntity):

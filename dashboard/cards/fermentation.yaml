@@ -13,7 +13,7 @@ card:
           const chamber = states['climate.fermentation_chamber']?.state ?? 'off';
           const demand = String(states['sensor.brewassistant_fermentation_climate_demand']?.state ?? 'standby').toLowerCase();
           const mode = String(states['sensor.brewassistant_fermentation_climate_mode']?.state ?? 'standby').toLowerCase();
-          const heatPower = Number(states['sensor.brewassistant_source_health_summary']?.attributes?.fermentation_heat_power_entity_state);
+          const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
           const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
           if (chamber === 'off') return 'mdi:power';
@@ -78,7 +78,7 @@ card:
 
           const chamberState = states['climate.fermentation_chamber']?.state ?? 'off';
           const supervisorOn = states['switch.brewassistant_fermentation_climate_supervisor_enabled']?.state === 'on';
-          const heatPower = Number(states['sensor.brewassistant_source_health_summary']?.attributes?.fermentation_heat_power_entity_state);
+          const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
           const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
           const demand = clean(states['sensor.brewassistant_fermentation_climate_demand']?.state) || 'standby';
@@ -86,7 +86,7 @@ card:
           const reason = clean(states['sensor.brewassistant_fermentation_air_target_reason']?.state) || '';
           const summary = clean(states['sensor.brewassistant_fermentation_air_target_summary']?.state);
           const smart = clean(states['sensor.brewassistant_smart_recommendation_summary']?.state);
-          const pillStatus = clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || '—';
+          const pillStatus = clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || '—';
 
           const chamberAvg = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
 
@@ -278,7 +278,7 @@ card:
                 const chamber = states['climate.fermentation_chamber']?.state ?? 'off';
                 const demand = String(states['sensor.brewassistant_fermentation_climate_demand']?.state ?? 'standby').toLowerCase();
                 const mode = String(states['sensor.brewassistant_fermentation_climate_mode']?.state ?? 'standby').toLowerCase();
-                const heatPower = Number(states['sensor.brewassistant_source_health_summary']?.attributes?.fermentation_heat_power_entity_state);
+                const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
                 const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
                 if (heatOn || demand === 'heat' || mode === 'heating') return 'linear-gradient(135deg, rgba(255,152,0,.14), rgba(127,127,127,.035))';
@@ -513,11 +513,8 @@ card:
                 name: Liquid temperature
               - entity: sensor.brewassistant_gravity
                 name: BrewAssistant SG
-
               - entity: sensor.brewassistant_gravity_last_updated
                 name: SG last updated
-              - entity: sensor.brewassistant_smart_pill_status_core
-                name: Pill status
               - entity: sensor.brewassistant_smart_pill_temp_age_minutes_core
                 name: Pill temp age
           - type: entities
@@ -526,9 +523,7 @@ card:
             entities:
               - entity: switch.fermentation_heat_mat
                 name: Heat mat
-              - type: attribute
-                entity: sensor.brewassistant_source_health_summary
-                attribute: fermentation_heat_power_entity_state
+              - entity: sensor.brewassistant_fermentation_heat_power
                 name: Heat mat power
               - entity: sensor.brewassistant_smart_recommendation_summary
                 name: Smart summary

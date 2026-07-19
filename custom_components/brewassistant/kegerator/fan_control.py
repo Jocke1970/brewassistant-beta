@@ -480,6 +480,21 @@ def _status_from_decision(inputs: FanInputs, decision: FanDecision) -> str:
 
 
 def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant) -> dict[str, Any]:
+    air_temp_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_POWER_ENTITY,
+        DEFAULT_KEGERATOR_POWER_ENTITY,
+    )
+    fan_power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_FAN_POWER_ENTITY,
+        DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
+    )
     data = _bucket(hass)
     status = _status_from_decision(inputs, decision)
     summary = (
@@ -531,7 +546,7 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "climate_state": inputs.climate_state,
         "climate_enabled": inputs.climate_enabled,
         "hvac_action": inputs.hvac_action,
-        "air_temperature_entity": AIR_TEMP,
+        "air_temperature_entity": air_temp_entity,
         "current_temperature": inputs.current_temperature,
         "target_temperature": inputs.target_temperature,
         "temperature_delta": inputs.temperature_delta,
@@ -542,7 +557,7 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "trend_label": inputs.trend_label,
         "temperature_summary": inputs.temperature_summary,
         "power_entity": inputs.power_entity,
-        "power_entity_candidates": POWER_CANDIDATES,
+        "power_entity_candidates": (power_entity,),
         "power_w": inputs.power_w,
         "compressor_active": inputs.compressor_active,
         "compressor_threshold_w": COMPRESSOR_W,
@@ -556,7 +571,7 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "afterrun_entity_configured": AFTER_RUN_NUMBER,
         "fan_switch_entity": FAN,
         "fan_state": inputs.fan_state,
-        "fan_power_entity": FAN_POWER,
+        "fan_power_entity": fan_power_entity,
         "fan_power_w": inputs.fan_power_w,
         "fan_running": inputs.fan_running,
         "fan_should_run": decision.should_run,
@@ -569,7 +584,7 @@ def _snapshot_from(inputs: FanInputs, decision: FanDecision, hass: HomeAssistant
         "fan_switch_ok": inputs.fan_switch_ok,
         "temperature_sensor_ok": inputs.temperature_sensor_ok,
         "power_sensor_ok": inputs.power_sensor_ok,
-        "power_sensor_candidates_ok": _any_available(hass, POWER_CANDIDATES),
+        "power_sensor_candidates_ok": _available(hass, power_entity),
         "fan_power_sensor_ok": inputs.fan_power_sensor_ok,
         "fermentation_chamber_entity": CHAMBER,
         "fermentation_chamber_state": _state(hass, CHAMBER),

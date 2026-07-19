@@ -330,7 +330,11 @@ def build_carbonation_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "source": "python_runtime",
         "pressure_source": pressure_source,
         "temperature_source": temp_source,
-        "local_temperature_entity": LOCAL_TEMPERATURE_ENTITY,
+        "local_temperature_entity": configured_entity(
+            hass,
+            CONF_KEGERATOR_AIR_TEMP_ENTITY,
+            DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+        ),
         "fallback_temperature_entity": FALLBACK_TEMPERATURE_ENTITY,
         "mode": "read_only",
     }
