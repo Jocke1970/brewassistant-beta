@@ -14,6 +14,7 @@ from . import brewzilla_mash_priority_thermal_mix_guard as _mash_priority_therma
 from . import brewzilla_mash_wort_delta_pump_guard as _mash_wort_delta_pump_guard
 from . import brewzilla_heat_strike_pump_mix_guard as _heat_strike_pump_mix_guard
 from . import brewzilla_heat_strike_target_clamp_guard as _heat_strike_target_clamp_guard
+from . import brewzilla_heat_strike_near_target_safety_guard as _heat_strike_near_target_safety_guard
 from . import brewzilla_equipment_learning_patch as _equipment_learning_patch
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
 from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_guard
@@ -64,6 +65,7 @@ _advice_control.install_advice_control()
 _mash_wort_delta_pump_guard.install_mash_wort_delta_pump_guard()
 _mash_priority_thermal_mix_guard.install_mash_priority_thermal_mix_guard()
 _heat_strike_pump_mix_guard.install_heat_strike_pump_mix_guard()
+_heat_strike_near_target_safety_guard.install_heat_strike_near_target_safety_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
 _mash_in_target_patch.install_mash_in_target_patch()
