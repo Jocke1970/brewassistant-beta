@@ -1,4 +1,17 @@
-Traceback (most recent call last):
-  File "/tmp/agent_sensor_cleanup.py", line 219, in <module>
-    raise RuntimeError("fermentation.yaml: expected one Pill status entity row")
-RuntimeError: fermentation.yaml: expected one Pill status entity row
+./custom_components/brewassistant/carbonation_backend/carbonation_runtime.py:333:37: F821 undefined name 'LOCAL_TEMPERATURE_ENTITY'
+        "local_temperature_entity": LOCAL_TEMPERATURE_ENTITY,
+                                    ^
+./custom_components/brewassistant/kegerator/fan_control.py:534:35: F821 undefined name 'AIR_TEMP'
+        "air_temperature_entity": AIR_TEMP,
+                                  ^
+./custom_components/brewassistant/kegerator/fan_control.py:545:36: F821 undefined name 'POWER_CANDIDATES'
+        "power_entity_candidates": POWER_CANDIDATES,
+                                   ^
+./custom_components/brewassistant/kegerator/fan_control.py:559:29: F821 undefined name 'FAN_POWER'
+        "fan_power_entity": FAN_POWER,
+                            ^
+./custom_components/brewassistant/kegerator/fan_control.py:572:60: F821 undefined name 'POWER_CANDIDATES'
+        "power_sensor_candidates_ok": _any_available(hass, POWER_CANDIDATES),
+                                                           ^
+5     F821 undefined name 'LOCAL_TEMPERATURE_ENTITY'
+5
