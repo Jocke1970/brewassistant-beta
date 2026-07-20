@@ -13,7 +13,7 @@ card:
           const chamber = states['climate.fermentation_chamber']?.state ?? 'off';
           const demand = String(states['sensor.brewassistant_fermentation_climate_demand']?.state ?? 'standby').toLowerCase();
           const mode = String(states['sensor.brewassistant_fermentation_climate_mode']?.state ?? 'standby').toLowerCase();
-          const heatPower = Number(states['sensor.fermentation_heat_mat_power']?.state);
+          const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
           const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
           if (chamber === 'off') return 'mdi:power';
@@ -78,7 +78,7 @@ card:
 
           const chamberState = states['climate.fermentation_chamber']?.state ?? 'off';
           const supervisorOn = states['switch.brewassistant_fermentation_climate_supervisor_enabled']?.state === 'on';
-          const heatPower = n('sensor.fermentation_heat_mat_power');
+          const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
           const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
           const demand = clean(states['sensor.brewassistant_fermentation_climate_demand']?.state) || 'standby';
@@ -86,19 +86,12 @@ card:
           const reason = clean(states['sensor.brewassistant_fermentation_air_target_reason']?.state) || '';
           const summary = clean(states['sensor.brewassistant_fermentation_air_target_summary']?.state);
           const smart = clean(states['sensor.brewassistant_smart_recommendation_summary']?.state);
-          const pillStatus = clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || clean(states['sensor.yellow_pill_connection']?.state) || '—';
+          const pillStatus = clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || '—';
 
-          const chamberAvg = firstNum([
-            'sensor.brewassistant_fermentation_chamber_air_temperature_average',
-            'sensor.kyl_temperatur_4'
-          ]);
+          const chamberAvg = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
 
-          const pillTemp = n('sensor.yellow_pill_temperature');
-          const sg = firstSg([
-            'sensor.brewassistant_gravity',
-            'sensor.yellow_pill_gravity',
-            'sensor.yellow_pill_gravity_2'
-          ]);
+          const pillTemp = n('sensor.brewassistant_liquid_temperature');
+          const sg = validSg('sensor.brewassistant_gravity');
 
           const airTarget = n('sensor.brewassistant_fermentation_effective_air_target');
           const targetDelta = Number.isFinite(chamberAvg) && Number.isFinite(airTarget) ? chamberAvg - airTarget : null;
@@ -285,7 +278,7 @@ card:
                 const chamber = states['climate.fermentation_chamber']?.state ?? 'off';
                 const demand = String(states['sensor.brewassistant_fermentation_climate_demand']?.state ?? 'standby').toLowerCase();
                 const mode = String(states['sensor.brewassistant_fermentation_climate_mode']?.state ?? 'standby').toLowerCase();
-                const heatPower = Number(states['sensor.fermentation_heat_mat_power']?.state);
+                const heatPower = Number(states['sensor.brewassistant_fermentation_heat_power']?.state);
                 const heatOn = states['switch.fermentation_heat_mat']?.state === 'on' || (Number.isFinite(heatPower) && heatPower > 2);
 
                 if (heatOn || demand === 'heat' || mode === 'heating') return 'linear-gradient(135deg, rgba(255,152,0,.14), rgba(127,127,127,.035))';
@@ -405,7 +398,7 @@ card:
                 - font-weight: 850
                 - opacity: 0.7
           - type: custom:button-card
-            entity: sensor.yellow_pill_connection
+            entity: sensor.brewassistant_smart_pill_status_core
             name: RAPT Pill
             icon: mdi:radio-tower
             show_state: true
@@ -456,9 +449,9 @@ card:
               function fmt(v, unit='', d=1) {
                 return Number.isFinite(v) ? `${v.toFixed(d)}${unit ? ' ' + unit : ''}` : '—';
               }
-              const chamber = n('sensor.brewassistant_fermentation_chamber_air_temperature_average') ?? n('sensor.kyl_temperatur_4');
-              const pill = n('sensor.yellow_pill_temperature');
-              const sg = validSg('sensor.brewassistant_gravity') ?? validSg('sensor.yellow_pill_gravity') ?? validSg('sensor.yellow_pill_gravity_2');
+              const chamber = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
+              const pill = n('sensor.brewassistant_liquid_temperature');
+              const sg = validSg('sensor.brewassistant_gravity');
               const sup = states['switch.brewassistant_fermentation_climate_supervisor_enabled']?.state === 'on' ? 'klimat på' : 'klimat av';
               return `Kammare ${fmt(chamber, '°C')} · Pill ${fmt(pill, '°C')} · SG ${Number.isFinite(sg) ? sg.toFixed(3) : '—'} · ${sup}`;
             ]]]
@@ -514,20 +507,14 @@ card:
             title: Pill / gravity
             show_header_toggle: false
             entities:
-              - entity: sensor.yellow_pill_connection
-                name: Pill connection
-              - entity: sensor.yellow_pill_temperature
-                name: Pill temp
-              - entity: sensor.yellow_pill_gravity
-                name: Pill SG
-              - entity: sensor.yellow_pill_gravity
-                name: Pill SG 2
+              - entity: sensor.brewassistant_smart_pill_status_core
+                name: Pill status
+              - entity: sensor.brewassistant_liquid_temperature
+                name: Liquid temperature
               - entity: sensor.brewassistant_gravity
                 name: BrewAssistant SG
               - entity: sensor.brewassistant_gravity_last_updated
                 name: SG last updated
-              - entity: sensor.brewassistant_smart_pill_status_core
-                name: Pill status
               - entity: sensor.brewassistant_smart_pill_temp_age_minutes_core
                 name: Pill temp age
           - type: entities
@@ -536,7 +523,7 @@ card:
             entities:
               - entity: switch.fermentation_heat_mat
                 name: Heat mat
-              - entity: sensor.fermentation_heat_mat_power
+              - entity: sensor.brewassistant_fermentation_heat_power
                 name: Heat mat power
               - entity: sensor.brewassistant_smart_recommendation_summary
                 name: Smart summary

@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant
 
 _UNAVAILABLE_STATES = {"unknown", "unavailable", "none", ""}
 _ON_STATES = {"on", "true", "yes", "active"}
-DEFAULT_PILL_TEMP_ENTITY = "sensor.yellow_pill_temperature"
 DEFAULT_PILL_STALE_MINUTES = 120
 
 
@@ -57,9 +56,9 @@ def _is_on(hass: HomeAssistant, entity_id: str) -> bool:
     return state is not None and state.state.lower() in _ON_STATES
 
 
-def _pill_context(hass: HomeAssistant) -> tuple[str, int | None, bool]:
-    """Return pill status, age in minutes and stale flag."""
-    state = hass.states.get(DEFAULT_PILL_TEMP_ENTITY)
+def _pill_context(hass: HomeAssistant, entity_id: str | None) -> tuple[str, int | None, bool]:
+    """Return liquid-source status, age in minutes and stale flag."""
+    state = hass.states.get(entity_id) if entity_id else None
     if state is None or state.state in _UNAVAILABLE_STATES:
         return "Pill temperature unavailable", None, True
 
@@ -86,6 +85,7 @@ def build_smart_recommendations(
     chamber_temp: float | None,
     fallback_active: bool,
     source: str,
+    liquid_temp_entity: str | None,
 ) -> SmartRecommendationData:
     """Build a read-only smart fermentation recommendation snapshot."""
     enabled = _is_on(hass, "input_boolean.brewassistant_smart_fermentation_enabled")
@@ -106,7 +106,7 @@ def build_smart_recommendations(
     temp_rate = _state_float(hass, "sensor.brewassistant_smart_temp_rate")
 
     rising_too_fast = temp_rate is not None and temp_rate > max_rising
-    pill_status, pill_age_minutes, pill_stale = _pill_context(hass)
+    pill_status, pill_age_minutes, pill_stale = _pill_context(hass, liquid_temp_entity)
 
     if liquid_temp is None or target_temp is None or delta is None:
         return SmartRecommendationData(

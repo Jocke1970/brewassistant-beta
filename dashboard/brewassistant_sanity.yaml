@@ -30,9 +30,9 @@ cards:
     entities:
       - entity: climate.kegerator_kylskap
         name: Kegerator climate
-      - entity: sensor.kyl_temperatur_4
+      - entity: sensor.brewassistant_kegerator_air_temperature
         name: Kegerator air temperature
-      - entity: sensor.kegerator_power
+      - entity: sensor.brewassistant_kegerator_power
         name: Kegerator power
       - entity: switch.brewassistant_kegerator_guard_enabled
         name: Guard enabled
@@ -64,7 +64,7 @@ cards:
         name: Afterrun minutes
       - entity: switch.kegerator_fan
         name: Fan switch
-      - entity: sensor.kegerator_fan_power
+      - entity: sensor.brewassistant_kegerator_fan_power
         name: Fan power
       - type: attribute
         entity: switch.brewassistant_kegerator_fan_auto_enabled

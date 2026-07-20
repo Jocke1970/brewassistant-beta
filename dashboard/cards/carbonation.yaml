@@ -58,8 +58,7 @@ card:
           function sourceLabel(v) {
             const s = String(v ?? '—');
             if (s === 'python_runtime') return 'runtime';
-            if (s === 'sensor.kyl_temperatur_4') return 'kegerator temp';
-            if (s.includes('kyl_temperatur')) return 'kegerator temp';
+            if (s.includes('kegerator') || s.includes('air_temperature')) return 'kegerator temp';
             if (s.includes('carbonation')) return 'carbonation';
             return short(s.replace('sensor.', ''), 15);
           }

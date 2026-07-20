@@ -11,6 +11,10 @@ from .const import (
     CONF_COLD_CRASH_ACTIVE_ENTITY,
     CONF_COLD_CRASH_TARGET_ENTITY,
     CONF_GRAVITY_ENTITY,
+    CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    CONF_KEGERATOR_POWER_ENTITY,
+    CONF_KEGERATOR_FAN_POWER_ENTITY,
+    CONF_FERMENTATION_HEAT_POWER_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
     CONF_RECIPE_TARGET_ENTITY,
 )
@@ -22,6 +26,10 @@ NUMERIC_KEYS = {
     CONF_RECIPE_TARGET_ENTITY,
     CONF_COLD_CRASH_TARGET_ENTITY,
     CONF_GRAVITY_ENTITY,
+    CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    CONF_KEGERATOR_POWER_ENTITY,
+    CONF_KEGERATOR_FAN_POWER_ENTITY,
+    CONF_FERMENTATION_HEAT_POWER_ENTITY,
 }
 
 SOURCE_LABELS = {
@@ -31,6 +39,10 @@ SOURCE_LABELS = {
     CONF_COLD_CRASH_ACTIVE_ENTITY: "Cold crash active helper",
     CONF_COLD_CRASH_TARGET_ENTITY: "Cold crash target temperature",
     CONF_GRAVITY_ENTITY: "Gravity source",
+    CONF_KEGERATOR_AIR_TEMP_ENTITY: "Kegerator air temperature",
+    CONF_KEGERATOR_POWER_ENTITY: "Kegerator power",
+    CONF_KEGERATOR_FAN_POWER_ENTITY: "Kegerator fan power",
+    CONF_FERMENTATION_HEAT_POWER_ENTITY: "Fermentation heat power",
 }
 
 SOURCE_SENSOR_KEYS = {
@@ -40,6 +52,10 @@ SOURCE_SENSOR_KEYS = {
     "configured_cold_crash_active_entity": CONF_COLD_CRASH_ACTIVE_ENTITY,
     "configured_cold_crash_target_entity": CONF_COLD_CRASH_TARGET_ENTITY,
     "configured_gravity_entity": CONF_GRAVITY_ENTITY,
+    "configured_kegerator_air_temp_entity": CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    "configured_kegerator_power_entity": CONF_KEGERATOR_POWER_ENTITY,
+    "configured_kegerator_fan_power_entity": CONF_KEGERATOR_FAN_POWER_ENTITY,
+    "configured_fermentation_heat_power_entity": CONF_FERMENTATION_HEAT_POWER_ENTITY,
 }
 
 SOURCE_BINARY_KEYS = {
@@ -49,6 +65,10 @@ SOURCE_BINARY_KEYS = {
     "source_cold_crash_active_available": CONF_COLD_CRASH_ACTIVE_ENTITY,
     "source_cold_crash_target_available": CONF_COLD_CRASH_TARGET_ENTITY,
     "source_gravity_available": CONF_GRAVITY_ENTITY,
+    "source_kegerator_air_temp_available": CONF_KEGERATOR_AIR_TEMP_ENTITY,
+    "source_kegerator_power_available": CONF_KEGERATOR_POWER_ENTITY,
+    "source_kegerator_fan_power_available": CONF_KEGERATOR_FAN_POWER_ENTITY,
+    "source_fermentation_heat_power_available": CONF_FERMENTATION_HEAT_POWER_ENTITY,
 }
 
 

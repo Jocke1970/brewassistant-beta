@@ -25,7 +25,7 @@ cards:
       - switch.brewassistant_show_kegerator
       - switch.brewassistant_kegerator_fan_auto_enabled
       - climate.kegerator_kylskap
-      - sensor.kyl_temperatur_4
+      - sensor.brewassistant_kegerator_air_temperature
       - switch.kegerator_fan
       - climate.fermentation_chamber
       - sensor.brewassistant_fermentation_chamber_air_temperature_average
@@ -124,7 +124,7 @@ cards:
           const carbStatus = clean(states['sensor.brewassistant_carbonation_status']?.state) || 'Inactive';
           const carbBar = num('sensor.brewassistant_carbonation_recommended_pressure_bar');
           const kegStatus = clean(states['switch.brewassistant_kegerator_fan_auto_enabled']?.attributes?.status) || clean(states['climate.kegerator_kylskap']?.state) || '—';
-          const kegTemp = num('sensor.kyl_temperatur_4');
+          const kegTemp = num('sensor.brewassistant_kegerator_air_temperature');
           const fan = clean(states['switch.kegerator_fan']?.state) || '—';
 
           return `
@@ -308,7 +308,7 @@ cards:
               const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
               return Number.isFinite(n) ? n : null;
             }
-            const temp = num('sensor.kyl_temperatur_4');
+            const temp = num('sensor.brewassistant_kegerator_air_temperature');
             const climate = states['climate.kegerator_kylskap']?.state || '—';
             const fan = states['switch.kegerator_fan']?.state || '—';
             const visible = entity.state === 'on' ? 'Visible' : 'Hidden';

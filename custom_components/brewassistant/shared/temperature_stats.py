@@ -17,7 +17,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
 
-from ..const import CONF_CHAMBER_TEMP_ENTITY, DOMAIN
+from ..const import CONF_CHAMBER_TEMP_ENTITY, CONF_KEGERATOR_AIR_TEMP_ENTITY, DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
 
@@ -32,7 +32,6 @@ FERMENTATION_SCOPE_STATUSES = {
     "cold crash",
 }
 
-KEGERATOR_AIR_SOURCE_ENTITY = "sensor.kyl_temperatur_4"
 
 
 @dataclass(slots=True)
@@ -75,6 +74,10 @@ def _float_state(coordinator: BrewAssistantCoordinator, entity_id: str) -> float
 
 def _configured_chamber_entity(coordinator: BrewAssistantCoordinator) -> str | None:
     return coordinator.configured_entities.get(CONF_CHAMBER_TEMP_ENTITY)
+
+
+def _configured_kegerator_air_entity(coordinator: BrewAssistantCoordinator) -> str | None:
+    return coordinator.configured_entities.get(CONF_KEGERATOR_AIR_TEMP_ENTITY)
 
 
 def _liquid_source_entity(coordinator: BrewAssistantCoordinator) -> str | None:
@@ -243,7 +246,8 @@ def _summary(
 
 
 def _kegerator_air(coordinator: BrewAssistantCoordinator) -> float | None:
-    return _float_state(coordinator, KEGERATOR_AIR_SOURCE_ENTITY)
+    source_entity = _configured_kegerator_air_entity(coordinator)
+    return _float_state(coordinator, source_entity) if source_entity else None
 
 
 def _chamber_air(coordinator: BrewAssistantCoordinator) -> float | None:
@@ -309,7 +313,7 @@ TEMPERATURE_STAT_CONFIGS: tuple[TemperatureStatConfig, ...] = (
         source_label="Kegerator air",
         icon="mdi:fridge-thermometer",
         value_fn=_kegerator_air,
-        source_entity_fn=lambda coordinator: KEGERATOR_AIR_SOURCE_ENTITY,
+        source_entity_fn=_configured_kegerator_air_entity,
     ),
     TemperatureStatConfig(
         key="fermentation_chamber_air_temperature_average",
