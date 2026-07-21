@@ -1,9 +1,17 @@
 """Final clean heat-strike guard for BrewZilla.
 
-This guard makes the physical pre-mash-in heat-strike phase dominant over the
-Brewfather paused/hold step.  While mash-in has not started, control decisions
-should be based on the strike-water/kettle view, not on a cold mash/BLE gate
-probe or the next Brewfather mash hold.
+This guard makes the physical pre-mash-in heat-strike phase explicit and
+separates two different jobs:
+
+* readiness / operator gate: the mash/BLE/control probe should reach strike
+  because that is the temperature the brewer uses for mash-in readiness.
+* overshoot safety: the hottest kettle/wort/internal view must cap heat early
+  and drive stronger pump mixing when the kettle is running hotter than the
+  mash/BLE probe.
+
+While mash-in has not started, Brewfather may already be paused on the first
+mash hold.  BA must still control the physical strike-water phase rather than
+treating the Brewfather hold as a real mash hold.
 """
 
 from __future__ import annotations
@@ -20,21 +28,32 @@ _ORIGINAL_WITH_ADVICE: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]]
 
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 
-# Heat profile for the physical strike-water phase.  Far from strike we keep the
-# heat-strike ramp decisive; close to strike we taper from the hottest kettle/wort
-# view.  The mash/BLE probe is allowed only as a fallback temperature, never as a
-# reason to keep heat alive when the kettle/wort view is already near strike.
-_CLEAN_HEAT_PROFILE: tuple[tuple[float, float, bool, str], ...] = (
-    (1.0, 0.0, False, "clean_strike_final_coast"),
-    (3.0, 10.0, True, "clean_strike_final_low_hold"),
-    (5.0, 25.0, True, "clean_strike_capture"),
-    (8.0, 50.0, True, "clean_strike_approach"),
-    (10.0, 75.0, True, "clean_strike_late_ramp"),
+# Nominal heat profile from the operator-facing strike gate temperature.  This
+# answers the question: how far is the mash/BLE/control probe from strike?
+_GATE_HEAT_PROFILE: tuple[tuple[float, float, bool, str], ...] = (
+    (1.0, 0.0, False, "clean_gate_final_coast"),
+    (3.0, 10.0, True, "clean_gate_final_low_hold"),
+    (5.0, 25.0, True, "clean_gate_capture"),
+    (8.0, 50.0, True, "clean_gate_approach"),
+    (10.0, 75.0, True, "clean_gate_late_ramp"),
 )
-_CLEAN_FAR_HEAT = 100.0
-_CLEAN_FAR_PHASE = "clean_strike_far_ramp"
+_GATE_FAR_HEAT = 100.0
+_GATE_FAR_PHASE = "clean_gate_far_ramp"
 
-# Pump floors during heat-strike.  The pump is used for water/kettle mixing here;
+# Safety heat cap from the hottest kettle/wort/internal view.  This answers the
+# question: is the hot side already too close to strike to keep pushing heat?
+_SAFETY_HEAT_CAPS: tuple[tuple[float, float, bool, str], ...] = (
+    (0.0, 0.0, False, "clean_safety_at_or_over_strike"),
+    (1.0, 0.0, False, "clean_safety_final_coast"),
+    (3.0, 10.0, True, "clean_safety_final_low_hold"),
+    (5.0, 25.0, True, "clean_safety_capture_cap"),
+    (8.0, 50.0, True, "clean_safety_approach_cap"),
+    (10.0, 75.0, True, "clean_safety_late_ramp_cap"),
+)
+_SAFETY_FAR_CAP = 100.0
+_SAFETY_FAR_PHASE = "clean_safety_far_no_cap"
+
+# Pump floors during heat-strike.  The pump is used for strike-water mixing here;
 # there is no grain bed yet, so compaction is not a concern before mash-in.
 _PUMP_FAR = 70.0
 _PUMP_NEAR = 90.0
@@ -74,53 +93,92 @@ def _strike_target(out: dict[str, Any]) -> float | None:
     return _num(out.get("heat_strike_target") or out.get("heat_strike_gate_target"))
 
 
-def _guard_temperature(out: dict[str, Any]) -> tuple[float | None, str | None]:
-    """Return strike-water guard temp.
+def _gate_temperature(out: dict[str, Any]) -> tuple[float | None, str | None]:
+    """Return the operator-facing heat-strike gate temperature.
 
-    Prefer kettle/wort/internal readings.  Use mash/BLE only as a fallback if no
-    kettle/wort view exists.  This prevents a cold external probe from forcing a
-    low-hold/heat-alive branch while the actual strike water is already close.
+    Mash/BLE/control temperature should be the primary readiness signal because
+    that is what tells the brewer whether the strike water is ready at the probe
+    location used for mash-in.  Kettle/wort/internal readings are fallback only
+    for readiness.
     """
-    primary_candidates: list[tuple[str, float]] = []
+    for key in (
+        "mash_temperature",
+        "mash_in_gate_current_temperature",
+        "heat_strike_control_temperature",
+    ):
+        value = _num(out.get(key))
+        if value is not None:
+            return value, key
+
+    for key in (
+        "advice_learning_temperature",
+        "current_temperature",
+        "brewzilla_current_temp",
+        "wort_temperature",
+        "heat_strike_transition_brake_temperature",
+    ):
+        value = _num(out.get(key))
+        if value is not None:
+            return value, key
+
+    return None, None
+
+
+def _safety_temperature(out: dict[str, Any]) -> tuple[float | None, str | None]:
+    """Return the hottest strike-water safety temperature.
+
+    This is intentionally different from the readiness/gate temperature.  It is
+    used only to cap heat and prevent overshoot when kettle/wort is already hot
+    while mash/BLE still lags behind.
+    """
+    candidates: list[tuple[str, float]] = []
     for key in (
         "current_temperature",
         "brewzilla_current_temp",
         "wort_temperature",
         "heat_strike_transition_brake_temperature",
         "advice_learning_temperature",
+        "mash_temperature",
+        "mash_in_gate_current_temperature",
     ):
         value = _num(out.get(key))
         if value is not None:
-            primary_candidates.append((key, value))
-    if primary_candidates:
-        source, value = max(primary_candidates, key=lambda item: item[1])
-        return value, source
+            candidates.append((key, value))
 
-    for key in ("mash_temperature", "mash_in_gate_current_temperature"):
-        value = _num(out.get(key))
-        if value is not None:
-            return value, key
-    return None, None
+    if not candidates:
+        return None, None
+
+    source, value = max(candidates, key=lambda item: item[1])
+    return value, source
 
 
-def _heat_for_delta(delta: float | None) -> tuple[float | None, bool | None, str | None]:
+def _heat_from_gate_delta(delta: float | None) -> tuple[float | None, bool | None, str | None]:
     if delta is None:
         return None, None, None
-    for threshold, heat, heater_on, phase in _CLEAN_HEAT_PROFILE:
+    for threshold, heat, heater_on, phase in _GATE_HEAT_PROFILE:
         if delta <= threshold:
             return heat, heater_on, phase
-    return _CLEAN_FAR_HEAT, True, _CLEAN_FAR_PHASE
+    return _GATE_FAR_HEAT, True, _GATE_FAR_PHASE
+
+
+def _heat_cap_from_safety_delta(delta: float | None) -> tuple[float | None, bool | None, str | None]:
+    if delta is None:
+        return None, None, None
+    for threshold, heat_cap, heater_on, phase in _SAFETY_HEAT_CAPS:
+        if delta <= threshold:
+            return heat_cap, heater_on, phase
+    return _SAFETY_FAR_CAP, True, _SAFETY_FAR_PHASE
 
 
 def _mash_wort_delta(out: dict[str, Any]) -> float | None:
-    mash = _num(out.get("mash_temperature"))
-    wort = _num(out.get("wort_temperature"))
+    mash = _num(out.get("mash_temperature") or out.get("mash_in_gate_current_temperature"))
+    wort = _num(out.get("wort_temperature") or out.get("current_temperature") or out.get("brewzilla_current_temp"))
     if mash is None or wort is None:
         return None
     return round(float(wort) - float(mash), 2)
 
 
-def _pump_for_conditions(out: dict[str, Any], strike_delta: float | None) -> tuple[float, str, float | None]:
+def _pump_for_conditions(out: dict[str, Any], safety_delta: float | None, gate_delta: float | None) -> tuple[float, str, float | None]:
     mw_delta = _mash_wort_delta(out)
     if mw_delta is not None:
         if mw_delta >= _DELTA_PUMP_LARGE_C:
@@ -130,9 +188,15 @@ def _pump_for_conditions(out: dict[str, Any], strike_delta: float | None) -> tup
         if mw_delta >= _DELTA_PUMP_SMALL_C:
             return 80.0, "clean_strike_mash_wort_small_mix", mw_delta
 
-    if strike_delta is not None and strike_delta <= 3.0:
+    # When either view is close to target, mix more aggressively so the readings
+    # converge before the operator mashes in.
+    closest_delta = min(
+        value for value in (safety_delta, gate_delta) if value is not None
+    ) if safety_delta is not None or gate_delta is not None else None
+
+    if closest_delta is not None and closest_delta <= 3.0:
         return _PUMP_READY, "clean_strike_near_target_equalize", mw_delta
-    if strike_delta is not None and strike_delta <= 8.0:
+    if closest_delta is not None and closest_delta <= 8.0:
         return _PUMP_NEAR, "clean_strike_approach_equalize", mw_delta
     return _PUMP_FAR, "clean_strike_ramp_mix", mw_delta
 
@@ -157,14 +221,25 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
         out.setdefault("clean_heat_strike_active", False)
         return out
 
-    guard_temp, guard_source = _guard_temperature(out)
-    strike_delta = None if guard_temp is None else round(float(strike) - float(guard_temp), 2)
-    clean_heat, clean_heater_on, clean_phase = _heat_for_delta(strike_delta)
-    if clean_heat is None or clean_heater_on is None or clean_phase is None:
+    gate_temp, gate_source = _gate_temperature(out)
+    safety_temp, safety_source = _safety_temperature(out)
+    gate_delta = None if gate_temp is None else round(float(strike) - float(gate_temp), 2)
+    safety_delta = None if safety_temp is None else round(float(strike) - float(safety_temp), 2)
+
+    gate_heat, gate_heater_on, gate_phase = _heat_from_gate_delta(gate_delta)
+    safety_cap, safety_heater_on, safety_phase = _heat_cap_from_safety_delta(safety_delta)
+    if gate_heat is None or gate_heater_on is None or gate_phase is None:
         out.setdefault("clean_heat_strike_active", False)
         return out
+    if safety_cap is None or safety_heater_on is None or safety_phase is None:
+        safety_cap, safety_heater_on, safety_phase = 100.0, True, "clean_safety_unknown_no_cap"
 
-    pump_floor, pump_reason, mw_delta = _pump_for_conditions(out, strike_delta)
+    clean_heat = min(float(gate_heat), float(safety_cap))
+    # If the safety view says heater off, it wins over the readiness gate.
+    clean_heater_on = bool(gate_heater_on and safety_heater_on and clean_heat > advice_control.base.UTILIZATION_TOLERANCE)
+    clean_phase = gate_phase if clean_heat == float(gate_heat) else safety_phase
+
+    pump_floor, pump_reason, mw_delta = _pump_for_conditions(out, safety_delta, gate_delta)
     desired_pump_current = _num(out.get("desired_pump_utilization"))
     clean_pump = pump_floor if desired_pump_current is None else max(float(desired_pump_current), pump_floor)
 
@@ -201,9 +276,14 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
         {
             "clean_heat_strike_active": True,
             "clean_heat_strike_phase": clean_phase,
-            "clean_heat_strike_guard_temperature": guard_temp,
-            "clean_heat_strike_guard_temperature_source": guard_source,
-            "clean_heat_strike_delta_to_target": strike_delta,
+            "clean_heat_strike_gate_temperature": gate_temp,
+            "clean_heat_strike_gate_temperature_source": gate_source,
+            "clean_heat_strike_gate_delta_to_target": gate_delta,
+            "clean_heat_strike_safety_temperature": safety_temp,
+            "clean_heat_strike_safety_temperature_source": safety_source,
+            "clean_heat_strike_safety_delta_to_target": safety_delta,
+            "clean_heat_strike_gate_heat_utilization": gate_heat,
+            "clean_heat_strike_safety_heat_cap": safety_cap,
             "clean_heat_strike_original_heat_utilization": previous_heat,
             "clean_heat_strike_original_pump_utilization": previous_pump,
             "clean_heat_strike_pump_reason": pump_reason,
@@ -231,16 +311,18 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
             "advice_heat_profile_phase": clean_phase,
             "advice_local_profile_heat_utilization": round(float(clean_heat), 1),
             "mash_in_heat_strategy_phase": clean_phase,
-            "mash_in_heat_strategy_delta_to_target": strike_delta,
+            "mash_in_heat_strategy_delta_to_target": gate_delta,
             "heat_strike_phase": clean_phase,
-            "heat_strike_delta_to_target": strike_delta,
+            "heat_strike_delta_to_target": gate_delta,
+            "heat_strike_safety_delta_to_target": safety_delta,
             "heat_strike_control_target": target,
             "heat_strike_clean_control_target": target,
             "heat_strike_transition_low_hold_floor_active": False,
             "control_reason": (
-                f"{original_reason} Clean heat-strike control: physical pre-mash-in phase is dominant; "
-                f"guard temp {guard_temp}°C ({guard_source}), strike target {target}°C, "
-                f"delta {strike_delta}°C; heat {round(float(clean_heat), 1)}% ({clean_phase}), "
+                f"{original_reason} Clean heat-strike control: mash/BLE gate remains primary for readiness; "
+                f"gate temp {gate_temp}°C ({gate_source}), gate delta {gate_delta}°C; "
+                f"safety temp {safety_temp}°C ({safety_source}), safety delta {safety_delta}°C; "
+                f"heat {round(float(clean_heat), 1)}% ({clean_phase}; gate {gate_heat}%, cap {safety_cap}%), "
                 f"pump {round(float(clean_pump), 1)}% ({pump_reason})."
             ),
         }
