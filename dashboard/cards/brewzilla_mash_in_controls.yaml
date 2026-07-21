@@ -11,6 +11,11 @@ card:
       icon: mdi:barley
       show_state: false
       show_label: true
+      triggers_update:
+        - button.brewassistant_mash_in_started
+        - button.brewassistant_mash_in_complete
+        - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+        - sensor.brewassistant_brewzilla_control_reason
       tap_action:
         action: more-info
       label: |
@@ -20,13 +25,34 @@ card:
             const s = String(v).trim();
             return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
           }
+          function numAttr(attrs, key) {
+            const n = Number(String(attrs?.[key] ?? '').replace(',', '.'));
+            return Number.isFinite(n) ? n : null;
+          }
+          function fmt(v, unit = '°C', d = 1) {
+            return Number.isFinite(v) ? `${v.toFixed(d)} ${unit}` : '—';
+          }
+          function boolish(v) {
+            const s = String(v ?? '').toLowerCase();
+            return v === true || ['on','true','yes','1'].includes(s);
+          }
           const start = states['button.brewassistant_mash_in_started'];
           const complete = states['button.brewassistant_mash_in_complete'];
           const a = start?.attributes || complete?.attributes || {};
           const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-          const gateState = clean(a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state) || 'idle';
+          const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+          const gateState = clean(a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || oz.mash_in_gate_state) || 'idle';
           const startedVisible = a.mash_in_started_visible === true;
           const completeVisible = a.mash_in_complete_visible === true || gateState === 'mash_in_started';
+          const cleanHeat = boolish(oz.clean_heat_strike_active);
+          const strike = numAttr(oz, 'heat_strike_target') ?? numAttr(oz, 'heat_strike_clean_control_target');
+          const gateTemp = numAttr(oz, 'clean_heat_strike_gate_temperature');
+          const gateDelta = numAttr(oz, 'clean_heat_strike_gate_delta_to_target');
+          const safetyTemp = numAttr(oz, 'clean_heat_strike_safety_temperature');
+          const safetyDelta = numAttr(oz, 'clean_heat_strike_safety_delta_to_target');
+          const heat = numAttr(oz, 'desired_heat_utilization');
+          const pump = numAttr(oz, 'desired_pump_utilization');
+          const pumpReason = clean(oz.clean_heat_strike_pump_reason) || '—';
           const effective = clean(a.effective_target || a.mash_in_effective_target || gate?.attributes?.effective_target || gate?.attributes?.mash_in_effective_target) || '—';
           const next = clean(a.next_target || a.mash_in_next_target || gate?.attributes?.next_target || gate?.attributes?.mash_in_next_target) || '—';
           const startOk = !!start;
@@ -34,14 +60,19 @@ card:
           let msg = 'Väntar på mash-in readiness.';
           if (!startOk || !completeOk) {
             msg = 'Nya knapp-entities saknas ännu — kör pull + full HA-restart.';
+          } else if (cleanHeat && gateState !== 'mash_in_started') {
+            msg = 'Heatstrike pågår. Mash/BLE/control-proben är readiness-gate; wort/kettle används som säkerhetsbroms. Tryck MASH-IN STARTED först när gate-temp är vid strike.';
           } else if (startedVisible) {
-            msg = 'Tryck MASH-IN STARTED i BA när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.';
+            msg = 'Strike är redo. Tryck MASH-IN STARTED i BA när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.';
           } else if (completeVisible) {
             msg = 'Mash-in startad. Tillsätt malt och rör om. När du är klar: tryck FORTSÄTT i Brewfather. BA kör Mash-In Complete och startar cirkulation automatiskt.';
           } else if (gateState === 'mash_in_complete') {
             msg = 'Mash-in complete. Brewfather är igång och BA har släppt vidare till normal mäskcirkulation.';
           }
-          return `${msg}<br>state ${gateState} · effective ${effective}°C · next ${next}°C`;
+          const heatLine = cleanHeat
+            ? `<br>strike ${fmt(strike)} · gate ${fmt(gateTemp)} / Δ ${fmt(gateDelta)} · safety ${fmt(safetyTemp)} / Δ ${fmt(safetyDelta)} · heat ${Number.isFinite(heat) ? heat.toFixed(0) + ' %' : '—'} · pump ${Number.isFinite(pump) ? pump.toFixed(0) + ' %' : '—'} (${pumpReason})`
+            : '';
+          return `${msg}<br>state ${gateState} · effective ${effective}°C · next ${next}°C${heatLine}`;
         ]]]
       styles:
         card:
@@ -77,12 +108,18 @@ card:
           icon: mdi:barley
           show_state: false
           show_label: true
+          triggers_update:
+            - button.brewassistant_mash_in_started
+            - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+            - sensor.brewassistant_brewzilla_control_reason
           label: |
             [[[
               const a = states['button.brewassistant_mash_in_started']?.attributes || {};
-              const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
-              const next = a.next_target ?? a.mash_in_next_target ?? '—';
-              return `Släpp strike-target · effective ${target}°C · next ${next}°C`;
+              const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+              const target = oz.heat_strike_target ?? oz.heat_strike_clean_control_target ?? a.effective_target ?? a.mash_in_effective_target ?? '—';
+              const gate = oz.clean_heat_strike_gate_temperature ?? '—';
+              const safety = oz.clean_heat_strike_safety_temperature ?? '—';
+              return `Starta fysisk inmäskning · strike ${target}°C · gate ${gate}°C · safety ${safety}°C`;
             ]]]
           tap_action:
             action: call-service
@@ -91,9 +128,11 @@ card:
               entity_id: button.brewassistant_mash_in_started
             confirmation:
               text: >-
-                Börjar du mäska in nu? BA släpper strike-target, håller pumpen av
-                och siktar på nästa mash-target med låg anti-drop heat. När malten
-                är inrörd fortsätter du normalt med FORTSÄTT i Brewfather.
+                Börjar du mäska in nu? Kontrollera att Mash/BLE/control-proben är
+                vid strike-target och att wort/kettle inte springer iväg. BA släpper
+                strike-target, håller pumpen av och siktar på nästa mash-target med
+                låg anti-drop heat. När malten är inrörd fortsätter du normalt med
+                FORTSÄTT i Brewfather.
           styles:
             card:
               - display: |
