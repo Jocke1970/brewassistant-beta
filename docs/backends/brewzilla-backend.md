@@ -1,7 +1,7 @@
 # BrewZilla Backend
 
 Status: active development / supervised hot-side testing  
-Last synced: 2026-07-16
+Last synced: 2026-07-23
 
 This document explains the backend responsibilities for BrewAssistant's BrewZilla/RAPT hot-side control path.
 
@@ -22,6 +22,7 @@ It is responsible for:
 - preserving BrewZilla local regulation after BA has given BZ a valid target
 - recording enough event-log data to debug the decision afterwards
 - collecting equipment-learning evidence for later profile suggestions
+- exposing future Brewfather timing/profile suggestions without auto-applying them
 ```
 
 It is not intended to be unattended autopilot. Hot-side actions remain supervised.
@@ -40,6 +41,18 @@ Brewday Runtime resolver
   -> Brewday Event Log
   -> Equipment Learning evidence model
 ```
+
+Future learning-advisor path:
+
+```text
+Brewday Event Log / Runtime snapshots
+  -> segment detector: heatstrike, mash-in drop, mash ramp, mash-out, boil ramp, boil
+  -> planned-vs-actual timing model
+  -> passive BF timing/profile suggestion sensors
+  -> optional JSON/Markdown batch report export
+```
+
+That path must remain read-only/advisory until the operator explicitly reviews and applies a suggestion.
 
 ## Important backend files
 
@@ -66,6 +79,8 @@ Brewday Runtime resolver
 | `brewzilla_learning.py` | Live Brewday Advice analysis snapshot and recommendation context. |
 | `brewzilla_equipment_learning.py` | Persistent equipment-specific model and profile-suggestion evidence. |
 | `brewzilla_equipment_learning_patch.py` | Bridges live learning snapshots into the persistent equipment-learning model. |
+| planned `brewzilla_learning_advisor.py` | Future planned-vs-actual segment model and Brewfather timing/profile suggestion layer. |
+| planned `brewzilla_learning_report.py` | Future optional JSON/Markdown export for batch learning reports. |
 
 ## Read-only vs direct action
 
@@ -79,6 +94,8 @@ local-control  -> short passive lease after target application
 direct-control -> BA has an allowed action to apply
 blocked        -> higher guard blocks positive control
 ```
+
+Learning/advisor output is not a control mode. It must never turn `monitor` into `direct-control` by itself.
 
 ## Local BrewZilla regulation preservation
 
@@ -129,6 +146,8 @@ rcl_value_stale_guard_stale_seconds: ...
 rcl_value_stale_guard_refresh_requested: true
 rcl_value_stale_guard_reload_requested: true
 ```
+
+The learning advisor should track RCL quality separately from control. Stale periods should reduce confidence in a timing suggestion if they make the segment boundary or measured temperatures unreliable.
 
 ## Two-step mash-in gate
 
@@ -266,7 +285,70 @@ sensor.brewassistant_brewzilla_equipment_learning_profile_key
 sensor.brewassistant_brewzilla_equipment_learning_suggestion
 ```
 
+Future BF timing advisor sensors may include:
+
+```text
+sensor.brewassistant_brewzilla_learning_bf_suggestions
+sensor.brewassistant_brewzilla_learning_current_segment
+sensor.brewassistant_brewzilla_learning_last_segment_result
+sensor.brewassistant_brewzilla_learning_batch_report
+sensor.brewassistant_brewzilla_learning_confidence
+```
+
 See [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md).
+
+## BF timing/profile advisor
+
+The future advisor should use existing HA/BrewAssistant inputs to compare planned recipe timing against observed hardware behavior.
+
+Initial segment types:
+
+```text
+heatstrike
+mash_in_drop
+mash_ramp
+mash_hold
+mash_out
+boil_ramp
+boil
+```
+
+Example recommendation output:
+
+```yaml
+state: "2 suggestions · confidence medium"
+suggestions:
+  heatstrike_time_min: 30
+  ramp_66_72_time_min: 9
+  boil_ramp_time_min: null
+confidence:
+  heatstrike: high
+  ramp_66_72: medium
+  boil_ramp: low
+evidence:
+  observations_total: 42
+  segment_count: 5
+  batches: 2
+```
+
+The advisor should consider context such as:
+
+```text
+recipe name / batch id
+planned Brewfather step duration
+actual time to target
+actual time to stable mash/BLE temperature
+mash water volume
+grain amount
+pre-boil volume
+room temperature
+water start temperature
+RCL stale/refresh periods
+primary temperature source
+safety temperature source
+```
+
+The advisor may suggest Brewfather settings for the next batch. It must not modify Brewfather or live BA control logic automatically.
 
 ## Safe-down behavior
 
@@ -286,16 +368,20 @@ No backend should re-enable heat or pump during abort lockout.
 
 ## Test recipe recommendation
 
-For BrewAssistant/BrewZilla tests:
+For the current supervised BrewAssistant/BrewZilla tests:
 
 ```text
-Ramp between targets: 5 min
-Hold time: unchanged
+Heatstrike time: match observed real time, currently about 30 min for small-batch tests
+Ramp between mash targets: start with 9 min for 66 -> 72°C validation
+Hold time: unchanged unless the test explicitly focuses on hold behavior
 Strike / mash-in target: based on recipe and grain temperature
 Mash target after grain: active first mash hold, for example 66°C
+Boil validation: include a short 10 min boil once mash/ramp behavior is stable
 ```
 
-Two-minute ramps are useful stress tests, but they can cause Brewfather target transitions before the mash/wort temperatures and cloud telemetry have stabilized.
+Shorter ramps are useful stress tests, but they can cause Brewfather target transitions before the mash/wort temperatures and cloud telemetry have stabilized.
+
+The BF timing advisor should eventually replace hard-coded test timing guesses with evidence-based suggestions per equipment/context/volume/grain bucket.
 
 ## What to verify in next event log
 
@@ -315,4 +401,15 @@ rcl_value_stale_guard_refresh_requested: true   # only if RCL stalls
 local_regulation_heat_guard_active: true        # only if another guard tries to kill heat despite valid target
 brewzilla_equipment_learning_observations: ...
 brewzilla_equipment_learning_suggestion: ...
+```
+
+Future BF timing advisor checks:
+
+```yaml
+current_segment: heatstrike | mash_ramp | mash_out | boil_ramp | boil
+planned_duration_min: ...
+actual_time_to_target_min: ...
+actual_time_to_stable_min: ...
+suggested_bf_duration_min: ...
+confidence: low | medium | high
 ```
