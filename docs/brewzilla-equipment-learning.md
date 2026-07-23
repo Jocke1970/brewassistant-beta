@@ -1,11 +1,13 @@
 # BrewZilla Equipment Learning
 
-Status: v1 / passive evidence model  
-Last synced: 2026-07-16
+Status: v1 passive evidence model / v2 BF timing advisor plan  
+Last synced: 2026-07-23
 
 This document describes the persistent BrewZilla equipment-learning layer.
 
 The purpose is to make BrewAssistant learn the behavior of a specific BrewZilla setup over repeated runs instead of relying only on generic hard-coded profiles.
+
+The current implementation is intentionally passive. It records evidence and exposes diagnostics. It must not silently change BrewZilla control behavior or rewrite Brewfather recipes/profiles.
 
 ## Why this exists
 
@@ -23,6 +25,12 @@ The equipment-learning layer answers a different question:
 What has this specific BrewZilla repeatedly shown us under similar conditions?
 ```
 
+The next advisor layer answers:
+
+```text
+Given what this setup has shown, what Brewfather timing/profile values should the brewer consider for the next batch?
+```
+
 ## Separation of responsibilities
 
 ```text
@@ -31,6 +39,9 @@ Analysis / Advice:
 
 Equipment Learning:
   persistent evidence grouped by equipment, context, volume, grain and phase
+
+BF Timing / Profile Advisor:
+  human-reviewable Brewfather timing/profile suggestions for future batches
 
 Profile Suggestion:
   candidate profile change for later operator review
@@ -48,6 +59,21 @@ STORAGE_KEY: brewassistant_brewzilla_equipment_learning
 ```
 
 It is loaded at integration startup and updated during supervised active hot-side stages.
+
+### Storage roles
+
+```text
+Home Assistant storage:
+  source of truth for machine-readable learning history and rolling models
+
+Sensors:
+  current summary, dashboard status, latest segment and latest suggestions
+
+Optional export files:
+  human-readable per-batch learning reports and offline analysis artifacts
+```
+
+The stored model should remain independent from live control. Accepted future overrides should be stored separately from built-in defaults and should require explicit operator review/apply.
 
 ## Sampling
 
@@ -101,6 +127,18 @@ larger real mash 16+ L
 low-grain vs high-grain mash
 ```
 
+Future advisor buckets may add:
+
+```text
+ambient temperature bucket
+start-water temperature bucket
+season / room-condition bucket
+RCL quality bucket
+sensor-source quality bucket
+```
+
+Those buckets are advisory context only. They should improve confidence and explainability, not split the evidence so aggressively that every batch becomes unique and unlearnable.
+
 ## Observation fields
 
 Each recorded observation may include:
@@ -137,6 +175,32 @@ advice_thermal_mix_heat_cap
 advice_thermal_mix_reason
 ```
 
+Planned v2 timing-advisor observations should also capture, where available:
+
+```text
+recipe_name
+batch_id_or_session_id
+planned_step_duration_min
+planned_step_target_temperature
+segment_start_at
+segment_end_at
+segment_start_temperature
+segment_target_temperature
+actual_time_to_target_min
+actual_time_to_stable_min
+max_mash_temperature
+max_wort_temperature
+max_mash_overshoot_c
+max_wort_overshoot_c
+avg_rate_c_per_min
+room_temperature_c
+water_start_temperature_c
+RCL_stale_seconds_total
+RCL_refresh_count
+primary_temperature_source
+safety_temperature_source
+```
+
 ## Segment model
 
 For each profile bucket, BA keeps rolling stats such as:
@@ -156,6 +220,101 @@ thermal_mix_low_cap_cases
 ```
 
 `rate_by_heat_utilization` groups observed ramp/hold rates into heat-utilization buckets such as `050%`, `060%`, `070%`.
+
+Future v2 segment models should also keep planned-vs-actual timing stats:
+
+```text
+planned_duration_min_avg
+actual_time_to_target_min_avg
+actual_time_to_stable_min_avg
+actual_minus_planned_min_avg
+suggested_bf_duration_min
+confidence
+sample_count_by_recipe_family
+sample_count_by_environment_bucket
+```
+
+## Segment types for BF timing advisor
+
+The BF timing advisor should reason over explicit physical segments, not just generic Brewfather steps.
+
+Initial segment types:
+
+```text
+heatstrike
+mash_in_drop
+mash_ramp
+mash_hold
+mash_out
+boil_ramp
+boil
+```
+
+Example segment definitions:
+
+```text
+heatstrike:
+  start: strike target is latched/applied
+  done: mash/BLE gate reaches strike readiness or ready_for_mash_in is reached
+
+mash_in_drop:
+  start: Mash-In Started
+  done: mash temperature stabilizes near first mash target or Mash-In Complete starts circulation
+
+mash_ramp:
+  start: target changes from one mash rest to a higher mash rest
+  done: mash/BLE reaches target or stabilizes within tolerance
+
+boil_ramp:
+  start: runtime enters boil ramp / boil target intent
+  done: boil is detected or kettle temperature reaches practical boil threshold
+```
+
+The advisor should preserve both:
+
+```text
+planned duration from Brewfather
+actual duration measured by BrewAssistant
+```
+
+That lets BA explain whether a Brewfather step is too short, too long or already close enough.
+
+## BF timing recommendations
+
+The advisor should create human-reviewable suggestions such as:
+
+```text
+Heatstrike 22 -> 71.8°C:
+  planned: 30 min
+  observed: 28-31 min
+  suggestion: keep 30 min
+  confidence: medium/high
+
+Mash ramp 66 -> 72°C:
+  planned: 9 min
+  observed time to stable mash: 9-10 min
+  suggestion: use 10 min or keep 9 min and accept slight lag
+  confidence: medium
+
+Boil ramp:
+  planned: unknown
+  observed: insufficient data
+  suggestion: collect another run
+  confidence: low
+```
+
+The suggestion should include enough context for the brewer to judge whether it applies:
+
+```yaml
+context:
+  equipment_id: brewzilla_gen4_35l
+  learning_context: Real mash
+  volume_bucket: vol:10-13L
+  grain_bucket: grain:2-3kg
+  room_temperature_c: 22.4
+  water_start_temperature_c: 21.8
+  rcl_quality: partial_stale_periods
+```
 
 ## Profile suggestion v1
 
@@ -200,6 +359,57 @@ sensor.brewassistant_brewzilla_equipment_learning_suggestion
 
 The regular BrewZilla learning sensors also carry the equipment-learning snapshot in attributes.
 
+Future advisor-facing sensors should expose short states with detailed attributes:
+
+```text
+sensor.brewassistant_brewzilla_learning_bf_suggestions
+sensor.brewassistant_brewzilla_learning_current_segment
+sensor.brewassistant_brewzilla_learning_last_segment_result
+sensor.brewassistant_brewzilla_learning_batch_report
+sensor.brewassistant_brewzilla_learning_confidence
+```
+
+Example state/attributes:
+
+```yaml
+state: "2 suggestions · confidence medium"
+attributes:
+  suggestions:
+    heatstrike_time_min: 30
+    ramp_66_72_time_min: 9
+    boil_ramp_time_min: null
+  confidence:
+    heatstrike: high
+    ramp_66_72: medium
+    boil_ramp: low
+  evidence:
+    observations_total: 42
+    segment_count: 5
+    batches: 2
+```
+
+## Optional export files
+
+A future export service may write reports under `/config/brewassistant/learning/`:
+
+```text
+/config/brewassistant/learning/brewzilla_learning_summary.json
+/config/brewassistant/learning/batches/YYYY-MM-DD_<batch_slug>.json
+/config/brewassistant/learning/batches/YYYY-MM-DD_<batch_slug>.md
+```
+
+The JSON file is for machine-readable backup and offline analysis. The Markdown file is for the brewer.
+
+Example report content:
+
+```text
+BrewAssistant Learning Report
+Batch: Test batch
+Heatstrike: planned 30 min, observed 29.4 min, suggestion keep 30 min
+Ramp 66 -> 72°C: planned 9 min, observed 9.8 min, suggestion 10 min
+Boil ramp: insufficient data
+```
+
 ## Expected summary states
 
 Possible high-level summaries:
@@ -208,6 +418,8 @@ Possible high-level summaries:
 Learning disabled
 No equipment observations yet
 N observations / M profile buckets
+N observations / M profile buckets · suggestion: ...
+N BF timing suggestions · confidence medium
 ```
 
 ## Safety philosophy
@@ -223,6 +435,7 @@ It must not:
 - turn heater or pump on/off
 - override abort/safe-down logic
 - silently rewrite profile parameters
+- silently rewrite Brewfather recipe or equipment-profile timings
 ```
 
 It may:
@@ -233,7 +446,10 @@ It may:
 - aggregate profile buckets
 - create candidate suggestions
 - expose diagnostics through sensors
+- export human-readable batch reports
 ```
+
+Any future APPLY/DENY flow must be explicit, reversible and separate from the built-in defaults.
 
 ## Future work
 
@@ -243,9 +459,13 @@ Planned next steps:
 - add APPLY/DENY flow for learned profile suggestions
 - store accepted profile overrides separately from built-in defaults
 - add dashboard card for equipment learning
+- add BF timing advisor sensors for heatstrike, mash ramps, mash-out and boil ramp
+- add optional JSON/Markdown learning-report export after a supervised batch
 - add phase models for heat-strike, mash-in drop, mash ramps, mash holds, mash-out and boil ramp
 - calculate strike target offset from observed mash-in drop
 - calculate practical taper points per batch size and grain load
+- calculate recommended Brewfather step durations from planned-vs-actual segment data
+- track ambient temperature and start-water temperature when HA sensors are available
 - track RCL quality and stale periods per session
 - compare predicted vs actual target hit and overshoot
 ```
@@ -259,6 +479,17 @@ brewzilla_equipment_learning_observations: ...
 brewzilla_equipment_learning_segments: ...
 brewzilla_equipment_learning_profile_key: ...
 brewzilla_equipment_learning_suggestion: ...
+```
+
+For future BF timing advisor validation, also check:
+
+```yaml
+current_segment: heatstrike | mash_ramp | mash_out | boil_ramp | boil
+planned_duration_min: ...
+actual_time_to_target_min: ...
+actual_time_to_stable_min: ...
+suggested_bf_duration_min: ...
+confidence: low | medium | high
 ```
 
 A suggestion is useful only if its evidence matches the actual brew context. Water-only observations should not be treated as real-mash profile data.
