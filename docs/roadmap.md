@@ -18,9 +18,13 @@ YAML/dashboard as presentation and explicit operator-action layer only
 ```text
 Safe Advice Beta / beta.7
 ↓
-BrewZilla mash-in confirmation and circulation validation
+BrewZilla heatstrike and mash-in confirmation validation
+↓
+BrewZilla mash-ramp and short boil-chain validation
 ↓
 First full serious all-grain BrewZilla batch validation
+↓
+BrewZilla Equipment Learning BF timing/profile advisor
 ↓
 Boil / hop / cooling validation
 ↓
@@ -87,6 +91,7 @@ Old fix/test branches should not become permanent project structure.
 [x] BrewZilla Start Mash Circulation button entity
 [x] BrewZilla Mash-In Complete action starts circulation using pump utilization plus pump switch
 [x] BrewZilla Learning uses normalized runtime for Brewfather and Manual Brewday
+[x] BrewZilla Equipment Learning passive persistent evidence model
 [x] BrewZilla ABORT service
 [x] BrewZilla operator dashboard card
 [x] BrewZilla mash-in confirmation dashboard card
@@ -113,6 +118,15 @@ Old fix/test branches should not become permanent project structure.
 [x] Fermentation Cockpit UI
 ```
 
+Planned near-term Python Core additions:
+
+```text
+[ ] BrewZilla BF timing/profile advisor based on planned-vs-actual segment data
+[ ] BrewZilla learning segment detector: heatstrike, mash-in drop, mash ramp, mash-out, boil ramp, boil
+[ ] BrewZilla learning report export: optional JSON/Markdown per supervised batch
+[ ] Dashboard card section for BF timing suggestions and confidence
+```
+
 ---
 
 ## Current beta.7 validation focus
@@ -126,6 +140,48 @@ Old fix/test branches should not become permanent project structure.
 [ ] Confirm fallback Start Mash Circulation button sets pump utilization before pump ON
 [ ] Confirm Brewfather pause/resume order does not bypass BrewAssistant mash-in state
 [ ] Confirm Brewday Event Log captures mash-in confirmation and circulation actions
+[ ] Confirm heatstrike holds the real strike target without boosted-target overshoot
+[ ] Confirm heatstrike uses mash/BLE as readiness gate and wort/internal as overshoot safety cap
+[ ] Confirm 66 -> 72°C ramp behavior with 9 min planned ramp time
+[ ] Confirm 10 min boil-chain test once mash/ramp behavior is stable
+[ ] Confirm equipment-learning observations and profile buckets are populated during supervised tests
+```
+
+---
+
+## BrewZilla Equipment Learning / BF timing advisor
+
+Current status:
+
+```text
+[x] Passive equipment-learning storage model
+[x] Rolling segment/profile buckets by equipment/context/volume/grain/stage
+[x] Existing sensors expose equipment-learning summary, observations, segments, profile key and suggestion
+[ ] Planned-vs-actual timing segment detector
+[ ] Brewfather timing suggestions for heatstrike, mash ramps, mash-out and boil ramp
+[ ] Confidence model using observation count, context match and RCL/source quality
+[ ] Optional JSON/Markdown batch learning report export
+```
+
+Design rules:
+
+```text
+- learning is evidence only
+- suggestions are for operator review
+- no silent Brewfather recipe/profile rewrites
+- no live target/heat/pump changes from learning
+- water-only evidence must not be treated as real-mash evidence
+- environment context should be recorded when HA sensors are available
+```
+
+Initial advisor outputs:
+
+```text
+Heatstrike time suggestion
+Mash ramp time suggestion, e.g. 66 -> 72°C
+Mash-out ramp time suggestion
+Boil-ramp time suggestion
+Batch report summary with planned vs actual timings
 ```
 
 ---
