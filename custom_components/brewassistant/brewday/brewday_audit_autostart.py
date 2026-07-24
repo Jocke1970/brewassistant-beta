@@ -1,7 +1,7 @@
-"""Auto-start Brewday audit log from Brewfather Planning status.
+"""Auto-start Brewday audit log from active Brewfather Brewday runtime.
 
 This backend hook keeps the manual Brewday audit start service intact, but starts
-recording automatically when a Brewfather Brew Tracker enters Planning and the
+recording automatically when Brewfather/Brewday Runtime is active and the
 BrewZilla/RAPT backend entities are present.
 """
 
@@ -15,19 +15,46 @@ from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 
 from .brewday_audit import async_start_brewday_audit_log, get_brewday_audit_log
+from .brewday_runtime import build_brewday_runtime_snapshot
 
 _LOGGER = logging.getLogger(__name__)
 
 BREWFATHER_STATUS_ENTITY = "sensor.brewfather_brew_tracker_status"
+BREWFATHER_RUNTIME_SOURCE = "Brewfather Brew Tracker"
 PLANNING_STATUS = "planning"
 DATA_KEY_LAST_RESULT = "brewday_audit_autostart_last_result"
 
 # Brewfather/RAPT may expose the live tracker state as "paused" while the batch
-# itself is still in Planning.  The autostart gate must therefore resolve
-# Planning from both the entity state and the batch-status attributes.
+# itself is still in Planning.  The autostart gate therefore keeps the legacy
+# Planning fallback, but the primary signal is now the normalized Brewday Runtime.
 BREWFATHER_BATCH_STATUS_ATTRIBUTES = (
     "brew_tracker_batch_status",
     "batch_status",
+)
+
+ACTIVE_RUNTIME_STATES = {
+    "live",
+    "running",
+    "paused",
+    "prepared",
+    "awaiting_snapshot",
+    "awaiting_confirm",
+}
+TERMINAL_RUNTIME_STATES = {"idle", "inactive", "completed", "complete", "done", "archived"}
+HOT_SIDE_WORDS = (
+    "mash",
+    "mäsk",
+    "ramp",
+    "heat",
+    "värm",
+    "strike",
+    "boil",
+    "kok",
+    "sparge",
+    "lak",
+    "whirlpool",
+    "hop stand",
+    "hopstand",
 )
 
 # Use the upstream/RCL BrewZilla entities rather than BA-derived sensors so the
@@ -44,7 +71,7 @@ BREWZILLA_BACKEND_ENTITY_CANDIDATES = (
 
 # Initial setup can race RAPT/RCL entity availability after HA restart/update.
 # Keep retrying briefly, react when entities change, and keep a lightweight
-# watchdog running so an already-present Planning/Paused tracker is not missed.
+# watchdog running so an already-active Brewfather runtime is not missed.
 INITIAL_CHECK_DELAY_SECONDS = 10
 RETRY_CHECK_DELAYS_SECONDS = (30, 60, 120, 180, 300)
 WATCHDOG_INTERVAL_SECONDS = 30
@@ -95,20 +122,79 @@ def _brewfather_status_source(hass: HomeAssistant) -> str | None:
     return source
 
 
-def _autostart_allowed(hass: HomeAssistant) -> tuple[bool, str]:
+def _runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
+    try:
+        snapshot = build_brewday_runtime_snapshot(hass)
+    except Exception as exc:  # pragma: no cover - diagnostics must never break HA setup
+        return {"runtime_error": f"{type(exc).__name__}: {exc}"}
+    return snapshot if isinstance(snapshot, dict) else {"runtime_error": "invalid_snapshot"}
+
+
+def _runtime_state(runtime: dict[str, Any]) -> str:
+    return str(runtime.get("runtime_state") or runtime.get("status") or "idle").strip().lower()
+
+
+def _runtime_text(runtime: dict[str, Any]) -> str:
+    return " ".join(
+        str(runtime.get(key) or "")
+        for key in ("stage", "step", "next_step", "raw_step_name")
+    ).lower()
+
+
+def _runtime_is_brewfather_hot_side(runtime: dict[str, Any]) -> bool:
+    source = str(runtime.get("source") or "")
+    if source != BREWFATHER_RUNTIME_SOURCE:
+        return False
+
+    state = _runtime_state(runtime)
+    if state in TERMINAL_RUNTIME_STATES or state not in ACTIVE_RUNTIME_STATES:
+        return False
+    if bool(runtime.get("completed_runtime")) or bool(runtime.get("terminal_complete_inferred")):
+        return False
+
+    text = _runtime_text(runtime)
+    target = runtime.get("target_temperature")
+    return bool(any(word in text for word in HOT_SIDE_WORDS) or target is not None)
+
+
+def _autostart_allowed(hass: HomeAssistant) -> tuple[bool, str, dict[str, Any]]:
+    runtime = _runtime_snapshot(hass)
+
     if not _brewfather_backend_available(hass):
-        return False, "brewfather_backend_missing"
+        return False, "brewfather_backend_missing", runtime
     if not _brewzilla_backend_available(hass):
-        return False, "brewzilla_backend_missing"
-    if _brewfather_status(hass) != PLANNING_STATUS:
-        return False, "brewfather_not_planning"
+        return False, "brewzilla_backend_missing", runtime
     if get_brewday_audit_log(hass).active:
-        return False, "audit_already_active"
-    return True, "brewfather_planning"
+        return False, "audit_already_active", runtime
+
+    if _runtime_is_brewfather_hot_side(runtime):
+        return True, "brewfather_runtime_active", runtime
+
+    # Legacy fallback: useful when the normalized runtime has not built a hot-side
+    # snapshot yet, but the BF batch is already known to be in Planning.
+    if _brewfather_status(hass) == PLANNING_STATUS:
+        return True, "brewfather_planning", runtime
+
+    return False, "brewfather_runtime_not_active", runtime
 
 
 def _store_autostart_result(hass: HomeAssistant, result: dict[str, Any]) -> None:
     hass.data.setdefault("brewassistant", {})[DATA_KEY_LAST_RESULT] = result
+
+
+def _runtime_result_fields(runtime: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "runtime_source": runtime.get("source"),
+        "runtime_state": runtime.get("runtime_state") or runtime.get("status"),
+        "runtime_stage": runtime.get("stage"),
+        "runtime_step": runtime.get("step"),
+        "runtime_next_step": runtime.get("next_step"),
+        "runtime_target_temperature": runtime.get("target_temperature"),
+        "runtime_raw_step_name": runtime.get("raw_step_name"),
+        "runtime_raw_step_index": runtime.get("raw_step_index"),
+        "runtime_resolved_step_index": runtime.get("resolved_step_index"),
+        "runtime_error": runtime.get("runtime_error"),
+    }
 
 
 async def async_maybe_autostart_brewday_audit_log(
@@ -116,9 +202,9 @@ async def async_maybe_autostart_brewday_audit_log(
     *,
     trigger: str,
 ) -> dict[str, Any]:
-    """Start Brewday audit log if Brewfather is Planning and backends exist."""
+    """Start Brewday audit log if Brewfather/Brewday Runtime is active."""
 
-    allowed, reason = _autostart_allowed(hass)
+    allowed, reason, runtime = _autostart_allowed(hass)
     if not allowed:
         result = {
             "started": False,
@@ -128,14 +214,19 @@ async def async_maybe_autostart_brewday_audit_log(
             "brewfather_status_source": _brewfather_status_source(hass),
             "brewfather_backend_available": _brewfather_backend_available(hass),
             "brewzilla_backend_available": _brewzilla_backend_available(hass),
+            **_runtime_result_fields(runtime),
         }
         _store_autostart_result(hass, result)
         return result
 
-    note = f"Auto-started: Brewfather batch status Planning and BrewZilla/Brewfather backends are available ({trigger})."
+    note = (
+        "Auto-started: Brewfather/Brewday Runtime is active and "
+        f"BrewZilla/Brewfather backends are available ({trigger}; {reason})."
+    )
     snapshot = await async_start_brewday_audit_log(hass, note=note)
     _LOGGER.info(
-        "Brewday audit auto-started from Brewfather Planning (%s, source=%s)",
+        "Brewday audit auto-started from %s (%s, BF status source=%s)",
+        reason,
         trigger,
         _brewfather_status_source(hass),
     )
@@ -147,6 +238,7 @@ async def async_maybe_autostart_brewday_audit_log(
         "brewfather_status_source": _brewfather_status_source(hass),
         "brewfather_backend_available": True,
         "brewzilla_backend_available": True,
+        **_runtime_result_fields(runtime),
         "snapshot": snapshot,
     }
     _store_autostart_result(hass, result)
@@ -154,7 +246,7 @@ async def async_maybe_autostart_brewday_audit_log(
 
 
 def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], None]:
-    """Register Brewfather Planning -> Brewday audit autostart hook."""
+    """Register Brewfather/Brewday Runtime -> Brewday audit autostart hook."""
 
     async def _check(trigger: str) -> None:
         result = await async_maybe_autostart_brewday_audit_log(hass, trigger=trigger)
@@ -171,7 +263,7 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
         new_state = event.data.get("new_state")
         old_status, _old_source = _brewfather_status_from_state(old_state)
         new_status, _new_source = _brewfather_status_from_state(new_state)
-        if old_status == new_status or new_status != PLANNING_STATUS:
+        if old_status == new_status and new_status != PLANNING_STATUS:
             return
         hass.async_create_task(_check("brewfather_status_changed"))
 
@@ -186,7 +278,7 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
             "unknown",
             "unavailable",
         }
-        if old_available == new_available and _brewfather_status(hass) != PLANNING_STATUS:
+        if old_available == new_available and not _runtime_is_brewfather_hot_side(_runtime_snapshot(hass)):
             return
         hass.async_create_task(_check(f"backend_candidate_changed:{event.data.get('entity_id')}"))
 
@@ -200,9 +292,8 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
         if get_brewday_audit_log(hass).active:
             return
         # The watchdog intentionally does not require a state_changed event.  If
-        # Brewfather is already Planning/Paused when BA is loaded, or if an
-        # attribute update is missed by HA/RAPT, this still converges within one
-        # interval.
+        # Brewfather is already active when BA is loaded, or if an attribute update
+        # is missed by HA/RAPT, this still converges within one interval.
         hass.async_create_task(_check("watchdog_30s"))
 
     remove_brewfather_listener = async_track_state_change_event(
