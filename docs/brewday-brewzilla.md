@@ -2,55 +2,67 @@
 
 This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker or Manual Brewday → BrewAssistant → BrewZilla.
 
-Status: **MVP validated in supervised Brewfather/BrewZilla dry-run with event logging**.
+Status: **post-#112 supervised hot-side beta flow**. The latest water/system tests validated the core chain from heat-strike through mash-in, 66°C hold, 66→72°C ramp and 72→77°C hold. A longer boil-specific validation is still useful before treating the full brewday path as a final baseline.
 
-The first verified path is BrewZilla/RAPT hardware, but the architecture should remain as hardware-profile friendly as possible. BrewAssistant should expose canonical `sensor.brewassistant_brewday_*` and `sensor.brewassistant_brewzilla_*` entities to dashboards instead of making every card parse raw Brewfather data directly.
+The first verified path is BrewZilla/RAPT hardware, but the architecture should remain hardware-profile friendly. BrewAssistant should expose canonical `sensor.brewassistant_brewday_*` and `sensor.brewassistant_brewzilla_*` entities to dashboards instead of making every card parse raw Brewfather data directly.
+
+---
+
+## Current control philosophy
+
+BrewAssistant is an operator-supervised hot-side controller.
+
+```text
+Brewfather Brew Tracker or Manual Brewday
+        ↓
+BrewAssistant normalized Brewday Runtime
+        ↓
+BrewAssistant BrewZilla orchestration snapshot
+        ↓
+BrewZilla target / heater / pump / utilization actions
+        ↓
+Brewday Event Log + diagnostics
+```
+
+Important safety boundaries:
+
+```text
+- ABORT and completed-runtime safe-down remain authoritative.
+- RAPT Cloud Link stale/disconnected telemetry must not silently zero heat/pump.
+- Once BrewZilla has a valid local target, BrewZilla may continue local regulation.
+- Recovery/diagnostic guards may refresh/reload RCL, but must not change target/heat/pump as part of recovery.
+- Operator mash-in confirmation remains explicit and one-way.
+```
 
 ---
 
 ## Verified flow
 
-The low-temperature water test and the follow-up dry-run mash profile verified the core technical chain:
+Recent supervised water/system tests verified:
 
 ```text
-Brewfather Brew Tracker raw timeline or Manual Brewday
-        ↓
-BrewAssistant normalized runtime resolver
-        ↓
-BrewAssistant brewday runtime sensors
-        ↓
-BrewZilla orchestration helper
-        ↓
-BrewZilla target / heater / pump / utilization actions
-        ↓
-Brewday event log
+✅ Brewfather Brew Tracker / Manual Brewday can feed normalized runtime
+✅ BrewAssistant follows the runtime target and step sequence
+✅ BrewZilla receives target changes through the mash profile
+✅ Heat utilization and pump utilization are evaluated and logged
+✅ Event Log captures runtime, target sync, actions and RAPT/RCL health signals
+✅ ABORT remains available as a hard stop
+✅ BrewZilla local regulation continues when a valid target is already applied
 ```
 
-Verified test sequences:
+Current hot-side test profile:
 
 ```text
-Low-temperature water test:
-30°C → 35°C → 40°C → 45°C → 50°C → 55°C
-
-Dry-run mash profile:
-45°C → 55°C → 65°C → 72°C → 78°C
+Heat-strike to ~71.8°C
+Mash-In Started / Brewfather Continue / Mash-In Complete
+Hold 66°C
+Ramp 66→72°C, currently tested at 9 min
+Hold 72°C
+Ramp / hold toward 77°C
+Boil validation still pending as its own longer test
 ```
 
-Observed result:
-
-```text
-✅ Brewfather Brew Tracker was read
-✅ BrewAssistant followed the RAW tracker timeline
-✅ BrewAssistant ignored lagging convenience step sensors
-✅ BrewAssistant can resolve active step ahead of RAW index using stage timing
-✅ Paused Brewfather state remains stable as paused/freeze-state
-✅ Manual Brewday can feed normalized runtime and BrewZilla orchestration
-✅ BrewZilla target changed through the full dry-run sequence
-✅ Heater and pump actions were evaluated and logged
-✅ ABORT remained available as a hard stop
-✅ Event log captured runtime, target sync and orchestration events
-⚠️ Remaining issues are primarily presentation/wording and full-process validation beyond mash
-```
+Water-only tests are useful for runtime, RCL and timing validation, but should not be treated as real-mash thermal-learning evidence.
 
 ---
 
@@ -66,7 +78,7 @@ stage.remainingSeconds
 step.time anchors
 ```
 
-This is handled in:
+Implemented in:
 
 ```text
 custom_components/brewassistant/brewday/brewday_runtime_core.py
@@ -87,8 +99,6 @@ resolved_step_index
 raw_step_name
 ```
 
-Dashboard cards may show these in debug sections, but normal operator UI should use the normalized runtime step and target.
-
 `raw_step_index != resolved_step_index` is not automatically an error. It often means BrewAssistant has calculated the active step from the stage timeline while Brewfather/RAPT Cloud still exposes an older raw index.
 
 ---
@@ -97,16 +107,16 @@ Dashboard cards may show these in debug sections, but normal operator UI should 
 
 Brewfather may create several internal tracker steps with the same recipe name. For example, a ramp and a hold can both be named `Step 6 - 55C final low-temp sync`.
 
-BrewAssistant now exposes human-friendly labels:
+BrewAssistant exposes human-friendly labels such as:
 
 ```text
 Ramp to 55°C
 Hold 55°C · 2 min
 ```
 
-instead of displaying duplicated raw names as current and next step.
+instead of displaying duplicated raw names as current and next step. The original Brewfather name remains available as `raw_step_name` in attributes for debug use.
 
-The original Brewfather name remains available as `raw_step_name` in attributes for debug use.
+During clean heat-strike the operator UI should prefer BrewAssistant's physical state over Brewfather's parked next step. Brewfather can already be paused at a lower mash step while BrewAssistant is still physically heating strike water.
 
 ---
 
@@ -128,8 +138,6 @@ BrewAssistant keeps the current step and target instead of advancing into `await
 ## Target and output actions
 
 Target sync and hardware output actions are separate decisions.
-
-This is important because the BrewZilla target may already be correct while the heater or pump still needs to be started.
 
 The orchestration layer evaluates:
 
@@ -176,91 +184,129 @@ current_temperature - target_temperature
 
 ---
 
-## Control backend tracks
+## Clean heat-strike model
 
-The current implemented backend track is direct supervised control:
+The current pre-mash-in heat-strike model is intentionally physical-state dominant.
 
 ```text
-Normalized Brewday Runtime
-→ BrewZilla Orchestration
-→ target / heater / pump / heat utilization / pump utilization
-→ Event Log
+Mash/BLE/control probe = readiness gate
+Wort/kettle/internal = safety cap against overshoot
+Pump utilization = mixing tool when wort/internal runs hotter than mash/BLE
+BrewZilla target = real strike target, not a boosted target
 ```
 
-A future backend track should investigate RAPT Cloud Link profile orchestration:
+Expected heat schedule from the gate delta:
 
 ```text
-BrewAssistant runtime or recipe plan
-→ generated/selected RAPT/BrewZilla profile
-→ RAPT Cloud Link profile execution
-→ BrewZilla runs the profile
-→ BrewAssistant monitors telemetry and safety state
+>10°C below strike: 100%
+8–10°C below strike: 75%
+5–8°C below strike: 50%
+3–5°C below strike: 25%
+1–3°C below strike: 10%
+<=1°C below strike / overshoot: 0%, heater off
 ```
 
-That profile-based path may be useful because BrewZilla can run brew profiles through RAPT Cloud. It must still be treated as a separate strategy from direct target/heater/pump actions, with clear source arbitration and operator safety controls.
-
-Minimum design requirements for the profile-control path:
+Safety cap uses the hottest wort/kettle/internal view as a limiter, so desired heat is effectively:
 
 ```text
-- Do not mix direct BrewZilla actions and RAPT profile execution without explicit ownership.
-- Source arbitration must decide whether Brewfather Runtime, Manual Brewday or RAPT/BrewZilla profile execution owns the current brewday.
-- Operator confirmation and ABORT must remain available.
-- Event Log must record which backend owned each action or observation.
-- RAPT Cloud latency/stale telemetry must remain visible in Source Health / BrewZilla diagnostics.
+min(gate_heat, safety_cap)
+```
+
+Pump mixing floors during heat-strike:
+
+```text
+large wort-mash delta: 100%
+mid delta: 90%
+small delta: 80%
+otherwise: 70–100% depending on strike proximity
+```
+
+Do not rewrite this model casually. Small threshold or diagnostic changes are acceptable after logs show a specific reason.
+
+---
+
+## Mash-in state machine
+
+Mash-in is an operator-supervised transition.
+
+Normal flow:
+
+```text
+1. Heat-strike reaches readiness gate on mash/BLE/control probe.
+2. BrewAssistant shows Mash-In Started.
+3. Operator presses Mash-In Started when malt addition starts.
+4. BrewAssistant releases strike target to the effective mash target and keeps pump paused.
+5. Operator presses Continue/FORTSÄTT in Brewfather when mash-in is physically complete.
+6. BrewAssistant auto-runs Mash-In Complete when Brewfather resumes in mash context.
+7. Mash circulation starts.
+```
+
+Manual `Mash-In Complete` remains a fallback button.
+
+Post-#112 guardrail:
+
+```text
+mash_in_ready → mash_in_started → mash_in_complete
+```
+
+is one-way. A stale or late Mash-In Started call after `mash_in_complete` must be ignored and logged as an ignored action, not move the state machine backwards.
+
+Relevant modules:
+
+```text
+custom_components/brewassistant/brewzilla/brewzilla_mash_in_gate.py
+custom_components/brewassistant/brewzilla/brewzilla_mash_in_complete_safe_down_guard.py
+custom_components/brewassistant/brewzilla/brewzilla_mash_in_state_guard.py
 ```
 
 ---
 
-## Mash-in heat strategy
+## Brewday audit autostart
 
-Heating strike water / heating up to mash-in is handled as a BrewZilla orchestration strategy, not as dashboard logic and not as BrewZilla Learning control logic.
-
-The strategy is triggered from normalized runtime stage/step text such as:
+Autostart should no longer depend only on exact Brewfather `Planning` state. Post-#112 behavior:
 
 ```text
-heat strike
-strike water
-heating up to mash
-heating up to mash-in
+Primary gate:
+- normalized Brewday Runtime is active/trusted
+- runtime source is Brewfather Brew Tracker or Manual Brewday
+- runtime stage/step is hot-side relevant
+- BrewZilla/RAPT backend entities are present
+- audit/event log is inactive
+- runtime is not completed/idle/archived
+
+Fallback gate:
+- Brewfather batch status Planning, for early startup/race conditions
 ```
 
-The intent is to heat efficiently early, mix near target to reduce stratification, and then stop pump flow for the operator-controlled mash-in moment.
-
-Current phases:
+The watchdog still runs at about 30 s intervals while the event log is inactive. The last autostart decision is stored in:
 
 ```text
-ramp_far:
-  condition: current_temperature < target - 5.0°C
-  heat_utilization: 100%
-  heater: ON
-  pump_utilization: 0%
-  pump: OFF
-
-approach:
-  condition: target - 5.0°C <= current_temperature < target - 0.5°C
-  heat_utilization: 60%
-  heater: ON
-  pump_utilization: 50%
-  pump: ON
-
-mash_in_ready:
-  condition: target - 0.5°C <= current_temperature <= target + 0.3°C
-  heat_utilization: 40%
-  heater: ON / gentle hold
-  pump_utilization: 0%
-  pump: OFF
-  mash_in_confirmation_recommended: true
-
-overshoot:
-  condition: current_temperature > target + 0.3°C
-  heat_utilization: 0%
-  heater: OFF
-  pump_utilization: 0%
-  pump: OFF
-  mash_in_confirmation_recommended: true
+hass.data["brewassistant"]["brewday_audit_autostart_last_result"]
 ```
 
-Dashboard/operator UI should show the strategy result through orchestration sensors and Event Log output. Parameter tuning, such as changing the 5°C approach margin or 60% approach heat utilization, belongs in backend strategy or future BrewZilla Learning recommendations.
+---
+
+## Active hot-side RCL recovery
+
+RAPT Cloud Link may become stale or disconnected while BrewZilla is already holding a valid local target. BrewAssistant should attempt recovery without changing live control state.
+
+Post-#112 recovery behavior:
+
+```text
+When active hot-side runtime + RCL/BrewZilla stale/disconnected:
+- request homeassistant.update_entity for known RCL/BrewZilla entities
+- request throttled homeassistant.reload_config_entry when available
+- expose rcl_active_hot_side_recovery_* diagnostics on orchestration attributes
+- set rapt_critical_refresh_recommended true
+- preserve BrewZilla local target/regulation
+- do not change target, heat utilization, pump utilization, heater or pump as part of recovery
+```
+
+Relevant module:
+
+```text
+custom_components/brewassistant/brewzilla/brewzilla_active_rcl_recovery_guard.py
+```
 
 ---
 
@@ -302,7 +348,7 @@ Manual refresh is still available as a service, but normal operation should not 
 
 ## Event log
 
-Brewday event log records post-run analysis data for runtime and BrewZilla orchestration.
+Brewday Event Log records post-run analysis data for runtime and BrewZilla orchestration.
 
 Current service names are kept for compatibility:
 
@@ -321,4 +367,43 @@ sensor.brewassistant_brewday_event_log_summary
 
 Event Log uses normalized runtime, so both Brewfather Brew Tracker and Manual Brewday can provide stage, step and target context.
 
+Important new diagnostic families:
+
+```text
+mash_in_gate_*
+rcl_active_hot_side_recovery_*
+rapt_brewzilla_*_age_seconds
+ba_owned_* utilization/reassert fields
+```
+
 `last_target` prefers runtime target, but can fall back to requested/applied/device target values for action events where the runtime target was unavailable in older stored events.
+
+---
+
+## Current timing guidance
+
+Observed water/system-test guidance after the latest supervised runs:
+
+```text
+Heat-strike time in Brewfather: about 30 min for the current small-test setup
+Ramp 66→72°C: 9 min is a better current test value than 5 min
+```
+
+Treat these as recipe/test-profile hints, not backend constants.
+
+Future equipment learning should compare planned vs actual timing by segment and present advisory Brewfather timing suggestions without automatically changing Brewfather or live control behavior.
+
+---
+
+## Remaining validation
+
+Recommended next checks:
+
+```text
+✅ Heat-strike still uses clean gate/safety/pump model
+✅ Event Log autostarts from active runtime
+✅ RCL recovery exposes diagnostics and does not change target/heat/pump
+✅ Mash-In Started cannot revert mash_in_complete
+⏳ Full boil ramp + 10 min boil validation
+⏳ Real-mash thermal validation, separate from Water only learning
+```
