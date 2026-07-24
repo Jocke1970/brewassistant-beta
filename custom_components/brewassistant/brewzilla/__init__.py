@@ -20,10 +20,12 @@ from . import brewzilla_equipment_learning_patch as _equipment_learning_patch
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
 from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_guard
 from . import brewzilla_rcl_value_recovery_guard as _rcl_value_recovery_guard
+from . import brewzilla_active_rcl_recovery_guard as _active_rcl_recovery_guard
 from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
 from . import brewzilla_strike_ready_hold_guard as _strike_ready_hold_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
+from . import brewzilla_mash_in_state_guard as _mash_in_state_guard
 from . import brewzilla_mash_in_target_patch as _mash_in_target_patch
 from . import brewzilla_freshness_guard as _freshness_guard
 from . import brewzilla_stale_safe_guard as _runtime_safety
@@ -83,3 +85,5 @@ _no_positive_gate.install_no_positive_gate()
 _local_regulation_heat_guard.install_local_regulation_heat_guard()
 _mash_in_started_guard.install_mash_in_started_guard()
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
+_mash_in_state_guard.install_mash_in_state_guard()
+_active_rcl_recovery_guard.install_active_rcl_recovery_guard()
