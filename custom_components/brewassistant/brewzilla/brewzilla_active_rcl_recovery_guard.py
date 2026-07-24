@@ -119,7 +119,7 @@ def _stale_reason(snapshot: dict[str, Any]) -> str | None:
         "heat_utilization": heat_age,
         "pump_utilization": pump_age,
     }
-    stale = {name: age for name, age in candidates.items() if isinstance(age, int | float) and age > warn}
+    stale = {name: age for name, age in candidates.items() if isinstance(age, (int, float)) and age > warn}
     if stale:
         oldest_name, oldest_age = max(stale.items(), key=lambda item: float(item[1]))
         return f"brewzilla_{oldest_name}_stale_{int(float(oldest_age))}s"
