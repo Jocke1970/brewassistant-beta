@@ -26,6 +26,7 @@ _DATA_KEY = "brewzilla_active_hot_side_rcl_recovery"
 _UPDATE_MIN_INTERVAL_SECONDS = 60
 _RELOAD_MIN_INTERVAL_SECONDS = 900
 _HARD_RELOAD_STALE_MULTIPLIER = 3
+_LIVE_TELEMETRY_FRESH_SECONDS = base.RAPT_OBSERVATION_WARN_AGE_SECONDS
 _ACTIVE_STATES = {"live", "running", "paused", "prepared", "awaiting_snapshot", "awaiting_confirm"}
 _HOT_SIDE_WORDS = (
     "mash",
@@ -108,9 +109,39 @@ def _telemetry_age_candidates(snapshot: dict[str, Any]) -> dict[str, Any]:
         "control": snapshot.get("brewzilla_rapt_control_age_seconds"),
         "dynamic": snapshot.get("rapt_brewzilla_dynamic_age_seconds"),
         "temperature": snapshot.get("rapt_brewzilla_temperature_age_seconds"),
+        "power": snapshot.get("rapt_brewzilla_power_age_seconds"),
         "target": snapshot.get("rapt_brewzilla_target_age_seconds"),
         "heat_utilization": snapshot.get("rapt_brewzilla_heat_util_age_seconds"),
         "pump_utilization": snapshot.get("rapt_brewzilla_pump_util_age_seconds"),
+    }
+
+
+def _live_telemetry_age_candidates(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "temperature": snapshot.get("rapt_brewzilla_temperature_age_seconds"),
+        "power": snapshot.get("rapt_brewzilla_power_age_seconds"),
+    }
+
+
+def _fresh_live_telemetry(snapshot: dict[str, Any]) -> tuple[bool, str | None, float | None]:
+    fresh_entries = [
+        (name, float(age))
+        for name, age in _live_telemetry_age_candidates(snapshot).items()
+        if isinstance(age, (int, float)) and 0 <= float(age) <= _LIVE_TELEMETRY_FRESH_SECONDS
+    ]
+    if not fresh_entries:
+        return False, None, None
+    freshest_name, freshest_age = min(fresh_entries, key=lambda item: item[1])
+    return True, freshest_name, freshest_age
+
+
+def _freshness_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
+    live_fresh, live_source, live_age = _fresh_live_telemetry(snapshot)
+    return {
+        "rcl_active_hot_side_recovery_live_telemetry_fresh": live_fresh,
+        "rcl_active_hot_side_recovery_live_telemetry_source": live_source,
+        "rcl_active_hot_side_recovery_live_telemetry_age_seconds": int(live_age) if live_age is not None else None,
+        "rcl_active_hot_side_recovery_live_telemetry_fresh_seconds": _LIVE_TELEMETRY_FRESH_SECONDS,
     }
 
 
@@ -122,16 +153,29 @@ def _aged_entries(candidates: dict[str, Any], *, older_than_seconds: int) -> dic
     }
 
 
-def _recovery_need(snapshot: dict[str, Any]) -> tuple[str | None, bool]:
-    """Return (reason, allow_reload).
+def _recovery_need(snapshot: dict[str, Any]) -> tuple[str | None, bool, dict[str, Any]]:
+    """Return (reason, allow_reload, diagnostics).
 
     Soft stale telemetry should only request ``update_entity``.  Reloading the
     RCL config entry is disruptive because entities briefly disconnect, so it is
-    reserved for hard connection loss or very stale telemetry.
+    reserved for hard connection loss or very stale telemetry.  Fresh live
+    temperature/power telemetry wins over a stale/lost connection sensor because
+    the unit is still reporting useful data.
     """
 
+    freshness = _freshness_diagnostics(snapshot)
+    live_fresh = bool(freshness["rcl_active_hot_side_recovery_live_telemetry_fresh"])
+    live_source = freshness["rcl_active_hot_side_recovery_live_telemetry_source"]
+    live_age = freshness["rcl_active_hot_side_recovery_live_telemetry_age_seconds"]
+
     if _connection_lost(snapshot):
-        return "brewzilla_connection_lost_during_active_brew", True
+        if live_fresh:
+            return (
+                f"brewzilla_connection_state_untrusted_live_{live_source}_fresh_{live_age}s",
+                False,
+                freshness,
+            )
+        return "brewzilla_connection_lost_during_active_brew", True, freshness
 
     warn = base.RAPT_OBSERVATION_WARN_AGE_SECONDS
     hard = warn * _HARD_RELOAD_STALE_MULTIPLIER
@@ -140,18 +184,24 @@ def _recovery_need(snapshot: dict[str, Any]) -> tuple[str | None, bool]:
     hard_stale = _aged_entries(candidates, older_than_seconds=hard)
     if hard_stale:
         oldest_name, oldest_age = max(hard_stale.items(), key=lambda item: item[1])
-        return f"brewzilla_{oldest_name}_hard_stale_{int(oldest_age)}s", True
+        if live_fresh:
+            return (
+                f"brewzilla_{oldest_name}_hard_stale_live_{live_source}_fresh_{live_age}s",
+                False,
+                freshness,
+            )
+        return f"brewzilla_{oldest_name}_hard_stale_{int(oldest_age)}s", True, freshness
 
     soft_stale = _aged_entries(candidates, older_than_seconds=warn)
     if soft_stale:
         oldest_name, oldest_age = max(soft_stale.items(), key=lambda item: item[1])
-        return f"brewzilla_{oldest_name}_soft_stale_{int(oldest_age)}s", False
+        return f"brewzilla_{oldest_name}_soft_stale_{int(oldest_age)}s", False, freshness
 
     # Intentionally do not use rapt_critical_refresh_recommended as a recovery
     # trigger.  That flag can be true for normal hot-side control reasons such as
     # an action being needed, target sync, or a step ending soon.  Treating it as
     # an RCL failure caused needless reloads while telemetry was still flowing.
-    return None, False
+    return None, False, freshness
 
 
 def _request_recovery(hass: HomeAssistant, *, reason: str, allow_reload: bool) -> dict[str, Any]:
@@ -182,7 +232,7 @@ def _request_recovery(hass: HomeAssistant, *, reason: str, allow_reload: bool) -
             error = f"update_entity:{type(exc).__name__}: {exc}"
 
     if not allow_reload:
-        reload_suppressed_reason = "soft_stale_update_only"
+        reload_suppressed_reason = "live_telemetry_fresh_or_soft_stale_update_only"
     elif not reload_available:
         reload_suppressed_reason = "reload_config_entry_unavailable"
     elif reload_recent:
@@ -236,10 +286,11 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
             "rcl_active_hot_side_recovery_reason": None,
         }
 
-    reason, allow_reload = _recovery_need(snapshot)
+    reason, allow_reload, freshness = _recovery_need(snapshot)
     if reason is None:
         return {
             **snapshot,
+            **freshness,
             "rcl_active_hot_side_recovery_active": False,
             "rcl_active_hot_side_recovery_reason": None,
         }
@@ -247,11 +298,12 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
     recovery = _request_recovery(hass, reason=reason, allow_reload=allow_reload)
     local_target = snapshot.get("applied_target") or snapshot.get("requested_target")
     control_reason = str(snapshot.get("control_reason") or "").strip()
-    reload_note = (
-        "reload_config_entry allowed for hard RCL failure"
-        if allow_reload
-        else "reload_config_entry suppressed because telemetry is only soft-stale"
-    )
+    if allow_reload:
+        reload_note = "reload_config_entry allowed for hard RCL failure"
+    elif freshness.get("rcl_active_hot_side_recovery_live_telemetry_fresh"):
+        reload_note = "reload_config_entry suppressed because live temperature/power telemetry is fresh"
+    else:
+        reload_note = "reload_config_entry suppressed because telemetry is only soft-stale"
     recovery_reason = (
         f"Active hot-side RCL recovery: {reason}; update_entity requested when throttling allows; "
         f"{reload_note}; BrewZilla local target is preserved."
@@ -259,6 +311,7 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
     return {
         **snapshot,
         **recovery,
+        **freshness,
         "rapt_critical_refresh_recommended": True,
         "rcl_active_hot_side_recovery_local_regulation_preserved": local_target is not None,
         "rcl_active_hot_side_recovery_preserved_target": local_target,
