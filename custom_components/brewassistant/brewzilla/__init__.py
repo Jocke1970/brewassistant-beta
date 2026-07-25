@@ -39,6 +39,7 @@ from . import brewzilla_no_positive_gate as _no_positive_gate
 from . import brewzilla_local_regulation_heat_guard as _local_regulation_heat_guard
 from . import brewzilla_mash_in_started_guard as _mash_in_started_guard
 from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_safe_down_guard
+from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -87,3 +88,4 @@ _mash_in_started_guard.install_mash_in_started_guard()
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
 _mash_in_state_guard.install_mash_in_state_guard()
 _active_rcl_recovery_guard.install_active_rcl_recovery_guard()
+_abort_lockout_final_guard.install_abort_lockout_final_guard()
