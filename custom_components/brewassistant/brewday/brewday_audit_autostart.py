@@ -11,7 +11,7 @@ from datetime import timedelta
 import logging
 from typing import Any, Callable
 
-from homeassistant.core import Event, HomeAssistant, State
+from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 
 from .brewday_audit import async_start_brewday_audit_log, get_brewday_audit_log
@@ -258,6 +258,13 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
             result.get("reason"),
         )
 
+    def _schedule_check(trigger: str) -> None:
+        # Some HA helper callbacks may be executed outside the event loop when they
+        # are not explicitly marked as callbacks.  Use the thread-safe scheduler so
+        # autostart retries never call hass.async_create_task from the wrong thread.
+        hass.create_task(_check(trigger))
+
+    @callback
     def _status_changed(event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
@@ -265,8 +272,9 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
         new_status, _new_source = _brewfather_status_from_state(new_state)
         if old_status == new_status and new_status != PLANNING_STATUS:
             return
-        hass.async_create_task(_check("brewfather_status_changed"))
+        _schedule_check("brewfather_status_changed")
 
+    @callback
     def _backend_candidate_changed(event: Event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
@@ -280,21 +288,23 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
         }
         if old_available == new_available and not _runtime_is_brewfather_hot_side(_runtime_snapshot(hass)):
             return
-        hass.async_create_task(_check(f"backend_candidate_changed:{event.data.get('entity_id')}"))
+        _schedule_check(f"backend_candidate_changed:{event.data.get('entity_id')}")
 
     def _scheduled_check(trigger: str) -> Callable[[Any], None]:
+        @callback
         def _run(_: Any) -> None:
-            hass.async_create_task(_check(trigger))
+            _schedule_check(trigger)
 
         return _run
 
+    @callback
     def _watchdog_tick(_: Any) -> None:
         if get_brewday_audit_log(hass).active:
             return
         # The watchdog intentionally does not require a state_changed event.  If
         # Brewfather is already active when BA is loaded, or if an attribute update
         # is missed by HA/RAPT, this still converges within one interval.
-        hass.async_create_task(_check("watchdog_30s"))
+        _schedule_check("watchdog_30s")
 
     remove_brewfather_listener = async_track_state_change_event(
         hass,
