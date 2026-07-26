@@ -9,7 +9,7 @@ has already moved on.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -25,12 +25,12 @@ _ORIGINAL_TEMPERATURE_AGE_SECONDS = None
 
 _DATA_KEY = "brewzilla_rcl_value_recovery_guard"
 _RCL_VALUE_STALE_WARN_SECONDS = 120
-_RCL_RELOAD_MIN_INTERVAL_SECONDS = 180
 _TEMPERATURE_CHANGE_EPSILON_C = 0.05
 _GATE_COLD_DELTA_C = 5.0
 _INTERNAL_NEAR_STRIKE_COAST_C = 1.0
 _LOW_HOLD_HEAT_FAR_FROM_STRIKE = 20.0
 _LOW_HOLD_HEAT_NEAR_STRIKE = 10.0
+_VALUE_STALE_RELOAD_SUPPRESSED_REASON = "value_stale_update_only_active_rcl_recovery_guard_owns_reload_policy"
 
 _RCL_RECOVERY_ENTITY_IDS = [
     "sensor.brewzilla_temperature",
@@ -124,12 +124,19 @@ def _transition_guard_temperature(out: dict[str, Any]) -> tuple[float | None, st
     return None, None
 
 
-def _refresh_and_maybe_reload_rcl(hass: HomeAssistant, *, stale_seconds: int, reason: str) -> dict[str, Any]:
+def _refresh_rcl_value_entities(hass: HomeAssistant, *, stale_seconds: int, reason: str) -> dict[str, Any]:
+    """Refresh RCL entities for a stale heat-strike value without reloading RCL.
+
+    This guard detects one specific heat-strike symptom: the selected temperature
+    value has not changed for a suspiciously long time.  The non-disruptive
+    recovery path is an ``update_entity`` request.  The active hot-side RCL
+    recovery guard owns the disruptive ``reload_config_entry`` decision because
+    it can also check whether live temperature/power telemetry is still flowing.
+    """
+
     store = _store(hass)
-    now = datetime.now(UTC)
     entity_ids = _known_entity_ids(hass)
     update_requested = False
-    reload_requested = False
     reload_available = hass.services.has_service("homeassistant", "reload_config_entry")
     error = None
 
@@ -146,40 +153,15 @@ def _refresh_and_maybe_reload_rcl(hass: HomeAssistant, *, stale_seconds: int, re
             update_requested = True
         except Exception as exc:  # pragma: no cover - defensive HA runtime guard
             error = f"update_entity:{type(exc).__name__}: {exc}"
-
-    last_reload = store.get("last_reload_at")
-    reload_recent = bool(
-        isinstance(last_reload, datetime)
-        and now - last_reload < timedelta(seconds=_RCL_RELOAD_MIN_INTERVAL_SECONDS)
-    )
-
-    if entity_ids and reload_available and not reload_recent:
-        try:
-            hass.async_create_task(
-                hass.services.async_call(
-                    "homeassistant",
-                    "reload_config_entry",
-                    {"entity_id": entity_ids},
-                    blocking=False,
-                )
-            )
-            reload_requested = True
-            store["last_reload_at"] = now
-            store["last_reload_entity_ids"] = entity_ids
-            store["last_reload_error"] = None
-        except Exception as exc:  # pragma: no cover - defensive HA runtime guard
-            error = f"reload_config_entry:{type(exc).__name__}: {exc}"
             store["last_reload_error"] = error
-
-    if error:
-        store["last_reload_error"] = error
 
     return {
         "rcl_value_stale_guard_refresh_requested": update_requested,
-        "rcl_value_stale_guard_reload_requested": reload_requested,
+        "rcl_value_stale_guard_reload_requested": False,
+        "rcl_value_stale_guard_reload_allowed": False,
+        "rcl_value_stale_guard_reload_suppressed_reason": _VALUE_STALE_RELOAD_SUPPRESSED_REASON,
         "rcl_value_stale_guard_reload_available": reload_available,
-        "rcl_value_stale_guard_reload_recently_requested": reload_recent,
-        "rcl_value_stale_guard_reload_interval_seconds": _RCL_RELOAD_MIN_INTERVAL_SECONDS,
+        "rcl_value_stale_guard_reload_recently_requested": False,
         "rcl_value_stale_guard_last_reload_at": store.get("last_reload_at").isoformat()
         if isinstance(store.get("last_reload_at"), datetime)
         else None,
@@ -239,7 +221,7 @@ def _track_rcl_value_staleness(hass: HomeAssistant, out: dict[str, Any]) -> dict
     if stale_seconds < _RCL_VALUE_STALE_WARN_SECONDS:
         return guarded
 
-    recovery_attrs = _refresh_and_maybe_reload_rcl(
+    recovery_attrs = _refresh_rcl_value_entities(
         hass,
         stale_seconds=stale_seconds,
         reason="heatstrike_temperature_value_not_changing",
@@ -248,7 +230,7 @@ def _track_rcl_value_staleness(hass: HomeAssistant, out: dict[str, Any]) -> dict
     guarded["control_reason"] = (
         str(guarded.get("control_reason") or "")
         + f" RCL value-stale guard: {source} has stayed at {round(float(temp), 2)}°C for {stale_seconds}s; "
-        "update_entity was requested and reload_config_entry is attempted when available/throttled."
+        "update_entity was requested; reload_config_entry is suppressed here because active hot-side RCL recovery owns reload decisions."
     ).strip()
     return guarded
 
