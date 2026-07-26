@@ -16,15 +16,11 @@ YAML/dashboard as presentation and explicit operator-action layer only
 ### Current phase
 
 ```text
-Safe Advice Beta / beta.7
+BrewZilla hot-side supervised-control baseline / beta.8
 ↓
-BrewZilla heatstrike and mash-in confirmation validation
+First supervised real-mash BrewZilla validation
 ↓
-BrewZilla mash-ramp and short boil-chain validation
-↓
-First full serious all-grain BrewZilla batch validation
-↓
-BrewZilla Equipment Learning BF timing/profile advisor
+BrewZilla Equipment Learning BF timing/profile advisor evidence pass
 ↓
 Boil / hop / cooling validation
 ↓
@@ -75,6 +71,7 @@ Old fix/test branches should not become permanent project structure.
 [x] Brewday Event Log sensors
 [x] Brewday Event Log dashboard example
 [x] Brewday Event Log uses normalized runtime for Brewfather and Manual Brewday
+[x] Runtime-based Brewday Event Log autostart
 [x] Manual Brewday Python engine
 [x] Manual Brewday source adapter
 [x] Manual Brewday services
@@ -85,14 +82,23 @@ Old fix/test branches should not become permanent project structure.
 [x] BrewZilla target sync from normalized runtime
 [x] BrewZilla heater/pump direct action helper
 [x] BrewZilla heat/pump utilization direct action helper
-[x] BrewZilla mash-in heat strategy: ramp far, approach, mash-in ready and overshoot
+[x] BrewZilla clean heatstrike model: Mash/BLE readiness gate and wort/internal safety cap
+[x] BrewZilla heatstrike target clamp to real strike target
+[x] BrewZilla heatstrike pump mixing/equalization
+[x] BrewZilla Mash-In Started target release to active Brewfather mash target
+[x] BrewZilla Mash-In Started pump stop during malt addition/stirring
+[x] Brewfather resume auto-completes Mash-In Complete and resumes circulation
+[x] BrewZilla one-way mash-in state machine
 [x] BrewZilla mash-in confirmation gate pending binary sensor
 [x] BrewZilla Mash-In Complete button entity
 [x] BrewZilla Start Mash Circulation button entity
-[x] BrewZilla Mash-In Complete action starts circulation using pump utilization plus pump switch
 [x] BrewZilla Learning uses normalized runtime for Brewfather and Manual Brewday
 [x] BrewZilla Equipment Learning passive persistent evidence model
+[x] BrewZilla active hot-side RCL recovery policy
+[x] BrewZilla RCL reload suppression while live temp/power telemetry is fresh
+[x] BrewZilla legacy RCL value-stale guard update-only
 [x] BrewZilla ABORT service
+[x] BrewZilla ABORT final low-level positive-action lockout
 [x] BrewZilla operator dashboard card
 [x] BrewZilla mash-in confirmation dashboard card
 [x] BrewZilla Learning dashboard card
@@ -121,6 +127,7 @@ Old fix/test branches should not become permanent project structure.
 Planned near-term Python Core additions:
 
 ```text
+[ ] BrewZilla real-mash validation report from beta.8 run
 [ ] BrewZilla BF timing/profile advisor based on planned-vs-actual segment data
 [ ] BrewZilla learning segment detector: heatstrike, mash-in drop, mash ramp, mash-out, boil ramp, boil
 [ ] BrewZilla learning report export: optional JSON/Markdown per supervised batch
@@ -129,22 +136,26 @@ Planned near-term Python Core additions:
 
 ---
 
-## Current beta.7 validation focus
+## Current beta.8 validation focus
 
 ```text
-[ ] Confirm button.brewassistant_brewzilla_mash_in_complete exists after HA restart
-[ ] Confirm button.brewassistant_brewzilla_start_mash_circulation exists after HA restart
-[ ] Confirm binary_sensor.brewassistant_brewzilla_mash_in_gate_pending turns on at mash-in target
-[ ] Confirm Mash-In Complete logs mash_in_confirmed
-[ ] Confirm Mash-In Complete sets pump utilization before pump ON
-[ ] Confirm fallback Start Mash Circulation button sets pump utilization before pump ON
-[ ] Confirm Brewfather pause/resume order does not bypass BrewAssistant mash-in state
-[ ] Confirm Brewday Event Log captures mash-in confirmation and circulation actions
-[ ] Confirm heatstrike holds the real strike target without boosted-target overshoot
+[ ] Confirm value-stale RCL guard logs update_entity only and reload suppressed from that guard
+[ ] Confirm live BrewZilla temperature/power telemetry suppresses active RCL reload
+[ ] Confirm Event Log autostarts from active Brewfather/Brewday Runtime
+[ ] Confirm clean_heat_strike_active is true during pre-mash-in heatstrike
 [ ] Confirm heatstrike uses mash/BLE as readiness gate and wort/internal as overshoot safety cap
-[ ] Confirm 66 -> 72°C ramp behavior with 9 min planned ramp time
-[ ] Confirm 10 min boil-chain test once mash/ramp behavior is stable
-[ ] Confirm equipment-learning observations and profile buckets are populated during supervised tests
+[ ] Confirm heatstrike holds the real strike target without boosted-target overshoot
+[ ] Confirm Mash-In Started releases target to active Brewfather mash target
+[ ] Confirm Mash-In Started stops pump for malt addition/stirring
+[ ] Confirm Brewfather resume auto-completes mash-in and starts circulation
+[ ] Confirm mash-in state remains mash_in_complete through later mash/ramp steps
+[ ] Confirm ABORT produces heater off, pump off, heat utilization 0 and pump utilization 0
+[ ] Confirm no delayed pump_on/heater_on/positive number actions after ABORT
+[ ] Validate mash-in temperature drop with real grain
+[ ] Validate 66°C hold behavior with real grain bed
+[ ] Validate 66 -> 72°C ramp behavior with real mash inertia
+[ ] Validate pump flow without stuck/channeled bed symptoms
+[ ] Confirm equipment-learning Real mash observations and profile buckets are populated
 ```
 
 ---
@@ -216,77 +227,4 @@ Completed:
 [x] Validate Manual Brewday service flow across stages in UI
 [x] Validate Prepare/Idle sanity after Home Assistant reload
 [x] Validate Brewfather paused behavior during dry-run
-```
-
-Remaining:
-
-```text
-[ ] Validate Manual Brewday service flow in a real BrewZilla brewday
-[ ] Add Manual timed-step auto-advance
-[ ] Add Manual timed-step awaiting-confirm behavior at 0 seconds
-[ ] Add Manual session persistence across Home Assistant restart
-```
-
----
-
-## Deferred: UI localization and translations
-
-Full UI localization is intentionally deferred until BrewAssistant is a functionally complete and stable Home Assistant integration. Translation work must not delay BrewZilla, Brewday Runtime, fermentation, cooling, carbonation or installation validation.
-
-### Architecture rules during ongoing development
-
-```text
-Backend code, entity IDs, unique IDs, attribute keys and internal states remain stable English.
-Backend logic must never compare translated or user-facing text.
-User-facing entity names, state labels, controls, actions and descriptions become translatable later.
-Dashboard-specific hard-coded text remains a separate presentation-layer concern.
-```
-
-Each functional backend owns a dedicated translation-key namespace:
-
-```text
-core / shared          -> core_*, source_*, runtime_*
-brewday/               -> brewday_*
-brewzilla/             -> brewzilla_*
-fermentation/          -> fermentation_*
-kegerator/             -> kegerator_*
-cooling/               -> cooling_*, counterflow_chiller_*
-carbonation_backend/   -> carbonation_*
-climate_backend/       -> climate_supervisor_*
-```
-
-Home Assistant still receives one complete translation file per language:
-
-```text
-custom_components/brewassistant/translations/en.json
-custom_components/brewassistant/translations/sv.json
-```
-
-Separate per-backend source fragments may be introduced later and merged into the complete Home Assistant language files by a validation/build script.
-
-Planned localization work:
-
-```text
-[ ] Inventory all user-facing text in Python entities, services/actions and config/options flows
-[ ] Add stable translation_key values for sensors, binary sensors, switches, buttons, selects and numbers
-[ ] Keep entity IDs, unique IDs and backend state values unchanged during UI-name migration
-[ ] Normalize translatable select/state values to stable English snake_case machine values where needed
-[ ] Add compatibility handling for previously restored English display-value states
-[ ] Update and language-review complete English and Swedish translation files
-[ ] Translate service/action names, descriptions and field labels
-[ ] Add automated parity checks so en.json and sv.json contain matching keys
-[ ] Add validation that new operator-facing entities do not introduce unnecessary hard-coded display names
-[ ] Review dashboards separately and remove hard-coded names where the translated entity name should be used
-```
-
----
-
-## Later cleanup backlog
-
-```text
-[ ] Consolidate temporary fix branches into main/dev workflow
-[ ] Remove or archive historical beta5/baseline docs once beta.7 is validated
-[ ] Keep backend action paths single-purpose: button entities for operator actions, no parallel workaround services
-[ ] Continue Python module cleanup to avoid fragmented implementation files
-[ ] Retire legacy YAML package logic after Python coverage is complete
 ```
