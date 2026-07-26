@@ -1,6 +1,6 @@
-# BrewAssistant v0.2.0-beta.7
+# BrewAssistant v0.2.0-beta.8
 
-**BrewAssistant v0.2.0-beta.7** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboard cards and notifications.
+**BrewAssistant v0.2.0-beta.8** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, carbonation guidance, dynamic serving/climate supervision, kegerator fan circulation, fermentation tracking, dashboard cards and notifications.
 
 > [!WARNING]
 > BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
@@ -21,6 +21,7 @@ Start here when trying to understand how the current backend behaves:
 
 | Area | Document |
 | --- | --- |
+| Beta 8 release notes | [`docs/beta8-release-notes.md`](docs/beta8-release-notes.md) |
 | Backend documentation index | [`docs/backends/README.md`](docs/backends/README.md) |
 | BrewZilla backend responsibilities | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
 | BrewZilla Advice control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
@@ -44,8 +45,9 @@ This repository is shared openly for transparency, learning and experimentation 
 ## Current status
 
 ```text
-v0.2.0-beta.7
-Safe Advice Beta
+v0.2.0-beta.8
+BrewZilla hot-side supervised-control baseline
+Ready for first supervised real-mash validation
 ```
 
 Validated in the active beta baseline:
@@ -63,20 +65,31 @@ Validated in the active beta baseline:
 ✅ BrewZilla target sync from normalized Brewday Runtime
 ✅ BrewZilla Orchestration bridge for Manual Brewday target
 ✅ BrewZilla heater/pump direct actions
-✅ BrewZilla mash-in heat strategy: ramp far, approach, mash-in ready and overshoot phases
+✅ Clean BrewZilla heatstrike model: Mash/BLE readiness gate and wort/internal safety cap
+✅ BrewZilla heatstrike target clamp to real strike target
+✅ BrewZilla heatstrike pump mixing and equalization
+✅ BrewZilla Mash-In Started target release to active Brewfather mash target
+✅ BrewZilla Mash-In Started pump stop during malt addition/stirring
+✅ Brewfather resume -> auto Mash-In Complete -> mash circulation resume
+✅ One-way mash-in state machine; late Started calls cannot revert completed state
 ✅ BrewZilla mash-in confirmation gate pending binary sensor
 ✅ BrewZilla Mash-In Complete operator button
 ✅ BrewZilla Start Mash Circulation operator button
-✅ BrewZilla mash-in confirmation starts circulation using pump utilization plus pump switch
 ✅ ABORT service for heater + pump
 ✅ ABORT lockout blocks automatic BrewZilla re-apply after operator stop
 ✅ ABORT safe-state enforcement: heater off, pump off, heat utilization 0 and pump utilization 0
+✅ ABORT low-level lockout for late switch.turn_on and positive number.set_value races
 ✅ Brewday Event Log backend, services, sensors and dashboard card
 ✅ Brewday Event Log uses normalized runtime for Brewfather and Manual Brewday
+✅ Runtime-based Brewday Event Log autostart with Brewfather Planning fallback
+✅ Active hot-side RCL recovery diagnostics
+✅ RCL reload suppression while live BrewZilla temperature/power telemetry is fresh
+✅ Legacy heatstrike RCL value-stale guard is update-only
 ✅ Smart Brewfather refresh policy
 ✅ Low-temperature BrewZilla water test: 30 → 35 → 40 → 45 → 50 → 55°C
 ✅ Dry-run mash profile target validation: 45 → 55 → 65 → 72 → 78°C
 ✅ Reality-style BrewZilla/Brewfather test with malt/water flow
+✅ Water-test heatstrike → mash-in → 66 → 72 → 77°C chain
 ✅ Boil target fallback to 100°C when Brew Tracker omits a target
 ✅ Pump OFF orchestration during boil
 ✅ Runtime terminal completion inference after final Brew Tracker step
@@ -101,12 +114,14 @@ Validated in the active beta baseline:
 Active BrewZilla/Brewday Advice test focus:
 
 ```text
-🧪 Built-in BrewZilla 35L small-batch advice profile
-🧪 Thermal mix modifier: cap heat and raise pump when wort is above target while mash lags
-🧪 Paused mash-hold maintenance: limited heat/pump corrections while Brewfather reports paused hold
-🧪 Mash circulation floor after mash-in: keep pump at or above 50 % unless a safety/gate/abort guard blocks it
-🧪 Local-control lease break reasons: retake control when Advice sees thermal mix, near-target taper or profile changes
-🧪 Recommended supervised test recipe: 5 min ramps, unchanged hold times
+🧪 First supervised beta.8 real-mash BrewZilla validation
+🧪 Mash-in temperature drop with real grain
+🧪 Mash/BLE readiness behavior inside a real grain bed
+🧪 66°C hold with malt pipe/grain-bed thermal lag
+🧪 66 -> 72°C ramp behavior with real mash inertia
+🧪 Pump flow without stuck/channeled bed symptoms
+🧪 Equipment-learning Real mash observations and profile buckets
+🧪 BrewZilla BF timing/profile advisor evidence from planned-vs-actual segments
 ```
 
 ---
