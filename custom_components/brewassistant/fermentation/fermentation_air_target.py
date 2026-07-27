@@ -11,6 +11,7 @@ from homeassistant.const import UnitOfTemperature
 from ..const import DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
+from .fermentation_tracking_sensor import create_fermentation_tracking_sensors
 
 FALLBACK_SOURCES = {"chamber fallback", "unavailable"}
 ACTIVE_STAGES = {"fermentation", "cold_crash"}
@@ -58,7 +59,11 @@ def _float_state(coordinator: BrewAssistantCoordinator, entity_id: str) -> float
         return None
 
 
-def _float_attr(coordinator: BrewAssistantCoordinator, entity_id: str, attr: str) -> float | None:
+def _float_attr(
+    coordinator: BrewAssistantCoordinator,
+    entity_id: str,
+    attr: str,
+) -> float | None:
     state = coordinator.hass.states.get(entity_id)
     if state is None:
         return None
@@ -157,26 +162,59 @@ def _clamp(value: float, low: float, high: float) -> tuple[float, bool, str | No
     return clamped, False, None
 
 
-def _recommend(mode: str, delta: float, target: float, trend: float | None) -> AirTargetRecommendation:
+def _recommend(
+    mode: str,
+    delta: float,
+    target: float,
+    trend: float | None,
+) -> AirTargetRecommendation:
     if mode == "cold_crash":
         min_air_target = COLD_CRASH_MIN_AIR_TARGET
         max_air_target = COLD_CRASH_MAX_AIR_TARGET
         if delta >= 8:
-            raw_air, demand, reason = target - 1.5, "strong_cooling", "liquid far above cold-crash target"
+            raw_air, demand, reason = (
+                target - 1.5,
+                "strong_cooling",
+                "liquid far above cold-crash target",
+            )
         elif delta >= 4:
-            raw_air, demand, reason = target - 1.0, "cooling", "liquid above cold-crash target"
+            raw_air, demand, reason = (
+                target - 1.0,
+                "cooling",
+                "liquid above cold-crash target",
+            )
         elif delta >= 1:
-            raw_air, demand, reason = target - 0.5, "mild_cooling", "liquid approaching cold-crash target"
+            raw_air, demand, reason = (
+                target - 0.5,
+                "mild_cooling",
+                "liquid approaching cold-crash target",
+            )
         elif delta >= 0.3:
-            raw_air, demand, reason = target, "settle", "liquid close to cold-crash target"
+            raw_air, demand, reason = (
+                target,
+                "settle",
+                "liquid close to cold-crash target",
+            )
         elif delta >= -0.2:
-            raw_air, demand, reason = target + 0.5, "hold", "liquid at cold-crash target"
+            raw_air, demand, reason = (
+                target + 0.5,
+                "hold",
+                "liquid at cold-crash target",
+            )
         else:
-            raw_air, demand, reason = target + 1.0, "relax", "liquid below cold-crash target"
+            raw_air, demand, reason = (
+                target + 1.0,
+                "relax",
+                "liquid below cold-crash target",
+            )
         if trend is not None and trend < -2 and delta < 2:
             raw_air += 0.5
             reason = f"{reason}; liquid falling quickly"
-        effective, clamp_applied, clamp_reason = _clamp(raw_air, min_air_target, max_air_target)
+        effective, clamp_applied, clamp_reason = _clamp(
+            raw_air,
+            min_air_target,
+            max_air_target,
+        )
         return AirTargetRecommendation(
             effective_air_target=effective,
             raw_air_target=round(raw_air, 2),
@@ -191,20 +229,52 @@ def _recommend(mode: str, delta: float, target: float, trend: float | None) -> A
     min_air_target = FERMENTATION_MIN_AIR_TARGET
     max_air_target = FERMENTATION_MAX_AIR_TARGET
     if delta >= 1:
-        raw_air, demand, reason = target - 1.5, "cooling", "liquid above fermentation target"
+        raw_air, demand, reason = (
+            target - 1.5,
+            "cooling",
+            "liquid above fermentation target",
+        )
     elif delta >= 0.5:
-        raw_air, demand, reason = target - 1.0, "mild_cooling", "liquid slightly above fermentation target"
+        raw_air, demand, reason = (
+            target - 1.0,
+            "mild_cooling",
+            "liquid slightly above fermentation target",
+        )
     elif delta >= 0.2:
-        raw_air, demand, reason = target - 0.5, "nudge_cooling", "liquid just above fermentation target"
+        raw_air, demand, reason = (
+            target - 0.5,
+            "nudge_cooling",
+            "liquid just above fermentation target",
+        )
     elif delta <= -1:
-        raw_air, demand, reason = target + 1.5, "warm_or_relax", "liquid below fermentation target"
+        raw_air, demand, reason = (
+            target + 1.5,
+            "warm_or_relax",
+            "liquid below fermentation target",
+        )
     elif delta <= -0.5:
-        raw_air, demand, reason = target + 1.0, "hold_warm", "liquid slightly below fermentation target"
+        raw_air, demand, reason = (
+            target + 1.0,
+            "hold_warm",
+            "liquid slightly below fermentation target",
+        )
     elif delta <= -0.2:
-        raw_air, demand, reason = target + 0.5, "ease_cooling", "liquid just below fermentation target"
+        raw_air, demand, reason = (
+            target + 0.5,
+            "ease_cooling",
+            "liquid just below fermentation target",
+        )
     else:
-        raw_air, demand, reason = target, "hold", "liquid close to fermentation target"
-    effective, clamp_applied, clamp_reason = _clamp(raw_air, min_air_target, max_air_target)
+        raw_air, demand, reason = (
+            target,
+            "hold",
+            "liquid close to fermentation target",
+        )
+    effective, clamp_applied, clamp_reason = _clamp(
+        raw_air,
+        min_air_target,
+        max_air_target,
+    )
     return AirTargetRecommendation(
         effective_air_target=effective,
         raw_air_target=round(raw_air, 2),
@@ -230,8 +300,16 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     chamber = _chamber(coordinator)
     trend = _trend(coordinator) if active and real_liquid else None
 
-    liquid_delta = round(liquid - target, 2) if active and liquid is not None and target is not None else None
-    avg_air_liquid_delta = _float_state(coordinator, DELTA_AVG_ENTITY) if active and not test_mode_active else None
+    liquid_delta = (
+        round(liquid - target, 2)
+        if active and liquid is not None and target is not None
+        else None
+    )
+    avg_air_liquid_delta = (
+        _float_state(coordinator, DELTA_AVG_ENTITY)
+        if active and not test_mode_active
+        else None
+    )
     air_liquid_delta = avg_air_liquid_delta
     if active and air_liquid_delta is None and chamber is not None and liquid is not None:
         air_liquid_delta = round(chamber - liquid, 2)
@@ -269,10 +347,17 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     clamp_applied = recommendation.clamp_applied if recommendation else False
     clamp_reason = recommendation.clamp_reason if recommendation else None
 
-    air_target_delta = round(chamber - air_target, 2) if chamber is not None and air_target is not None else None
+    air_target_delta = (
+        round(chamber - air_target, 2)
+        if chamber is not None and air_target is not None
+        else None
+    )
     summary = f"{mode} · {demand} · {reason}"
     if liquid is not None and target is not None and air_target is not None:
-        summary = f"{mode} · {demand} · liquid {liquid:.1f} → {target:.1f} °C · air target {air_target:.1f} °C"
+        summary = (
+            f"{mode} · {demand} · liquid {liquid:.1f} → {target:.1f} °C "
+            f"· air target {air_target:.1f} °C"
+        )
         if clamp_applied:
             summary = f"{summary} · clamp {clamp_reason}"
         if test_mode_active:
@@ -287,7 +372,9 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
         "demand": demand,
         "reason": reason,
         "liquid_temperature": round(liquid, 2) if liquid is not None else None,
-        "liquid_target_temperature": round(target, 2) if active and target is not None else None,
+        "liquid_target_temperature": (
+            round(target, 2) if active and target is not None else None
+        ),
         "target_plausible_for_mode": target_plausible,
         "liquid_delta": liquid_delta,
         "liquid_trend_c_per_hour": trend,
@@ -313,20 +400,68 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
 
 
 SENSORS: tuple[AirTargetSensorConfig, ...] = (
-    AirTargetSensorConfig(key="fermentation_effective_air_target", name="BrewAssistant Fermentation Effective Air Target", snapshot_key="effective_air_target", icon="mdi:target", unit=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT),
-    AirTargetSensorConfig(key="fermentation_climate_demand", name="BrewAssistant Fermentation Climate Demand", snapshot_key="demand", icon="mdi:thermostat-auto"),
-    AirTargetSensorConfig(key="fermentation_climate_mode", name="BrewAssistant Fermentation Climate Mode", snapshot_key="mode", icon="mdi:state-machine"),
-    AirTargetSensorConfig(key="fermentation_air_target_reason", name="BrewAssistant Fermentation Air Target Reason", snapshot_key="reason", icon="mdi:text-box-check-outline"),
-    AirTargetSensorConfig(key="fermentation_liquid_delta", name="BrewAssistant Fermentation Liquid Delta", snapshot_key="liquid_delta", icon="mdi:delta", unit=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT),
-    AirTargetSensorConfig(key="fermentation_air_liquid_delta", name="BrewAssistant Fermentation Air Liquid Delta", snapshot_key="air_liquid_delta", icon="mdi:arrow-expand-vertical", unit=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT),
-    AirTargetSensorConfig(key="fermentation_air_target_summary", name="BrewAssistant Fermentation Air Target Summary", snapshot_key="summary", icon="mdi:script-text-outline"),
+    AirTargetSensorConfig(
+        key="fermentation_effective_air_target",
+        name="BrewAssistant Fermentation Effective Air Target",
+        snapshot_key="effective_air_target",
+        icon="mdi:target",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_climate_demand",
+        name="BrewAssistant Fermentation Climate Demand",
+        snapshot_key="demand",
+        icon="mdi:thermostat-auto",
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_climate_mode",
+        name="BrewAssistant Fermentation Climate Mode",
+        snapshot_key="mode",
+        icon="mdi:state-machine",
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_air_target_reason",
+        name="BrewAssistant Fermentation Air Target Reason",
+        snapshot_key="reason",
+        icon="mdi:text-box-check-outline",
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_liquid_delta",
+        name="BrewAssistant Fermentation Liquid Delta",
+        snapshot_key="liquid_delta",
+        icon="mdi:delta",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_air_liquid_delta",
+        name="BrewAssistant Fermentation Air Liquid Delta",
+        snapshot_key="air_liquid_delta",
+        icon="mdi:arrow-expand-vertical",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    AirTargetSensorConfig(
+        key="fermentation_air_target_summary",
+        name="BrewAssistant Fermentation Air Target Summary",
+        snapshot_key="summary",
+        icon="mdi:script-text-outline",
+    ),
 )
 
 
 class BrewAssistantAirTargetSensor(BrewAssistantEntity, SensorEntity):
     _attr_has_entity_name = False
 
-    def __init__(self, coordinator: BrewAssistantCoordinator, config: AirTargetSensorConfig) -> None:
+    def __init__(
+        self,
+        coordinator: BrewAssistantCoordinator,
+        config: AirTargetSensorConfig,
+    ) -> None:
         super().__init__(coordinator, config.key)
         self._config = config
         self._attr_name = config.name
@@ -348,5 +483,11 @@ class BrewAssistantAirTargetSensor(BrewAssistantEntity, SensorEntity):
         return build_air_target_snapshot(self.coordinator)
 
 
-def create_fermentation_air_target_sensors(coordinator: BrewAssistantCoordinator) -> list[BrewAssistantAirTargetSensor]:
-    return [BrewAssistantAirTargetSensor(coordinator, config) for config in SENSORS]
+def create_fermentation_air_target_sensors(
+    coordinator: BrewAssistantCoordinator,
+) -> list[SensorEntity]:
+    """Create existing climate recommendation sensors plus tracking MVP sensors."""
+    return [
+        *[BrewAssistantAirTargetSensor(coordinator, config) for config in SENSORS],
+        *create_fermentation_tracking_sensors(coordinator),
+    ]
