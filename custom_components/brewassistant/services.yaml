@@ -160,38 +160,44 @@ carbonation_reset:
   description: Reset the Python-owned BrewAssistant carbonation runtime.
 
 fermentation_start:
-  name: Fermentation start
-  description: Start a Python-owned fermentation tracking session and clear previous gravity samples.
+  name: Fermentation tracking start
+  description: Start a fresh independent fermentation tracking session and clear previous observations. Recipe values are optional.
   fields:
     recipe_name:
       name: Recipe name
-      description: Recipe or batch name.
+      description: Optional recipe or batch name.
       example: American Lite Ale
     original_gravity:
       name: Original gravity
-      description: Recipe or measured OG in SG.
-      required: true
+      description: Optional recipe or measured OG in SG. Required for fermented refractometer correction.
       example: 1.044
     target_final_gravity:
       name: Target final gravity
-      description: Recipe target FG in SG.
-      required: true
+      description: Optional recipe target FG in SG.
       example: 1.011
     temp_rise_trigger_sg:
       name: Temperature-rise trigger
-      description: Current corrected SG at or below which the temperature-rise recommendation becomes ready.
+      description: Corrected SG at or below which the temperature-rise recommendation becomes ready.
       example: 1.016
     primary_temperature_c:
       name: Primary temperature
-      description: Primary fermentation temperature in Celsius.
+      description: Optional primary fermentation temperature in Celsius.
       example: 18
     temp_rise_temperature_c:
       name: Temperature-rise target
-      description: Recommended temperature after the gravity trigger is reached.
+      description: Optional recommended temperature after the gravity trigger is reached.
       example: 20
+    gravity_source_mode:
+      name: Gravity source mode
+      description: Use manual, automatic, or hybrid. Hybrid uses the newest valid source and manual wins timestamp ties.
+      example: hybrid
+    temperature_source_mode:
+      name: Temperature source mode
+      description: Use manual, automatic, or hybrid independently of the gravity source.
+      example: manual
     stable_hours:
       name: Stable hours
-      description: Minimum observed time span required for stable-FG detection.
+      description: Minimum persisted gravity observation span required for stable-FG detection.
       example: 48
     stability_tolerance_sg:
       name: Stability tolerance
@@ -211,36 +217,44 @@ fermentation_start:
       example: "2026-07-27 18:00:00"
 
 fermentation_update:
-  name: Fermentation update
-  description: Update recipe targets or detection thresholds without clearing gravity samples.
+  name: Fermentation tracking update
+  description: Update recipe targets, source policies, or detection thresholds without clearing observations.
   fields:
     recipe_name:
       name: Recipe name
-      description: Recipe or batch name.
+      description: Optional recipe or batch name.
       example: American Lite Ale
     original_gravity:
       name: Original gravity
-      description: Recipe or measured OG in SG.
+      description: Optional recipe or measured OG in SG.
       example: 1.044
     target_final_gravity:
       name: Target final gravity
-      description: Recipe target FG in SG.
+      description: Optional recipe target FG in SG.
       example: 1.011
     temp_rise_trigger_sg:
       name: Temperature-rise trigger
-      description: Current corrected SG at or below which the temperature-rise recommendation becomes ready.
+      description: Corrected SG at or below which the temperature-rise recommendation becomes ready.
       example: 1.016
     primary_temperature_c:
       name: Primary temperature
-      description: Primary fermentation temperature in Celsius.
+      description: Optional primary fermentation temperature in Celsius.
       example: 18
     temp_rise_temperature_c:
       name: Temperature-rise target
-      description: Recommended temperature after the gravity trigger is reached.
+      description: Optional recommended temperature after the gravity trigger is reached.
       example: 20
+    gravity_source_mode:
+      name: Gravity source mode
+      description: Use manual, automatic, or hybrid.
+      example: hybrid
+    temperature_source_mode:
+      name: Temperature source mode
+      description: Use manual, automatic, or hybrid independently of the gravity source.
+      example: manual
     stable_hours:
       name: Stable hours
-      description: Minimum observed time span required for stable-FG detection.
+      description: Minimum persisted gravity observation span required for stable-FG detection.
       example: 48
     stability_tolerance_sg:
       name: Stability tolerance
@@ -259,18 +273,50 @@ fermentation_update:
       description: Optional fermentation start datetime.
       example: "2026-07-27 18:00:00"
 
+fermentation_record_observation:
+  name: Record fermentation observation
+  description: Store manual gravity and/or beer temperature with one observation timestamp. Instrument and displayed unit are separate to prevent refractometer SG from being treated as hydrometer SG.
+  fields:
+    gravity_instrument:
+      name: Gravity instrument
+      description: Use refractometer, hydrometer, or manual. Required when gravity_value is supplied unless gravity_method is used.
+      example: refractometer
+    gravity_unit:
+      name: Displayed gravity unit
+      description: Unit shown by the instrument; use brix or sg.
+      example: sg
+    gravity_value:
+      name: Displayed gravity value
+      description: The value exactly as read from the selected instrument scale.
+      example: 1.024
+    gravity_method:
+      name: Gravity method shortcut
+      description: Optional shortcut such as refractometer_brix, refractometer_sg, hydrometer_sg, or manual_sg.
+      example: refractometer_sg
+    temperature_c:
+      name: Beer temperature
+      description: Optional manually observed beer temperature in Celsius.
+      example: 18.4
+    observed_at:
+      name: Observed at
+      description: Optional shared observation datetime; current time is used when omitted.
+      example: "2026-07-30 19:00:00"
+    note:
+      name: Note
+      description: Optional observation note.
+      example: Daily manual check
+
 fermentation_record_gravity:
-  name: Record fermentation gravity
-  description: Store a first-class manual gravity observation and calculate corrected SG when the input is Brix.
+  name: Record fermentation gravity (legacy)
+  description: Compatibility service for existing calls. Prefer fermentation_record_observation for new dashboard input.
   fields:
     measurement_type:
       name: Measurement type
-      description: Use refractometer_brix, hydrometer_sg, or manual_sg.
-      required: true
+      description: Use refractometer_brix, refractometer_sg, hydrometer_sg, or manual_sg.
       example: refractometer_brix
     value:
       name: Measured value
-      description: Raw degrees Brix for refractometer input or SG for hydrometer/manual SG input.
+      description: Raw displayed Brix or SG value according to measurement_type.
       required: true
       example: 6.0
     measured_at:
@@ -280,8 +326,8 @@ fermentation_record_gravity:
     note:
       name: Note
       description: Optional observation note.
-      example: Daily refractometer sample
+      example: Legacy gravity input
 
 fermentation_reset:
-  name: Fermentation reset
-  description: Clear the Python-owned fermentation runtime and all stored gravity samples.
+  name: Fermentation tracking reset
+  description: Clear the independent fermentation tracking runtime and all stored observations.
