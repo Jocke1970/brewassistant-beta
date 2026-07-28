@@ -118,15 +118,23 @@ def _mode(coordinator: BrewAssistantCoordinator) -> str:
     return "fermentation"
 
 
-def _liquid(coordinator: BrewAssistantCoordinator) -> tuple[float | None, str | None, str | None]:
-    average = _float_state(coordinator, LIQUID_AVG_ENTITY)
-    if average is not None:
-        return average, "tracking_average", LIQUID_AVG_ENTITY
+def _liquid(
+    coordinator: BrewAssistantCoordinator,
+) -> tuple[float | None, str | None, str | None]:
+    """Return normalized tracking temperature before any legacy average fallback."""
     tracking = _tracking(coordinator)
     value = tracking.get("current_temperature_c")
-    if value is None:
-        return None, None, None
-    return float(value), tracking.get("temperature_source"), tracking.get("temperature_source_entity")
+    if value is not None:
+        return (
+            float(value),
+            tracking.get("temperature_source"),
+            tracking.get("temperature_source_entity"),
+        )
+
+    average = _float_state(coordinator, LIQUID_AVG_ENTITY)
+    if average is not None:
+        return average, "legacy_tracking_average", LIQUID_AVG_ENTITY
+    return None, None, None
 
 
 def _chamber(coordinator: BrewAssistantCoordinator) -> float | None:
@@ -146,7 +154,13 @@ def _target(coordinator: BrewAssistantCoordinator, mode: str) -> float | None:
     return data.recipe_target_temperature if data is not None else None
 
 
-def _trend(coordinator: BrewAssistantCoordinator) -> float | None:
+def _trend(
+    coordinator: BrewAssistantCoordinator,
+    liquid_entity: str | None,
+) -> float | None:
+    """Use legacy average trend only when that average is the selected liquid source."""
+    if liquid_entity != LIQUID_AVG_ENTITY:
+        return None
     return _float_attr(coordinator, LIQUID_AVG_ENTITY, "trend_c_per_hour")
 
 
@@ -220,7 +234,7 @@ def _recommend(
 
 
 def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    """Build a chamber-only recommendation from tracking outputs and chamber state."""
+    """Build a chamber-only recommendation from normalized tracking outputs."""
     mode = _mode(coordinator)
     active = _scope_active(coordinator)
     test_mode = _test_mode(coordinator)
@@ -228,11 +242,20 @@ def build_air_target_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str
     liquid, liquid_source, liquid_entity = _liquid(coordinator) if active else (None, None, None)
     chamber = _chamber(coordinator)
     target = _target(coordinator, mode) if active else None
-    trend = _trend(coordinator) if liquid is not None else None
+    trend = _trend(coordinator, liquid_entity) if liquid is not None else None
     target_plausible = _target_plausible_for_mode(mode, target)
     liquid_delta = round(liquid - target, 2) if liquid is not None and target is not None else None
-    avg_delta = _float_state(coordinator, DELTA_AVG_ENTITY) if active and not test_mode_active else None
-    air_liquid_delta = avg_delta
+
+    use_legacy_average_delta = (
+        active
+        and not test_mode_active
+        and liquid_entity == LIQUID_AVG_ENTITY
+    )
+    air_liquid_delta = (
+        _float_state(coordinator, DELTA_AVG_ENTITY)
+        if use_legacy_average_delta
+        else None
+    )
     if air_liquid_delta is None and chamber is not None and liquid is not None:
         air_liquid_delta = round(chamber - liquid, 2)
 
