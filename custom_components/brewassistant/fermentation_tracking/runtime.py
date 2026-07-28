@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,6 +12,7 @@ from ..const import DOMAIN
 from .calculations import valid_sg, valid_temperature
 from .models import SOURCE_MODE_HYBRID, SOURCE_MODES, FermentationRuntime
 from .observations import record_manual_observation
+from .recalculation import recalculate_refractometer_observations
 from .snapshot import build_fermentation_snapshot
 from .storage import (
     LOADED_KEY,
@@ -129,10 +131,12 @@ def start_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> Fer
 
 
 def update_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> FermentationRuntime:
-    """Update tracking configuration without clearing observations."""
-    runtime = get_runtime(hass)
-    _update(runtime, data)
-    return runtime
+    """Update configuration atomically and recalculate derived readings."""
+    candidate = deepcopy(get_runtime(hass))
+    _update(candidate, data)
+    recalculate_refractometer_observations(candidate)
+    set_runtime(hass, candidate)
+    return candidate
 
 
 def reset_fermentation_runtime(hass: HomeAssistant) -> FermentationRuntime:
