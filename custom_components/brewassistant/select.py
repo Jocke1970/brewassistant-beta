@@ -218,7 +218,7 @@ class BrewAssistantBrewZillaLearningContextSelect(BrewAssistantEntity, RestoreEn
         self._attr_unique_id = f"{DOMAIN}_select_brewzilla_learning_context"
         self._attr_name = "BrewAssistant BrewZilla Learning Context"
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_context"
-        self._current_option = "Unknown"
+        self._current_option = "Real mash"
 
     async def async_added_to_hass(self) -> None:
         """Restore learning context after restart."""
