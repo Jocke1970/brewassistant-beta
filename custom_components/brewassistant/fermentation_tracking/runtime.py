@@ -175,8 +175,6 @@ async def async_setup_fermentation_runtime(hass: HomeAssistant) -> None:
     data = hass.data.setdefault(DOMAIN, {})
     if not data.get(LOADED_KEY):
         await async_load(hass)
-    if hass.services.has_service(DOMAIN, SERVICE_START):
-        return
 
     async def handle_start(call: ServiceCall) -> None:
         start_fermentation_runtime(hass, dict(call.data))
@@ -203,11 +201,16 @@ async def async_setup_fermentation_runtime(hass: HomeAssistant) -> None:
         await async_save(hass)
         await _refresh_coordinators(hass)
 
-    hass.services.async_register(DOMAIN, SERVICE_START, handle_start)
-    hass.services.async_register(DOMAIN, SERVICE_UPDATE, handle_update)
-    hass.services.async_register(DOMAIN, SERVICE_RECORD_OBSERVATION, handle_record)
-    hass.services.async_register(DOMAIN, SERVICE_RECORD_GRAVITY, handle_legacy_record)
-    hass.services.async_register(DOMAIN, SERVICE_RESET, handle_reset)
+    services = {
+        SERVICE_START: handle_start,
+        SERVICE_UPDATE: handle_update,
+        SERVICE_RECORD_OBSERVATION: handle_record,
+        SERVICE_RECORD_GRAVITY: handle_legacy_record,
+        SERVICE_RESET: handle_reset,
+    }
+    for service_name, handler in services.items():
+        if not hass.services.has_service(DOMAIN, service_name):
+            hass.services.async_register(DOMAIN, service_name, handler)
 
 
 __all__ = [
