@@ -1,14 +1,23 @@
 # Fermentation Tracking MVP
 
-## Purpose
+## Architecture
 
-The fermentation tracking backend is Python-owned and independent of RAPT Pill.
-It treats a manually recorded gravity observation as a first-class source, stores
-observations in Home Assistant Storage, and exposes one normalized current SG to
-downstream BrewAssistant logic.
+BrewAssistant now separates two concerns:
 
-The existing fermentation climate code remains separate. This MVP recommends
-process transitions but does not change climate targets or start cold crash.
+```text
+fermentation_tracking
+  process observations, SG/Brix correction, beer temperature,
+  progress, ABV, stability and readiness
+
+fermentation_chamber
+  chamber-air recommendations and supervised climate control
+```
+
+`fermentation_tracking` does not require RAPT Pill, a fermentation chamber, or any automatic sensor. It can run entirely from manual SG and temperature observations.
+
+The chamber backend consumes normalized tracking outputs when available, but tracking never switches a heater, cooler, fan, or climate entity itself.
+
+Legacy files under `custom_components/brewassistant/fermentation/` are compatibility bridges only.
 
 ## Runtime and storage
 
@@ -18,38 +27,31 @@ Storage key:
 brewassistant_fermentation_runtime
 ```
 
-Each stored gravity sample contains:
+A stored observation includes:
 
+- metric: gravity or temperature
 - observation timestamp
-- measurement type
-- raw value
-- corrected SG
-- source
+- source type: manual or automatic
+- source and optional source entity
+- instrument/method
+- raw value and raw unit
+- normalized value and unit
 - optional note
-- wort correction factor when relevant
+- wort correction factor and calculation Brix when relevant
 
-The latest valid observation becomes `current_sg`. A configured external gravity
-entity can participate as another source. When timestamps are equal, a manual
-observation wins.
+Recipe metadata is optional. OG and target FG are only required for calculations that need them. A fermented refractometer observation requires OG because alcohol correction cannot be calculated safely without it.
 
-## Supported manual observations
+## Independent source policies
+
+Gravity and beer temperature have separate policies:
 
 ```text
-refractometer_brix
-hydrometer_sg
-manual_sg
+manual
+automatic
+hybrid
 ```
 
-For a refractometer observation, BrewAssistant stores the raw Brix reading and
-calculates corrected SG from recipe OG, measured Brix, and the configured wort
-correction factor. The default correction factor is `1.04`.
-
-Hydrometer and generic manual SG observations use the submitted SG directly as
-the corrected/current SG.
-
-## Services
-
-### Start tracking
+Example:
 
 ```yaml
 service: brewassistant.fermentation_start
@@ -60,85 +62,147 @@ data:
   temp_rise_trigger_sg: 1.016
   primary_temperature_c: 18
   temp_rise_temperature_c: 20
-  stable_hours: 48
-  stability_tolerance_sg: 0.001
-  fg_tolerance_sg: 0.002
-  wort_correction_factor: 1.04
+  gravity_source_mode: manual
+  temperature_source_mode: automatic
 ```
 
-Starting a new runtime clears previous gravity samples.
+In `hybrid`, the newest valid source wins independently for each metric. A manual observation wins an exact timestamp tie.
 
-### Record daily refractometer reading
+This allows combinations such as:
+
+- manual refractometer SG + automatic beer temperature
+- automatic SG + manual temperature
+- manual SG + manual temperature
+- automatic SG + automatic temperature
+
+## Manual observation service
+
+Use one shared service for gravity, temperature, or both:
+
+```text
+brewassistant.fermentation_record_observation
+```
+
+Instrument and displayed unit are separate fields. This prevents a refractometer SG scale from being treated as hydrometer SG.
+
+### Refractometer showing Brix
 
 ```yaml
-service: brewassistant.fermentation_record_gravity
+service: brewassistant.fermentation_record_observation
 data:
-  measurement_type: refractometer_brix
-  value: 6.0
+  gravity_instrument: refractometer
+  gravity_unit: brix
+  gravity_value: 6.2
+  temperature_c: 18.4
   note: Daily Oxebar sample
 ```
 
-### Record hydrometer SG
+### Refractometer showing SG
 
 ```yaml
-service: brewassistant.fermentation_record_gravity
+service: brewassistant.fermentation_record_observation
 data:
-  measurement_type: hydrometer_sg
-  value: 1.011
+  gravity_instrument: refractometer
+  gravity_unit: sg
+  gravity_value: 1.024
+  temperature_c: 18.4
 ```
 
-### Adjust thresholds without clearing samples
+The displayed SG is first converted to its Brix-equivalent optical reading and is then alcohol-corrected with batch OG and the configured wort correction factor. It is never accepted as hydrometer SG.
+
+### Hydrometer SG
 
 ```yaml
-service: brewassistant.fermentation_update
+service: brewassistant.fermentation_record_observation
 data:
-  stable_hours: 48
-  stability_tolerance_sg: 0.001
+  gravity_instrument: hydrometer
+  gravity_unit: sg
+  gravity_value: 1.011
+  temperature_c: 20.0
 ```
 
-### Reset
+### Temperature only
 
 ```yaml
-service: brewassistant.fermentation_reset
+service: brewassistant.fermentation_record_observation
+data:
+  temperature_c: 18.6
+  note: No gravity sample today
 ```
+
+### Method shortcuts
+
+A dashboard may use one shortcut instead of separate instrument and unit fields:
+
+```text
+refractometer_brix
+refractometer_sg
+hydrometer_sg
+manual_sg
+```
+
+Example:
+
+```yaml
+service: brewassistant.fermentation_record_observation
+data:
+  gravity_method: refractometer_sg
+  gravity_value: 1.024
+```
+
+The former `brewassistant.fermentation_record_gravity` service remains as a compatibility alias.
+
+## Validation guardrails
+
+The backend rejects ambiguous or implausible combinations, including:
+
+- refractometer reading without OG during fermentation tracking
+- hydrometer with Brix as the selected unit
+- Brix outside 0–40
+- SG outside 0.900–1.200
+- temperature outside -5–50 °C
+- OG at or below target FG
+- temperature-rise trigger outside the configured OG–FG range
+- unknown source policy
+
+Both the raw reading and normalized result remain visible in sensor attributes.
 
 ## Normalized outputs
 
-The existing entity below now resolves the normalized current/corrected SG
-regardless of source:
-
-```text
-sensor.brewassistant_gravity
-```
-
-MVP tracking sensors:
+Primary tracking sensors include:
 
 ```text
 sensor.brewassistant_fermentation_tracking_status
+sensor.brewassistant_fermentation_current_sg
 sensor.brewassistant_fermentation_gravity_source
+sensor.brewassistant_fermentation_gravity_source_type
+sensor.brewassistant_fermentation_gravity_source_mode
+sensor.brewassistant_fermentation_current_temperature
+sensor.brewassistant_fermentation_temperature_source
+sensor.brewassistant_fermentation_temperature_source_type
+sensor.brewassistant_fermentation_temperature_source_mode
 sensor.brewassistant_fermentation_progress_percent
 sensor.brewassistant_fermentation_estimated_abv
 sensor.brewassistant_fermentation_gravity_stability
 sensor.brewassistant_fermentation_ready_for_temp_rise
 sensor.brewassistant_fermentation_ready_for_cold_crash
 sensor.brewassistant_fermentation_sample_count
-sensor.brewassistant_fermentation_last_observation
+sensor.brewassistant_fermentation_temperature_observation_count
 sensor.brewassistant_fermentation_recommended_temperature
 sensor.brewassistant_fermentation_tracking_summary
 ```
 
-Each tracking sensor exposes the complete current snapshot as attributes,
-including the ten most recent stored samples.
+Each tracking sensor exposes the complete normalized snapshot as attributes, including raw reading metadata and recent persisted observations.
 
 ## Detection rules
 
-### Fermentation progress
+### Progress
 
 ```text
 (OG - current SG) / (OG - target FG) × 100
 ```
 
-The displayed result is clamped to 0–100%.
+The result is clamped to 0–100%. It is unavailable until OG, target FG, and current SG exist.
 
 ### Estimated ABV
 
@@ -146,44 +210,38 @@ The displayed result is clamped to 0–100%.
 (OG - current SG) × 131.25
 ```
 
-This is a live estimate until final gravity is confirmed.
+This is a live estimate until FG is confirmed.
 
-### Ready for temperature rise
+### Temperature rise
 
-True when the runtime is active and normalized current SG is at or below the
-configured trigger SG.
+Ready when tracking is active and normalized current SG is at or below the configured trigger.
 
-For the American Lite Ale test case:
+American Lite Ale example:
 
 ```text
 current SG <= 1.016
+recommended temperature: 20 °C
 ```
 
-The backend then recommends `20 °C`; it does not apply that target.
+Tracking recommends the process change but does not apply it directly.
 
 ### Stable FG
 
-Stable FG requires at least two stored manual samples whose observation window
-spans the configured minimum time and whose SG range stays inside the configured
-tolerance.
-
-Default MVP rule:
+Stable FG uses persisted gravity observations:
 
 ```text
-window >= 48 h
+observation span >= 48 h
 max SG - min SG <= 0.001
 ```
 
-External live sensor points are allowed as the current SG source, but stable-FG
-detection is deliberately based on persisted manual samples in this MVP. That
-makes the daily measurement workflow deterministic and auditable.
+At least two observations are required. The current MVP persists manual observations. A configured automatic SG entity can supply live `current_sg`, but its history is not automatically copied into BrewAssistant Storage yet. Therefore automatic-only stable-FG detection is a known follow-up, not a silent assumption.
 
-### Ready for cold crash
+### Cold-crash readiness
 
-True only when all conditions are met:
+All conditions must be true:
 
-- runtime is active
-- gravity is stable for the configured period
+- tracking is active
+- persisted gravity observations are stable for the configured period
 - current SG is no more than the configured tolerance above target FG
 
 American Lite Ale defaults:
@@ -195,25 +253,26 @@ eligible SG: <= 1.013
 stable period: >= 48 h
 ```
 
-This extra target-FG gate prevents a stalled fermentation at a much higher SG
-from being marked ready merely because the reading stopped changing.
+This target-FG gate prevents a stalled fermentation at a much higher SG from being marked ready merely because it stopped changing.
 
 ## MVP boundaries
 
 Included:
 
-- Python-owned runtime
-- HA Storage samples
-- manual Brix and SG observations
-- external gravity source compatibility
-- canonical current/corrected SG
-- progress, ABV and readiness calculations
-- service surface for a later daily-input dashboard card
+- separate tracking and chamber packages
+- recipe-independent runtime
+- manual or automatic source resolution per metric
+- manual Brix, refractometer-SG, hydrometer-SG, generic SG, and temperature observations
+- HA Storage persistence for manual observations
+- normalized current SG and beer temperature
+- progress, ABV, stability, and readiness calculations
+- backward-compatible imports and gravity service
 
 Not included yet:
 
-- automatic climate target changes
+- automatic persistence of every external SG sensor update
+- automatic climate target changes without the existing supervised chamber policy
 - automatic cold-crash start
-- a large fermentation dashboard
-- automatic import of OG/FG from every recipe provider
-- sample editing/deletion UI
+- observation edit/delete UI
+- large dashboard redesign
+- automatic OG/FG import from every recipe provider
