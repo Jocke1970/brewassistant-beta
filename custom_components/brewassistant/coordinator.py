@@ -18,25 +18,29 @@ from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
     CONF_COLD_CRASH_ACTIVE_ENTITY,
     CONF_COLD_CRASH_TARGET_ENTITY,
+    CONF_FERMENTATION_HEAT_POWER_ENTITY,
     CONF_GRAVITY_ENTITY,
     CONF_KEGERATOR_AIR_TEMP_ENTITY,
-    CONF_KEGERATOR_POWER_ENTITY,
     CONF_KEGERATOR_FAN_POWER_ENTITY,
-    CONF_FERMENTATION_HEAT_POWER_ENTITY,
+    CONF_KEGERATOR_POWER_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
     CONF_RECIPE_TARGET_ENTITY,
     DEFAULT_CHAMBER_TEMP_ENTITY,
     DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
     DEFAULT_COLD_CRASH_TARGET_ENTITY,
+    DEFAULT_FERMENTATION_HEAT_POWER_ENTITY,
     DEFAULT_GRAVITY_ENTITY,
     DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
-    DEFAULT_KEGERATOR_POWER_ENTITY,
     DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
-    DEFAULT_FERMENTATION_HEAT_POWER_ENTITY,
+    DEFAULT_KEGERATOR_POWER_ENTITY,
     DEFAULT_LIQUID_TEMP_ENTITY,
     DEFAULT_RECIPE_TARGET_ENTITY,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+)
+from .fermentation.fermentation_runtime import (
+    async_setup_fermentation_runtime,
+    build_fermentation_snapshot,
 )
 from .kegerator.fan_control import async_apply_kegerator_fan_auto
 
@@ -95,66 +99,47 @@ class BrewAssistantData:
 
 
 def _entity_from_entry(entry: ConfigEntry, key: str, fallback: str) -> str:
-    """Return an entity id from entry options/data with a fallback."""
     return str(entry.options.get(key) or entry.data.get(key) or fallback)
 
 
 def _state_float(hass: HomeAssistant, entity_id: str | None) -> float | None:
-    """Read a Home Assistant state as float, returning None when invalid."""
     if not entity_id:
         return None
-
     state = hass.states.get(entity_id)
     if state is None or state.state in _UNAVAILABLE_STATES:
         return None
-
     try:
-        return float(state.state)
+        return float(str(state.state).replace(",", "."))
     except (TypeError, ValueError):
         return None
 
 
 def _state_string(hass: HomeAssistant, entity_id: str | None) -> str | None:
-    """Read a Home Assistant state as string, returning None when invalid."""
     if not entity_id:
         return None
-
     state = hass.states.get(entity_id)
     if state is None or state.state in _UNAVAILABLE_STATES:
         return None
-
     return str(state.state)
 
 
 def _state_is_on(hass: HomeAssistant, entity_id: str | None) -> bool:
-    """Return whether an entity state should be treated as active/on."""
     if not entity_id:
         return False
-
     state = hass.states.get(entity_id)
-    if state is None:
-        return False
-
-    return state.state.lower() in _ON_STATES
+    return state is not None and state.state.lower() in _ON_STATES
 
 
 def _any_state_is_on(hass: HomeAssistant, entity_ids: tuple[str, ...]) -> bool:
-    """Return whether any listed entity is on/active."""
     return any(_state_is_on(hass, entity_id) for entity_id in entity_ids)
 
 
 def _format_temp(value: float | None) -> str:
-    """Format a temperature for status summaries."""
-    if value is None:
-        return "—"
-    return f"{value:.1f}"
+    return "—" if value is None else f"{value:.1f}"
 
 
 def _format_gravity(value: float | None) -> str:
-    """Format specific gravity for status summaries."""
-    if value is None:
-        return "—"
-    return f"{value:.3f}"
+    return "—" if value is None else f"{value:.3f}"
 
 
 def _temperature_context(
@@ -165,7 +150,6 @@ def _temperature_context(
     fallback_active: bool,
     target_mode: str,
 ) -> dict[str, str]:
-    """Build dashboard-friendly temperature status fields."""
     if liquid_temp is None:
         return {
             "status": "Unavailable",
@@ -176,7 +160,6 @@ def _temperature_context(
             "status_summary": "Temperature unavailable · check source entities",
             "problem_level": "problem",
         }
-
     if target_temp is None or delta is None:
         return {
             "status": "Monitoring",
@@ -190,23 +173,29 @@ def _temperature_context(
 
     abs_delta = abs(delta)
     if abs_delta <= 0.25:
-        status = "On target"
-        severity = "ok"
-        icon_hint = "check-circle"
-        color_hint = "green"
-        problem_level = "ok"
+        status, severity, icon_hint, color_hint, problem_level = (
+            "On target",
+            "ok",
+            "check-circle",
+            "green",
+            "ok",
+        )
     elif abs_delta <= 0.5:
-        status = "Slight offset"
-        severity = "info"
-        icon_hint = "delta"
-        color_hint = "amber"
-        problem_level = "info"
+        status, severity, icon_hint, color_hint, problem_level = (
+            "Slight offset",
+            "info",
+            "delta",
+            "amber",
+            "info",
+        )
     else:
-        status = "Temp offset"
-        severity = "warning"
-        icon_hint = "thermometer-alert"
-        color_hint = "red"
-        problem_level = "warning"
+        status, severity, icon_hint, color_hint, problem_level = (
+            "Temp offset",
+            "warning",
+            "thermometer-alert",
+            "red",
+            "warning",
+        )
 
     if fallback_active:
         status = "Fallback active"
@@ -217,18 +206,16 @@ def _temperature_context(
 
     direction = "above" if delta > 0 else "below" if delta < 0 else "on"
     source_summary = f"{source}{' · fallback' if fallback_active else ''}"
-    status_summary = (
-        f"{target_mode} · {_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C "
-        f"· Δ {delta:+.2f} °C · {direction} target · {source_summary}"
-    )
-
     return {
         "status": status,
         "severity": severity,
         "icon_hint": icon_hint,
         "color_hint": color_hint,
         "source_summary": source_summary,
-        "status_summary": status_summary,
+        "status_summary": (
+            f"{target_mode} · {_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C "
+            f"· Δ {delta:+.2f} °C · {direction} target · {source_summary}"
+        ),
         "problem_level": problem_level,
     }
 
@@ -240,13 +227,11 @@ def _standby_temperature_context(
     target_temp: float | None,
     delta: float | None,
 ) -> dict[str, str]:
-    """Return neutral fermentation context when fermentation is out of scope."""
     temp_part = ""
     if liquid_temp is not None and target_temp is not None and delta is not None:
         temp_part = f" · {_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C · Δ {delta:+.2f} °C"
     elif liquid_temp is not None:
         temp_part = f" · {_format_temp(liquid_temp)} °C"
-
     status = "Completed" if process["status"] == "Finished / transferred to keg" else "Standby"
     return {
         **context,
@@ -267,23 +252,31 @@ def _process_context(
     liquid_temp: float | None,
     target_temp: float | None,
     gravity: float | None,
+    fermentation: dict[str, Any],
 ) -> dict[str, str]:
-    """Build read-only Python-owned process mirror state."""
-
     normalized_runtime = (runtime_status or "").lower()
 
-    if normalized_runtime in _INACTIVE_RUNTIME_STATUSES:
-        status = "Finished / transferred to keg"
-        next_step = "Batch completed"
-        current_stage = "none"
-        next_stage = "none"
-        reason = f"Runtime status indicates inactive batch: {normalized_runtime}"
-    elif cold_crash_active or target_mode == "Cold crash":
+    if cold_crash_active or target_mode == "Cold crash":
         status = "Cold crash"
         next_step = "Maintain cold crash and positive pressure"
         current_stage = "cold_crash"
         next_stage = "transfer"
         reason = "Cold crash target is active"
+    elif fermentation.get("active"):
+        status = str(fermentation.get("status") or "Primary fermentation")
+        next_step = str(fermentation.get("next_action") or "Monitor fermentation")
+        current_stage = "fermentation"
+        next_stage = "cold_crash" if fermentation.get("ready_for_cold_crash") else "fermentation"
+        reason = (
+            "Python-owned fermentation runtime active · "
+            f"gravity source {fermentation.get('gravity_source') or 'unavailable'}"
+        )
+    elif normalized_runtime in _INACTIVE_RUNTIME_STATUSES:
+        status = "Finished / transferred to keg"
+        next_step = "Batch completed"
+        current_stage = "none"
+        next_stage = "none"
+        reason = f"Runtime status indicates inactive batch: {normalized_runtime}"
     elif normalized_runtime == "fermenting":
         status = "Primary fermentation"
         next_step = "Monitor fermentation"
@@ -308,7 +301,6 @@ def _process_context(
         summary_parts.append(f"{_format_temp(liquid_temp)} → {_format_temp(target_temp)} °C")
     if gravity is not None:
         summary_parts.append(f"SG {_format_gravity(gravity)}")
-
     return {
         "status": status,
         "next_step": next_step,
@@ -320,12 +312,11 @@ def _process_context(
 
 
 class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
-    """Collect normalized BrewAssistant state from existing HA entities."""
+    """Collect normalized BrewAssistant state from HA entities and Python stores."""
 
     config_entry: ConfigEntry
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize the coordinator."""
         super().__init__(
             hass,
             logger=_LOGGER,
@@ -335,7 +326,8 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         self.config_entry = entry
 
     async def _async_update_data(self) -> BrewAssistantData:
-        """Fetch one normalized snapshot from Home Assistant state machine."""
+        await async_setup_fermentation_runtime(self.hass)
+
         refresh_result = await maybe_request_brewfather_refresh(self.hass)
         brewzilla_result = await async_apply_brewzilla_target_if_allowed(self.hass)
         if refresh_result.get("refreshed") or brewzilla_result.get("applied"):
@@ -359,47 +351,42 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             fan_result = await async_apply_kegerator_fan_auto(self.hass)
             self.hass.data.setdefault(DOMAIN, {})["last_kegerator_fan_auto_tick"] = fan_result
 
-        liquid_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_LIQUID_TEMP_ENTITY,
-            DEFAULT_LIQUID_TEMP_ENTITY,
-        )
-        chamber_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_CHAMBER_TEMP_ENTITY,
-            DEFAULT_CHAMBER_TEMP_ENTITY,
-        )
-        target_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_RECIPE_TARGET_ENTITY,
-            DEFAULT_RECIPE_TARGET_ENTITY,
-        )
+        liquid_entity = _entity_from_entry(self.config_entry, CONF_LIQUID_TEMP_ENTITY, DEFAULT_LIQUID_TEMP_ENTITY)
+        chamber_entity = _entity_from_entry(self.config_entry, CONF_CHAMBER_TEMP_ENTITY, DEFAULT_CHAMBER_TEMP_ENTITY)
+        target_entity = _entity_from_entry(self.config_entry, CONF_RECIPE_TARGET_ENTITY, DEFAULT_RECIPE_TARGET_ENTITY)
         cold_crash_active_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_COLD_CRASH_ACTIVE_ENTITY,
-            DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+            self.config_entry, CONF_COLD_CRASH_ACTIVE_ENTITY, DEFAULT_COLD_CRASH_ACTIVE_ENTITY
         )
         cold_crash_target_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_COLD_CRASH_TARGET_ENTITY,
-            DEFAULT_COLD_CRASH_TARGET_ENTITY,
+            self.config_entry, CONF_COLD_CRASH_TARGET_ENTITY, DEFAULT_COLD_CRASH_TARGET_ENTITY
         )
-        gravity_entity = _entity_from_entry(
-            self.config_entry,
-            CONF_GRAVITY_ENTITY,
-            DEFAULT_GRAVITY_ENTITY,
-        )
+        gravity_entity = _entity_from_entry(self.config_entry, CONF_GRAVITY_ENTITY, DEFAULT_GRAVITY_ENTITY)
 
         pill_temp = _state_float(self.hass, liquid_entity)
         chamber_temp = _state_float(self.hass, chamber_entity)
         recipe_target_temp = _state_float(self.hass, target_entity)
         cold_crash_target_temp = _state_float(self.hass, cold_crash_target_entity)
-        gravity = _state_float(self.hass, gravity_entity)
+
+        gravity_state = self.hass.states.get(gravity_entity)
+        external_gravity = _state_float(self.hass, gravity_entity)
+        external_updated_at = gravity_state.last_updated if external_gravity is not None and gravity_state else None
+        fermentation = build_fermentation_snapshot(
+            self.hass,
+            external_sg=external_gravity,
+            external_updated_at=external_updated_at,
+            external_entity=gravity_entity,
+        )
+        gravity = fermentation.get("current_sg")
+
         runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")
         normalized_runtime = (runtime_status or "").lower()
         runtime_inactive = normalized_runtime in _INACTIVE_RUNTIME_STATUSES
         runtime_active = bool(normalized_runtime and not runtime_inactive)
-        fermentation_context_active = runtime_active or _any_state_is_on(self.hass, _FERMENTATION_ACTIVITY_ENTITIES)
+        fermentation_context_active = (
+            runtime_active
+            or bool(fermentation.get("active"))
+            or _any_state_is_on(self.hass, _FERMENTATION_ACTIVITY_ENTITIES)
+        )
 
         cold_crash_active = _state_is_on(self.hass, cold_crash_active_entity)
         cold_crash_in_scope = (
@@ -408,7 +395,6 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             and not runtime_inactive
             and fermentation_context_active
         )
-
         if cold_crash_in_scope:
             target_temp = cold_crash_target_temp
             effective_target_entity = cold_crash_target_entity
@@ -429,14 +415,12 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             source_entity = chamber_entity if chamber_temp is not None else None
             fallback_active = chamber_temp is not None
 
-        delta = None
-        if liquid_temp is not None and target_temp is not None:
-            delta = round(liquid_temp - target_temp, 2)
-
+        delta = round(liquid_temp - target_temp, 2) if liquid_temp is not None and target_temp is not None else None
         rounded_liquid = round(liquid_temp, 2) if liquid_temp is not None else None
         rounded_chamber = round(chamber_temp, 2) if chamber_temp is not None else None
         rounded_target = round(target_temp, 2) if target_temp is not None else None
-        rounded_gravity = round(gravity, 3) if gravity is not None else None
+        rounded_gravity = round(float(gravity), 3) if gravity is not None else None
+
         context = _temperature_context(
             rounded_liquid,
             rounded_target,
@@ -452,15 +436,14 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
             liquid_temp=rounded_liquid,
             target_temp=rounded_target,
             gravity=rounded_gravity,
+            fermentation=fermentation,
         )
-
         if process["current_stage"] not in _ACTIVE_FERMENTATION_STAGES:
             context = _standby_temperature_context(context, process, rounded_liquid, rounded_target, delta)
 
+        status_summary = context["status_summary"]
         if rounded_gravity is not None:
-            status_summary = f"{context['status_summary']} · SG {_format_gravity(rounded_gravity)}"
-        else:
-            status_summary = context["status_summary"]
+            status_summary = f"{status_summary} · SG {_format_gravity(rounded_gravity)}"
 
         return BrewAssistantData(
             liquid_temperature=rounded_liquid,
@@ -491,47 +474,30 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
 
     @property
     def configured_entities(self) -> dict[str, Any]:
-        """Return configured source entities."""
         return {
             CONF_LIQUID_TEMP_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_LIQUID_TEMP_ENTITY,
-                DEFAULT_LIQUID_TEMP_ENTITY,
+                self.config_entry, CONF_LIQUID_TEMP_ENTITY, DEFAULT_LIQUID_TEMP_ENTITY
             ),
             CONF_CHAMBER_TEMP_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_CHAMBER_TEMP_ENTITY,
-                DEFAULT_CHAMBER_TEMP_ENTITY,
+                self.config_entry, CONF_CHAMBER_TEMP_ENTITY, DEFAULT_CHAMBER_TEMP_ENTITY
             ),
             CONF_RECIPE_TARGET_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_RECIPE_TARGET_ENTITY,
-                DEFAULT_RECIPE_TARGET_ENTITY,
+                self.config_entry, CONF_RECIPE_TARGET_ENTITY, DEFAULT_RECIPE_TARGET_ENTITY
             ),
             CONF_COLD_CRASH_ACTIVE_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_COLD_CRASH_ACTIVE_ENTITY,
-                DEFAULT_COLD_CRASH_ACTIVE_ENTITY,
+                self.config_entry, CONF_COLD_CRASH_ACTIVE_ENTITY, DEFAULT_COLD_CRASH_ACTIVE_ENTITY
             ),
             CONF_COLD_CRASH_TARGET_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_COLD_CRASH_TARGET_ENTITY,
-                DEFAULT_COLD_CRASH_TARGET_ENTITY,
+                self.config_entry, CONF_COLD_CRASH_TARGET_ENTITY, DEFAULT_COLD_CRASH_TARGET_ENTITY
             ),
             CONF_GRAVITY_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_GRAVITY_ENTITY,
-                DEFAULT_GRAVITY_ENTITY,
+                self.config_entry, CONF_GRAVITY_ENTITY, DEFAULT_GRAVITY_ENTITY
             ),
             CONF_KEGERATOR_AIR_TEMP_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_KEGERATOR_AIR_TEMP_ENTITY,
-                DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+                self.config_entry, CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY
             ),
             CONF_KEGERATOR_POWER_ENTITY: _entity_from_entry(
-                self.config_entry,
-                CONF_KEGERATOR_POWER_ENTITY,
-                DEFAULT_KEGERATOR_POWER_ENTITY,
+                self.config_entry, CONF_KEGERATOR_POWER_ENTITY, DEFAULT_KEGERATOR_POWER_ENTITY
             ),
             CONF_KEGERATOR_FAN_POWER_ENTITY: _entity_from_entry(
                 self.config_entry,
