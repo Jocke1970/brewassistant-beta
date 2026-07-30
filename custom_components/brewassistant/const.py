@@ -45,7 +45,7 @@ DEFAULT_COLD_CRASH_ACTIVE_ENTITY = "input_boolean.brew_cold_crash_active"
 DEFAULT_COLD_CRASH_TARGET_ENTITY = "input_number.cold_crash_temp_target"
 DEFAULT_GRAVITY_ENTITY = "sensor.yellow_pill_gravity"
 DEFAULT_KEGERATOR_AIR_TEMP_ENTITY = "sensor.kyl_temperatur_4"
-DEFAULT_KEGERATOR_POWER_ENTITY = "sensor.kyl_frys_power_3"
+DEFAULT_KEGERATOR_POWER_ENTITY = "sensor.kegerator_power"
 DEFAULT_KEGERATOR_FAN_POWER_ENTITY = "sensor.kegerator_fan_power"
 DEFAULT_FERMENTATION_HEAT_POWER_ENTITY = "sensor.fermentation_heat_mat_power"
 
