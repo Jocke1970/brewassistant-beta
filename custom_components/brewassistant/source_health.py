@@ -6,6 +6,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from .configured_entities import configured_entity
 from .const import (
     CONF_CHAMBER_TEMP_ENTITY,
     CONF_COLD_CRASH_ACTIVE_ENTITY,
@@ -17,6 +18,7 @@ from .const import (
     CONF_FERMENTATION_HEAT_POWER_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
     CONF_RECIPE_TARGET_ENTITY,
+    DEFAULT_KEGERATOR_POWER_ENTITY,
 )
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
@@ -72,6 +74,21 @@ SOURCE_BINARY_KEYS = {
 }
 
 
+def _resolved_source_entity(
+    hass: HomeAssistant,
+    key: str,
+    configured_entity_id: str,
+) -> str:
+    """Return the effective source used by the backend.
+
+    Kegerator power can have a stale saved source from older installations.
+    Keep source-health aligned with fan_control by resolving the same fallback.
+    """
+    if key == CONF_KEGERATOR_POWER_ENTITY:
+        return configured_entity(hass, key, DEFAULT_KEGERATOR_POWER_ENTITY)
+    return configured_entity_id
+
+
 def diagnose_source(hass: HomeAssistant, key: str, entity_id: str) -> dict[str, Any]:
     """Return diagnostic information for one source entity."""
     state_obj = hass.states.get(entity_id)
@@ -125,7 +142,11 @@ def diagnose_source(hass: HomeAssistant, key: str, entity_id: str) -> dict[str, 
 def build_source_health(hass: HomeAssistant, configured_entities: dict[str, Any]) -> dict[str, Any]:
     """Return aggregate source diagnostics."""
     sources = {
-        key: diagnose_source(hass, key, str(entity_id))
+        key: diagnose_source(
+            hass,
+            key,
+            _resolved_source_entity(hass, key, str(entity_id)),
+        )
         for key, entity_id in configured_entities.items()
     }
     total = len(sources)
