@@ -1,0 +1,184 @@
+title: Diagnostik
+path: brewassistant-beta5-sanity-sv
+icon: mdi:beer-outline
+cards:
+  - type: markdown
+    title: BrewAssistant Beta.5 baslinje
+    content: >-
+      ## 🍺 BrewAssistant Beta.5
+
+      **Installerad:** `{{ state_attr('update.brewassistant_beta_update',
+      'installed_version') or 'okänd' }}`   **Core:** `{{
+      states('sensor.brewassistant_core_version') }}`   **Modulsammanfattning:** `{{
+      states('sensor.brewassistant_module_summary') }}`
+
+      ---
+
+      **Kegerator:** `{{ states('climate.kegerator_kylskap') }}` · mål `{{
+      state_attr('climate.kegerator_kylskap', 'temperature') or '—' }} °C`  
+      **Skydd:** `{{ states('switch.brewassistant_kegerator_guard_enabled') }}`
+      · `{{ state_attr('switch.brewassistant_kegerator_guard_enabled', 'status')
+      or '—' }}`   **Fläkt:** `{{
+      states('select.brewassistant_kegerator_fan_mode') }}` · auto `{{
+      states('switch.brewassistant_kegerator_fan_auto_enabled') }}` · fläkt `{{
+      states('switch.kegerator_fan') }}`   **Händelselogg:** `{{
+      states('sensor.brewassistant_brewday_event_log_summary') }}` · händelser `{{
+      states('sensor.brewassistant_brewday_event_log_event_count') }}`
+  - type: entities
+    title: Kegerator – skydd / klimat
+    show_header_toggle: false
+    entities:
+      - entity: climate.kegerator_kylskap
+        name: Kegerator-klimat
+      - entity: sensor.brewassistant_kegerator_air_temperature
+        name: Lufttemperatur i kegerator
+      - entity: sensor.brewassistant_kegerator_power
+        name: Kegerator-effekt
+      - entity: switch.brewassistant_kegerator_guard_enabled
+        name: Skydd aktiverat
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: status
+        name: Skyddsstatus
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: summary
+        name: Skyddssammanfattning
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: watchdog_active
+        name: Övervakning aktiv
+      - type: attribute
+        entity: switch.brewassistant_kegerator_guard_enabled
+        attribute: last_evaluation
+        name: Senaste utvärdering
+  - type: entities
+    title: Automatisk kegeratorfläkt
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_kegerator_fan_auto_enabled
+        name: Fläktautomatik aktiverad
+      - entity: select.brewassistant_kegerator_fan_mode
+        name: Fläktläge
+      - entity: number.brewassistant_kegerator_fan_afterrun_minutes
+        name: Eftergång minuter
+      - entity: switch.kegerator_fan
+        name: Fläktbrytare
+      - entity: sensor.brewassistant_kegerator_fan_power
+        name: Fläkteffekt
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: status
+        name: Backendstatus
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: summary
+        name: Backendsammanfattning
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_should_run
+        name: Fläkten bör köra
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: fan_reason
+        name: Orsak
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: afterrun_active
+        name: Eftergång aktiv
+      - type: attribute
+        entity: switch.brewassistant_kegerator_fan_auto_enabled
+        attribute: afterrun_remaining_minutes
+        name: Återstående eftergång
+  - type: entities
+    title: Bryggdagsruntime
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewday_runtime_summary
+        name: Runtimesammanfattning
+      - entity: sensor.brewassistant_brewday_runtime_state
+        name: Runtimestatus
+      - entity: sensor.brewassistant_brewday_runtime_stage
+        name: Runtimefas
+      - entity: sensor.brewassistant_brewday_runtime_step
+        name: Runtimesteg
+      - entity: sensor.brewassistant_brewday_runtime_next_step
+        name: Nästa steg
+      - entity: sensor.brewassistant_brewday_live_time_remaining_minutes
+        name: Återstående tid live
+      - entity: sensor.brewassistant_brewday_live_progress
+        name: Förlopp live
+      - entity: sensor.brewassistant_brewday_stage
+        name: Fas från stage engine
+      - entity: sensor.brewassistant_brewday_stage_status_line
+        name: Statusrad för fas
+      - entity: sensor.brewassistant_brewday_stage_suggested_action
+        name: Föreslagen åtgärd
+      - entity: sensor.brewassistant_brewday_stage_control_hint
+        name: Styrningsråd
+  - type: entities
+    title: BrewZilla-orkestrering
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewzilla_runtime_summary
+        name: Runtimesammanfattning
+      - entity: sensor.brewassistant_brewzilla_runtime_state
+        name: Runtimestatus
+      - entity: sensor.brewassistant_brewzilla_safety_state
+        name: Säkerhetsstatus
+      - entity: sensor.brewassistant_brewzilla_orchestration_mode
+        name: Orkestreringsläge
+      - entity: sensor.brewassistant_brewzilla_control_reason
+        name: Styrningsorsak
+      - entity: sensor.brewassistant_brewzilla_requested_target
+        name: Begärt mål
+      - entity: sensor.brewassistant_brewzilla_applied_target
+        name: Verkställt mål
+      - entity: sensor.brewassistant_brewzilla_target_delta
+        name: Måldelta
+      - entity: sensor.brewassistant_brewzilla_target_sync_needed
+        name: Målsynk behövs
+      - entity: sensor.brewassistant_brewzilla_can_apply_target
+        name: Kan verkställa mål
+  - type: entities
+    title: Bryggdagens händelselogg
+    show_header_toggle: false
+    entities:
+      - entity: sensor.brewassistant_brewday_event_log_summary
+        name: Loggsammanfattning
+      - entity: sensor.brewassistant_brewday_event_log_event_count
+        name: Antal händelser
+      - entity: sensor.brewassistant_brewday_event_log_last_event
+        name: Senaste händelse
+      - entity: sensor.brewassistant_brewday_event_log_last_step
+        name: Senaste steg
+      - entity: sensor.brewassistant_brewday_event_log_last_target
+        name: Senaste mål
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: Starta logg
+        icon: mdi:record-rec
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_start
+      - type: button
+        name: Snapshot
+        icon: mdi:camera-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_snapshot
+      - type: button
+        name: Stoppa logg
+        icon: mdi:stop-circle-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_stop
+      - type: button
+        name: Rensa logg
+        icon: mdi:trash-can-outline
+        tap_action:
+          action: call-service
+          service: brewassistant.brewday_audit_clear
+          confirmation:
+            text: Rensa bryggdagens händelselogg?
