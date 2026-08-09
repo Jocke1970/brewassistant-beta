@@ -25,6 +25,7 @@ Start here when trying to understand how the current backend behaves:
 | Backend documentation index | [`docs/backends/README.md`](docs/backends/README.md) |
 | BrewZilla backend responsibilities | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
 | BrewZilla Advice control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
+| Localization architecture and status | [`docs/localization.md`](docs/localization.md) |
 
 Backend documentation should explain intent, safety boundaries, event-log markers and dashboard dependencies, not just restate code structure.
 
@@ -109,6 +110,8 @@ Validated in the active beta baseline:
 ✅ Carbonation runtime card baseline
 ✅ BrewAssistant Hub card baseline
 ✅ Sanity dashboard baseline
+✅ Localization foundation: English canonical backend/UI source with Swedish optional localization
+✅ Button entity translations validated end-to-end in English and Swedish Home Assistant system language
 ```
 
 Active BrewZilla/Brewday Advice test focus:
@@ -122,6 +125,8 @@ Active BrewZilla/Brewday Advice test focus:
 🧪 Pump flow without stuck/channeled bed symptoms
 🧪 Equipment-learning Real mash observations and profile buckets
 🧪 BrewZilla BF timing/profile advisor evidence from planned-vs-actual segments
+🧪 Swedish Home Assistant validation for translated switch entity names
+🧪 Swedish Home Assistant validation for translated number entity names
 ```
 
 ---
@@ -129,6 +134,8 @@ Active BrewZilla/Brewday Advice test focus:
 ## Documentation TODO
 
 The backend documentation index lists planned per-backend documents for Brewday Runtime, Event Log, Fermentation, Kegerator, Carbonation and Notifications.
+
+Localization architecture, migration safety rules and remaining UI translation work are tracked in [`docs/localization.md`](docs/localization.md).
 
 The preferred documentation pattern is one focused `.md` per backend area, with:
 
