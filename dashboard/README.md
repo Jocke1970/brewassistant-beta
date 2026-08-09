@@ -26,7 +26,11 @@ cards/fermentation_sv.yaml -> Swedish UI
 
 When adding or materially changing a canonical dashboard card, update its `_sv.yaml` mirror in the same development pass whenever practical.
 
+CI enforces filename parity and machine-reference safety through `tests/test_dashboard_language_parity.py`.
+
 ## Current structure
+
+The current baseline contains 24 canonical cards, 24 Swedish mirrors, plus canonical and Swedish sanity dashboards.
 
 ```text
 dashboard/
@@ -55,6 +59,12 @@ dashboard/
     brewtracker_runtime_sv.yaml
     brewzilla.yaml
     brewzilla_sv.yaml
+    brewzilla_ble_status.yaml
+    brewzilla_ble_status_sv.yaml
+    brewzilla_ble_indicator.yaml
+    brewzilla_ble_indicator_sv.yaml
+    brewzilla_dual_temperature_gauge.yaml
+    brewzilla_dual_temperature_gauge_sv.yaml
     brewzilla_mash_in_confirm.yaml
     brewzilla_mash_in_confirm_sv.yaml
     brewzilla_mash_in_controls.yaml
@@ -108,7 +118,7 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 
 ## Cards
 
-Every card listed below has a matching `_sv.yaml` presentation mirror.
+Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 
 | Canonical file | Purpose |
 | --- | --- |
@@ -123,6 +133,9 @@ Every card listed below has a matching `_sv.yaml` presentation mirror.
 | `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
 | `brewtracker_runtime.yaml` | BrewTracker live runtime card with current step, next step, batch status, progress and refresh action. |
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
+| `brewzilla_ble_status.yaml` | Detailed BLE/external mash-temperature source status. |
+| `brewzilla_ble_indicator.yaml` | Compact BLE/external mash-temperature source indicator. |
+| `brewzilla_dual_temperature_gauge.yaml` | Dual mash/wort BrewZilla temperature gauge with target and source context. |
 | `brewzilla_mash_in_confirm.yaml` | Legacy mash-in confirmation and explicit mash-circulation action card. |
 | `brewzilla_mash_in_controls.yaml` | Two-step mash-in operator controls: Mash-In Started, then Mash-In Complete. |
 | `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
@@ -221,6 +234,8 @@ Install required frontend cards before copying dashboard YAML into Home Assistan
 - Swedish *_sv.yaml files mirror presentation only.
 - Keep entity IDs, service IDs, conditions and machine-state comparisons identical across languages.
 - Do not translate machine values that backend logic or automations depend on.
+- CI must fail if a canonical dashboard card lacks a Swedish mirror.
+- CI must fail if a Swedish mirror introduces unexpected machine entity references or changes service/action references.
 - Keep only the current approved card baseline in dashboard/cards/.
 - Avoid storing every visual iteration in the repo.
 - Put backend logic in Python, not in dashboard templates.
