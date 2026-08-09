@@ -43,6 +43,7 @@ async def async_setup_entry(
         [
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
+            BrewAssistantTranslationTestButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
             BrewAssistantBrewZillaMashInStartedButton(coordinator),
             BrewAssistantBrewZillaMashInCompleteButton(coordinator),
@@ -115,6 +116,21 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
         """Cancel pending supervised action."""
         cancel_pending_action(self.coordinator.hass)
         self.async_write_ha_state()
+
+
+class BrewAssistantTranslationTestButton(BrewAssistantButtonEntity):
+    """No-op button used to validate Home Assistant entity translations."""
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "translation_test")
+        self._attr_unique_id = f"{DOMAIN}_button_translation_test"
+        self._attr_translation_key = "translation_test"
+        self._attr_icon = "mdi:translate"
+        self._attr_suggested_object_id = f"{DOMAIN}_translation_test"
+
+    async def async_press(self) -> None:
+        """Perform no action; this entity exists only for localization testing."""
+        return
 
 
 class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
