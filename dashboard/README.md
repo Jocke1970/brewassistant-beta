@@ -4,40 +4,94 @@ This directory contains the current dashboard card baseline for BrewAssistant Be
 
 Dashboard files are examples/operator UI only. Runtime normalization, orchestration, safety checks and calculations live in the Python custom integration under `custom_components/brewassistant/`.
 
+## Dashboard languages
+
+BrewAssistant maintains two presentation tracks over the same backend:
+
+```text
+*.yaml     = canonical English dashboard source
+*_sv.yaml  = Swedish presentation mirror
+```
+
+Both tracks must use the same BrewAssistant entity IDs, service/action IDs, machine-state comparisons, conditions and hardware-control paths. The Swedish files may translate labels, headings, confirmation text and displayed status wording, but they must not translate values that backend logic or automations depend on.
+
+Examples:
+
+```text
+cards/brewzilla.yaml       -> canonical English UI
+cards/brewzilla_sv.yaml    -> Swedish UI
+cards/fermentation.yaml    -> canonical English UI
+cards/fermentation_sv.yaml -> Swedish UI
+```
+
+When adding or materially changing a canonical dashboard card, update its `_sv.yaml` mirror in the same development pass whenever practical.
+
+CI enforces filename parity and machine-reference safety through `tests/test_dashboard_language_parity.py`.
+
 ## Current structure
+
+The current baseline contains 24 canonical cards, 24 Swedish mirrors, plus canonical and Swedish sanity dashboards.
 
 ```text
 dashboard/
   brewassistant_sanity.yaml
+  brewassistant_sanity_sv.yaml
   cards/
     brewassistant_hub.yaml
+    brewassistant_hub_sv.yaml
     brewassistant_visibility_badges.yaml
+    brewassistant_visibility_badges_sv.yaml
     brewassistant_brewday.yaml
+    brewassistant_brewday_sv.yaml
     brewassistant_brewday_bf_reload.yaml
+    brewassistant_brewday_bf_reload_sv.yaml
     brewassistant_brewday_event_log.yaml
+    brewassistant_brewday_event_log_sv.yaml
     brewassistant_manual_brewday.yaml
+    brewassistant_manual_brewday_sv.yaml
     brewassistant_source_health.yaml
+    brewassistant_source_health_sv.yaml
     brewfather_feed.yaml
+    brewfather_feed_sv.yaml
     brewfather_recipe.yaml
+    brewfather_recipe_sv.yaml
     brewtracker_runtime.yaml
+    brewtracker_runtime_sv.yaml
     brewzilla.yaml
+    brewzilla_sv.yaml
+    brewzilla_ble_status.yaml
+    brewzilla_ble_status_sv.yaml
+    brewzilla_ble_indicator.yaml
+    brewzilla_ble_indicator_sv.yaml
+    brewzilla_dual_temperature_gauge.yaml
+    brewzilla_dual_temperature_gauge_sv.yaml
     brewzilla_mash_in_confirm.yaml
+    brewzilla_mash_in_confirm_sv.yaml
     brewzilla_mash_in_controls.yaml
+    brewzilla_mash_in_controls_sv.yaml
     brewzilla_local_control.yaml
+    brewzilla_local_control_sv.yaml
     brewzilla_advice_auto.yaml
+    brewzilla_advice_auto_sv.yaml
     brewzilla_safety_rcl.yaml
+    brewzilla_safety_rcl_sv.yaml
     brewzilla_learning.yaml
+    brewzilla_learning_sv.yaml
     carbonation.yaml
+    carbonation_sv.yaml
     counterflow_chiller.yaml
+    counterflow_chiller_sv.yaml
     fermentation.yaml
+    fermentation_sv.yaml
     kegerator.yaml
+    kegerator_sv.yaml
 ```
 
 ## Hub replacement workflow
 
-`cards/brewassistant_hub.yaml` is the daily mission-control card and should replace the existing BrewAssistant Hub card in the Home Assistant dashboard.
+`cards/brewassistant_hub.yaml` is the canonical daily mission-control card. Use `cards/brewassistant_hub_sv.yaml` for the Swedish operator UI.
 
-The Hub card exposes the main daily module toggles. Advanced diagnostic toggles can also be placed as compact badges using `cards/brewassistant_visibility_badges.yaml`.
+The Hub card exposes the main daily module toggles. Advanced diagnostic toggles can also be placed as compact badges using `cards/brewassistant_visibility_badges.yaml` or its Swedish mirror.
 
 Important visibility switches include:
 
@@ -64,7 +118,9 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 
 ## Cards
 
-| File | Purpose |
+Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
+
+| Canonical file | Purpose |
 | --- | --- |
 | `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
 | `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Brewday Advice and Safety/RCL cards. |
@@ -77,6 +133,9 @@ The `switch.brewassistant_show_*` entities are persistent backend visibility con
 | `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
 | `brewtracker_runtime.yaml` | BrewTracker live runtime card with current step, next step, batch status, progress and refresh action. |
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
+| `brewzilla_ble_status.yaml` | Detailed BLE/external mash-temperature source status. |
+| `brewzilla_ble_indicator.yaml` | Compact BLE/external mash-temperature source indicator. |
+| `brewzilla_dual_temperature_gauge.yaml` | Dual mash/wort BrewZilla temperature gauge with target and source context. |
 | `brewzilla_mash_in_confirm.yaml` | Legacy mash-in confirmation and explicit mash-circulation action card. |
 | `brewzilla_mash_in_controls.yaml` | Two-step mash-in operator controls: Mash-In Started, then Mash-In Complete. |
 | `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
@@ -97,11 +156,11 @@ Brewfather Recipe = recipe, batch, current/next instructions
 BrewTracker Runtime = current live step, next step, batch status, target, remaining time, progress, refresh
 ```
 
-`brewfather_feed.yaml` remains for compatibility while the split cards are tested.
+`brewfather_feed.yaml` remains for compatibility while the split cards are tested. The same split is preserved in the Swedish mirrors.
 
 ## BrewZilla two-step mash-in controls
 
-`cards/brewzilla_mash_in_controls.yaml` is the preferred explicit operator card for the mash-in handoff.
+`cards/brewzilla_mash_in_controls.yaml` is the canonical operator card for the mash-in handoff; `cards/brewzilla_mash_in_controls_sv.yaml` is the Swedish presentation mirror.
 
 Expected flow:
 
@@ -126,7 +185,7 @@ button.brewassistant_brewzilla_start_mash_circulation
 
 The legacy `cards/brewzilla_mash_in_confirm.yaml` remains for compatibility during migration, but the two-step card should be used for realistic 69°C strike / 66°C mash-in tests.
 
-The fallback `Starta mäskcirkulation` button is intentionally explicit. It sets mash pump utilization and turns the pump on through the BrewAssistant button entity. It should not be replaced with duplicate service workarounds.
+The fallback `Starta mäskcirkulation` button in the Swedish UI is intentionally explicit. It calls the same BrewAssistant button entity as the canonical UI and must not be replaced with a duplicate service workaround.
 
 ## BrewZilla local-control split
 
@@ -140,15 +199,15 @@ Brewday Advice = why BA selected a profile; hidden by default unless meaningful
 Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
 ```
 
-`brewzilla_advice_auto.yaml` and `brewzilla_safety_rcl.yaml` use card-level display rules: they stay hidden during normal operation, but appear when there is a recommendation, warning, missing context, guard activity, or when the matching switch is enabled.
+`brewzilla_advice_auto.yaml` and `brewzilla_safety_rcl.yaml`, and their Swedish mirrors, use card-level display rules: they stay hidden during normal operation, but appear when there is a recommendation, warning, missing context, guard activity, or when the matching switch is enabled.
 
 ## Brewfather reload placement
 
-Use `cards/brewassistant_brewday_bf_reload.yaml` as a quick action on or directly below the Brewday Runtime card. It calls `brewassistant.force_brewfather_refresh` so the operator can refresh Brewfather/BrewTracker immediately after starting a brew in Brewfather, instead of waiting for the normal refresh policy interval.
+Use `cards/brewassistant_brewday_bf_reload.yaml` or `cards/brewassistant_brewday_bf_reload_sv.yaml` as a quick action on or directly below the Brewday Runtime card. Both call `brewassistant.force_brewfather_refresh`.
 
 ## Sanity dashboard
 
-`brewassistant_sanity.yaml` is a compact post-restart validation dashboard. It is intended for quick checks after updating Home Assistant or the BrewAssistant integration.
+`brewassistant_sanity.yaml` is the canonical compact post-restart validation dashboard. `brewassistant_sanity_sv.yaml` provides the same diagnostic surface with Swedish presentation text.
 
 The sanity dashboard is intentionally not switch-hidden, because it is meant for diagnostics even when the daily dashboard is collapsed.
 
@@ -171,6 +230,12 @@ Install required frontend cards before copying dashboard YAML into Home Assistan
 ## Policy
 
 ```text
+- English *.yaml files are the canonical dashboard source.
+- Swedish *_sv.yaml files mirror presentation only.
+- Keep entity IDs, service IDs, conditions and machine-state comparisons identical across languages.
+- Do not translate machine values that backend logic or automations depend on.
+- CI must fail if a canonical dashboard card lacks a Swedish mirror.
+- CI must fail if a Swedish mirror introduces unexpected machine entity references or changes service/action references.
 - Keep only the current approved card baseline in dashboard/cards/.
 - Avoid storing every visual iteration in the repo.
 - Put backend logic in Python, not in dashboard templates.

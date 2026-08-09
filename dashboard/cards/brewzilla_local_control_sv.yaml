@@ -1,0 +1,127 @@
+type: conditional
+conditions:
+  - condition: state_not
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state: unavailable
+card:
+  type: vertical-stack
+  cards:
+    - type: markdown
+      title: Lokal BrewZilla-styrning
+      content: >
+        {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+        {% set mode = states(orch) %}
+        {% set lease = state_attr(orch, 'local_control_lease_active') %}
+        {% set target = state_attr(orch, 'local_control_lease_target') or state_attr(orch, 'requested_target') %}
+        {% set heat = state_attr(orch, 'local_control_lease_heat_utilization') or state_attr(orch, 'desired_heat_utilization') %}
+        {% set pump = state_attr(orch, 'local_control_lease_pump_utilization') or state_attr(orch, 'desired_pump_utilization') %}
+        {% set rcl_degraded = state_attr(orch, 'rcl_degraded') or state_attr(orch, 'heat_strike_rcl_degraded') %}
+        {% set strike = state_attr(orch, 'heat_strike_target') %}
+        {% set control = state_attr(orch, 'heat_strike_control_target') %}
+        {% set next = state_attr(orch, 'heat_strike_next_mash_target') %}
+        **Läge:** `{{ mode }}`  
+        **Lease:** {{ 'aktiv' if lease else 'inte aktiv' }}  
+        **RCL:** {{ 'degraderad / styrning blockerad' if rcl_degraded else 'ok' }}  
+        **BA-mål:** {{ target if target is not none else '—' }} °C  
+        **BA-värmeprofil:** {{ heat if heat is not none else '—' }} %  
+        **BA-pumpprofil:** {{ pump if pump is not none else '—' }} %  
+        **Heatstrike:** strike {{ strike if strike is not none else '—' }} °C · BZ {{ control if control is not none else '—' }} °C · nästa {{ next if next is not none else '—' }} °C  
+        **Orsak:** {{ states('sensor.brewassistant_brewzilla_control_reason') }}
+    - type: custom:expander-card
+      title: BA:s styrmodell
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_brewzilla_orchestration_mode
+              name: Orkestreringsläge
+            - entity: sensor.brewassistant_brewzilla_safety_state
+              name: Säkerhetsstatus
+            - entity: sensor.brewassistant_brewzilla_control_reason
+              name: Styrningsorsak
+            - entity: sensor.brewassistant_brewzilla_requested_target
+              name: Begärt/styrande mål
+            - entity: sensor.brewassistant_brewzilla_applied_target
+              name: Verkställt BrewZilla-mål
+            - entity: sensor.brewassistant_brewzilla_target_delta
+              name: Måldelta
+            - entity: sensor.brewassistant_brewzilla_target_sync_needed
+              name: Målsynk behövs
+            - entity: sensor.brewassistant_brewzilla_can_apply_target
+              name: Kan verkställa mål
+            - entity: sensor.brewassistant_brewzilla_wort_temperature
+              name: BA vört-/kitteltemperatur
+            - entity: sensor.brewassistant_brewzilla_mash_temperature
+              name: BA mäsktemperatur
+            - entity: sensor.brewassistant_brewzilla_temperature_delta_mash_wort
+              name: BA mäsk/vört-delta
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_latch_active
+              name: Heatstrike-låsning aktiv
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_target
+              name: Heatstrike-mål
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_control_target
+              name: BrewZilla-styrmål för heatstrike
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: heat_strike_next_mash_target
+              name: Nästa mäskmål
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: desired_heat_utilization
+              name: Önskat värmeutnyttjande
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: desired_pump_utilization
+              name: Önskat pumputnyttjande
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: rcl_degraded
+              name: RCL degraderad
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: rcl_degraded_missing
+              name: Saknade fält vid degraderad RCL
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: local_control_lease_active
+              name: Lokal styrlease aktiv
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: local_control_lease_target
+              name: Lease-mål
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: local_control_lease_heat_utilization
+              name: Lease-värmeprofil
+            - type: attribute
+              entity: sensor.brewassistant_brewzilla_orchestration_mode
+              attribute: local_control_lease_pump_utilization
+              name: Lease-pumpprofil
+    - type: custom:expander-card
+      title: BrewZilla/RCL rå återläsning
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewzilla_connection
+              name: RCL-anslutning
+            - entity: sensor.brewzilla_temperature
+              name: Intern BrewZilla-temperatur
+            - entity: number.brewzilla_target_temperature
+              name: Återläst BrewZilla-mål
+            - entity: sensor.brewzilla_power
+              name: BrewZilla-effekt
+            - entity: switch.brewzilla_heater
+              name: Värmarutgång
+            - entity: switch.brewzilla_pump
+              name: Pumputgång
+            - entity: number.brewzilla_heat_utilization
+              name: Återläst värmeutnyttjande
+            - entity: number.brewzilla_pump_utilization
+              name: Återläst pumputnyttjande

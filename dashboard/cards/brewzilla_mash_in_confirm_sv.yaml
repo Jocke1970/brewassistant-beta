@@ -1,0 +1,123 @@
+type: vertical-stack
+cards:
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+        state: "on"
+    card:
+      type: custom:button-card
+      entity: button.brewassistant_mash_in_complete
+      name: Inmäskning startad · vänta på BF FORTSÄTT
+      icon: mdi:barley
+      show_state: false
+      show_label: true
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_complete
+        confirmation:
+          text: >-
+            Manuell reservväg. I normalflödet trycker du FORTSÄTT i Brewfather
+            när inmäskningen är klar. BA känner då BF Running och markerar
+            inmäskningen klar automatiskt. Använd denna knapp bara om BF inte triggar.
+      hold_action:
+        action: more-info
+      label: |
+        [[[
+          const pending = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+          const target = pending?.attributes?.last_target ?? '—';
+          const step = pending?.attributes?.last_step ?? 'Mash-in';
+          const button = states['button.brewassistant_mash_in_complete'];
+          const buttonState = button ? 'reservknapp redo' : 'knapp saknas';
+          return `${step} · mål ${target} °C<br>Primärt: tryck FORTSÄTT i Brewfather. BA slutför inmäskningen och startar pump/cirkulation automatiskt.<br>Manuell reservväg: ${buttonState}`;
+        ]]]
+      styles:
+        card:
+          - min-height: 88px
+          - padding: 12px
+          - border-radius: 16px
+          - background: rgba(255,193,7,.12)
+          - border: 1px solid rgba(255,193,7,.42)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 34px minmax(0,1fr)
+          - column-gap: 10px
+        icon:
+          - width: 23px
+          - color: rgb(255,193,7)
+        name:
+          - justify-self: start
+          - font-size: 13px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 10.7px
+          - font-weight: 760
+          - line-height: 1.22
+          - opacity: 0.82
+
+  - type: custom:button-card
+    entity: button.brewassistant_start_mash_circulation
+    name: Starta mäskcirkulation
+    icon: mdi:pump
+    show_state: false
+    show_label: true
+    tap_action:
+      action: perform-action
+      perform_action: button.press
+      target:
+        entity_id: button.brewassistant_start_mash_circulation
+    hold_action:
+      action: more-info
+    label: |
+      [[[
+        const pump = states['switch.brewzilla_pump']?.state ?? '—';
+        const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
+        const button = states['button.brewassistant_start_mash_circulation'];
+        const buttonState = button ? 'knapp redo' : 'knapp saknas';
+        return `Pump ${pump} · utnyttjande ${util} %<br>Visas bara efter inmäskning tills pumpen är igång · ${buttonState}`;
+      ]]]
+    styles:
+      card:
+        - display: >
+            [[[
+              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+              const pending = gate?.state === 'on';
+              const gateState = gate?.attributes?.state || '';
+              const completed = gate?.attributes?.completed_once === true || gateState === 'mash_in_complete' || !!gate?.attributes?.confirmed_at;
+
+              const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
+              const utilRaw = states['number.brewzilla_pump_utilization']?.state;
+              const util = Number.parseFloat(utilRaw);
+              const circulationOn = pumpOn && !Number.isNaN(util) && util > 0;
+
+              return (!pending && completed && !circulationOn) ? 'block' : 'none';
+            ]]]
+        - min-height: 72px
+        - padding: 11px
+        - border-radius: 16px
+        - background: rgba(33,150,243,.10)
+        - border: 1px solid rgba(33,150,243,.28)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 22px
+        - color: rgb(33,150,243)
+      name:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 10.7px
+        - font-weight: 760
+        - line-height: 1.22
+        - opacity: 0.78
