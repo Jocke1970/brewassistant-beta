@@ -56,7 +56,7 @@ async def async_setup_entry(
 class BrewAssistantButtonEntity(BrewAssistantEntity, ButtonEntity):
     """Base class for BrewAssistant operator action buttons."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     @property
     def available(self) -> bool:
@@ -72,10 +72,10 @@ class BrewAssistantButtonEntity(BrewAssistantEntity, ButtonEntity):
 class BrewAssistantSupervisedApplyButton(BrewAssistantButtonEntity):
     """Base supervised apply button."""
 
-    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, name: str, icon: str) -> None:
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, icon: str) -> None:
         super().__init__(coordinator, key)
         self._attr_unique_id = f"{DOMAIN}_button_{key}"
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_icon = icon
         self._attr_suggested_object_id = f"{DOMAIN}_{key}"
 
@@ -92,7 +92,6 @@ class BrewAssistantConfirmSupervisedApplyButton(BrewAssistantSupervisedApplyButt
         super().__init__(
             coordinator,
             "confirm_supervised_apply",
-            "BrewAssistant Confirm Supervised Apply",
             "mdi:check-decagram",
         )
 
@@ -109,7 +108,6 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
         super().__init__(
             coordinator,
             "cancel_supervised_apply",
-            "BrewAssistant Cancel Supervised Apply",
             "mdi:cancel",
         )
 
@@ -125,7 +123,7 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "counterflow_chiller_ready")
         self._attr_unique_id = f"{DOMAIN}_button_counterflow_chiller_ready"
-        self._attr_name = "BrewAssistant CFC Ready"
+        self._attr_translation_key = "counterflow_chiller_ready"
         self._attr_icon = "mdi:snowflake-thermometer"
         self._attr_suggested_object_id = f"{DOMAIN}_counterflow_chiller_ready"
 
@@ -146,7 +144,7 @@ class BrewAssistantBrewZillaMashInStartedButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_mash_in_started")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_started"
-        self._attr_name = "BrewAssistant Mash-In Started"
+        self._attr_translation_key = "brewzilla_mash_in_started"
         self._attr_icon = "mdi:barley"
         self._attr_suggested_object_id = f"{DOMAIN}_mash_in_started"
 
@@ -168,7 +166,7 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_mash_in_complete")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_complete"
-        self._attr_name = "BrewAssistant Mash-In Complete"
+        self._attr_translation_key = "brewzilla_mash_in_complete"
         self._attr_icon = "mdi:pump"
         self._attr_suggested_object_id = f"{DOMAIN}_mash_in_complete"
 
@@ -190,7 +188,7 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_start_mash_circulation")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_start_mash_circulation"
-        self._attr_name = "BrewAssistant Start Mash Circulation"
+        self._attr_translation_key = "brewzilla_start_mash_circulation"
         self._attr_icon = "mdi:pump"
         self._attr_suggested_object_id = f"{DOMAIN}_start_mash_circulation"
 
@@ -212,7 +210,7 @@ class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_learning_apply")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_learning_apply"
-        self._attr_name = "BrewAssistant BrewZilla Learning APPLY"
+        self._attr_translation_key = "brewzilla_learning_apply"
         self._attr_icon = "mdi:check-decagram"
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_apply"
 
@@ -234,7 +232,7 @@ class BrewAssistantBrewZillaLearningDenyButton(BrewAssistantButtonEntity):
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_learning_deny")
         self._attr_unique_id = f"{DOMAIN}_button_brewzilla_learning_deny"
-        self._attr_name = "BrewAssistant BrewZilla Learning DENY"
+        self._attr_translation_key = "brewzilla_learning_deny"
         self._attr_icon = "mdi:close-octagon"
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_deny"
 
