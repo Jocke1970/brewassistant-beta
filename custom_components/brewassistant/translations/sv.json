@@ -146,6 +146,20 @@
       "show_fermentation": {"name": "Visa jäsning"},
       "show_carbonation": {"name": "Visa kolsyresättning"},
       "show_kegerator": {"name": "Visa kegerator"}
+    },
+    "number": {
+      "carbonation_pressure_bar_control": {"name": "Kolsyretryck"},
+      "carbonation_target_volumes_control": {"name": "Målkolsyra"},
+      "carbonation_start_volumes_control": {"name": "Startkolsyra"},
+      "counterflow_chiller_sanitize_minutes": {"name": "CFC-desinficeringstid"},
+      "counterflow_chiller_pump_utilization": {"name": "CFC-pumpnivå"},
+      "kegerator_fan_afterrun_minutes": {"name": "Eftergångstid för kegeratorfläkt"},
+      "batch_context_grain_amount_kg": {"name": "Maltmängd"},
+      "batch_context_mash_water_l": {"name": "Mäskvatten"},
+      "batch_context_strike_water_l": {"name": "Inmäskningsvatten"},
+      "batch_context_sparge_water_l": {"name": "Lakvatten"},
+      "batch_context_pre_boil_volume_l": {"name": "Volym före kok"},
+      "batch_context_grain_temperature_c": {"name": "Malttemperatur"}
     }
   }
 }
