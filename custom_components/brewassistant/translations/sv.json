@@ -109,6 +109,16 @@
       "source_cold_crash_active_available": {"name": "Källa cold crash aktiv tillgänglig"},
       "source_cold_crash_target_available": {"name": "Källa cold crash mål tillgänglig"},
       "source_gravity_available": {"name": "Källa SG tillgänglig"}
+    },
+    "button": {
+      "confirm_supervised_apply": {"name": "Bekräfta väntande åtgärd"},
+      "cancel_supervised_apply": {"name": "Avbryt väntande åtgärd"},
+      "counterflow_chiller_ready": {"name": "CFC klar"},
+      "brewzilla_mash_in_started": {"name": "Inmäskning påbörjad"},
+      "brewzilla_mash_in_complete": {"name": "Inmäskning klar"},
+      "brewzilla_start_mash_circulation": {"name": "Starta mäskcirkulation"},
+      "brewzilla_learning_apply": {"name": "Verkställ BrewZilla-inlärningsförslag"},
+      "brewzilla_learning_deny": {"name": "Avvisa BrewZilla-inlärningsförslag"}
     }
   }
 }
