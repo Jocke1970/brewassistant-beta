@@ -19,7 +19,9 @@
         }
       }
     },
-    "abort": {"already_configured": "BrewAssistant is already configured."}
+    "abort": {
+      "already_configured": "BrewAssistant is already configured."
+    }
   },
   "options": {
     "step": {
@@ -107,6 +109,16 @@
       "source_cold_crash_active_available": {"name": "Source cold crash active available"},
       "source_cold_crash_target_available": {"name": "Source cold crash target available"},
       "source_gravity_available": {"name": "Source gravity available"}
+    },
+    "button": {
+      "confirm_supervised_apply": {"name": "Confirm Supervised Apply"},
+      "cancel_supervised_apply": {"name": "Cancel Supervised Apply"},
+      "counterflow_chiller_ready": {"name": "CFC Ready"},
+      "brewzilla_mash_in_started": {"name": "Mash-In Started"},
+      "brewzilla_mash_in_complete": {"name": "Mash-In Complete"},
+      "brewzilla_start_mash_circulation": {"name": "Start Mash Circulation"},
+      "brewzilla_learning_apply": {"name": "BrewZilla Learning APPLY"},
+      "brewzilla_learning_deny": {"name": "BrewZilla Learning DENY"}
     }
   }
 }
