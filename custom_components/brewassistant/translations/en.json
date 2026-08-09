@@ -120,6 +120,33 @@
       "brewzilla_start_mash_circulation": {"name": "Start Mash Circulation"},
       "brewzilla_learning_apply": {"name": "BrewZilla Learning APPLY"},
       "brewzilla_learning_deny": {"name": "BrewZilla Learning DENY"}
+    },
+    "switch": {
+      "brewzilla_orchestration_enabled": {"name": "BrewZilla orchestration enabled"},
+      "brewzilla_apply_target_temp": {"name": "Apply BrewZilla target temperature"},
+      "brewzilla_manual_target_override": {"name": "BrewZilla manual target override"},
+      "brewzilla_allow_heater_control": {"name": "Allow BrewZilla heater control"},
+      "brewzilla_allow_pump_control": {"name": "Allow BrewZilla pump control"},
+      "brewzilla_allow_boil_mode": {"name": "Allow BrewZilla boil mode"},
+      "brewzilla_safe_mode": {"name": "BrewZilla safe mode"},
+      "counterflow_chiller_enabled": {"name": "Counterflow chiller enabled"},
+      "kegerator_guard_enabled": {"name": "Kegerator guard enabled"},
+      "kegerator_fan_auto_enabled": {"name": "Automatic kegerator fan enabled"},
+      "climate_supervisor_enabled": {"name": "Climate supervisor enabled"},
+      "fermentation_climate_supervisor_enabled": {"name": "Fermentation climate supervisor enabled"},
+      "show_brewday": {"name": "Show Brewday"},
+      "show_brewfather_feed": {"name": "Show Brewfather feed"},
+      "show_brewtracker_runtime": {"name": "Show BrewTracker runtime"},
+      "show_brewfather_recipe": {"name": "Show Brewfather recipe"},
+      "show_brewzilla": {"name": "Show BrewZilla"},
+      "show_brewzilla_local_control": {"name": "Show BrewZilla local control"},
+      "show_brewzilla_learning": {"name": "Show Brewday advice"},
+      "show_brewzilla_safety_rcl": {"name": "Show Safety/RCL"},
+      "show_event_log": {"name": "Show event log"},
+      "show_cfc": {"name": "Show CFC"},
+      "show_fermentation": {"name": "Show fermentation"},
+      "show_carbonation": {"name": "Show carbonation"},
+      "show_kegerator": {"name": "Show kegerator"}
     }
   }
 }
