@@ -192,14 +192,14 @@ async def async_setup_entry(
 class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
     """Python-owned manual batch context number control."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
         super().__init__(coordinator, key)
         self._config = config
         self._value: float | None = None
         self._attr_unique_id = f"{DOMAIN}_number_{key}"
-        self._attr_name = str(config["name"])
+        self._attr_translation_key = key
         self._attr_suggested_object_id = str(config["object_id"])
         self.entity_id = f"number.{self._config['object_id']}"
         self._attr_icon = str(config["icon"])
@@ -271,14 +271,14 @@ class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, Number
 class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
     """Simple kegerator fan number control."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
         super().__init__(coordinator, key)
         self._config = config
         self._value = float(config["default"])
         self._attr_unique_id = f"{DOMAIN}_number_{key}"
-        self._attr_name = str(config["name"])
+        self._attr_translation_key = key
         self._attr_suggested_object_id = str(config["object_id"])
         self._attr_icon = str(config["icon"])
         self._attr_native_unit_of_measurement = str(config["unit"])
@@ -319,13 +319,13 @@ class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, Number
 class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
     """Python-owned carbonation number control."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
         super().__init__(coordinator, key)
         self._config = config
         self._attr_unique_id = f"{DOMAIN}_number_{key}"
-        self._attr_name = str(config["name"])
+        self._attr_translation_key = key
         self._attr_suggested_object_id = str(config["object_id"])
         self._attr_icon = str(config["icon"])
         self._attr_native_unit_of_measurement = str(config["unit"])
@@ -374,13 +374,13 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
 class BrewAssistantCounterflowChillerNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
     """Python-owned Counter Flow Chiller number control."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
         super().__init__(coordinator, key)
         self._config = config
         self._attr_unique_id = f"{DOMAIN}_number_{key}"
-        self._attr_name = str(config["name"])
+        self._attr_translation_key = key
         self._attr_suggested_object_id = str(config["object_id"])
         self._attr_icon = str(config["icon"])
         self._attr_native_unit_of_measurement = str(config["unit"])

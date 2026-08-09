@@ -248,7 +248,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity):
     """Persistent orchestration safety switch."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -265,17 +265,12 @@ class BrewAssistantSafetySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity
         self._clean_entity_id = f"switch.{self._clean_object_id}"
         self._entity_id_migration_result: str | None = None
         self._attr_unique_id = f"{DOMAIN}_switch_{key}"
-        self._attr_name = str(config["name"])
+        self._attr_translation_key = key
         self._attr_icon = str(config["icon"])
         self._attr_is_on = bool(config.get("default", False))
         self._attr_suggested_object_id = self._clean_object_id
         if self._kind == "dashboard_visibility":
             self._attr_entity_id = self._clean_entity_id
-
-    @property
-    def name(self) -> str:
-        """Return explicit display name."""
-        return self._attr_name
 
     async def async_added_to_hass(self) -> None:
         """Restore last known switch state."""
