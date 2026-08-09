@@ -136,6 +136,49 @@ Planned near-term Python Core additions:
 
 ---
 
+## UI localization / translations
+
+Localization is now an active incremental workstream rather than a deferred rewrite. It must remain presentation-only and must not block the primary goal of completing a reliable BrewAssistant integration.
+
+Architecture:
+
+```text
+English = canonical backend and default UI source
+Swedish = optional Home Assistant localization
+Backend identifiers/states/keys remain stable English
+UI labels use Home Assistant translation_key where appropriate
+```
+
+Current status:
+
+```text
+[x] Keep backend identifiers, entity IDs, unique IDs and runtime keys in English
+[x] Keep complete translations/en.json as canonical UI source
+[x] Maintain translations/sv.json as Swedish localization
+[x] Validate Home Assistant translation_key path with a new BrewAssistant test entity
+[x] Validate English system-language display
+[x] Validate Swedish system-language display
+[x] Migrate BrewAssistant button entity names to translation_key
+[x] Migrate BrewAssistant switch entity names to translation_key
+[x] Migrate BrewAssistant number entity names to translation_key
+[ ] Validate switch translations in Swedish Home Assistant after merge
+[ ] Validate number translations in Swedish Home Assistant after merge
+[ ] Inventory remaining hard-coded sensor entity names
+[ ] Inventory remaining hard-coded binary-sensor entity names
+[ ] Migrate select entity names
+[ ] Design compatibility-safe migration for select options/text states
+[ ] Translate service/action names, descriptions and fields
+[ ] Add en/sv translation-key parity checks
+[ ] Add localization/Hassfest validation to CI where practical
+[ ] Review dashboard YAML hard-coded names separately
+```
+
+Translation ownership should remain logically grouped by function/backend namespace (`brewzilla_*`, `brewday_*`, `fermentation_*`, `kegerator_*`, `carbonation_*`, etc.), while Home Assistant continues to receive one complete translation file per language.
+
+See [`localization.md`](localization.md) for architecture, safety rules, verified behavior and current coverage.
+
+---
+
 ## Current beta.8 validation focus
 
 ```text
