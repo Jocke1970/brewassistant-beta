@@ -99,7 +99,7 @@ dashboard/cards/foo.yaml     = canonical English card
 dashboard/cards/foo_sv.yaml  = Swedish presentation mirror
 ```
 
-The current baseline includes Swedish mirrors for all 21 dashboard cards plus the sanity dashboard.
+The current baseline includes Swedish mirrors for all 24 canonical dashboard cards plus the sanity dashboard.
 
 A Swedish mirror may translate:
 
@@ -133,6 +133,20 @@ if (status === 'Carbonating') {
 ```
 
 is valid because the backend state remains English and only presentation is localized.
+
+### Dashboard parity guard
+
+`tests/test_dashboard_language_parity.py` protects the language split in CI.
+
+It verifies that:
+
+- every canonical dashboard card has a `_sv.yaml` mirror
+- there are no orphan Swedish mirrors
+- the sanity dashboard has a Swedish mirror
+- Swedish cards do not introduce entity IDs that are absent from the canonical card
+- Swedish cards call the same Home Assistant services/actions as the canonical card
+
+The first CI run of this guard immediately found three canonical BrewZilla UI files that were missing from the older documented baseline: `brewzilla_ble_status.yaml`, `brewzilla_ble_indicator.yaml` and `brewzilla_dual_temperature_gauge.yaml`. All three now have Swedish mirrors as part of the 24-card baseline.
 
 ### Dashboard naming caveat
 
@@ -186,7 +200,7 @@ Status after the August 2026 localization pass:
 | Select entity names | Pending |
 | Select options / text states | Pending controlled migration |
 | Services/actions descriptions | Pending |
-| Dashboard hard-coded presentation | Swedish mirror track implemented for the full baseline; HA visual validation pending |
+| Dashboard hard-coded presentation | Swedish mirrors implemented for all 24 canonical cards plus sanity; CI parity guard active; HA visual validation pending |
 
 ## Migration safety rules
 
@@ -219,7 +233,7 @@ Dashboard localization follows the same safety principle: translate what the ope
 [ ] Design safe migration for select options and translatable text states
 [ ] Translate service/action names, descriptions and fields
 [ ] Add en/sv translation-key parity validation
-[ ] Add dashboard EN/SV filename parity validation
+[x] Add dashboard EN/SV filename and machine-reference parity validation
 [ ] Add Hassfest/localization validation to CI where practical
 [ ] Keep canonical EN and Swedish dashboard mirrors synchronized as UI evolves
 ```
