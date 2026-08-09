@@ -113,7 +113,6 @@
     "button": {
       "confirm_supervised_apply": {"name": "Bekräfta väntande åtgärd"},
       "cancel_supervised_apply": {"name": "Avbryt väntande åtgärd"},
-      "translation_test": {"name": "Översättningstest"},
       "counterflow_chiller_ready": {"name": "CFC klar"},
       "brewzilla_mash_in_started": {"name": "Inmäskning påbörjad"},
       "brewzilla_mash_in_complete": {"name": "Inmäskning klar"},
