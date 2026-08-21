@@ -15,11 +15,30 @@ from homeassistant.core import HomeAssistant
 
 from .manual_brewday_store import get_manual_brewday_session
 
+MANUAL_TARGET_OVERRIDE = "switch.brewassistant_brewzilla_manual_target_override"
+BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
+
+
+def _state_float(hass: HomeAssistant, entity_id: str) -> float | None:
+    state = hass.states.get(entity_id)
+    if state is None or state.state in {"unknown", "unavailable", "none", ""}:
+        return None
+    try:
+        return float(str(state.state).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
 
 def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Return a normalized Manual Brewday snapshot from the Python engine."""
     session = get_manual_brewday_session(hass)
     snapshot = session.to_snapshot()
+
+    step_target = snapshot.get("target_temperature")
+    target_override = hass.states.is_state(MANUAL_TARGET_OVERRIDE, "on")
+    operator_target = _state_float(hass, BREWZILLA_TARGET_NUMBER) if target_override else None
+    if operator_target is not None:
+        snapshot["target_temperature"] = operator_target
 
     snapshot.update({
         "source": "Manual Brewday",
@@ -38,6 +57,12 @@ def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "stage_remaining_seconds": snapshot.get("time_remaining_seconds", 0),
         "stage_progress_percent": snapshot.get("progress", 0),
         "actual_temperature": None,
+        "step_target_temperature": step_target,
+        "operator_target_temperature": operator_target,
+        "target_override_active": bool(target_override and operator_target is not None),
+        "target_temperature_source": (
+            "operator_override" if target_override and operator_target is not None else "manual_step"
+        ),
     })
 
     timeline = snapshot.get("timeline") or []
