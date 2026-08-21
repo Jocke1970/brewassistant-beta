@@ -26,8 +26,23 @@ ALLOW_HEATER_CONTROL = "switch.brewassistant_brewzilla_allow_heater_control"
 ALLOW_PUMP_CONTROL = "switch.brewassistant_brewzilla_allow_pump_control"
 
 
+def _state(hass, entity_id: str):
+    direct = hass.states.get(entity_id)
+    if direct is not None:
+        return direct
+    if "." not in entity_id:
+        return None
+    domain, object_id = entity_id.split(".", 1)
+    suffix = f"_{object_id}"
+    for candidate in hass.states.async_all(domain):
+        candidate_object_id = candidate.entity_id.split(".", 1)[1]
+        if candidate_object_id == object_id or candidate_object_id.endswith(suffix):
+            return candidate
+    return None
+
+
 def _switch_on(hass, entity_id: str, default: bool = False) -> bool:
-    state = hass.states.get(entity_id)
+    state = _state(hass, entity_id)
     if state is None:
         return default
     return str(state.state).lower() == "on"
