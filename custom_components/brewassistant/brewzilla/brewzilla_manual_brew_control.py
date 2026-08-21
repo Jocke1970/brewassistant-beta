@@ -7,8 +7,9 @@ real ownership gates while the normalized runtime source is ``Manual Brewday``:
 * Allow heater control OFF -> BA must not touch heater or heat utilization.
 * Allow pump control OFF -> BA must not touch pump or pump utilization.
 
-This guard is installed before the safety/freshness guards so safety logic may
-still stop hardware when required.
+The guard is installed last in the normal control-decision chain. It therefore
+wins over automatic strategy/lease decisions, while an already blocked safety
+state or ABORT remains untouched and may still force BrewZilla safe.
 """
 
 from __future__ import annotations
@@ -77,6 +78,7 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     target_override = active and _switch_on(hass, MANUAL_TARGET_OVERRIDE, False)
     heater_auto = _switch_on(hass, ALLOW_HEATER_CONTROL, False) if active else True
     pump_auto = _switch_on(hass, ALLOW_PUMP_CONTROL, False) if active else True
+    blocked = str(out.get("orchestration_mode") or "") == "blocked"
 
     out.update(
         {
@@ -86,6 +88,7 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             "manual_pump_auto_allowed": pump_auto,
             "manual_heat_override_active": bool(active and not heater_auto),
             "manual_pump_override_active": bool(active and not pump_auto),
+            "manual_control_safety_override_active": bool(active and blocked),
             "manual_control_target_entity": base.BREWZILLA_TARGET_NUMBER,
             "manual_control_heat_utilization_entity": base.BREWZILLA_HEAT_UTILIZATION,
             "manual_control_pump_utilization_entity": base.BREWZILLA_PUMP_UTILIZATION,
@@ -95,17 +98,21 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     if not active:
         return out
 
-    # Target override is resolved in manual_brewday_adapter before the base
-    # orchestration strategy is calculated. Suppress any residual target sync
-    # here so BA cannot write the number back on the same coordinator tick.
+    # Safety/freshness guards have already evaluated before this final operator
+    # gate. A blocked snapshot is therefore deliberately left untouched.
+    if blocked:
+        return out
+
+    # Target override is resolved in manual_brewday_adapter before the control
+    # strategies are calculated. Suppress any residual target sync here so BA
+    # cannot write the step target back on a later coordinator tick.
     if target_override:
         out["target_sync_needed"] = False
         out["target_delta"] = 0.0
         out["requested_target_source"] = "manual_operator_override"
 
-    # "Allow ... control" are real ownership gates in Manual Brew. When OFF,
-    # the corresponding raw RCL/BrewZilla entities are operator-owned and BA is
-    # deliberately hands-off. Later safety guards may still stop hardware.
+    # When an automatic channel is disabled, its raw RCL/BrewZilla entities are
+    # operator-owned. Normal BrewAssistant strategy/lease actions are removed.
     if not heater_auto:
         out["desired_heat_utilization"] = out.get("heat_utilization")
         out["heat_utilization_action_needed"] = False
@@ -124,14 +131,18 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         out["ba_owned_reassert_action_needed"] = False
 
     action_needed = _remaining_action_needed(out)
-    blocked = str(out.get("orchestration_mode") or "") == "blocked"
-    out["can_apply_target"] = bool(not blocked and action_needed)
+    out["can_apply_target"] = action_needed
 
-    if not action_needed and not blocked:
+    if not action_needed:
         out["orchestration_mode"] = "manual-control"
-        out["control_reason"] = "Manual Brew operator owns selected BrewZilla controls; BA is observing."
-    elif not blocked and (target_override or not heater_auto or not pump_auto):
-        out["control_reason"] = "Manual Brew mixed control: operator overrides selected channels; BA controls remaining allowed channels."
+        out["control_reason"] = (
+            "Manual Brew operator owns selected BrewZilla controls; BA is observing."
+        )
+    elif target_override or not heater_auto or not pump_auto:
+        out["control_reason"] = (
+            "Manual Brew mixed control: operator overrides selected channels; "
+            "BA controls remaining allowed channels."
+        )
 
     return out
 
