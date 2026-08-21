@@ -157,73 +157,88 @@ card:
           - text-align: left
           - white-space: normal
           - margin-top: 4px
-    - type: custom:expander-card
-      title-card:
-        type: custom:button-card
-        name: BrewZilla · manuell styrning
-        icon: mdi:tune-variant
-        show_state: false
-        show_label: true
-        label: |
-          [[[
-            const targetManual = states['switch.brewassistant_brewzilla_manual_target_override']?.state === 'on';
-            const heatAuto = states['switch.brewassistant_brewzilla_allow_heater_control']?.state === 'on';
-            const pumpAuto = states['switch.brewassistant_brewzilla_allow_pump_control']?.state === 'on';
-            return `Mål ${targetManual ? 'MAN' : 'AUTO'} · Värme ${heatAuto ? 'AUTO' : 'MAN'} · Pump ${pumpAuto ? 'AUTO' : 'MAN'}`;
-          ]]]
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px
-            - background: rgba(33,150,243,.06)
-            - border: 1px solid rgba(33,150,243,.18)
-          grid:
-            - grid-template-areas: "\"i n\" \"i l\""
-            - grid-template-columns: 34px minmax(0,1fr)
-            - column-gap: 10px
-          icon:
-            - width: 22px
-            - height: 22px
-          name:
-            - justify-self: start
-            - font-size: 14px
-            - font-weight: 950
-          label:
-            - justify-self: start
-            - text-align: left
-            - white-space: normal
-            - font-size: 11.5px
-            - font-weight: 750
-            - opacity: 0.72
-      cards:
-        - type: markdown
-          content: >-
-            **Ägarskap i Manual Brew:** slå på **Manuellt temperaturmål** för att låsa
-            BrewZilla-målet till värdet nedan. När **BA får styra värme/pump** är av
-            lämnar BrewAssistant respektive kanal helt till operatören. Safety/ABORT
-            kan fortfarande tvinga hårdvaran till säkert läge.
-        - type: entities
-          show_header_toggle: false
-          entities:
-            - entity: switch.brewassistant_brewzilla_manual_target_override
-              name: Manuellt temperaturmål
-              icon: mdi:hand-back-right-outline
-            - entity: number.brewzilla_target_temperature
-              name: Temperaturmål
-            - type: divider
-            - entity: switch.brewassistant_brewzilla_allow_heater_control
-              name: BA får styra värme (Auto)
-            - entity: number.brewzilla_heat_utilization
-              name: Heat utilization
-            - entity: switch.brewzilla_heater
-              name: Värmare
-            - type: divider
-            - entity: switch.brewassistant_brewzilla_allow_pump_control
-              name: BA får styra pump (Auto)
-            - entity: number.brewzilla_pump_utilization
-              name: Pump utilization
-            - entity: switch.brewzilla_pump
-              name: Pump
+    - type: conditional
+      conditions:
+        - entity: sensor.brewfather_brew_tracker_status
+          state: "active"
+      card:
+        type: markdown
+        content: >-
+          ⚠️ **Brewfather Brew Tracker är aktiv.** Manual Brew är spärrat tills den
+          aktiva Brewfather-sessionen har stoppats eller avslutats. Om Manual Brew
+          redan körde pausas den automatiskt och återstartar inte själv.
+    - type: conditional
+      conditions:
+        - entity: sensor.brewfather_brew_tracker_status
+          state_not: "active"
+      card:
+        type: custom:expander-card
+        title-card:
+          type: custom:button-card
+          name: BrewZilla · manuell styrning
+          icon: mdi:tune-variant
+          show_state: false
+          show_label: true
+          label: |
+            [[[
+              const targetManual = states['switch.brewassistant_brewzilla_manual_target_override']?.state === 'on';
+              const heatAuto = states['switch.brewassistant_brewzilla_allow_heater_control']?.state === 'on';
+              const pumpAuto = states['switch.brewassistant_brewzilla_allow_pump_control']?.state === 'on';
+              return `Mål ${targetManual ? 'MAN' : 'AUTO'} · Värme ${heatAuto ? 'AUTO' : 'MAN'} · Pump ${pumpAuto ? 'AUTO' : 'MAN'}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(33,150,243,.06)
+              - border: 1px solid rgba(33,150,243,.18)
+            grid:
+              - grid-template-areas: "\"i n\" \"i l\""
+              - grid-template-columns: 34px minmax(0,1fr)
+              - column-gap: 10px
+            icon:
+              - width: 22px
+              - height: 22px
+            name:
+              - justify-self: start
+              - font-size: 14px
+              - font-weight: 950
+            label:
+              - justify-self: start
+              - text-align: left
+              - white-space: normal
+              - font-size: 11.5px
+              - font-weight: 750
+              - opacity: 0.72
+        cards:
+          - type: markdown
+            content: >-
+              **Ägarskap i Manual Brew:** slå på **Manuellt temperaturmål** för att låsa
+              BrewZilla-målet till värdet nedan. När **BA får styra värme/pump** är av
+              lämnar BrewAssistant respektive kanal helt till operatören. Safety/ABORT
+              kan fortfarande tvinga hårdvaran till säkert läge.
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: switch.brewassistant_brewzilla_manual_target_override
+                name: Manuellt temperaturmål
+                icon: mdi:hand-back-right-outline
+              - entity: number.brewzilla_target_temperature
+                name: Temperaturmål
+              - type: divider
+              - entity: switch.brewassistant_brewzilla_allow_heater_control
+                name: BA får styra värme (Auto)
+              - entity: number.brewzilla_heat_utilization
+                name: Heat utilization
+              - entity: switch.brewzilla_heater
+                name: Värmare
+              - type: divider
+              - entity: switch.brewassistant_brewzilla_allow_pump_control
+                name: BA får styra pump (Auto)
+              - entity: number.brewzilla_pump_utilization
+                name: Pump utilization
+              - entity: switch.brewzilla_pump
+                name: Pump
     - type: custom:expander-card
       title-card:
         type: custom:button-card
