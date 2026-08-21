@@ -114,6 +114,19 @@ Validated in the active beta baseline:
 ✅ Button entity translations validated end-to-end in English and Swedish Home Assistant system language
 ```
 
+Post-beta.8 changes currently implemented in `main`:
+
+```text
+✅ Manual Brew target override can make the operator's BrewZilla target the effective runtime target
+✅ Manual Brew has independent AUTO/MAN ownership for heater + heat utilization
+✅ Manual Brew has independent AUTO/MAN ownership for pump + pump utilization
+✅ Brewfather Brew Tracker status `active` blocks positive Manual Brew actions
+✅ If Brewfather becomes active during Manual Brew, Manual Brew is paused and does not auto-resume
+✅ ABORT/safety/freshness blocking still wins over Manual Brew operator ownership
+```
+
+These Manual Brew Control v2 changes have passed integration load/CI checks, but the raw BrewZilla target/heat/pump ownership path is still **pending physical BrewZilla validation**. Do not treat software implementation as proof that the real device will preserve operator values across repeated coordinator/RCL cycles.
+
 Active BrewZilla/Brewday Advice test focus:
 
 ```text
@@ -127,6 +140,9 @@ Active BrewZilla/Brewday Advice test focus:
 🧪 BrewZilla BF timing/profile advisor evidence from planned-vs-actual segments
 🧪 Swedish Home Assistant validation for translated switch entity names
 🧪 Swedish Home Assistant validation for translated number entity names
+🧪 Physical Manual Brew target override persistence across repeated coordinator/RCL updates
+🧪 Physical Manual Brew heat/pump utilization persistence with AUTO disabled
+🧪 Mixed ownership: one channel AUTO while another remains operator-owned
 ```
 
 ---

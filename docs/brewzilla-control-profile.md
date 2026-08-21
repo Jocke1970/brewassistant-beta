@@ -1,9 +1,9 @@
 # BrewZilla Advice Control Profile
 
 Status: active development / supervised hot-side testing  
-Last synced: 2026-07-16
+Last synced: 2026-08-21
 
-This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker tests.
+This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker and Manual Brewday tests.
 
 The design target is **supervised apply**, not unattended autopilot. BrewAssistant may set targets, heat utilization and pump utilization when the current runtime and safety context allow it, but the brewer remains the operator.
 
@@ -14,6 +14,7 @@ BA reads Brewfather/Brewday intent.
 BA sets BrewZilla target/utilization when allowed.
 BrewZilla regulates locally against the target it has received.
 BA observes, refreshes stale telemetry, and corrects only when a trusted rule says it should.
+Manual Brew may assign target, heat and pump ownership independently to the operator.
 ```
 
 Important control philosophy:
@@ -24,9 +25,12 @@ BA must not kill heat merely because RCL telemetry is stale/degraded.
 
 RCL trouble should trigger refresh/reload diagnostics and warnings,
 not silent heat starvation.
+
+When Manual Brew gives an output channel to the operator,
+normal Advice/lease/reassert logic must not silently take that channel back.
 ```
 
-Explicit ABORT, runtime completed, and manual emergency stop still win and may safe-down heat/pump.
+Explicit ABORT, runtime completed, safety/freshness blocking, and manual emergency stop still win and may safe-down heat/pump.
 
 ## Control layers
 
@@ -38,8 +42,11 @@ The current BrewZilla path is layered:
 4. Heat-strike / mash-in / thermal-mix guards
 5. Freshness / RCL recovery / execution / target-trust guards
 6. Local BrewZilla regulation preservation
-7. Direct-control apply
-8. Equipment learning evidence layer
+7. Manual Brew operator ownership final gate
+8. Direct-control apply
+9. Equipment learning evidence layer
+
+The Manual Brew ownership gate runs last in the normal decision chain, but it does not undo a snapshot that is already blocked by a higher safety/freshness/ABORT decision.
 
 ## Base profile
 
@@ -263,6 +270,63 @@ utilization_action_needed
 observe_window_elapsed
 ```
 
+The lease is subordinate to Manual Brew operator ownership. Once Manual Brew assigns target, heat or pump to the operator, expiry or breakage of the 45-second lease must not be used to reassert BA values onto that operator-owned channel. Manual ownership remains in force until its corresponding ownership switch is changed, the runtime stops being Manual Brewday, or a higher-priority safety/ABORT decision takes over.
+
+## Manual Brew operator ownership
+
+Manual Brew Control v2 separates target, heat and pump ownership instead of using one global control mode.
+
+```text
+switch.brewassistant_brewzilla_manual_target_override = on
+  -> operator target is effective Manual Brew target
+  -> number.brewzilla_target_temperature is preserved from normal BA reassert
+
+switch.brewassistant_brewzilla_allow_heater_control = on
+  -> BA AUTO owns heater + heat utilization
+switch.brewassistant_brewzilla_allow_heater_control = off
+  -> operator owns heater + heat utilization
+
+switch.brewassistant_brewzilla_allow_pump_control = on
+  -> BA AUTO owns pump + pump utilization
+switch.brewassistant_brewzilla_allow_pump_control = off
+  -> operator owns pump + pump utilization
+```
+
+Mixed ownership is valid. The final guard suppresses normal target/utilization/switch reassert actions only for channels currently owned by the operator.
+
+Relevant implementation:
+
+```text
+custom_components/brewassistant/brewday/manual_brewday_adapter.py
+custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py
+```
+
+Expected diagnostics include:
+
+```yaml
+manual_brew_control_active: true
+manual_target_override_active: true|false
+manual_heater_auto_allowed: true|false
+manual_pump_auto_allowed: true|false
+manual_heat_override_active: true|false
+manual_pump_override_active: true|false
+manual_control_safety_override_active: true|false
+```
+
+Physical validation is still required to confirm that operator-owned target/heat/pump values remain stable across repeated real BrewZilla/RAPT Cloud Link coordinator cycles.
+
+## Brewfather / Manual Brew mutual exclusion
+
+Brewfather Brew Tracker remains authoritative while its normalized status is exactly `active`.
+
+```text
+BF active -> positive Manual Brew actions are blocked
+BF becomes active mid-Manual -> Manual Brew is paused
+BF later becomes inactive -> Manual Brew remains paused until explicitly restarted
+```
+
+BrewAssistant does not silently terminate the external Brewfather session. This runtime ownership rule prevents Brewfather intent and Manual Brew intent from competing for the same Brewday at the same time.
+
 ## Positive-control gate
 
 Brewday Advice must not resurrect stale targets when Brewday Runtime is idle, inactive, completed or otherwise outside an active control state.
@@ -348,6 +412,16 @@ rcl_value_stale_guard_refresh_requested: true   # only if RCL value actually sta
 local_regulation_heat_guard_active: true        # only when a stale/guard layer tries to kill heat despite valid target
 brewzilla_equipment_learning_observations: ...
 brewzilla_equipment_learning_suggestion: ...    # optional candidate, not auto-applied
+```
+
+For Manual Brew Control v2 physical validation, additionally verify:
+
+```text
+- manual target remains unchanged beyond the old ~45 s lease window
+- manual heat utilization remains unchanged while heater AUTO is disabled
+- manual pump utilization remains unchanged while pump AUTO is disabled
+- switching one channel back to AUTO lets BA retake only that channel
+- BF active blocks/pauses Manual Brew without causing automatic resume later
 ```
 
 Also verify that long stretches of:
