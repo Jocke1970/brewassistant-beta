@@ -26,7 +26,7 @@ def brewfather_brew_tracker_active(hass: HomeAssistant) -> bool:
 def _ownership_error() -> HomeAssistantError:
     return HomeAssistantError(
         "Manual Brewday is blocked while Brewfather Brew Tracker is active. "
-        "Stop/finish the active Brewfather Brew Tracker session before taking "
+        "Stop or finish the active Brewfather Brew Tracker session before taking "
         "manual control."
     )
 
