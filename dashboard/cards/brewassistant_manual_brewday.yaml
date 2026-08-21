@@ -282,73 +282,88 @@ card:
           - text-align: left
           - white-space: normal
           - margin-top: 4px
-    - type: custom:expander-card
-      title-card:
-        type: custom:button-card
-        name: BrewZilla · manual control
-        icon: mdi:tune-variant
-        show_state: false
-        show_label: true
-        label: |
-          [[[
-            const targetManual = states['switch.brewassistant_brewzilla_manual_target_override']?.state === 'on';
-            const heatAuto = states['switch.brewassistant_brewzilla_allow_heater_control']?.state === 'on';
-            const pumpAuto = states['switch.brewassistant_brewzilla_allow_pump_control']?.state === 'on';
-            return `Target ${targetManual ? 'MAN' : 'AUTO'} · Heat ${heatAuto ? 'AUTO' : 'MAN'} · Pump ${pumpAuto ? 'AUTO' : 'MAN'}`;
-          ]]]
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px
-            - background: rgba(33,150,243,.06)
-            - border: 1px solid rgba(33,150,243,.18)
-          grid:
-            - grid-template-areas: "\"i n\" \"i l\""
-            - grid-template-columns: 34px minmax(0,1fr)
-            - column-gap: 10px
-          icon:
-            - width: 22px
-            - height: 22px
-          name:
-            - justify-self: start
-            - font-size: 14px
-            - font-weight: 950
-          label:
-            - justify-self: start
-            - text-align: left
-            - white-space: normal
-            - font-size: 11.5px
-            - font-weight: 750
-            - opacity: 0.72
-      cards:
-        - type: markdown
-          content: >-
-            **Ownership in Manual Brew:** enable **Manual target override** to keep
-            BrewZilla at the target below. When **BA may control heat/pump** is off,
-            BrewAssistant leaves that channel to the operator. Safety/ABORT may still
-            force the hardware to a safe state.
-        - type: entities
-          show_header_toggle: false
-          entities:
-            - entity: switch.brewassistant_brewzilla_manual_target_override
-              name: Manual target override
-              icon: mdi:hand-back-right-outline
-            - entity: number.brewzilla_target_temperature
-              name: Target temperature
-            - type: divider
-            - entity: switch.brewassistant_brewzilla_allow_heater_control
-              name: BA may control heat (Auto)
-            - entity: number.brewzilla_heat_utilization
-              name: Heat utilization
-            - entity: switch.brewzilla_heater
-              name: Heater
-            - type: divider
-            - entity: switch.brewassistant_brewzilla_allow_pump_control
-              name: BA may control pump (Auto)
-            - entity: number.brewzilla_pump_utilization
-              name: Pump utilization
-            - entity: switch.brewzilla_pump
-              name: Pump
+    - type: conditional
+      conditions:
+        - entity: sensor.brewfather_brew_tracker_status
+          state: "active"
+      card:
+        type: markdown
+        content: >-
+          ⚠️ **Brewfather Brew Tracker is active.** Manual Brew is locked until the
+          active Brewfather session has been stopped or finished. If Manual Brew
+          was already running, it is paused automatically and will not auto-resume.
+    - type: conditional
+      conditions:
+        - entity: sensor.brewfather_brew_tracker_status
+          state_not: "active"
+      card:
+        type: custom:expander-card
+        title-card:
+          type: custom:button-card
+          name: BrewZilla · manual control
+          icon: mdi:tune-variant
+          show_state: false
+          show_label: true
+          label: |
+            [[[
+              const targetManual = states['switch.brewassistant_brewzilla_manual_target_override']?.state === 'on';
+              const heatAuto = states['switch.brewassistant_brewzilla_allow_heater_control']?.state === 'on';
+              const pumpAuto = states['switch.brewassistant_brewzilla_allow_pump_control']?.state === 'on';
+              return `Target ${targetManual ? 'MAN' : 'AUTO'} · Heat ${heatAuto ? 'AUTO' : 'MAN'} · Pump ${pumpAuto ? 'AUTO' : 'MAN'}`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 18px
+              - padding: 12px
+              - background: rgba(33,150,243,.06)
+              - border: 1px solid rgba(33,150,243,.18)
+            grid:
+              - grid-template-areas: "\"i n\" \"i l\""
+              - grid-template-columns: 34px minmax(0,1fr)
+              - column-gap: 10px
+            icon:
+              - width: 22px
+              - height: 22px
+            name:
+              - justify-self: start
+              - font-size: 14px
+              - font-weight: 950
+            label:
+              - justify-self: start
+              - text-align: left
+              - white-space: normal
+              - font-size: 11.5px
+              - font-weight: 750
+              - opacity: 0.72
+        cards:
+          - type: markdown
+            content: >-
+              **Ownership in Manual Brew:** enable **Manual target override** to keep
+              BrewZilla at the target below. When **BA may control heat/pump** is off,
+              BrewAssistant leaves that channel to the operator. Safety/ABORT may still
+              force the hardware to a safe state.
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: switch.brewassistant_brewzilla_manual_target_override
+                name: Manual target override
+                icon: mdi:hand-back-right-outline
+              - entity: number.brewzilla_target_temperature
+                name: Target temperature
+              - type: divider
+              - entity: switch.brewassistant_brewzilla_allow_heater_control
+                name: BA may control heat (Auto)
+              - entity: number.brewzilla_heat_utilization
+                name: Heat utilization
+              - entity: switch.brewzilla_heater
+                name: Heater
+              - type: divider
+              - entity: switch.brewassistant_brewzilla_allow_pump_control
+                name: BA may control pump (Auto)
+              - entity: number.brewzilla_pump_utilization
+                name: Pump utilization
+              - entity: switch.brewzilla_pump
+                name: Pump
     - type: custom:expander-card
       title-card:
         type: custom:button-card
