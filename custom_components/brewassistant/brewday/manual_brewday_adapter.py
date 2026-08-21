@@ -19,8 +19,23 @@ MANUAL_TARGET_OVERRIDE = "switch.brewassistant_brewzilla_manual_target_override"
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
 
 
+def _state(hass: HomeAssistant, entity_id: str):
+    direct = hass.states.get(entity_id)
+    if direct is not None:
+        return direct
+    if "." not in entity_id:
+        return None
+    domain, object_id = entity_id.split(".", 1)
+    suffix = f"_{object_id}"
+    for candidate in hass.states.async_all(domain):
+        candidate_object_id = candidate.entity_id.split(".", 1)[1]
+        if candidate_object_id == object_id or candidate_object_id.endswith(suffix):
+            return candidate
+    return None
+
+
 def _state_float(hass: HomeAssistant, entity_id: str) -> float | None:
-    state = hass.states.get(entity_id)
+    state = _state(hass, entity_id)
     if state is None or state.state in {"unknown", "unavailable", "none", ""}:
         return None
     try:
@@ -29,13 +44,18 @@ def _state_float(hass: HomeAssistant, entity_id: str) -> float | None:
         return None
 
 
+def _state_is_on(hass: HomeAssistant, entity_id: str) -> bool:
+    state = _state(hass, entity_id)
+    return state is not None and str(state.state).lower() == "on"
+
+
 def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Return a normalized Manual Brewday snapshot from the Python engine."""
     session = get_manual_brewday_session(hass)
     snapshot = session.to_snapshot()
 
     step_target = snapshot.get("target_temperature")
-    target_override = hass.states.is_state(MANUAL_TARGET_OVERRIDE, "on")
+    target_override = _state_is_on(hass, MANUAL_TARGET_OVERRIDE)
     operator_target = _state_float(hass, BREWZILLA_TARGET_NUMBER) if target_override else None
     if operator_target is not None:
         snapshot["target_temperature"] = operator_target
