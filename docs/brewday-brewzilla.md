@@ -32,6 +32,7 @@ Important safety boundaries:
 - Once BrewZilla has a valid local target, BrewZilla may continue local regulation.
 - Recovery/diagnostic guards may refresh/reload RCL, but must not change target/heat/pump as part of recovery.
 - Operator mash-in confirmation remains explicit and one-way.
+- Manual Brew operator ownership is channel-scoped, but it never overrides an already blocked safety/freshness/ABORT decision.
 ```
 
 ---
@@ -132,6 +133,75 @@ live_timer_active = false
 ```
 
 BrewAssistant keeps the current step and target instead of advancing into `awaiting_snapshot` just because remaining time reaches zero while paused.
+
+---
+
+## Brewfather vs Manual Brew ownership
+
+Brewfather Brew Tracker and Manual Brew are intentionally mutually exclusive for positive Brewday control.
+
+Brewfather is considered active for this ownership rule only when its normalized tracker status is exactly:
+
+```text
+active
+```
+
+When Brewfather is active:
+
+```text
+- Brewfather remains the authoritative normalized runtime source.
+- Manual Brew prepare/start/next/direct-stage-jump actions are rejected.
+- Pause, finish and reset remain available so Manual Brew can always be made safe or cleared.
+- If Manual Brew was already running or awaiting confirmation, it is automatically paused when runtime ownership is evaluated.
+- When Brewfather later becomes inactive, Manual Brew does not auto-resume; the operator must explicitly start it again.
+- BrewAssistant does not silently stop or finish the external Brewfather session.
+```
+
+Relevant modules:
+
+```text
+custom_components/brewassistant/brewday/brewday_runtime.py
+custom_components/brewassistant/brewday/manual_brewday_store.py
+```
+
+This precedence is separate from the Manual Brew BrewZilla channel ownership described below. Brewfather decides which Brewday runtime is authoritative; the Manual Brew control guard decides which BrewZilla output channels BA may reassert while Manual Brew is the active runtime.
+
+---
+
+## Manual Brew target / heat / pump ownership
+
+When the normalized runtime source is `Manual Brewday`, the operator may own target, heat and pump independently.
+
+```text
+Manual Target Override ON
+  -> operator owns BrewZilla target
+  -> current number.brewzilla_target_temperature becomes the effective Manual Brew target
+
+Allow Heater Control ON
+  -> BrewAssistant AUTO owns heater + heat utilization
+Allow Heater Control OFF
+  -> operator owns heater + heat utilization
+
+Allow Pump Control ON
+  -> BrewAssistant AUTO owns pump + pump utilization
+Allow Pump Control OFF
+  -> operator owns pump + pump utilization
+```
+
+Mixed ownership is intentional. For example, the operator may own target + heat while BrewAssistant still runs the pump automatically.
+
+The Manual Brew ownership gate runs last in the normal orchestration decision chain so Advice, mash/local-control and lease logic cannot casually take an operator-owned channel back. However, a snapshot already blocked by safety/freshness or an active ABORT lockout bypasses manual suppression; safe-state behavior always has higher priority.
+
+Relevant modules:
+
+```text
+custom_components/brewassistant/brewday/manual_brewday_adapter.py
+custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py
+```
+
+The dashboard exposes the ownership switches together with raw BrewZilla target/utilization controls. While Brewfather status is `active`, the raw Manual BrewZilla control panel is hidden and a conflict warning is shown.
+
+Physical persistence of these operator values across repeated BrewZilla/RAPT Cloud Link coordinator cycles is still pending a real-device validation.
 
 ---
 
@@ -374,6 +444,10 @@ mash_in_gate_*
 rcl_active_hot_side_recovery_*
 rapt_brewzilla_*_age_seconds
 ba_owned_* utilization/reassert fields
+manual_brew_control_*
+manual_target_override_active
+manual_heat_override_active
+manual_pump_override_active
 ```
 
 `last_target` prefers runtime target, but can fall back to requested/applied/device target values for action events where the runtime target was unavailable in older stored events.
@@ -404,6 +478,11 @@ Recommended next checks:
 ✅ Event Log autostarts from active runtime
 ✅ RCL recovery exposes diagnostics and does not change target/heat/pump
 ✅ Mash-In Started cannot revert mash_in_complete
+✅ Manual Brew Control v2 loads cleanly in Home Assistant
+⏳ Physical Manual target persistence across repeated coordinator/RCL cycles
+⏳ Physical Manual heat/pump utilization persistence with AUTO disabled
+⏳ Mixed Manual/AUTO channel ownership on real BrewZilla
+⏳ Brewfather-active conflict/pause behavior in operator workflow
 ⏳ Full boil ramp + 10 min boil validation
 ⏳ Real-mash thermal validation, separate from Water only learning
 ```
