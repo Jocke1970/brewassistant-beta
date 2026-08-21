@@ -16,7 +16,10 @@ from homeassistant.core import HomeAssistant
 from .brewday_ramp_target_gate import build_core_snapshot, core_attrs, source
 from .manual_brewday_adapter import build_manual_engine_snapshot
 from .manual_brewday_runtime import ManualRuntimeState
-from .manual_brewday_store import get_manual_brewday_session
+from .manual_brewday_store import (
+    get_manual_brewday_session,
+    pause_manual_brewday_for_brewfather,
+)
 
 
 MANUAL_RUNTIME_ACTIVE_STATES = {
@@ -42,6 +45,7 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """
     runtime_source = source(hass)
     if runtime_source == "Brewfather Brew Tracker":
+        pause_manual_brewday_for_brewfather(hass)
         return build_core_snapshot(hass)
     if _manual_engine_is_active(hass):
         return build_manual_engine_snapshot(hass)
