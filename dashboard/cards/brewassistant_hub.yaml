@@ -246,6 +246,25 @@ cards:
             return `${runtime} · ${source}<br>${stage} · ${visible}`;
           ]]]
         styles: *hub_module_tile
+      - type: conditional
+        conditions:
+          - entity: switch.brewassistant_show_brewday
+            state: "on"
+          - entity: sensor.brewassistant_manual_brewday_status
+            state: "idle"
+          - entity: sensor.brewfather_brew_tracker_status
+            state_not: "active"
+        card:
+          type: custom:button-card
+          name: Prepare Manual Brewday
+          icon: mdi:clipboard-check-outline
+          show_state: false
+          show_label: true
+          label: Activates Manual Brewday without starting the brew
+          tap_action:
+            action: call-service
+            service: brewassistant.manual_brewday_prepare
+          styles: *hub_module_tile
       - type: custom:button-card
         entity: switch.brewassistant_show_fermentation
         name: Fermentation
