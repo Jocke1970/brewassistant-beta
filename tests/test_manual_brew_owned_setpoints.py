@@ -59,8 +59,21 @@ def test_manual_guard_keeps_reconciliation_enabled_for_operator_setpoints() -> N
     assert 'MANUAL_TARGET_SETPOINT = "number.brewassistant_brewzilla_manual_target_temperature"' in source
     assert 'MANUAL_HEAT_SETPOINT = "number.brewassistant_brewzilla_manual_heat_utilization"' in source
     assert 'MANUAL_PUMP_SETPOINT = "number.brewassistant_brewzilla_manual_pump_utilization"' in source
-    assert 'out["target_sync_needed"] = False' not in source
     assert "base._utilization_action_needed" in source
+
+
+def test_manual_pause_overrides_operator_ownership_with_safe_down() -> None:
+    source = CONTROL_SOURCE.read_text(encoding="utf-8")
+    assert 'paused = bool(active and runtime_state == "paused")' in source
+    assert '"manual_pause_safe_down_active": paused' in source
+    assert '"desired_heat_utilization": 0.0' in source
+    assert '"desired_pump_utilization": 0.0' in source
+    assert '"desired_heater_on": False' in source
+    assert '"desired_pump_on": False' in source
+    assert '"heater_stop_needed": bool(out.get("heater_on"))' in source
+    assert '"pump_stop_needed": bool(out.get("pump_on"))' in source
+    assert '"target_sync_needed": False' in source
+    assert "setpoints are retained for explicit resume" in source
 
 
 def test_manual_dashboard_uses_ba_owned_numeric_controls_in_both_languages() -> None:
