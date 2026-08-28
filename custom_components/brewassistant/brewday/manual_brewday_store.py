@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 from ..const import DOMAIN
-from .brewday_runtime_core import BF_STATUS, BREWDAY_ACTIVE_STATUS, state as runtime_state
+from .brewday_runtime_core import brewfather_session_active
 from .manual_brewday_runtime import ManualRuntimeSession, ManualRuntimeState
 
 KEY = "manual_brewday_session"
@@ -19,8 +19,8 @@ _ACTIVE_MANUAL_STATES = {
 
 
 def brewfather_brew_tracker_active(hass: HomeAssistant) -> bool:
-    """Return true only while Brewfather Brew Tracker is explicitly active."""
-    return runtime_state(hass, BF_STATUS, "").strip().lower() == BREWDAY_ACTIVE_STATUS
+    """Return the same Brewfather ownership decision used by runtime source selection."""
+    return brewfather_session_active(hass)
 
 
 def _ownership_error() -> HomeAssistantError:
