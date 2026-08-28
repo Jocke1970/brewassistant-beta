@@ -11,7 +11,11 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .carbonation_backend.carbonation_runtime import async_save_carbonation_runtime, get_carbonation_runtime, update_carbonation_runtime
+from .carbonation_backend.carbonation_runtime import (
+    async_save_carbonation_runtime,
+    get_carbonation_runtime,
+    update_carbonation_runtime,
+)
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .cooling.counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
@@ -89,6 +93,42 @@ KEGERATOR_FAN_NUMBERS: dict[str, dict[str, Any]] = {
         "max": 60.0,
         "step": 1.0,
         "default": 10.0,
+    },
+}
+
+MANUAL_BREWZILLA_NUMBERS: dict[str, dict[str, Any]] = {
+    "brewzilla_manual_target_temperature": {
+        "name": "BrewAssistant BrewZilla Manual Target Temperature",
+        "object_id": "brewassistant_brewzilla_manual_target_temperature",
+        "icon": "mdi:target",
+        "unit": "°C",
+        "min": 0.0,
+        "max": 110.0,
+        "step": 1.0,
+        "default": 20.0,
+        "device_entity": "number.brewzilla_target_temperature",
+    },
+    "brewzilla_manual_heat_utilization": {
+        "name": "BrewAssistant BrewZilla Manual Heat Utilization",
+        "object_id": "brewassistant_brewzilla_manual_heat_utilization",
+        "icon": "mdi:fire",
+        "unit": "%",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 5.0,
+        "default": 0.0,
+        "device_entity": "number.brewzilla_heat_utilization",
+    },
+    "brewzilla_manual_pump_utilization": {
+        "name": "BrewAssistant BrewZilla Manual Pump Utilization",
+        "object_id": "brewassistant_brewzilla_manual_pump_utilization",
+        "icon": "mdi:pump",
+        "unit": "%",
+        "min": 0.0,
+        "max": 100.0,
+        "step": 5.0,
+        "default": 0.0,
+        "device_entity": "number.brewzilla_pump_utilization",
     },
 }
 
@@ -183,10 +223,109 @@ async def async_setup_entry(
             for key, config in KEGERATOR_FAN_NUMBERS.items()
         ]
         + [
+            BrewAssistantManualBrewZillaNumber(coordinator, key, config)
+            for key, config in MANUAL_BREWZILLA_NUMBERS.items()
+        ]
+        + [
             BrewAssistantBatchContextNumber(coordinator, key, config)
             for key, config in BATCH_CONTEXT_NUMBERS.items()
         ]
     )
+
+
+class BrewAssistantManualBrewZillaNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
+    """Operator-owned Manual Brew setpoint, separate from BrewZilla readback."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
+        super().__init__(coordinator, key)
+        self._config = config
+        self._value: float | None = None
+        self._attr_unique_id = f"{DOMAIN}_number_{key}"
+        self._attr_name = str(config["name"])
+        self._attr_suggested_object_id = str(config["object_id"])
+        self.entity_id = f"number.{self._config['object_id']}"
+        self._attr_icon = str(config["icon"])
+        self._attr_native_unit_of_measurement = str(config["unit"])
+        self._attr_native_min_value = float(config["min"])
+        self._attr_native_max_value = float(config["max"])
+        self._attr_native_step = float(config["step"])
+
+    def _ensure_stable_entity_id(self) -> None:
+        desired_entity_id = f"number.{self._config['object_id']}"
+        registry = er.async_get(self.coordinator.hass)
+        current_entity_id = registry.async_get_entity_id(
+            "number",
+            DOMAIN,
+            str(self._attr_unique_id),
+        )
+        if current_entity_id is None or current_entity_id == desired_entity_id:
+            return
+        existing = registry.async_get(desired_entity_id)
+        if existing is not None and existing.unique_id != self._attr_unique_id:
+            return
+        try:
+            registry.async_update_entity(current_entity_id, new_entity_id=desired_entity_id)
+            self.entity_id = desired_entity_id
+        except ValueError:
+            return
+
+    def _normalize(self, value: float) -> float:
+        minimum = float(self._config["min"])
+        maximum = float(self._config["max"])
+        step = float(self._config["step"])
+        clamped = max(minimum, min(float(value), maximum))
+        stepped = minimum + round((clamped - minimum) / step) * step
+        return round(max(minimum, min(stepped, maximum)), 6)
+
+    def _device_value(self) -> float | None:
+        state = self.coordinator.hass.states.get(str(self._config["device_entity"]))
+        if state is None or state.state in {"unknown", "unavailable", "none", ""}:
+            return None
+        try:
+            return float(str(state.state).replace(",", "."))
+        except (TypeError, ValueError):
+            return None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore operator intent; initialize safely from current device readback."""
+        await super().async_added_to_hass()
+        self._ensure_stable_entity_id()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state not in {"unknown", "unavailable", "none", ""}:
+            try:
+                self._value = self._normalize(float(last_state.state))
+                return
+            except (TypeError, ValueError):
+                pass
+        device_value = self._device_value()
+        if device_value is not None:
+            self._value = self._normalize(device_value)
+        else:
+            self._value = self._normalize(float(self._config["default"]))
+
+    @property
+    def native_value(self) -> float | None:
+        """Return persistent operator setpoint, never device readback."""
+        return self._value
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set operator intent and immediately ask orchestration to reconcile it."""
+        self._value = self._normalize(value)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return command/readback separation diagnostics."""
+        return {
+            "source": "manual_brew_operator_setpoint",
+            "device_readback_entity": self._config["device_entity"],
+            "device_readback_value": self._device_value(),
+            "operator_owned_command": True,
+            "step": self._config["step"],
+        }
 
 
 class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
@@ -309,7 +448,7 @@ class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, Number
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return diagnostics."""
+        """Return diagnostic attributes."""
         return {
             "source": "kegerator_fan_simple_control",
             "default": self._config.get("default"),
