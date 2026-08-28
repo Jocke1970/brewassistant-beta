@@ -137,11 +137,24 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         return out
 
     # The Manual Brew adapter has already replaced requested_target with the
-    # operator-owned BA setpoint. Keep target_sync_needed intact: orchestration
-    # must compare that desired value with BrewZilla readback and reassert until
-    # they match.
+    # operator-owned BA setpoint. Recompute target reconciliation here, after
+    # normal lease/advice guards, so those guards cannot erase operator intent.
+    # Safety/ABORT still wins because blocked snapshots return above.
     if target_override:
+        out["requested_target"] = manual_target
         out["requested_target_source"] = "manual_operator_setpoint"
+        applied_target = out.get("applied_target")
+        try:
+            applied_target = float(applied_target) if applied_target is not None else None
+        except (TypeError, ValueError):
+            applied_target = None
+        if applied_target is None:
+            out["target_delta"] = None
+            out["target_sync_needed"] = True
+        else:
+            target_delta = round(float(manual_target) - applied_target, 2)
+            out["target_delta"] = target_delta
+            out["target_sync_needed"] = abs(target_delta) > base.TARGET_SYNC_TOLERANCE
 
     # Manual heat/pump ownership means BA must not decide ON/OFF state, but the
     # orchestration transport still applies and reasserts the operator's numeric
