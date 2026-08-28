@@ -256,6 +256,41 @@ card:
           - text-align: left
           - white-space: normal
           - margin-top: 4px
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
+        - entity: sensor.brewfather_brew_tracker_status
+          state_not: "active"
+      card:
+        type: custom:button-card
+        name: PREPARE MANUAL BREWDAY
+        icon: mdi:clipboard-check-outline
+        show_state: false
+        show_label: true
+        label: Activates Manual Brewday without starting the brew
+        tap_action:
+          action: call-service
+          service: brewassistant.manual_brewday_prepare
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - min-height: 64px
+            - background: rgba(255,152,0,.10)
+            - border: 1px solid rgba(255,152,0,.24)
+          icon:
+            - width: 24px
+            - height: 24px
+            - color: rgb(255,152,0)
+          name:
+            - font-size: 12px
+            - font-weight: 950
+          label:
+            - font-size: 10.5px
+            - font-weight: 750
+            - opacity: 0.72
+            - white-space: normal
     - type: horizontal-stack
       cards:
         - type: custom:button-card
