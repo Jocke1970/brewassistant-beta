@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from .manual_brewday_store import get_manual_brewday_session
 
 MANUAL_TARGET_OVERRIDE = "switch.brewassistant_brewzilla_manual_target_override"
-BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
+MANUAL_TARGET_NUMBER = "number.brewassistant_brewzilla_manual_target_temperature"
 
 
 def _state(hass: HomeAssistant, entity_id: str):
@@ -56,7 +56,7 @@ def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     step_target = snapshot.get("target_temperature")
     target_override = _state_is_on(hass, MANUAL_TARGET_OVERRIDE)
-    operator_target = _state_float(hass, BREWZILLA_TARGET_NUMBER) if target_override else None
+    operator_target = _state_float(hass, MANUAL_TARGET_NUMBER) if target_override else None
     if operator_target is not None:
         snapshot["target_temperature"] = operator_target
 
@@ -79,6 +79,7 @@ def build_manual_engine_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "actual_temperature": None,
         "step_target_temperature": step_target,
         "operator_target_temperature": operator_target,
+        "operator_target_entity": MANUAL_TARGET_NUMBER,
         "target_override_active": bool(target_override and operator_target is not None),
         "target_temperature_source": (
             "operator_override" if target_override and operator_target is not None else "manual_step"
