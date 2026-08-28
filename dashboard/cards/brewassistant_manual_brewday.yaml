@@ -291,50 +291,144 @@ card:
             - type: custom:button-card
               name: Prepare
               icon: mdi:clipboard-check-outline
+              variables:
+                enabled: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'idle').toLowerCase() === 'idle';
+                  ]]]
+                current: false
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_prepare
               styles: &manual_action
                 card:
                   - border-radius: 15px
                   - padding: 9px 7px
                   - min-height: 58px
-                  - background: rgba(255,152,0,.08)
-                  - border: 1px solid rgba(255,152,0,.18)
+                  - background: |
+                      [[[
+                        if (variables.current) return 'rgba(33,150,243,.13)';
+                        return variables.enabled ? 'rgba(255,152,0,.10)' : 'rgba(127,127,127,.045)';
+                      ]]]
+                  - border: |
+                      [[[
+                        if (variables.current) return '1px solid rgba(33,150,243,.32)';
+                        return variables.enabled ? '1px solid rgba(255,152,0,.28)' : '1px solid rgba(127,127,127,.10)';
+                      ]]]
+                  - opacity: |
+                      [[[
+                        return variables.current || variables.enabled ? '1' : '.45';
+                      ]]]
                 icon:
                   - width: 22px
                   - height: 22px
-                  - color: rgb(255,152,0)
+                  - color: |
+                      [[[
+                        if (variables.current) return 'rgb(33,150,243)';
+                        return variables.enabled ? 'rgb(255,152,0)' : 'rgba(127,127,127,.65)';
+                      ]]]
                 name:
                   - font-size: 11px
                   - font-weight: 950
                   - white-space: normal
+                  - color: |
+                      [[[
+                        return variables.current || variables.enabled ? 'var(--primary-text-color)' : 'var(--secondary-text-color)';
+                      ]]]
             - type: custom:button-card
-              name: Start
-              icon: mdi:play-circle-outline
+              name: Heat strike
+              icon: mdi:fire
+              variables:
+                enabled: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase() === 'prepared';
+                  ]]]
+                current: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    const step = String(states['sensor.brewassistant_brewday_runtime_step']?.state ?? '').toLowerCase();
+                    return runtime !== 'prepared' && step.includes('heat strike');
+                  ]]]
               tap_action:
-                action: call-service
-                service: brewassistant.manual_brewday_start
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
+                service: brewassistant.manual_brewday_next
               styles: *manual_action
             - type: custom:button-card
-              name: Pause
-              icon: mdi:pause-circle-outline
+              name: |
+                [[[
+                  const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                  if (runtime === 'paused') return 'Resume';
+                  if (runtime === 'awaiting_confirm') return 'Continue';
+                  return 'Pause';
+                ]]]
+              icon: |
+                [[[
+                  const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                  return runtime === 'paused' || runtime === 'awaiting_confirm' ? 'mdi:play-circle-outline' : 'mdi:pause-circle-outline';
+                ]]]
+              variables:
+                enabled: |
+                  [[[
+                    return ['running','paused','awaiting_confirm'].includes(String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase());
+                  ]]]
+                current: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase() === 'paused';
+                  ]]]
               tap_action:
-                action: call-service
-                service: brewassistant.manual_brewday_pause
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
+                service: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    return runtime === 'paused' || runtime === 'awaiting_confirm'
+                      ? 'brewassistant.manual_brewday_start'
+                      : 'brewassistant.manual_brewday_pause';
+                  ]]]
               styles: *manual_action
             - type: custom:button-card
               name: Next
               icon: mdi:skip-next-circle-outline
+              variables:
+                enabled: |
+                  [[[
+                    return ['running','paused','awaiting_confirm'].includes(String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase());
+                  ]]]
+                current: false
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_next
               styles: *manual_action
             - type: custom:button-card
               name: Mash
               icon: mdi:barley
+              variables:
+                current: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('mash');
+                  ]]]
+                enabled: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    const current = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('mash');
+                    return ['running','paused','awaiting_confirm'].includes(runtime) && !current;
+                  ]]]
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_start_mash
                 confirmation:
                   text: Jump Manual Brewday to Mash?
@@ -342,8 +436,22 @@ card:
             - type: custom:button-card
               name: Boil
               icon: mdi:kettle-steam-outline
+              variables:
+                current: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('boil');
+                  ]]]
+                enabled: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    const current = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('boil');
+                    return ['running','paused','awaiting_confirm'].includes(runtime) && !current;
+                  ]]]
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_start_boil
                 confirmation:
                   text: Jump Manual Brewday to Boil?
@@ -351,8 +459,22 @@ card:
             - type: custom:button-card
               name: Hopstand
               icon: mdi:leaf
+              variables:
+                current: |
+                  [[[
+                    return String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('whirlpool');
+                  ]]]
+                enabled: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    const current = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase().includes('whirlpool');
+                    return ['running','paused','awaiting_confirm'].includes(runtime) && !current;
+                  ]]]
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_start_whirlpool
                 confirmation:
                   text: Jump Manual Brewday to Whirlpool / Hopstand?
@@ -360,8 +482,24 @@ card:
             - type: custom:button-card
               name: Chill
               icon: mdi:snowflake-thermometer
+              variables:
+                current: |
+                  [[[
+                    const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+                    return stage.includes('chill') || stage.includes('cool');
+                  ]]]
+                enabled: |
+                  [[[
+                    const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+                    const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+                    const current = stage.includes('chill') || stage.includes('cool');
+                    return ['running','paused','awaiting_confirm'].includes(runtime) && !current;
+                  ]]]
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_start_cooling
                 confirmation:
                   text: Jump Manual Brewday to Cooling / Chill?
@@ -369,12 +507,24 @@ card:
             - type: custom:button-card
               name: Finish
               icon: mdi:check-circle-outline
+              variables:
+                enabled: |
+                  [[[
+                    return ['prepared','running','paused','awaiting_confirm'].includes(String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase());
+                  ]]]
+                current: false
               tap_action:
-                action: call-service
+                action: |
+                  [[[
+                    return variables.enabled ? 'call-service' : 'none';
+                  ]]]
                 service: brewassistant.manual_brewday_finish
                 confirmation:
                   text: Finish Manual Brewday?
               styles: *manual_action
+        - type: markdown
+          content: >-
+            **Button state:** orange = available · blue = current stage/state · grey = unavailable.
         - type: horizontal-stack
           cards:
             - type: custom:button-card
