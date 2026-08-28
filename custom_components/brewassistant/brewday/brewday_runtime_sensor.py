@@ -11,6 +11,7 @@ from .brewday_addition_alert_sensor import create_brewday_addition_alert_sensors
 from .brewday_audit_sensor import create_brewday_audit_sensors
 from .brewday_runtime import build_brewday_runtime_snapshot, brewday_runtime_attrs
 from .brewday_stage_sensor import create_brewday_stage_sensors
+from .manual_brewday_store import get_manual_brewday_session
 from ..brewzilla.brewzilla_energy_sensor import create_brewzilla_energy_sensors
 from ..brewzilla.brewzilla_learning_sensor import create_brewzilla_learning_sensors
 from ..brewzilla.brewzilla_orchestration_sensor import BrewAssistantBrewZillaOrchestrationSensor, ORCHESTRATION_SENSORS
@@ -65,6 +66,11 @@ BREWDAY_RUNTIME_SENSORS: dict[str, dict[str, Any]] = {
     "brewday_refresh_recommended": {"field": "refresh_recommended"},
 }
 
+MANUAL_BREWDAY_SESSION_SENSORS: dict[str, str] = {
+    "manual_brewday_status": "status",
+    "manual_brewday_stage": "stage",
+}
+
 
 def _display_name_from_key(key: str) -> str:
     """Return a stable human-readable name from an entity key."""
@@ -77,6 +83,10 @@ def create_brewday_runtime_sensors(
     """Create all Brewday Runtime, BrewZilla, Stage Engine, Audit, Learning, Energy and Addition sensors."""
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
+        + [
+            BrewAssistantManualBrewdaySessionSensor(coordinator, key, field)
+            for key, field in MANUAL_BREWDAY_SESSION_SENSORS.items()
+        ]
         + create_brewzilla_sensors(coordinator)
         + [
             BrewAssistantBrewZillaOrchestrationSensor(coordinator, key)
@@ -119,3 +129,39 @@ class BrewAssistantBrewdayRuntimeSensor(BrewAssistantEntity, SensorEntity):
         if self._key in {"brewday_runtime_summary", "brewday_runtime_state", "brewday_runtime_next_step"}:
             attrs["timeline"] = snapshot.get("timeline")
         return attrs
+
+
+class BrewAssistantManualBrewdaySessionSensor(BrewAssistantEntity, SensorEntity):
+    """Expose the Python-owned Manual Brewday session independently of runtime ownership."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, field: str) -> None:
+        """Initialize one Manual Brewday session sensor."""
+        super().__init__(coordinator, key)
+        self._key = key
+        self._field = field
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+
+    def _snapshot(self) -> dict[str, Any]:
+        return get_manual_brewday_session(self.coordinator.hass).to_snapshot()
+
+    @property
+    def native_value(self) -> Any:
+        """Return the requested Manual Brewday session field."""
+        return self._snapshot().get(self._field)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return useful Manual Brewday session diagnostics."""
+        snapshot = self._snapshot()
+        return {
+            "source": "Manual Brewday",
+            "runtime_state": snapshot.get("runtime_state"),
+            "stage": snapshot.get("stage"),
+            "step": snapshot.get("step"),
+            "next_step": snapshot.get("next_step"),
+            "progress": snapshot.get("progress"),
+            "summary": snapshot.get("summary"),
+        }
