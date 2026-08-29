@@ -43,7 +43,6 @@ dashboard/cards/brewtracker_runtime.yaml
 dashboard/cards/brewzilla.yaml
 dashboard/cards/brewzilla_mash_in_confirm.yaml
 dashboard/cards/brewzilla_local_control.yaml
-dashboard/cards/brewzilla_advice_auto.yaml
 dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
 dashboard/cards/counterflow_chiller.yaml
@@ -53,6 +52,8 @@ dashboard/cards/kegerator.yaml
 ```
 
 Every canonical card should have a corresponding `_sv.yaml` presentation mirror.
+
+`brewzilla_advice_auto.yaml` / `_sv.yaml` are retired. Their compact recommendation content is consolidated into `brewzilla_learning.yaml` / `_sv.yaml`, which is now the single Brewing Advice / Bryggråd surface.
 
 ---
 
@@ -193,7 +194,6 @@ Main files:
 dashboard/cards/brewzilla.yaml
 dashboard/cards/brewzilla_mash_in_confirm.yaml
 dashboard/cards/brewzilla_local_control.yaml
-dashboard/cards/brewzilla_advice_auto.yaml
 dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
 ```
@@ -210,15 +210,16 @@ Mash-In Confirm
 Local Control
   = target/local-regulation/lease visibility
 
-Brewday Advice
-  = why BA selected a control profile
+Brewing Advice / Bryggråd
+  = recommendation + explanation + risk/confidence + learning evidence
+  = APPLY/DENY / VERKSTÄLL/AVVISA for actionable learning recommendations
+  = expandable deeper learning diagnostics in the same card
 
 Safety/RCL
   = freshness/guards/filter/ABORT diagnostics
-
-Learning
-  = advisory/evidence review
 ```
+
+The previous separate `Brewday Advice` card is intentionally removed. Advice and Learning are one operator concept; Safety/RCL remains separate because it answers whether control/data is safe rather than what BA recommends.
 
 The BrewZilla `AVBRYT`/ABORT control continues to use the hardware-level `brewassistant.abort_brewzilla` path. The Brewday-level ABORT button reuses that same physical path and adds the persistent Brewday ownership latch.
 
