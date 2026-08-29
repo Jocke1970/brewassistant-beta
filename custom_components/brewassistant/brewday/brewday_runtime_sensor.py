@@ -11,6 +11,7 @@ from .brewday_addition_alert_sensor import create_brewday_addition_alert_sensors
 from .brewday_audit_sensor import create_brewday_audit_sensors
 from .brewday_runtime import build_brewday_runtime_snapshot, brewday_runtime_attrs
 from .brewday_stage_sensor import create_brewday_stage_sensors
+from .brewfather_ownership import brewfather_batch_phase
 from .manual_brewday_store import get_manual_brewday_session
 from ..brewzilla.brewzilla_energy_sensor import create_brewzilla_energy_sensors
 from ..brewzilla.brewzilla_learning_sensor import create_brewzilla_learning_sensors
@@ -84,6 +85,7 @@ def create_brewday_runtime_sensors(
     """Create all Brewday Runtime, BrewZilla, Stage Engine, Audit, Learning, Energy and Addition sensors."""
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
+        + [BrewAssistantBrewfatherBatchPhaseSensor(coordinator)]
         + [
             BrewAssistantManualBrewdaySessionSensor(coordinator, key, field)
             for key, field in MANUAL_BREWDAY_SESSION_SENSORS.items()
@@ -130,6 +132,22 @@ class BrewAssistantBrewdayRuntimeSensor(BrewAssistantEntity, SensorEntity):
         if self._key in {"brewday_runtime_summary", "brewday_runtime_state", "brewday_runtime_next_step"}:
             attrs["timeline"] = snapshot.get("timeline")
         return attrs
+
+
+class BrewAssistantBrewfatherBatchPhaseSensor(BrewAssistantEntity, SensorEntity):
+    """Expose the normalized Brewfather batch phase for process-scoped UI."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewfather_batch_phase")
+        self._attr_name = "BrewAssistant Brewfather Batch Phase"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewfather_batch_phase"
+
+    @property
+    def native_value(self) -> str:
+        """Return planning, brewing, fermenting or inactive."""
+        return brewfather_batch_phase(self.coordinator.hass)
 
 
 class BrewAssistantManualBrewdaySessionSensor(BrewAssistantEntity, SensorEntity):

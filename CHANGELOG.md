@@ -13,6 +13,41 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #151 — BrewTracker/Brewfather UI efter processfas
+
+### Sammanfattning
+
+BrewTracker och Brewfather visas nu efter vilken del av batchens livscykel som är relevant i stället för som två stora parallella kort med överlappande runtime-data. En ny integration-owned `sensor.brewassistant_brewfather_batch_phase` exponerar samma normaliserade `planning` / `brewing` / `fermenting` / `inactive`-fas som Brewfather ownership-backenden redan använder.
+
+`brewtracker_runtime*` är bryggdagskortet under Planning och Brewing. Planning visas som redo utan hot-side ownership, och Brewing innan Play visas explicit som pre-start/väntar på BrewTracker Play. Detta bevarar #147-regeln att batchfasen Brewing i sig inte är startbevis.
+
+`brewfather_feed*` behåller filnamnet för kompatibilitet men är nu ett kompakt Brewfather batch-/receptkort som endast visas under Fermenting. Det duplicerar inte Jäsningscockpitens temperatur/Pill/klimatstyrning; teknisk feed-hälsa hör fortsatt hemma i Source Health.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewtracker_runtime.yaml`
+- `dashboard/cards/brewtracker_runtime_sv.yaml`
+- `dashboard/cards/brewfather_feed.yaml`
+- `dashboard/cards/brewfather_feed_sv.yaml`
+
+### Ny entitet
+
+- `sensor.brewassistant_brewfather_batch_phase`
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/brewday_runtime_sensor.py`
+- `tests/test_brewfather_hot_side_ownership.py`
+- `tests/test_brewfather_process_phase_ui.py`
+- `dashboard/README.md`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom en ny integration-owned sensor skapas. Ersätt/reloada därefter de fyra BrewTracker/Brewfather-korten ovan.
+
+---
+
 ## 2026-08-29 — PR #150 — Brewday operator-ABORT + doc-sync
 
 ### Sammanfattning
