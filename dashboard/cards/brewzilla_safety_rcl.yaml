@@ -6,6 +6,7 @@ show_state: false
 show_label: true
 triggers_update:
   - switch.brewassistant_show_brewzilla_safety_rcl
+  - switch.brewassistant_show_safety_rcl
   - sensor.brewassistant_brewzilla_safety_state
   - sensor.brewassistant_brewzilla_orchestration_mode
   - sensor.brewassistant_brewzilla_control_reason
@@ -19,7 +20,8 @@ label: |
       const s = String(v);
       return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
     };
-    const manual = st['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+    const visibility = st['switch.brewassistant_show_brewzilla_safety_rcl'] || st['switch.brewassistant_show_safety_rcl'];
+    const manual = visibility?.state === 'on';
     const safety = clean(st['sensor.brewassistant_brewzilla_safety_state']?.state) || 'unknown';
     const mode = clean(st['sensor.brewassistant_brewzilla_orchestration_mode']?.state) || '—';
     const reason = clean(st['sensor.brewassistant_brewzilla_control_reason']?.state) || 'No active Safety/RCL issue.';
@@ -36,11 +38,11 @@ label: |
     const tone = warning ? 'rgba(244,67,54,.08)' : 'rgba(76,175,80,.08)';
     const border = warning ? 'rgba(244,67,54,.18)' : 'rgba(76,175,80,.18)';
     const footer = critical && !warning
-      ? `${String(reason).slice(0, 120)} · RAPT refresh rekommenderad, men ingen Safety/RCL-blockering.`
+      ? `${String(reason).slice(0, 120)} · RAPT refresh recommended, but no Safety/RCL blocking issue.`
       : String(reason).slice(0, 150);
     return `
       <div style="line-height:1.25;min-width:0;">
-        <div style="font-size:12px;font-weight:850;opacity:.66;">${warning ? 'aktiv varning / guard' : 'inga aktiva RCL-/safety-varningar'} · switch ${manual ? 'on' : 'off'}</div>
+        <div style="font-size:12px;font-weight:850;opacity:.66;">${warning ? 'active warning / guard' : 'no active RCL/safety warnings'} · switch ${manual ? 'on' : 'off'}</div>
         <div style="margin-top:7px;font-size:21px;font-weight:950;text-align:center;">${headline}</div>
         <div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;text-align:center;">${mode} · RCL ${rclAge ?? '—'}s</div>
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
@@ -58,7 +60,8 @@ styles:
         [[[
           const st = states;
           const attr = (id, key) => st[id]?.attributes?.[key];
-          const manual = st['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+          const visibility = st['switch.brewassistant_show_brewzilla_safety_rcl'] || st['switch.brewassistant_show_safety_rcl'];
+          const manual = visibility?.state === 'on';
           const safety = String(st['sensor.brewassistant_brewzilla_safety_state']?.state ?? '').toLowerCase();
           const issue = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_active') === true
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_blocking') === true
