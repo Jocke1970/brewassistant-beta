@@ -8,12 +8,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "custom_components/brewassistant/brewday/brewday_audit_autostart.py"
+AUDIT_SOURCE = ROOT / "custom_components/brewassistant/brewday/brewday_audit.py"
 BOUNDARY_SOURCE = ROOT / "custom_components/brewassistant/brewday/brewday_audit_session_boundary.py"
 BREWDAY_INIT = ROOT / "custom_components/brewassistant/brewday/__init__.py"
 
 
 def test_flight_recorder_source_parses() -> None:
     ast.parse(SOURCE.read_text(encoding="utf-8"))
+    ast.parse(AUDIT_SOURCE.read_text(encoding="utf-8"))
     ast.parse(BOUNDARY_SOURCE.read_text(encoding="utf-8"))
 
 
@@ -108,6 +110,14 @@ def test_flight_recorder_captures_ownership_setpoints_and_bz_readback() -> None:
     )
     for token in expected:
         assert token in source
+
+
+def test_flight_recorder_distinguishes_effective_and_physical_device_target() -> None:
+    source = AUDIT_SOURCE.read_text(encoding="utf-8")
+    assert 'BREWZILLA_EFFECTIVE_TARGET = "sensor.brewassistant_brewzilla_target_temperature"' in source
+    assert 'BREWZILLA_DEVICE_TARGET = "sensor.brewassistant_brewzilla_device_target_temperature"' in source
+    assert '"brewzilla_effective_target": _float_state(hass, BREWZILLA_EFFECTIVE_TARGET)' in source
+    assert '"brewzilla_device_target": _float_state(hass, BREWZILLA_DEVICE_TARGET)' in source
 
 
 def test_temperature_and_power_are_context_not_event_triggers() -> None:
