@@ -43,7 +43,11 @@ ACTIVE_STATES = {
 }
 
 BREWZILLA_CURRENT_TEMP = "sensor.brewassistant_brewzilla_current_temperature"
-BREWZILLA_DEVICE_TARGET = "sensor.brewassistant_brewzilla_target_temperature"
+# Keep the two target concepts explicit. The generic target sensor is the
+# normalized/effective target and intentionally follows an active Brewday
+# runtime, while device_target_temperature mirrors the physical RAPT number.
+BREWZILLA_EFFECTIVE_TARGET = "sensor.brewassistant_brewzilla_target_temperature"
+BREWZILLA_DEVICE_TARGET = "sensor.brewassistant_brewzilla_device_target_temperature"
 BREWZILLA_POWER = "sensor.brewzilla_power"
 BREWZILLA_HEATER = "switch.brewzilla_heater"
 BREWZILLA_PUMP = "switch.brewzilla_pump"
@@ -391,6 +395,7 @@ def _runtime_context(hass: HomeAssistant) -> dict[str, Any]:
 def _brewzilla_context(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "brewzilla_current_temp": _float_state(hass, BREWZILLA_CURRENT_TEMP),
+        "brewzilla_effective_target": _float_state(hass, BREWZILLA_EFFECTIVE_TARGET),
         "brewzilla_device_target": _float_state(hass, BREWZILLA_DEVICE_TARGET),
         "power_w": _float_state(hass, BREWZILLA_POWER),
         "main_power": _state(hass, BREWZILLA_MAIN),
@@ -457,6 +462,7 @@ def _merge_repeated_event(existing: dict[str, Any], event: dict[str, Any]) -> No
         "stage_remaining_seconds",
         "progress",
         "brewzilla_current_temp",
+        "brewzilla_effective_target",
         "brewzilla_device_target",
         "power_w",
         "heater_state",
