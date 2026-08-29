@@ -11,10 +11,11 @@ Dashboard YAML is a presentation and explicit operator-action layer. Runtime int
 ```text
 dashboard/
   brewassistant_sanity.yaml
+  brewassistant_sanity_sv.yaml
   cards/
 ```
 
-`dashboard/brewassistant_sanity.yaml` is the compact post-update smoke-test dashboard.
+`dashboard/brewassistant_sanity.yaml` is the compact post-update smoke-test dashboard. The `_sv.yaml` file is its Swedish presentation mirror.
 
 `dashboard/cards/` contains reusable daily-dashboard snippets. The old plural `dashboards/` directory is not the current source of truth.
 
@@ -29,10 +30,13 @@ Swedish card = presentation mirror using the same entity/action references
 
 ## Current reusable cards
 
+The current baseline contains 24 canonical cards and 24 Swedish `_sv.yaml` mirrors:
+
 ```text
 dashboard/cards/brewassistant_hub.yaml
 dashboard/cards/brewassistant_visibility_badges.yaml
 dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewsteps.yaml
 dashboard/cards/brewassistant_brewday_bf_reload.yaml
 dashboard/cards/brewassistant_brewday_event_log.yaml
 dashboard/cards/brewassistant_manual_brewday.yaml
@@ -41,7 +45,11 @@ dashboard/cards/brewfather_feed.yaml
 dashboard/cards/brewfather_recipe.yaml
 dashboard/cards/brewtracker_runtime.yaml
 dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_ble_status.yaml
+dashboard/cards/brewzilla_ble_indicator.yaml
+dashboard/cards/brewzilla_dual_temperature_gauge.yaml
 dashboard/cards/brewzilla_mash_in_confirm.yaml
+dashboard/cards/brewzilla_mash_in_controls.yaml
 dashboard/cards/brewzilla_local_control.yaml
 dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
@@ -51,7 +59,7 @@ dashboard/cards/fermentation.yaml
 dashboard/cards/kegerator.yaml
 ```
 
-Every canonical card should have a corresponding `_sv.yaml` presentation mirror.
+Every canonical card must have a corresponding `_sv.yaml` presentation mirror.
 
 `brewzilla_advice_auto.yaml` / `_sv.yaml` are retired. Their compact recommendation content is consolidated into `brewzilla_learning.yaml` / `_sv.yaml`, which is now the single Brewing Advice / Bryggråd surface.
 
@@ -140,6 +148,41 @@ The cockpit should show a red ABORT presentation while:
 sensor.brewassistant_brewday_runtime_state = aborted
 ```
 
+The 2026-08-29 physical regression verified that the operator ABORT survives a Home Assistant restart, continues to block Brewfather ownership, and only clears after the explicit rearm action.
+
+---
+
+## Brewsteps — BrewTracker-owned process map
+
+Files:
+
+```text
+dashboard/cards/brewassistant_brewsteps.yaml
+dashboard/cards/brewassistant_brewsteps_sv.yaml
+```
+
+Purpose: read-only physical process overview when Brewfather/BrewTracker owns the active brewday.
+
+Visibility contract:
+
+```text
+switch.brewassistant_show_brewday = on
+sensor.brewassistant_brewday_runtime_source = Brewfather Brew Tracker
+sensor.brewassistant_brewday_runtime_state != idle
+```
+
+Policy:
+
+```text
+- Show Heat strike -> Mash -> Mash out -> Sparge -> Boil -> Hopstand -> Chill -> Transfer.
+- Use normalized Brewday stage/step/next/progress/target plus physical BrewZilla phase context.
+- Never expose Manual Brewday service calls or progression buttons.
+- Brewfather/BrewTracker owns progression while this card is visible.
+- Manual Brewday keeps its separate interactive cockpit only while Manual owns runtime.
+```
+
+This card closes the UI gap where the interactive Manual Brewday step grid correctly disappeared under BrewTracker ownership but left no compact physical-process map in its place.
+
 ---
 
 ## BrewTracker Runtime
@@ -159,6 +202,7 @@ Policy:
 - Planning may be visible without being a hot-side owner.
 - Brewing pre-start may be visible without being a hot-side owner.
 - Raw Brewfather visibility must not imply BA physical-control authority.
+- After positive tracker-start evidence, Brewsteps provides the read-only physical process map.
 ```
 
 ---
@@ -192,7 +236,11 @@ Main files:
 
 ```text
 dashboard/cards/brewzilla.yaml
+dashboard/cards/brewzilla_ble_status.yaml
+dashboard/cards/brewzilla_ble_indicator.yaml
+dashboard/cards/brewzilla_dual_temperature_gauge.yaml
 dashboard/cards/brewzilla_mash_in_confirm.yaml
+dashboard/cards/brewzilla_mash_in_controls.yaml
 dashboard/cards/brewzilla_local_control.yaml
 dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
@@ -204,8 +252,14 @@ Responsibilities:
 BrewZilla
   = hardware cockpit + raw heater/pump visibility + physical ABORT
 
+BLE status / indicator / dual-temperature gauge
+  = external process-temperature visibility and kettle/internal comparison
+
+Mash-In Controls
+  = canonical explicit two-step mash-in handoff
+
 Mash-In Confirm
-  = explicit mash-in/circulation transition controls
+  = legacy compatibility mash-in/circulation transition surface
 
 Local Control
   = target/local-regulation/lease visibility
@@ -227,14 +281,14 @@ The BrewZilla `AVBRYT`/ABORT control continues to use the hardware-level `brewas
 
 ## BrewZilla mash-in operator baseline
 
-`dashboard/cards/brewzilla_mash_in_confirm.yaml` remains the explicit mash-in transition card.
+`dashboard/cards/brewzilla_mash_in_controls.yaml` is the canonical two-step mash-in control surface. `dashboard/cards/brewzilla_mash_in_confirm.yaml` remains for compatibility during migration.
 
 Important entities include:
 
 ```text
 binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-button.brewassistant_brewzilla_mash_in_started
-button.brewassistant_brewzilla_mash_in_complete
+button.brewassistant_mash_in_started
+button.brewassistant_mash_in_complete
 button.brewassistant_brewzilla_start_mash_circulation
 ```
 
@@ -242,9 +296,9 @@ Expected high-level flow:
 
 ```text
 1. Heat-strike reaches readiness gate.
-2. Operator starts mash-in / grain addition.
+2. Operator starts mash-in / grain addition and confirms Mash-In Started.
 3. Pump remains stopped while grain is added.
-4. Brewfather Continue or fallback operator control completes mash-in.
+4. Brewfather Continue or operator confirmation completes mash-in.
 5. Circulation resumes.
 ```
 
