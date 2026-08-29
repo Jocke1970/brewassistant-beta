@@ -9,6 +9,7 @@ from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from .brewday_addition_alert_sensor import create_brewday_addition_alert_sensors
 from .brewday_audit_sensor import create_brewday_audit_sensors
+from .brewday_physical_timing import create_brewday_physical_timing_sensors
 from .brewday_runtime import build_brewday_runtime_snapshot, brewday_runtime_attrs
 from .brewday_stage_sensor import create_brewday_stage_sensors
 from .brewfather_ownership import brewfather_batch_phase
@@ -85,6 +86,7 @@ def create_brewday_runtime_sensors(
     """Create all Brewday Runtime, BrewZilla, Stage Engine, Audit, Learning, Energy and Addition sensors."""
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
+        + create_brewday_physical_timing_sensors(coordinator)
         + [BrewAssistantBrewfatherBatchPhaseSensor(coordinator)]
         + [
             BrewAssistantManualBrewdaySessionSensor(coordinator, key, field)
