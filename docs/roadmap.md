@@ -18,8 +18,6 @@ Dashboard YAML      = presentation + explicit operator actions
 ```text
 BrewZilla supervised hot-side baseline
 ↓
-Short regression of Brewday operator ABORT + persistent rearm semantics
-↓
 First supervised real-mash BrewZilla validation
 ↓
 BrewZilla Equipment Learning timing/profile advisor evidence pass
@@ -39,7 +37,7 @@ Fermentation cockpit/runtime validation
 Full YAML logic retirement
 ```
 
-The 2026-08-29 Brewfather/BrewZilla physical tests moved the project beyond basic ownership/gating uncertainty. The current focus is no longer “can BA gate positive hardware safely?” but “does the complete operator workflow remain deterministic through real process transitions, ABORT/rearm, boil and CFC handoff?”
+The 2026-08-29 Brewfather/BrewZilla physical tests moved the project beyond basic ownership/gating uncertainty. The short Brewday operator ABORT / persistence / explicit-rearm regression is now complete on real Home Assistant + BrewZilla/RAPT Cloud Link. The current focus is the first supervised real-mash run and then deterministic transition through boil and CFC handoff.
 
 ### Branch policy
 
@@ -79,11 +77,13 @@ Completed:
 [x] Confirmation path rebuilds and validates the live plan before execution
 [x] Rejected pending plan is suppressed while exact intent/context remains unchanged
 [x] Confirmed-plan RCL number-readback grace prevents duplicate confirmation from stale cloud replay
+[x] Confirmed heater/pump switch echo gets bounded observe-only grace without auto re-energizing
 [x] BrewZilla hardware ABORT safe-down + positive-action lockout
 [x] Brewday operator ABORT semantics separated from pending-plan rejection
 [x] Brewday operator ABORT persistent ownership latch
 [x] Explicit Brewday control rearm action
 [x] Persisted Brewday ABORT loaded before coordinator/orchestration decisions
+[x] Read-only Brewsteps process view for BrewTracker-owned brewday
 ```
 
 Current operator-control rule:
@@ -133,6 +133,7 @@ Completed implementation:
 [x] Final low-level ABORT positive-action lockout
 [x] Supervised Apply gate for target/utilization/switch positive actions
 [x] Confirmed number-write readback grace
+[x] Confirmed switch-OFF echo observe-only grace (30 s)
 [x] BrewZilla heat/pump live visualization
 ```
 
@@ -152,17 +153,19 @@ Physically verified 2026-08-29:
 [x] Hardware ABORT zeros heat utilization
 [x] Hardware ABORT zeros pump utilization
 [x] Hardware ABORT lockout blocks recreated positive orchestration
+[x] Brewday ABORT produces physical safe-down and runtime_state=aborted
+[x] Brewfather does not reclaim BA hot-side ownership while operator control is aborted
+[x] HA restart preserves Brewday operator ABORT latch before orchestration resumes
+[x] Explicit rearm releases Brewday operator lock and returns runtime to safe idle
+[x] Rearm does not itself perform a positive BrewZilla action or bypass the independent hardware lockout
 ```
 
 Near-term physical checks:
 
 ```text
-[ ] Brewday ABORT button produces the same physical safe-down plus runtime_state=aborted
-[ ] Brewfather cannot reclaim BA ownership while operator control is aborted
-[ ] HA restart preserves Brewday operator ABORT latch
-[ ] Explicit rearm restores eligibility without bypassing BrewZilla ABORT lockout
-[ ] Real-mash heat-strike / mash-in temperature-drop validation
+[ ] First real-mash heat-strike / mash-in temperature-drop validation
 [ ] Real-mash 66°C hold and 66 -> 72°C ramp validation
+[ ] Read-only Brewsteps follows BrewTracker-owned physical process phases correctly
 [ ] Full boil ramp + boil validation
 ```
 
@@ -214,6 +217,7 @@ Completed:
 [x] Deterministic boundary for truly new brewday
 [x] Hardware ABORT evidence + lockout evidence
 [x] Brewday operator ABORT / rearm events
+[x] Persisted operator ABORT remains visible after HA restart
 ```
 
 Physical continuity baseline from 2026-08-29:
@@ -225,6 +229,8 @@ Play / paused-running -> same started_at
 ```
 
 No new `audit_started` at Play is the expected regression baseline.
+
+The later operator-ABORT regression continued to expose the abort/restart/rearm transitions in the same operator/diagnostic surfaces, including the persisted `aborted` state after Home Assistant restart.
 
 ---
 
@@ -303,6 +309,7 @@ Completed:
 [x] Button translation-key migration where applicable
 [x] Switch translation-key migration where applicable
 [x] Number translation-key migration where applicable
+[x] EN/SV read-only Brewsteps cards for BrewTracker-owned brewday
 ```
 
 Remaining:
@@ -341,13 +348,12 @@ These remain secondary to completing deterministic supervised hot-side and CFC p
 ## Immediate next sequence
 
 ```text
-1. Merge and install Brewday operator ABORT/rearm patch.
-2. Replace/reload general Brewday EN/SV card.
-3. Short physical ABORT regression:
-   active pending/applied session -> ABORT -> safe-down -> runtime aborted.
-4. Verify Brewfather cannot reclaim ownership while aborted.
-5. Restart HA once while aborted and verify latch persistence.
-6. Explicitly rearm and verify hardware ABORT lockout still wins until safe.
-7. Move to supervised real-mash validation.
-8. Then validate Boil release + CFC Chill/Transfer sensor handoff.
+1. Start the first supervised real-mash Brewfather/BrewTracker validation.
+2. Verify Heat strike -> Mash-In Started -> Mash-In Complete with real grain thermal drop.
+3. Verify stable 66°C mash hold and supervised 66 -> 72°C ramp.
+4. Verify the read-only Brewsteps card follows BrewTracker ownership and physical phase without exposing Manual controls.
+5. Continue through Mash out / Sparge / Pre-boil and validate full boil ramp + boil.
+6. At Boil start, verify Brewday releases the external process-temperature sensor.
+7. Validate CFC acquisition for Chill and continued wort-out use during Transfer.
+8. Use Flight Recorder + Equipment Learning evidence to decide the next timing/profile-advisor patch.
 ```

@@ -30,7 +30,7 @@ CI enforces filename parity and machine-reference safety through `tests/test_das
 
 ## Current structure
 
-The current baseline contains 23 canonical cards, 23 Swedish mirrors, plus canonical and Swedish sanity dashboards.
+The current baseline contains 24 canonical cards, 24 Swedish mirrors, plus canonical and Swedish sanity dashboards.
 
 ```text
 dashboard/
@@ -43,6 +43,8 @@ dashboard/
     brewassistant_visibility_badges_sv.yaml
     brewassistant_brewday.yaml
     brewassistant_brewday_sv.yaml
+    brewassistant_brewsteps.yaml
+    brewassistant_brewsteps_sv.yaml
     brewassistant_brewday_bf_reload.yaml
     brewassistant_brewday_bf_reload_sv.yaml
     brewassistant_brewday_event_log.yaml
@@ -123,6 +125,7 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 | `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
 | `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Bryggråd/Brewing Advice and Safety/RCL cards. |
 | `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
+| `brewassistant_brewsteps.yaml` | Read-only Heat strike → Transfer process map shown only while Brewfather/BrewTracker owns an active Brewday. |
 | `brewassistant_brewday_bf_reload.yaml` | Compact Brewfather/BrewTracker reload button for placement on or near the Brewday Runtime card. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
 | `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
@@ -151,10 +154,14 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 The UI is split by process phase rather than by two competing views of the same source:
 
 ```text
-Planning / Brewing
-  -> BrewTracker Runtime is the primary Brewfather-derived brewday card
-  -> Planning and Brewing-before-Play are visible ready/pre-start states
-  -> hot-side ownership begins only after positive BrewTracker start evidence
+Planning / Brewing before Play
+  -> BrewTracker Runtime is the primary Brewfather-derived source/status card
+  -> ready/pre-start is visible but does not imply hot-side ownership
+
+Active BrewTracker-owned Brewing
+  -> BrewTracker Runtime remains the source/status view
+  -> brewassistant_brewsteps.yaml becomes the read-only physical-process map
+  -> Brewsteps never exposes Manual Brewday services or competing progression controls
 
 Fermenting
   -> BrewTracker Runtime leaves the primary view
@@ -166,6 +173,8 @@ Technical feed/source health
 ```
 
 The normalized `sensor.brewassistant_brewfather_batch_phase` is the presentation boundary and uses the same backend phase resolver as Brewfather hot-side ownership. Dashboard code should not invent a separate interpretation of `Planning`, `Brewing` or `Fermenting`.
+
+`brewassistant_brewsteps.yaml` / `_sv.yaml` adds an additional ownership boundary: it is visible only when `sensor.brewassistant_brewday_runtime_source` is exactly `Brewfather Brew Tracker` and the normalized runtime is not `idle`. It is intentionally read-only because Brewfather/BrewTracker owns progression; Manual Brewday retains its own interactive cockpit only when Manual owns runtime.
 
 ## BrewZilla two-step mash-in controls
 
