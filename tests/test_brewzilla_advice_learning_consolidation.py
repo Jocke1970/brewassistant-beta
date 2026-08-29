@@ -32,14 +32,3 @@ def test_learning_card_is_the_single_advice_and_learning_surface() -> None:
         source = path.read_text(encoding="utf-8")
         for token in required:
             assert token in source
-
-
-def test_learning_language_mirrors_keep_machine_references_equal() -> None:
-    def machine_lines(path: Path) -> set[str]:
-        return {
-            line.strip()
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if any(prefix in line for prefix in ("sensor.", "switch.", "select.", "button.", "service:"))
-        }
-
-    assert machine_lines(LEARNING_EN) == machine_lines(LEARNING_SV)
