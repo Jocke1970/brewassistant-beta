@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .brewday.brewday_runtime import build_brewday_runtime_snapshot
 from .brewzilla.brewzilla_mash_in_gate import build_mash_in_gate_snapshot
+from .brewzilla.brewzilla_temperature import brewzilla_temperature_snapshot
 from .carbonation import build_carbonation_snapshot
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
@@ -202,6 +203,7 @@ async def async_setup_entry(
         + [BrewAssistantSourceBinarySensor(coordinator, key) for key in SOURCE_BINARY_KEYS]
         + [BrewAssistantCarbonationBinarySensor(coordinator, key) for key in CARBONATION_BINARY_SENSORS]
         + [BrewAssistantRuntimeAvailableBinarySensor(coordinator)]
+        + [BrewAssistantBrewZillaExternalTemperatureAvailableBinarySensor(coordinator)]
         + [BrewAssistantBrewZillaMashInGatePendingBinarySensor(coordinator)]
     )
 
@@ -346,6 +348,38 @@ class BrewAssistantRuntimeAvailableBinarySensor(BrewAssistantEntity, BinarySenso
             "snapshot_age_seconds": snapshot.get("snapshot_age_seconds"),
             "paused_freeze": snapshot.get("paused_freeze"),
             "refresh_recommended": snapshot.get("refresh_recommended"),
+        }
+
+
+class BrewAssistantBrewZillaExternalTemperatureAvailableBinarySensor(
+    BrewAssistantEntity,
+    BinarySensorEntity,
+):
+    """Report whether BrewZilla exposes a usable external process temperature."""
+
+    _attr_has_entity_name = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_icon = "mdi:thermometer-bluetooth"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_external_temperature_available")
+        self._attr_name = "BrewAssistant BrewZilla External Temperature Available"
+        self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_external_temperature_available"
+
+    @property
+    def is_on(self) -> bool | None:
+        snapshot = brewzilla_temperature_snapshot(self.coordinator.hass)
+        return bool(snapshot.get("external_temperature_available"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = brewzilla_temperature_snapshot(self.coordinator.hass)
+        return {
+            "source": snapshot.get("external_temperature_source"),
+            "source_entity": snapshot.get("external_temperature_entity"),
+            "age_seconds": snapshot.get("external_temperature_age_seconds"),
+            "candidates": snapshot.get("external_temperature_candidates"),
+            "candidate_policy": snapshot.get("candidate_policy"),
         }
 
 
