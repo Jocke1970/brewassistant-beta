@@ -163,6 +163,87 @@ card:
           - margin-top: 4px
     - type: conditional
       conditions:
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unknown"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unavailable"
+      card:
+        type: vertical-stack
+        cards:
+          - type: custom:button-card
+            entity: sensor.brewassistant_brewzilla_pending_action
+            name: KVITTENS KRÄVS
+            icon: mdi:shield-check-outline
+            show_state: false
+            show_label: true
+            label: |
+              [[[
+                const summary = states['sensor.brewassistant_brewzilla_pending_action']?.state ?? 'Väntande BrewZilla-plan';
+                return `Ingen positiv AUTO-åtgärd körs innan du bekräftar.<br><b>${summary}</b>`;
+              ]]]
+            styles:
+              card:
+                - border-radius: 18px
+                - padding: 12px
+                - background: rgba(255,152,0,.12)
+                - border: 2px solid rgba(255,152,0,.42)
+              icon:
+                - width: 26px
+                - height: 26px
+                - color: rgb(255,152,0)
+              name:
+                - font-size: 14px
+                - font-weight: 950
+              label:
+                - justify-self: stretch
+                - text-align: left
+                - white-space: normal
+                - font-size: 11.5px
+                - font-weight: 800
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: button.brewassistant_confirm_supervised_apply
+                name: BEKRÄFTA
+                icon: mdi:check-decagram
+                tap_action:
+                  action: call-service
+                  service: button.press
+                  target:
+                    entity_id: button.brewassistant_confirm_supervised_apply
+                  confirmation:
+                    text: Bekräfta och verkställ den väntande BrewZilla-planen?
+                styles:
+                  card:
+                    - border-radius: 16px
+                    - padding: 10px
+                    - background: rgba(76,175,80,.12)
+                    - border: 1px solid rgba(76,175,80,.30)
+                  name:
+                    - font-size: 12px
+                    - font-weight: 950
+              - type: custom:button-card
+                entity: button.brewassistant_cancel_supervised_apply
+                name: AVBRYT
+                icon: mdi:cancel
+                tap_action:
+                  action: call-service
+                  service: button.press
+                  target:
+                    entity_id: button.brewassistant_cancel_supervised_apply
+                  confirmation:
+                    text: Avbryt den väntande BrewZilla-planen? Runtimen fortsätter men hårdvaran hålls säker.
+                styles:
+                  card:
+                    - border-radius: 16px
+                    - padding: 10px
+                    - background: rgba(244,67,54,.10)
+                    - border: 1px solid rgba(244,67,54,.26)
+                  name:
+                    - font-size: 12px
+                    - font-weight: 950
+    - type: conditional
+      conditions:
         - entity: sensor.brewfather_brew_tracker_status
           state: "active"
       card:
@@ -358,6 +439,8 @@ card:
                     return variables.enabled ? 'call-service' : 'none';
                   ]]]
                 service: brewassistant.manual_brewday_next
+                confirmation:
+                  text: Starta Heat strike? Runtimen går vidare direkt. Positiva AUTO-åtgärder mot BrewZilla väntar därefter på separat BEKRÄFTA.
               styles: *manual_action
             - type: custom:button-card
               name: |
@@ -534,7 +617,7 @@ card:
                 action: call-service
                 service: brewassistant.apply_brewzilla_target
                 confirmation:
-                  text: Verkställ nuvarande runtime-mål på BrewZilla?
+                  text: Verkställ nuvarande runtime-mål på BrewZilla? AUTO-ökningar kan skapa en väntande kvittensplan i stället för direkt styrning.
               styles:
                 card:
                   - border-radius: 15px
