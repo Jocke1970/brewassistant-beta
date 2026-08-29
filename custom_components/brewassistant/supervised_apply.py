@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from typing import Any
 
@@ -19,10 +20,29 @@ READ_ONLY_MODE = "Read only"
 SUPERVISED_MODE = "Supervised apply"
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
 
+SupervisedExecutor = Callable[[HomeAssistant, dict[str, Any]], Awaitable[dict[str, Any]]]
+_EXECUTORS: dict[tuple[str, str], SupervisedExecutor] = {}
+
 
 def _runtime_data(hass: HomeAssistant) -> dict[str, Any]:
     """Return BrewAssistant hass.data bucket."""
     return hass.data.setdefault(DOMAIN_DATA, {})
+
+
+def register_supervised_executor(source: str, kind: str, executor: SupervisedExecutor) -> None:
+    """Register a direct confirmation executor for one pending-action type.
+
+    Registered executors are invoked only by the explicit CONFIRM button. This
+    avoids opening a temporary execution window that an unrelated coordinator
+    tick could accidentally consume.
+    """
+    _EXECUTORS[(source, kind)] = executor
+
+
+def _executor_for(action: dict[str, Any]) -> SupervisedExecutor | None:
+    source = str(action.get("source") or "")
+    kind = str(action.get("kind") or "")
+    return _EXECUTORS.get((source, kind))
 
 
 def _schedule_pending_sensor_refresh(hass: HomeAssistant) -> None:
@@ -57,10 +77,6 @@ async def _record_supervised_event(
             brewzilla_result={
                 "apply_result": event_type,
                 "actions": [],
-                "supervised_action_id": payload.get("id"),
-                "supervised_action_source": payload.get("source"),
-                "supervised_action_kind": payload.get("kind"),
-                "supervised_action_summary": payload.get("summary"),
             },
             note=note or payload.get("summary"),
             always_record=True,
@@ -101,7 +117,7 @@ def get_last_result(hass: HomeAssistant) -> dict[str, Any] | None:
 
 
 def get_execution_grant(hass: HomeAssistant) -> dict[str, Any] | None:
-    """Return the currently issued one-shot execution grant, if any."""
+    """Return the currently issued fallback one-shot execution grant, if any."""
     grant = _runtime_data(hass).get(EXECUTION_GRANT_KEY)
     if isinstance(grant, dict):
         return deepcopy(grant)
@@ -109,7 +125,7 @@ def get_execution_grant(hass: HomeAssistant) -> dict[str, Any] | None:
 
 
 def _issue_execution_grant(hass: HomeAssistant, pending: dict[str, Any]) -> dict[str, Any]:
-    """Issue a one-shot grant for exactly one pending action id/source pair."""
+    """Issue a one-shot grant for generic actions without a registered executor."""
     grant = {
         "id": pending.get("id"),
         "source": pending.get("source"),
@@ -125,7 +141,7 @@ def consume_execution_grant(
     action_id: str,
     source: str,
 ) -> bool:
-    """Consume the exact one-shot grant required for positive execution."""
+    """Consume the exact fallback one-shot grant required for execution."""
     runtime = _runtime_data(hass)
     grant = runtime.get(EXECUTION_GRANT_KEY)
     if not isinstance(grant, dict):
@@ -147,7 +163,7 @@ def set_pending_action(hass: HomeAssistant, action: dict[str, Any]) -> dict[str,
     pending["requires_confirmation"] = True
     runtime = _runtime_data(hass)
     runtime[PENDING_KEY] = pending
-    # A changed/re-created plan can never inherit a grant from an older action.
+    # A changed/re-created plan can never inherit a fallback grant from an older action.
     grant = runtime.get(EXECUTION_GRANT_KEY)
     if isinstance(grant, dict) and (
         grant.get("id") != pending.get("id") or grant.get("source") != pending.get("source")
@@ -193,13 +209,56 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
         await _record_supervised_event(hass, "supervised_no_pending_action", result)
         return deepcopy(result)
 
+    result = deepcopy(pending)
+    result["status"] = "executing"
+    result["confirmed_at"] = dt_util.utcnow().isoformat()
+    runtime[LAST_RESULT_KEY] = result
+    await _record_supervised_event(hass, "supervised_confirmed", pending)
+
+    executor = _executor_for(pending)
+    if executor is not None:
+        try:
+            execution_result = await executor(hass, pending)
+            result["execution_result"] = deepcopy(execution_result)
+            if execution_result.get("supervised_confirmation_consumed"):
+                result["status"] = "executed"
+                result["executed_at"] = dt_util.utcnow().isoformat()
+                await _record_supervised_event(
+                    hass,
+                    "supervised_executed",
+                    pending,
+                    note=f"{pending.get('summary')} · {execution_result.get('apply_result')}",
+                )
+            else:
+                result["status"] = "not_executed"
+                result["executed_at"] = dt_util.utcnow().isoformat()
+                result["reason"] = execution_result.get("apply_result") or "live_plan_not_accepted"
+                await _record_supervised_event(
+                    hass,
+                    "supervised_not_executed",
+                    pending,
+                    note=f"Confirmed plan was not executed: {result['reason']}",
+                )
+        except Exception as err:  # noqa: BLE001 - expose service failure in diagnostics
+            result["status"] = "error"
+            result["error"] = str(err)
+            result["executed_at"] = dt_util.utcnow().isoformat()
+            await _record_supervised_event(hass, "supervised_error", result, note=str(err))
+        finally:
+            runtime.pop(EXECUTION_GRANT_KEY, None)
+            runtime.pop(PENDING_KEY, None)
+            _schedule_pending_sensor_refresh(hass)
+
+        runtime[LAST_RESULT_KEY] = result
+        return deepcopy(result)
+
+    # Generic fallback path for supervised actions without a registered direct
+    # executor. These retain the one-shot grant behavior.
     domain = pending.get("domain")
     service = pending.get("service")
     service_data = pending.get("service_data")
     if not isinstance(domain, str) or not isinstance(service, str) or not isinstance(service_data, dict):
-        result = deepcopy(pending)
         result["status"] = "invalid_action"
-        result["confirmed_at"] = dt_util.utcnow().isoformat()
         runtime[LAST_RESULT_KEY] = result
         runtime.pop(PENDING_KEY, None)
         runtime.pop(EXECUTION_GRANT_KEY, None)
@@ -207,16 +266,7 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
         await _record_supervised_event(hass, "supervised_invalid_action", result)
         return deepcopy(result)
 
-    result = deepcopy(pending)
-    result["status"] = "executing"
-    result["confirmed_at"] = dt_util.utcnow().isoformat()
-    runtime[LAST_RESULT_KEY] = result
-    await _record_supervised_event(hass, "supervised_confirmed", pending)
-
     try:
-        # Issue the grant immediately before the nested apply call. There is no
-        # awaited work between grant creation and service dispatch, minimizing
-        # any chance that an unrelated coordinator tick can observe it first.
         _issue_execution_grant(hass, pending)
         await hass.services.async_call(
             domain,
@@ -224,8 +274,6 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
             service_data,
             blocking=True,
         )
-        # The guarded physical apply must consume the exact grant. If the grant
-        # remains, no matching positive plan was executed (e.g. runtime changed).
         grant_remaining = get_execution_grant(hass)
         if grant_remaining is None:
             result["status"] = "executed"
