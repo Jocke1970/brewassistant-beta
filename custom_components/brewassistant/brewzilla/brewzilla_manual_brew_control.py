@@ -11,12 +11,12 @@ Operator-owned numeric values are BrewAssistant setpoints, separate from the
 RAPT/BrewZilla readback entities. The normal orchestration layer transports and
 reasserts those setpoints until device readback matches them.
 
-A paused Manual Brew session is a safe-down state. Pause therefore overrides
-operator ownership for the physical outputs: heater and pump are driven OFF and
-both utilizations to zero while the operator setpoints remain stored for an
-explicit resume.
+Manual ``prepared`` and ``paused`` are safe-down states. They override operator
+ownership for physical outputs: heater and pump are driven OFF and both
+utilizations to zero while operator setpoints remain stored. Positive control is
+only possible after an explicit Heat strike/start/resume runtime transition.
 
-The guard is installed last in the normal control-decision chain. It therefore
+The guard is installed late in the normal control-decision chain. It therefore
 wins over automatic strategy/lease decisions, while an already blocked safety
 state or ABORT remains untouched and may still force BrewZilla safe.
 """
@@ -100,6 +100,8 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     active = _manual_runtime_active(out)
     runtime_state = str(out.get("brewday_state") or "idle").lower()
     paused = bool(active and runtime_state == "paused")
+    prepared = bool(active and runtime_state == "prepared")
+    safe_boundary = bool(paused or prepared)
 
     manual_target = _float_state(hass, MANUAL_TARGET_SETPOINT)
     manual_heat = _float_state(hass, MANUAL_HEAT_SETPOINT)
@@ -124,6 +126,8 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             "manual_pump_override_active": bool(active and not pump_auto),
             "manual_control_safety_override_active": bool(active and blocked),
             "manual_pause_safe_down_active": paused,
+            "manual_prepare_safe_down_active": prepared,
+            "manual_safe_boundary_active": safe_boundary,
             "manual_target_setpoint": manual_target,
             "manual_heat_utilization_setpoint": manual_heat,
             "manual_pump_utilization_setpoint": manual_pump,
@@ -144,12 +148,12 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     if blocked:
         return out
 
-    # Pause is a safe-down boundary and outranks Manual channel ownership. This
-    # also covers Brewfather -> Manual handoff: when Brewfather auto-pauses the
-    # Manual session, any physical outputs left active by the departing source
-    # must be driven safe before the operator explicitly resumes Manual Brew.
-    # The stored operator setpoints above are intentionally left unchanged.
-    if paused:
+    # Prepare and Pause are safe-down boundaries and outrank Manual channel
+    # ownership. Prepare must never energize BrewZilla; Heat strike is the
+    # explicit runtime transition that may create positive control intent.
+    # Pause also covers Brewfather -> Manual handoff. Stored operator setpoints
+    # intentionally remain unchanged for Heat strike/resume.
+    if safe_boundary:
         out.update(
             {
                 "target_sync_needed": False,
@@ -177,10 +181,16 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         action_needed = _remaining_action_needed(out)
         out["can_apply_target"] = action_needed
         out["orchestration_mode"] = "direct-control" if action_needed else "manual-control"
-        out["control_reason"] = (
-            "Manual Brew paused; physical outputs are forced safe while operator "
-            "setpoints are retained for explicit resume."
-        )
+        if prepared:
+            out["control_reason"] = (
+                "Manual Brew prepared; no positive BrewZilla control is allowed until "
+                "the operator starts Heat strike. Physical outputs remain safe."
+            )
+        else:
+            out["control_reason"] = (
+                "Manual Brew paused; physical outputs are forced safe while operator "
+                "setpoints are retained for explicit resume."
+            )
         return out
 
     # The Manual Brew adapter has already replaced requested_target with the
