@@ -102,18 +102,29 @@ def test_manual_handoff_safe_down_is_event_driven() -> None:
         assert token in source
 
 
-def test_brewfather_cards_show_planning_as_ready_not_authoritative() -> None:
-    for path in (BT_EN, BT_SV, FEED_EN, FEED_SV):
+def test_brewtracker_cards_show_planning_and_prestart_without_claiming_ownership() -> None:
+    for path in (BT_EN, BT_SV):
         source = path.read_text(encoding="utf-8")
         assert "sensor.brewfather_brew_tracker_status" in source
-        assert 'state_not: "inactive"' in source
-        assert "brew_tracker_batch_status" in source
-        assert "planning" in source.lower()
-        assert "Brewing" in source
+        assert "sensor.brewassistant_brewfather_batch_phase" in source
+        assert 'state: "planning"' in source
+        assert 'state: "brewing"' in source
+        assert "prestart" in source
+        assert "Play" in source
+        assert "hot-side ownership" in source
+
+
+def test_brewfather_post_brew_cards_are_fermenting_only() -> None:
+    for path in (FEED_EN, FEED_SV):
+        source = path.read_text(encoding="utf-8")
+        assert "sensor.brewassistant_brewfather_batch_phase" in source
+        assert 'state: "fermenting"' in source
+        assert 'state: "planning"' not in source
+        assert 'state: "brewing"' not in source
 
 
 def test_brewtracker_cards_do_not_use_manual_runtime_as_planning_content() -> None:
     for path in (BT_EN, BT_SV):
         source = path.read_text(encoding="utf-8")
-        assert "connected but not authoritative" in source or "inkopplad men inte styrande" in source
-        assert "Manual Brewday" in source
+        assert "BrewTracker ready" in source or "BrewTracker redo" in source
+        assert "Manual Brewday" not in source
