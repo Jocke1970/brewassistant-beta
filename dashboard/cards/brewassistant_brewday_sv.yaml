@@ -188,8 +188,22 @@ card:
       cards:
         - type: custom:button-card
           entity: button.brewassistant_confirm_supervised_apply
-          name: BEKRÄFTA
+          triggers_update:
+            - sensor.brewassistant_brewzilla_pending_action
+          name: |
+            [[[
+              const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+              const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
+              return pending ? 'BEKRÄFTA ÅTGÄRD' : 'BEKRÄFTA';
+            ]]]
           icon: mdi:check-decagram
+          show_label: true
+          label: |
+            [[[
+              const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+              const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
+              return pending ? 'KVITTENS VÄNTAR' : 'Ingen väntande åtgärd';
+            ]]]
           tap_action:
             action: call-service
             service: button.press
@@ -201,11 +215,48 @@ card:
             card:
               - border-radius: 16px
               - padding: 10px
-              - background: rgba(76,175,80,.10)
-              - border: 1px solid rgba(76,175,80,.24)
+              - min-height: 58px
+              - background: |
+                  [[[
+                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                      ? 'rgba(76,175,80,.22)' : 'rgba(76,175,80,.10)';
+                  ]]]
+              - border: |
+                  [[[
+                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                      ? '2px solid rgba(76,175,80,.72)' : '1px solid rgba(76,175,80,.24)';
+                  ]]]
+              - box-shadow: |
+                  [[[
+                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                      ? '0 0 0 2px rgba(76,175,80,.12)' : 'none';
+                  ]]]
+              - animation: |
+                  [[[
+                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                      ? 'ba-confirm-pulse 1.4s ease-in-out infinite' : 'none';
+                  ]]]
+            icon:
+              - color: rgb(76,175,80)
             name:
               - font-size: 12px
               - font-weight: 950
+            label:
+              - font-size: 9.5px
+              - font-weight: 900
+              - opacity: 0.72
+          extra_styles: |
+            @keyframes ba-confirm-pulse {
+              0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(76,175,80,.10); }
+              50% { transform: scale(1.018); box-shadow: 0 0 0 6px rgba(76,175,80,.18); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+              #card { animation: none !important; transform: none !important; }
+            }
         - type: custom:button-card
           entity: button.brewassistant_cancel_supervised_apply
           name: AVBRYT

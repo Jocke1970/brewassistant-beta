@@ -87,3 +87,14 @@ def test_swedish_cards_keep_same_action_references() -> None:
             f"{canonical_path.name}: EN={sorted(canonical_actions)}, "
             f"SV={sorted(swedish_actions)}"
         )
+
+
+def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -> None:
+    """The general Brewday CONFIRM control must only pulse for a pending plan."""
+    for filename in ("brewassistant_brewday.yaml", "brewassistant_brewday_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert "sensor.brewassistant_brewzilla_pending_action" in source
+        assert "ba-confirm-pulse" in source
+        assert "1.4s ease-in-out infinite" in source
+        assert "prefers-reduced-motion: reduce" in source
+        assert "animation: none !important" in source
