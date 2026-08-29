@@ -1,14 +1,15 @@
-"""Suppress duplicate Supervised Apply prompts caused by stale RCL config readback.
+"""Suppress duplicate Supervised Apply prompts caused by stale RCL readback.
 
 A confirmed BrewZilla plan may update Home Assistant optimistically and then be
 briefly overwritten by an older RAPT Cloud Link value. That stale value must not
 look like new operator intent and immediately request another confirmation.
 
-This guard remembers only the configuration increases that were both confirmed
-and actually sent by the explicit CONFIRM executor. For a short bounded window,
-an identical runtime/step/target may therefore ignore a stale target/heat/pump
-number readback. Switch ON actions are deliberately excluded: if heater or pump
-really goes OFF, re-energizing still requires a fresh confirmation.
+The guard remembers only actions that were both explicitly confirmed and
+actually sent by the CONFIRM executor. Confirmed target/heat/pump number
+increases may be observed for a bounded configuration grace window. Confirmed
+heater/pump ON actions get a much shorter switch-echo window: an immediate OFF
+echo is observed without re-energizing or re-prompting, but if OFF persists past
+that short window a fresh confirmation is required. ABORT always breaks grace.
 """
 
 from __future__ import annotations
@@ -29,7 +30,10 @@ _INSTALLED = False
 
 DATA_KEY = "brewzilla_supervised_confirmed_readback_grace"
 CONFIRMED_READBACK_GRACE_SECONDS = 240
+CONFIRMED_SWITCH_ECHO_GRACE_SECONDS = 30
 _CONFIG_ACTION_KEYS = {"target_up", "heat_up", "pump_up"}
+_SWITCH_ACTION_KEYS = {"heater_on", "pump_on"}
+_CONFIRMED_ACTION_KEYS = _CONFIG_ACTION_KEYS | _SWITCH_ACTION_KEYS
 
 
 def _data(hass: HomeAssistant) -> dict[str, Any]:
@@ -54,10 +58,14 @@ def _executed_action_keys(result: dict[str, Any]) -> set[str]:
             "ba_owned_reassert_pump_utilization:"
         ):
             keys.add("pump_up")
+        elif action == "heater_on":
+            keys.add("heater_on")
+        elif action == "pump_on":
+            keys.add("pump_on")
     return keys
 
 
-def _confirmed_config_actions(
+def _confirmed_actions(
     pending: dict[str, Any], result: dict[str, Any]
 ) -> list[dict[str, Any]]:
     context = pending.get("context")
@@ -69,7 +77,7 @@ def _confirmed_config_actions(
         dict(action)
         for action in actions
         if isinstance(action, dict)
-        and action.get("key") in _CONFIG_ACTION_KEYS
+        and action.get("key") in _CONFIRMED_ACTION_KEYS
         and action.get("key") in executed_keys
     ]
 
@@ -79,7 +87,7 @@ def _store_grace(
     pending: dict[str, Any],
     result: dict[str, Any],
 ) -> None:
-    actions = _confirmed_config_actions(pending, result)
+    actions = _confirmed_actions(pending, result)
     if not actions:
         _clear_grace(hass)
         return
@@ -126,8 +134,10 @@ def _same_intent(snapshot: dict[str, Any], grace: dict[str, Any]) -> bool:
 
 def _action_matches(current: dict[str, Any], confirmed: dict[str, Any]) -> bool:
     key = current.get("key")
-    if key != confirmed.get("key") or key not in _CONFIG_ACTION_KEYS:
+    if key != confirmed.get("key") or key not in _CONFIRMED_ACTION_KEYS:
         return False
+    if key in _SWITCH_ACTION_KEYS:
+        return bool(current.get("value")) is bool(confirmed.get("value"))
     current_value = supervised._num(current.get("value"))
     confirmed_value = supervised._num(confirmed.get("value"))
     if current_value is None or confirmed_value is None:
@@ -139,18 +149,31 @@ def _action_matches(current: dict[str, Any], confirmed: dict[str, Any]) -> bool:
 
 
 def _covered_by_grace(
-    positives: list[dict[str, Any]], grace: dict[str, Any]
+    positives: list[dict[str, Any]],
+    grace: dict[str, Any],
+    *,
+    age_seconds: int | None,
 ) -> bool:
     confirmed = grace.get("actions")
     if not positives or not isinstance(confirmed, list):
         return False
-    return all(
-        any(
-            isinstance(known, dict) and _action_matches(action, known)
-            for known in confirmed
+
+    for action in positives:
+        matched = next(
+            (
+                known
+                for known in confirmed
+                if isinstance(known, dict) and _action_matches(action, known)
+            ),
+            None,
         )
-        for action in positives
-    )
+        if matched is None:
+            return False
+        if action.get("key") in _SWITCH_ACTION_KEYS and (
+            age_seconds is None or age_seconds > CONFIRMED_SWITCH_ECHO_GRACE_SECONDS
+        ):
+            return False
+    return True
 
 
 def _grace_timing(grace: dict[str, Any]) -> tuple[int | None, int | None]:
@@ -173,7 +196,7 @@ def _grace_timing(grace: dict[str, Any]) -> tuple[int | None, int | None]:
 async def async_execute_confirmed_plan(
     hass: HomeAssistant, pending: dict[str, Any]
 ) -> dict[str, Any]:
-    """Delegate explicit execution, then remember config writes that were sent."""
+    """Delegate explicit execution, then remember actions that were sent."""
     assert _BASE_EXECUTE is not None
     result = await _BASE_EXECUTE(hass, pending)
     if result.get("supervised_confirmation_consumed"):
@@ -182,7 +205,7 @@ async def async_execute_confirmed_plan(
 
 
 async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[str, Any]:
-    """Suppress only stale duplicate config increases from a just-confirmed plan."""
+    """Suppress only stale duplicate positives from a just-confirmed plan."""
     assert _BASE_APPLY is not None
 
     grace = _active_grace(hass)
@@ -202,16 +225,20 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
     if not positives:
         return await _BASE_APPLY(hass)
 
-    if not _covered_by_grace(positives, grace):
+    age, remaining = _grace_timing(grace)
+    if not _covered_by_grace(positives, grace, age_seconds=age):
         _clear_grace(hass)
         return await _BASE_APPLY(hass)
 
-    # The same configuration increase was already explicitly confirmed and sent.
-    # Do not write it again and do not recreate a pending plan. Safe-down and
-    # explicitly operator-owned Manual actions may still pass through immediately.
+    # Every currently requested positive action is an echo of the exact plan
+    # already confirmed and sent. Do not write any positive action here. This
+    # is especially important for switch OFF readback: during the short echo
+    # window BA observes it, but never re-energizes without a new confirmation.
     direct_actions = await supervised._apply_nonpositive_or_manual_actions(hass, snapshot)
     clear_pending_action_from_source(hass, supervised.SOURCE)
-    age, remaining = _grace_timing(grace)
+    switch_echo_active = any(
+        action.get("key") in _SWITCH_ACTION_KEYS for action in positives
+    )
     result = {
         **snapshot,
         "applied": bool(direct_actions),
@@ -222,9 +249,11 @@ async def async_apply_brewzilla_target_if_allowed(hass: HomeAssistant) -> dict[s
         "pending_summary": None,
         "supervised_runtime_plan_pending": False,
         "supervised_readback_grace_active": True,
+        "supervised_readback_switch_echo_active": switch_echo_active,
         "supervised_readback_grace_plan_id": grace.get("plan_id"),
         "supervised_readback_grace_age_seconds": age,
         "supervised_readback_grace_remaining_seconds": remaining,
+        "supervised_readback_switch_echo_grace_seconds": CONFIRMED_SWITCH_ECHO_GRACE_SECONDS,
         "supervised_readback_grace_actions": grace.get("actions"),
         "executed_at": dt_util.utcnow().isoformat(),
     }
