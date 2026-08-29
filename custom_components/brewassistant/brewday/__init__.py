@@ -6,6 +6,15 @@ from .brewfather_ownership import install_core_ownership_policy
 # runtime/Manual/audit caller sees the same Planning-vs-Brewing ownership rule.
 install_core_ownership_policy()
 
+# Make the legacy audit rotation heuristic consume the deterministic session
+# boundary instead of treating Brewfather's ready-only pre-start idle row as a
+# completed prior brewday when Play is pressed.
+from .brewday_audit_session_continuity import (  # noqa: E402
+    install_audit_session_continuity_guard,
+)
+
+install_audit_session_continuity_guard()
+
 # Patch the audit autostart setup before the integration imports it. The guard
 # keeps terminal-session knowledge outside the rolling event log so a new
 # Manual/Brewfather brewday always starts with a clean recorder.

@@ -13,6 +13,34 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #149 — RCL readback-grace + samma Flight Recorder-logg vid BF Play
+
+### Sammanfattning
+
+Fysisk validering av Supervised Apply visade att en korrekt bekräftad BrewZilla-plan kunde följas av ett gammalt RAPT Cloud Link-readback, exempelvis heat utilization `100 → 0`, och därmed skapa en ny kvittens för samma redan godkända intention. En tidsbegränsad 240 s confirmed-plan readback-grace minns nu endast target/heat/pump-number-ökningar som både uttryckligen bekräftades och faktiskt skickades. Samma runtime/source/step/target/ownership får under grace-fönstret ignorera en stale kopia av just dessa konfigurationsvärden utan ny write och utan ny pending-plan. Heater/pump ON omfattas medvetet inte; verklig åter-energisering kräver fortfarande ny kvittens. ABORT bryter gracen omedelbart.
+
+Samma test visade att Flight Recorder kunde roteras när Brewfather gick från `Brewing` pre-start till faktisk Play. Den äldre autostart-heuristiken såg senaste `idle`/no-source-raden som en avslutad föregående bryggdag, trots att #147:s pre-start är en del av samma session. Legacy-heuristiken accepterar nu `idle`/`inactive` utan owner som terminal endast när #146:s deterministiska session-boundary faktiskt är armad. `completed`/`finished` förblir explicita terminala lägen.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/__init__.py`
+- `custom_components/brewassistant/brewday/brewday_audit_session_continuity.py`
+- `custom_components/brewassistant/brewzilla/__init__.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_supervised_readback_grace.py`
+- `tests/test_brewday_audit_session_continuity.py`
+- `tests/test_brewzilla_supervised_readback_grace.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom båda runtime-guards installeras under package-initiering.
+
+---
+
 ## 2026-08-29 — PR #148 — Tydlig device-target i Flight Recorder + pulserande CONFIRM
 
 ### Sammanfattning
@@ -117,7 +145,6 @@ Ingen backend-omstart krävs enbart för #145. Uppdatera/reloada BrewZilla-dashb
 `AVBRYT` betyder nu att den exakta positiva BrewZilla-planen avvisas, inte bara att det aktuella pending-objektet tas bort. Samma plan skapas därför inte om av nästa coordinator-tick och heater/pump förblir säkra medan runtime får fortsätta.
 
 Avvisningen är bunden till planens runtime- och intention-context. När source/owner, runtime-state, stage/step, target eller själva positiva AUTO-planen ändras betraktas det som ny intention och Supervised Apply får skapa en ny kvittens. Flight recorder visar under tiden `cancelled_plan_suppressed` i stället för ett nytt `pending_confirmation`.
-
 ### Dashboard/cards att ersätta
 
 - Inga.
@@ -237,7 +264,6 @@ Korrigerar #139: det var BLE-indikatorn, inte den generella dual-temperature-gau
 Ingen ny backend-entitet tillkommer i #140. Efter att #139 redan installerats räcker integration/dashboard update; full HA-omstart är inte nödvändig enbart för denna korrigering.
 
 ---
-
 ## 2026-08-29 — PR #139 — External temperature card visibility
 
 ### Sammanfattning
@@ -357,7 +383,6 @@ Manual Brewday-knapparna speglar state machine. `Start` ersattes av `Heat strike
 - Inga.
 
 ### HA-åtgärd
-
 Ingen backend-omstart krävs enbart för kortändringen; uppdatera/reload dashboard-korten.
 
 ---
