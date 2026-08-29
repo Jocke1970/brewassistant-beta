@@ -7,7 +7,8 @@ intent and physical BrewZilla changes:
 * safe-down actions are applied immediately,
 * operator-owned Manual setpoints are transported immediately,
 * AUTO positive actions are bundled into one supervised plan,
-* confirmation re-evaluates the live plan before any positive action is sent.
+* confirmation re-evaluates the live plan before any positive action is sent,
+* a positive confirmed plan requires and consumes one exact one-shot grant.
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ from ..control_policy import (
 )
 from ..supervised_apply import (
     clear_pending_action_from_source,
-    get_last_result,
+    consume_execution_grant,
+    get_execution_grant,
     get_pending_action,
     set_pending_action,
 )
@@ -228,19 +230,6 @@ def _pending_for_plan(hass, snapshot: dict[str, Any], actions: list[dict[str, An
     return set_pending_action(hass, action)
 
 
-def _confirmation_matches(hass, plan_id: str) -> bool:
-    pending = get_pending_action(hass)
-    last = get_last_result(hass)
-    return bool(
-        pending
-        and pending.get("source") == SOURCE
-        and pending.get("id") == plan_id
-        and last
-        and last.get("status") == "executing"
-        and last.get("id") == plan_id
-    )
-
-
 def _decorate_pending(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     out = dict(snapshot)
     pending = get_pending_action(hass)
@@ -352,20 +341,39 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
 
     plan_id = _plan_id(snapshot, positives)
 
-    # The generic BEKRÄFTA button marks the pending action as executing before
-    # it calls brewassistant.apply_brewzilla_target. Only that exact live plan is
-    # allowed through. If BF/Manual has advanced meanwhile, confirmation is stale
-    # and nothing positive is sent.
-    last = get_last_result(hass)
-    if last and last.get("status") == "executing" and last.get("source") == SOURCE:
-        if _confirmation_matches(hass, plan_id):
-            return await _BASE_APPLY(hass)
+    # Only the exact one-shot grant created by the generic BEKRÄFTA button may
+    # open the positive-action path. A stale/mismatched grant is never allowed
+    # to become a direct apply, even if a coordinator tick arrives meanwhile.
+    grant = get_execution_grant(hass)
+    if grant and grant.get("source") == SOURCE:
+        pending = get_pending_action(hass)
+        exact_pending = bool(
+            pending
+            and pending.get("source") == SOURCE
+            and pending.get("id") == plan_id
+        )
+        exact_grant = bool(grant.get("id") == plan_id)
+        if exact_pending and exact_grant and consume_execution_grant(
+            hass,
+            action_id=plan_id,
+            source=SOURCE,
+        ):
+            result = await _BASE_APPLY(hass)
+            result = {
+                **result,
+                "supervised_confirmation_consumed": True,
+                "supervised_plan_id": plan_id,
+                "supervised_plan_summary": _plan_summary(snapshot, positives),
+            }
+            hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+            return result
 
         result = {
             **snapshot,
             "applied": False,
             "apply_result": "supervised_plan_stale",
             "actions": [],
+            "supervised_confirmation_consumed": False,
             "supervised_plan_id": plan_id,
             "supervised_plan_summary": _plan_summary(snapshot, positives),
             "executed_at": dt_util.utcnow().isoformat(),
@@ -408,6 +416,7 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
         "supervised_plan_id": plan_id,
         "supervised_plan_summary": pending.get("summary"),
         "supervised_positive_actions": positives,
+        "supervised_confirmation_consumed": False,
         "executed_at": dt_util.utcnow().isoformat(),
     }
     hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
