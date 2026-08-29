@@ -30,13 +30,14 @@ Swedish card = presentation mirror using the same entity/action references
 
 ## Current reusable cards
 
-The current baseline contains 24 canonical cards and 24 Swedish `_sv.yaml` mirrors:
+The current baseline contains 25 canonical cards and 25 Swedish `_sv.yaml` mirrors:
 
 ```text
 dashboard/cards/brewassistant_hub.yaml
 dashboard/cards/brewassistant_visibility_badges.yaml
 dashboard/cards/brewassistant_brewday.yaml
 dashboard/cards/brewassistant_brewsteps.yaml
+dashboard/cards/brewday_physical_timing.yaml
 dashboard/cards/brewassistant_brewday_bf_reload.yaml
 dashboard/cards/brewassistant_brewday_event_log.yaml
 dashboard/cards/brewassistant_manual_brewday.yaml
@@ -82,7 +83,10 @@ Policy:
 - Keep inactive/disconnected modules visually calm.
 - Prioritize active brewday, cooling, fermentation/cold-crash and carbonation states.
 - Source/feed status supports the workflow; it does not replace domain ownership state.
+- Manual Brewday preparation is only offered when normalized Brewday Runtime is actually idle.
 ```
+
+The 2026-08-29 water-only validation exposed a `ButtonCardJSTemplateError` when the Manual Brewday prepare tile leaked into an active/paused Brewfather-owned runtime without an entity. The tile now uses authoritative `sensor.brewassistant_brewday_runtime_state = idle` visibility and has an explicit entity.
 
 ---
 
@@ -152,6 +156,34 @@ The 2026-08-29 physical regression verified that the operator ABORT survives a H
 
 ---
 
+## Physical step timing — current-brew telemetry
+
+Files:
+
+```text
+dashboard/cards/brewday_physical_timing.yaml
+dashboard/cards/brewday_physical_timing_sv.yaml
+```
+
+Purpose: read-only physical mash/ramp timing from #157 without changing BrewZilla control behavior.
+
+Policy:
+
+```text
+- Keep Brewfather/source schedule time distinct from actual process timing.
+- Show ramp elapsed time while physically moving toward target.
+- Start mash-hold countdown only after the selected process sensor enters the target band.
+- Show target/current temperature, hold progress, ramp °C/min and current-brew history.
+- Surface BF/source-schedule mismatch explicitly without attempting to correct control.
+- Preserve Water only / Real mash context in the displayed telemetry.
+```
+
+The first field-validation version is intentionally a separate expander card instead of being embedded into the large Brewday cockpit. After physical validation it may be folded into the cockpit if that improves operator UX.
+
+The timing ledger is currently volatile across Home Assistant restart; persistence is deferred until the behavior is physically validated.
+
+---
+
 ## Brewsteps — BrewTracker-owned process map
 
 Files:
@@ -180,8 +212,6 @@ Policy:
 - Brewfather/BrewTracker owns progression while this card is visible.
 - Manual Brewday keeps its separate interactive cockpit only while Manual owns runtime.
 ```
-
-This card closes the UI gap where the interactive Manual Brewday step grid correctly disappeared under BrewTracker ownership but left no compact physical-process map in its place.
 
 ---
 
@@ -277,6 +307,17 @@ The previous separate `Brewday Advice` card is intentionally removed. Advice and
 
 The BrewZilla `AVBRYT`/ABORT control continues to use the hardware-level `brewassistant.abort_brewzilla` path. The Brewday-level ABORT button reuses that same physical path and adds the persistent Brewday ownership latch.
 
+### Safety/RCL visibility compatibility
+
+The current Safety/RCL card accepts both:
+
+```text
+switch.brewassistant_show_brewzilla_safety_rcl   # canonical
+switch.brewassistant_show_safety_rcl             # legacy entity found in an existing registry
+```
+
+This is a dashboard compatibility bridge. Backend/entity-registry migration may be tightened separately later.
+
 ---
 
 ## BrewZilla mash-in operator baseline
@@ -303,6 +344,23 @@ Expected high-level flow:
 ```
 
 The state machine is one-way; UI should not invite a stale transition backwards after mash-in is complete.
+
+Known UI cleanup from the 2026-08-29 water-only validation:
+
+```text
+[ ] The `Starta mäskcirkulation` compatibility action can currently be visible outside the narrow post-Mash-In/pump-off window.
+```
+
+Required visibility contract for that compatibility action:
+
+```text
+Mash active
+AND Mash-In Complete
+AND circulation still needs to start
+AND pump is physically OFF / utilization 0
+```
+
+Once the pump is running, or before Mash-In Complete, the action should not be shown.
 
 ---
 
