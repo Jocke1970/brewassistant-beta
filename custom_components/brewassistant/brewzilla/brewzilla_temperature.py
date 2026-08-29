@@ -200,6 +200,15 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
     mash, ordered_diagnostics = _resolve_mash_candidate(selected, ble, control, internal)
 
+    # External-sensor visibility must not depend on the operator's selected mash
+    # source. Evaluate external candidates using the Auto safety heuristics so a
+    # real/fresh external sensor remains discoverable even if Internal is
+    # selected, while mirrored control telemetry is not mistaken for a probe.
+    external_ble = _with_diagnostics(ble, selected="Auto", internal=internal)
+    external_control = _with_diagnostics(control, selected="Auto", internal=internal)
+    external_candidates = [external_ble, external_control]
+    external = next((candidate for candidate in external_candidates if candidate.get("eligible")), None)
+
     mash_temperature = mash["value"] if mash else None
     mash_entity = mash["entity_id"] if mash else None
     mash_source = mash["source"] if mash else "Unavailable"
@@ -223,6 +232,14 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "mash_temperature_age_seconds": (mash or {}).get("age_seconds"),
         "mash_temperature_freshness_ok": (mash or {}).get("freshness_ok"),
         "mash_temperature_external_mash_candidate": (mash or {}).get("external_mash_candidate"),
+        "external_temperature_available": external is not None,
+        "external_temperature_source": external.get("source") if external else None,
+        "external_temperature_entity": external.get("entity_id") if external else None,
+        "external_temperature_age_seconds": external.get("age_seconds") if external else None,
+        "external_temperature_candidates": {
+            "ble": external_ble,
+            "control_device": external_control,
+        },
         "wort_temperature": wort_temperature,
         "wort_temperature_entity": BREWZILLA_INTERNAL_TEMP_SENSOR,
         "wort_temperature_source": "BrewZilla Internal",
