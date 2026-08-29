@@ -3,6 +3,9 @@ conditions:
   - condition: state
     entity: sensor.brewzilla_connection
     state: Connected
+  - condition: state
+    entity: binary_sensor.brewassistant_brewzilla_external_temperature_available
+    state: "on"
 card:
   type: custom:button-card
   entity: sensor.brewassistant_brewzilla_mash_temperature
@@ -20,6 +23,7 @@ card:
     - sensor.brewzilla_ble_thermometer_temperature
     - sensor.brewzilla_control_device_temperature
     - sensor.brewzilla_temperature
+    - binary_sensor.brewassistant_brewzilla_external_temperature_available
   label: |
     [[[
       const st = states;
