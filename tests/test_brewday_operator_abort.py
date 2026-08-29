@@ -12,12 +12,13 @@ OWNERSHIP = ROOT / "custom_components/brewassistant/brewday/brewfather_ownership
 RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
 RUNTIME_SENSOR = ROOT / "custom_components/brewassistant/brewday/brewday_runtime_sensor.py"
 BUTTON = ROOT / "custom_components/brewassistant/button.py"
+COORDINATOR = ROOT / "custom_components/brewassistant/coordinator.py"
 CARD_EN = ROOT / "dashboard/cards/brewassistant_brewday.yaml"
 CARD_SV = ROOT / "dashboard/cards/brewassistant_brewday_sv.yaml"
 
 
 def test_abort_python_sources_parse() -> None:
-    for path in (ABORT, OWNERSHIP, RUNTIME, RUNTIME_SENSOR, BUTTON):
+    for path in (ABORT, OWNERSHIP, RUNTIME, RUNTIME_SENSOR, BUTTON, COORDINATOR):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -32,6 +33,15 @@ def test_operator_abort_is_persisted_and_requires_explicit_rearm() -> None:
         '"control_state"] = "aborted" if state.get("active") else "armed"',
     ):
         assert token in source
+
+
+def test_persisted_abort_loads_before_any_coordinator_orchestration_tick() -> None:
+    source = COORDINATOR.read_text(encoding="utf-8")
+    assert "from .brewday.brewday_operator_abort import async_load_brewday_operator_abort" in source
+    update = source.split("async def _async_update_data", 1)[1]
+    assert "await async_load_brewday_operator_abort(self.hass)" in update
+    assert update.index("async_load_brewday_operator_abort") < update.index("maybe_request_brewfather_refresh")
+    assert update.index("async_load_brewday_operator_abort") < update.index("async_apply_brewzilla_target_if_allowed")
 
 
 def test_brewfather_ownership_obeys_operator_abort_latch() -> None:
