@@ -25,6 +25,7 @@ BREWDAY_RUNTIME_SENSORS: dict[str, dict[str, Any]] = {
     "brewday_runtime_source": {"field": "source"},
     "brewday_runtime_status": {"field": "status"},
     "brewday_runtime_state": {"field": "runtime_state"},
+    "brewday_operator_control_state": {"field": "operator_control_state"},
     "brewday_runtime_stage": {"field": "stage"},
     "brewday_runtime_step": {"field": "step"},
     "brewday_runtime_next_step": {"field": "next_step"},

@@ -1,215 +1,295 @@
 # Brewday / BrewZilla Direct Flow
 
-This document describes the current BrewAssistant Brewday flow for Brewfather Brew Tracker or Manual Brewday → BrewAssistant → BrewZilla.
+This document describes the current BrewAssistant hot-side control path from Brewfather Brew Tracker or Manual Brewday through BrewAssistant to BrewZilla/RAPT hardware.
 
-Status: **post-#112 supervised hot-side beta flow**. The latest water/system tests validated the core chain from heat-strike through mash-in, 66°C hold, 66→72°C ramp and 72→77°C hold. A longer boil-specific validation is still useful before treating the full brewday path as a final baseline.
+Status: **supervised hot-side beta baseline after the 2026-08-29 physical Brewfather/Supervised Apply validation**.
 
-The first verified path is BrewZilla/RAPT hardware, but the architecture should remain hardware-profile friendly. BrewAssistant should expose canonical `sensor.brewassistant_brewday_*` and `sensor.brewassistant_brewzilla_*` entities to dashboards instead of making every card parse raw Brewfather data directly.
+BrewAssistant is intentionally an operator-supervised controller. Runtime progression and hardware execution are separate concerns: Brewday may understand the next process step without silently energizing hardware.
 
 ---
 
-## Current control philosophy
-
-BrewAssistant is an operator-supervised hot-side controller.
+## Control philosophy
 
 ```text
 Brewfather Brew Tracker or Manual Brewday
         ↓
-BrewAssistant normalized Brewday Runtime
+normalized Brewday Runtime
         ↓
-BrewAssistant BrewZilla orchestration snapshot
+BrewZilla orchestration / safety guards
         ↓
-BrewZilla target / heater / pump / utilization actions
+Supervised Apply gate for positive physical actions
         ↓
-Brewday Event Log + diagnostics
+BrewZilla target / utilization / heater / pump
+        ↓
+Brewday Event Log + diagnostics + learning evidence
 ```
 
-Important safety boundaries:
+Safety ordering is authoritative:
 
 ```text
-- ABORT and completed-runtime safe-down remain authoritative.
-- RAPT Cloud Link stale/disconnected telemetry must not silently zero heat/pump.
-- Once BrewZilla has a valid local target, BrewZilla may continue local regulation.
-- Recovery/diagnostic guards may refresh/reload RCL, but must not change target/heat/pump as part of recovery.
-- Operator mash-in confirmation remains explicit and one-way.
-- Manual Brew operator ownership is channel-scoped, but it never overrides an already blocked safety/freshness/ABORT decision.
+operator ABORT / hardware ABORT / safe-down
+        > source ownership
+        > supervised positive control
+        > normal orchestration / learning / UI intent
 ```
+
+Positive physical actions must never bypass the explicit operator confirmation path. Risk-reducing safe-down actions do not wait for confirmation.
 
 ---
 
-## Verified flow
+## Brewfather phase vs actual tracker start
 
-Recent supervised water/system tests verified:
+Brewfather batch phase and Brew Tracker execution are separate concepts.
 
-```text
-✅ Brewfather Brew Tracker / Manual Brewday can feed normalized runtime
-✅ BrewAssistant follows the runtime target and step sequence
-✅ BrewZilla receives target changes through the mash profile
-✅ Heat utilization and pump utilization are evaluated and logged
-✅ Event Log captures runtime, target sync, actions and RAPT/RCL health signals
-✅ ABORT remains available as a hard stop
-✅ BrewZilla local regulation continues when a valid target is already applied
-```
-
-Current hot-side test profile:
+A batch may report:
 
 ```text
-Heat-strike to ~71.8°C
-Mash-In Started / Brewfather Continue / Mash-In Complete
-Hold 66°C
-Ramp 66→72°C, currently tested at 9 min
-Hold 72°C
-Ramp / hold toward 77°C
-Boil validation still pending as its own longer test
+brew_tracker_batch_status: Brewing
+active: true
+status: paused
+stage_index: 0
+current stage step: 0
+progress: 0
+remainingSeconds == duration
+current step: Start / Starta mäsktimer
 ```
 
-Water-only tests are useful for runtime, RCL and timing validation, but should not be treated as real-mash thermal-learning evidence.
+This is **pre-start**, not hot-side ownership.
 
----
-
-## Why RAW Brew Tracker is used
-
-The convenience entity `sensor.brewfather_brew_tracker_step` may lag behind the Brewfather web UI.
-
-BrewAssistant therefore resolves the active step from:
+Current ownership rules:
 
 ```text
-sensor.brewfather_brew_tracker_raw.attributes.data.stages
-stage.remainingSeconds
-step.time anchors
+Planning
+  -> visible / ready
+  -> no Brewfather hot-side ownership
+
+Brewing, parked on initial Start step
+  -> visible / ready
+  -> no Brewfather hot-side ownership
+
+Brewing with positive start evidence
+  -> Brewfather owns normalized hot-side runtime
+
+Started tracker paused later
+  -> ownership remains latched to the same tracker/batch
+
+Fermenting / completed / unrelated phases
+  -> no BrewZilla hot-side ownership
 ```
 
-Implemented in:
+Positive start evidence includes running tracker status, advancing stage/step, non-zero progress, decreasing remaining stage time, or leaving the explicit Start step.
+
+`active: true` alone is not start evidence.
+
+Implementation:
 
 ```text
-custom_components/brewassistant/brewday/brewday_runtime_core.py
+custom_components/brewassistant/brewday/brewfather_ownership.py
 ```
-
-The normalized runtime wrapper can also use Manual Brewday as the active source:
-
-```text
-custom_components/brewassistant/brewday/brewday_runtime.py
-custom_components/brewassistant/brewday/manual_brewday_adapter.py
-```
-
-The runtime keeps both values for diagnostics:
-
-```text
-raw_step_index
-resolved_step_index
-raw_step_name
-```
-
-`raw_step_index != resolved_step_index` is not automatically an error. It often means BrewAssistant has calculated the active step from the stage timeline while Brewfather/RAPT Cloud still exposes an older raw index.
-
----
-
-## Runtime presentation
-
-Brewfather may create several internal tracker steps with the same recipe name. For example, a ramp and a hold can both be named `Step 6 - 55C final low-temp sync`.
-
-BrewAssistant exposes human-friendly labels such as:
-
-```text
-Ramp to 55°C
-Hold 55°C · 2 min
-```
-
-instead of displaying duplicated raw names as current and next step. The original Brewfather name remains available as `raw_step_name` in attributes for debug use.
-
-During clean heat-strike the operator UI should prefer BrewAssistant's physical state over Brewfather's parked next step. Brewfather can already be paused at a lower mash step while BrewAssistant is still physically heating strike water.
-
----
-
-## Paused Brewfather behavior
-
-When Brewfather status is paused, BrewAssistant treats the snapshot as a freeze-frame:
-
-```text
-runtime_state = paused
-awaiting_snapshot = false
-paused_freeze = true
-live_timer_active = false
-```
-
-BrewAssistant keeps the current step and target instead of advancing into `awaiting_snapshot` just because remaining time reaches zero while paused.
 
 ---
 
 ## Brewfather vs Manual Brew ownership
 
-Brewfather Brew Tracker and Manual Brew are intentionally mutually exclusive for positive Brewday control.
+Brewfather and Manual Brew are mutually exclusive positive-control runtime owners.
 
-Brewfather is considered active for this ownership rule only when its normalized tracker status is exactly:
-
-```text
-active
-```
-
-When Brewfather is active:
+When an actually started Brewfather tracker owns the hot side:
 
 ```text
-- Brewfather remains the authoritative normalized runtime source.
-- Manual Brew prepare/start/next/direct-stage-jump actions are rejected.
-- Pause, finish and reset remain available so Manual Brew can always be made safe or cleared.
-- If Manual Brew was already running or awaiting confirmation, it is automatically paused when runtime ownership is evaluated.
-- When Brewfather later becomes inactive, Manual Brew does not auto-resume; the operator must explicitly start it again.
+- Brewfather is the authoritative normalized runtime source.
+- Manual Brew positive start/next/direct-stage actions are not allowed to compete.
+- An already active Manual Brew session is paused for the handoff.
+- Manual Brew does not auto-resume when Brewfather later disappears.
 - BrewAssistant does not silently stop or finish the external Brewfather session.
 ```
+
+Manual Brew can still use channel-scoped operator ownership while it is the active runtime:
+
+```text
+Manual Target Override ON
+  -> operator owns BrewZilla target
+
+Allow Heater Control OFF
+  -> operator owns heater + heat utilization
+
+Allow Pump Control OFF
+  -> operator owns pump + pump utilization
+```
+
+Safety and ABORT always outrank Manual ownership.
 
 Relevant modules:
 
 ```text
 custom_components/brewassistant/brewday/brewday_runtime.py
 custom_components/brewassistant/brewday/manual_brewday_store.py
-```
-
-This precedence is separate from the Manual Brew BrewZilla channel ownership described below. Brewfather decides which Brewday runtime is authoritative; the Manual Brew control guard decides which BrewZilla output channels BA may reassert while Manual Brew is the active runtime.
-
----
-
-## Manual Brew target / heat / pump ownership
-
-When the normalized runtime source is `Manual Brewday`, the operator may own target, heat and pump independently.
-
-```text
-Manual Target Override ON
-  -> operator owns BrewZilla target
-  -> current number.brewzilla_target_temperature becomes the effective Manual Brew target
-
-Allow Heater Control ON
-  -> BrewAssistant AUTO owns heater + heat utilization
-Allow Heater Control OFF
-  -> operator owns heater + heat utilization
-
-Allow Pump Control ON
-  -> BrewAssistant AUTO owns pump + pump utilization
-Allow Pump Control OFF
-  -> operator owns pump + pump utilization
-```
-
-Mixed ownership is intentional. For example, the operator may own target + heat while BrewAssistant still runs the pump automatically.
-
-The Manual Brew ownership gate runs last in the normal orchestration decision chain so Advice, mash/local-control and lease logic cannot casually take an operator-owned channel back. However, a snapshot already blocked by safety/freshness or an active ABORT lockout bypasses manual suppression; safe-state behavior always has higher priority.
-
-Relevant modules:
-
-```text
-custom_components/brewassistant/brewday/manual_brewday_adapter.py
 custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py
 ```
 
-The dashboard exposes the ownership switches together with raw BrewZilla target/utilization controls. While Brewfather status is `active`, the raw Manual BrewZilla control panel is hidden and a conflict warning is shown.
+---
 
-Physical persistence of these operator values across repeated BrewZilla/RAPT Cloud Link coordinator cycles is still pending a real-device validation.
+## Supervised Apply
+
+Automatic positive BrewZilla actions are gated by Supervised Apply.
+
+Examples of positive actions:
+
+```text
+target increase
+heat-utilization increase
+pump-utilization increase
+heater ON
+pump ON
+```
+
+Expected flow:
+
+```text
+1. Runtime/orchestration builds the desired physical plan.
+2. BA stores a pending plan and exposes it to the cockpit.
+3. No positive hardware write occurs while pending.
+4. Operator presses CONFIRM ACTION / BEKRÄFTA ÅTGÄRD.
+5. BA rebuilds the live plan and validates source/stage/step/target/plan identity.
+6. Only a still-valid matching plan is executed.
+7. Event Log records supervised_confirmed and supervised_executed.
+```
+
+Rejecting a pending plan is **not** an emergency stop:
+
+```text
+REJECT ACTION / AVVISA ÅTGÄRD
+  -> rejects and suppresses the current matching pending intention
+  -> does not perform a physical ABORT
+```
+
+A rejected plan remains suppressed while the exact intent/context is unchanged. A meaningful runtime/context change may legitimately create a new pending plan.
+
+Implementation:
+
+```text
+custom_components/brewassistant/supervised_apply.py
+custom_components/brewassistant/brewzilla/brewzilla_orchestration.py
+```
+
+---
+
+## Confirmed-plan RCL readback grace
+
+RAPT Cloud Link can briefly publish an older configuration value after BA has successfully written a new target/utilization value.
+
+A physical test reproduced this pattern after confirmation:
+
+```text
+heat utilization written 0 -> 100
+later stale readback 100 -> 0
+```
+
+Without protection, that stale readback looked like a new positive action and reopened Supervised Apply for the same already-approved intent.
+
+The confirmed-plan readback grace now remembers only the configuration increases that were explicitly confirmed and actually sent. For a short bounded window, the same source/stage/step/target may ignore a stale copy of those exact number writes without issuing a new write or a new pending plan.
+
+Important limits:
+
+```text
+- grace is time-bounded (currently 240 s)
+- it is scoped to the same confirmed runtime intention
+- it covers confirmed target/heat/pump number increases only
+- heater ON and pump ON are deliberately not silently re-energized
+- ABORT invalidates the grace immediately
+```
+
+Implementation:
+
+```text
+custom_components/brewassistant/brewzilla/brewzilla_supervised_readback_grace.py
+```
+
+---
+
+## Brewday operator ABORT
+
+Brewday now distinguishes rejecting one pending action from aborting the hot-side session.
+
+```text
+REJECT / AVVISA
+  = discard one pending Supervised Apply intention
+
+ABORT BREWDAY / ABORT BRYGGDAG
+  = physical BrewZilla safe-down
+  + discard pending positive intent
+  + reset Manual Brewday session to idle
+  + latch BrewAssistant hot-side ownership OFF
+```
+
+The Brewday ABORT reuses the authoritative BrewZilla ABORT path. It therefore performs the same physical safe-down:
+
+```text
+heater OFF
+pump OFF
+heat utilization 0
+pump utilization 0
+BrewZilla positive-action ABORT lockout
+```
+
+In addition, Brewday stores a persistent operator-control latch. While active:
+
+```text
+sensor.brewassistant_brewday_runtime_state = aborted
+sensor.brewassistant_brewday_operator_control_state = aborted
+normalized Brewday source = None
+Brewfather cannot automatically reclaim BA hot-side ownership
+```
+
+The latch is persisted through Home Assistant storage and is loaded before orchestration decisions. A Home Assistant restart must therefore not silently re-arm an aborted Brewday.
+
+The operator must explicitly use:
+
+```text
+REARM CONTROL / ÅTERAKTIVERA STYRNING
+```
+
+to release the Brewday ownership latch. Rearming Brewday does **not** bypass BrewZilla's independent hardware ABORT lockout; that lockout remains authoritative until its own guard allows control again.
+
+Implementation:
+
+```text
+custom_components/brewassistant/brewday/brewday_operator_abort.py
+custom_components/brewassistant/button.py
+custom_components/brewassistant/coordinator.py
+custom_components/brewassistant/brewday/brewfather_ownership.py
+```
+
+---
+
+## Target concepts
+
+Do not conflate runtime intent with the physical RAPT target.
+
+```text
+sensor.brewassistant_brewzilla_runtime_target_temperature
+  = Brewday runtime target
+
+sensor.brewassistant_brewzilla_target_temperature
+  = normalized/effective target; runtime-first while active
+
+sensor.brewassistant_brewzilla_device_target_temperature
+  = physical/raw BrewZilla/RAPT target normalized for BA
+```
+
+Flight Recorder therefore exposes both:
+
+```text
+brewzilla_effective_target
+brewzilla_device_target
+```
+
+A runtime target change alone is not evidence of a physical target write.
 
 ---
 
 ## Target and output actions
 
-Target sync and hardware output actions are separate decisions.
-
-The orchestration layer evaluates:
+Target sync and output actions are evaluated independently:
 
 ```text
 target_sync_needed
@@ -221,51 +301,28 @@ heat_utilization_action_needed
 pump_utilization_action_needed
 ```
 
-Therefore this case is valid and should trigger an action:
-
-```text
-Brew Tracker target = 30°C
-BrewZilla target = 30°C
-BrewZilla current = 25.6°C
-heater = off
-
-→ target_sync_needed = false
-→ heater_action_needed = true
-→ heater should turn on
-```
-
-Implemented in:
-
-```text
-custom_components/brewassistant/brewzilla/brewzilla_orchestration.py
-```
-
-`target_delta` means synchronization delta:
+`target_delta` means:
 
 ```text
 requested_target - applied_target
 ```
 
-It is not the same as temperature delta:
-
-```text
-current_temperature - target_temperature
-```
+It is not the process-temperature delta.
 
 ---
 
 ## Clean heat-strike model
 
-The current pre-mash-in heat-strike model is intentionally physical-state dominant.
+The pre-mash-in model is physical-state dominant:
 
 ```text
 Mash/BLE/control probe = readiness gate
-Wort/kettle/internal = safety cap against overshoot
-Pump utilization = mixing tool when wort/internal runs hotter than mash/BLE
-BrewZilla target = real strike target, not a boosted target
+BrewZilla internal/wort = safety view / overshoot limiter
+BrewZilla target = real strike target
+Pump = mixing/equalization tool
 ```
 
-Expected heat schedule from the gate delta:
+Current heat schedule from gate delta:
 
 ```text
 >10°C below strike: 100%
@@ -276,50 +333,49 @@ Expected heat schedule from the gate delta:
 <=1°C below strike / overshoot: 0%, heater off
 ```
 
-Safety cap uses the hottest wort/kettle/internal view as a limiter, so desired heat is effectively:
+The hottest safety view can cap heat below this gate request. Pump mixing is used to reduce thermal stratification.
+
+Do not tune these thresholds casually; use Event Log evidence from real mash or controlled water tests.
+
+---
+
+## Extra process-temperature sensor ownership
+
+The optional external process-temperature sensor, for example a RAPT BLE Thermometer, has phase-scoped ownership.
+
+This architecture is fixed:
 
 ```text
-min(gate_heat, safety_cap)
+Heat strike -> Mash -> Mash out -> Sparge -> Pre-boil
+  owner: Brewday Runtime / hot-side BrewZilla control
+  role: extra process/mash temperature input
+
+Boil starts
+  Brewday Runtime releases the external sensor
+
+Chill -> Transfer
+  owner: CFC backend
+  role: CFC outlet / wort-out temperature
 ```
 
-Pump mixing floors during heat-strike:
-
-```text
-large wort-mash delta: 100%
-mid delta: 90%
-small delta: 80%
-otherwise: 70–100% depending on strike proximity
-```
-
-Do not rewrite this model casually. Small threshold or diagnostic changes are acceptable after logs show a specific reason.
+BrewZilla's internal temperature remains Brewday Runtime's primary kettle temperature throughout the hot-side process. The external sensor handoff prevents Brewday and CFC from competing for the same physical measurement role.
 
 ---
 
 ## Mash-in state machine
 
-Mash-in is an operator-supervised transition.
-
-Normal flow:
+Mash-in is a supervised one-way transition:
 
 ```text
-1. Heat-strike reaches readiness gate on mash/BLE/control probe.
-2. BrewAssistant shows Mash-In Started.
-3. Operator presses Mash-In Started when malt addition starts.
-4. BrewAssistant releases strike target to the effective mash target and keeps pump paused.
-5. Operator presses Continue/FORTSÄTT in Brewfather when mash-in is physically complete.
-6. BrewAssistant auto-runs Mash-In Complete when Brewfather resumes in mash context.
-7. Mash circulation starts.
+ready_for_mash_in
+  -> Mash-In Started
+  -> grain addition / pump paused
+  -> Brewfather Continue
+  -> Mash-In Complete
+  -> circulation resumes
 ```
 
-Manual `Mash-In Complete` remains a fallback button.
-
-Post-#112 guardrail:
-
-```text
-mash_in_ready → mash_in_started → mash_in_complete
-```
-
-is one-way. A stale or late Mash-In Started call after `mash_in_complete` must be ignored and logged as an ignored action, not move the state machine backwards.
+A late/stale Mash-In Started action must not move an already completed mash-in backwards.
 
 Relevant modules:
 
@@ -331,141 +387,86 @@ custom_components/brewassistant/brewzilla/brewzilla_mash_in_state_guard.py
 
 ---
 
-## Brewday audit autostart
+## RCL freshness and local regulation
 
-Autostart should no longer depend only on exact Brewfather `Planning` state. Post-#112 behavior:
+Once BrewZilla has a valid local target, BA should preserve BrewZilla's local temperature regulation during telemetry degradation.
 
-```text
-Primary gate:
-- normalized Brewday Runtime is active/trusted
-- runtime source is Brewfather Brew Tracker or Manual Brewday
-- runtime stage/step is hot-side relevant
-- BrewZilla/RAPT backend entities are present
-- audit/event log is inactive
-- runtime is not completed/idle/archived
-
-Fallback gate:
-- Brewfather batch status Planning, for early startup/race conditions
-```
-
-The watchdog still runs at about 30 s intervals while the event log is inactive. The last autostart decision is stored in:
+RCL recovery may:
 
 ```text
-hass.data["brewassistant"]["brewday_audit_autostart_last_result"]
+request homeassistant.update_entity
+request a guarded/throttled config-entry reload where appropriate
+mark freshness/recovery diagnostics
 ```
+
+RCL recovery itself must not change target, heat utilization, pump utilization, heater or pump.
+
+A true explicit ABORT/completed/safe-down context is different and remains authoritative.
 
 ---
 
-## Active hot-side RCL recovery
+## Flight Recorder / one brewday = one log
 
-RAPT Cloud Link may become stale or disconnected while BrewZilla is already holding a valid local target. BrewAssistant should attempt recovery without changing live control state.
+Brewday Event Log starts early enough to capture Planning, but a single Brewfather batch must remain one recorder session through actual start.
 
-Post-#112 recovery behavior:
-
-```text
-When active hot-side runtime + RCL/BrewZilla stale/disconnected:
-- request homeassistant.update_entity for known RCL/BrewZilla entities
-- request throttled homeassistant.reload_config_entry when available
-- expose rcl_active_hot_side_recovery_* diagnostics on orchestration attributes
-- set rapt_critical_refresh_recommended true
-- preserve BrewZilla local target/regulation
-- do not change target, heat utilization, pump utilization, heater or pump as part of recovery
-```
-
-Relevant module:
+Expected continuity:
 
 ```text
-custom_components/brewassistant/brewzilla/brewzilla_active_rcl_recovery_guard.py
+Planning
+  -> Brewing pre-start
+  -> Play / tracker starts
+  -> running hot-side Brewday
+
+same started_at
+same Flight Recorder session
 ```
+
+The deterministic session-boundary latch, not a transient `idle`/no-owner pre-start snapshot, decides whether the next runtime activation belongs to a new brewday.
+
+A physical 2026-08-29 test verified that `started_at` remained unchanged across `paused -> running` / Play.
 
 ---
 
-## Refresh policy
+## Physically verified 2026-08-29 chain
 
-BrewAssistant requests Brewfather entity refreshes through a smart refresh policy.
-
-Implemented in:
+The current Brewfather/BrewZilla system test verified:
 
 ```text
-custom_components/brewassistant/brewday/brewday_refresh_policy.py
-custom_components/brewassistant/brewday/brewday_refresh.py
+✅ Planning starts/keeps Flight Recorder while hot-side remains non-owning
+✅ Brewing pre-start with active:true does not take hot-side ownership
+✅ Play provides positive start evidence and Brewfather becomes runtime owner
+✅ Flight Recorder does not rotate at Play
+✅ positive heat/pump plan waits for explicit confirmation
+✅ explicit confirmation writes heat utilization, pump utilization, heater ON and pump ON
+✅ supervised_executed is recorded after the complete plan
+✅ normal follow-up ticks do not repeat already-satisfied writes
+✅ BrewZilla ABORT turns heater/pump OFF and both utilizations to 0
+✅ BrewZilla ABORT lockout blocks delayed/recreated positive actions
 ```
 
-Policy overview:
-
-```text
-Normal real batch:
-- Mash / boil / other active stage: about every 5 minutes
-- Chilling: about every 2 minutes
-- Idle/setup/cleanup: about every 10 minutes
-
-Test batch / short-step recipe:
-- about every 30 seconds
-
-Step ending soon:
-- about every 15 seconds
-
-Awaiting snapshot:
-- about every 15 seconds with a bounded burst limit
-
-Minimum cooldown:
-- 10 seconds
-```
-
-Manual refresh is still available as a service, but normal operation should not require an Apply Target button.
+The new Brewday-level operator ABORT/rearm UI and persistent ownership latch should receive a short dedicated regression test after installation.
 
 ---
 
-## Event log
+## Dashboard controls
 
-Brewday Event Log records post-run analysis data for runtime and BrewZilla orchestration.
-
-Current service names are kept for compatibility:
+General Brewday cockpit:
 
 ```text
-brewassistant.brewday_audit_start
-brewassistant.brewday_audit_stop
-brewassistant.brewday_audit_clear
-brewassistant.brewday_audit_snapshot
+dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_sv.yaml
 ```
 
-Main sensor:
+The operator controls are intentionally distinct:
 
 ```text
-sensor.brewassistant_brewday_event_log_summary
+CONFIRM ACTION / BEKRÄFTA ÅTGÄRD
+REJECT ACTION / AVVISA ÅTGÄRD
+ABORT BREWDAY / ABORT BRYGGDAG
+REARM CONTROL / ÅTERAKTIVERA STYRNING   # visible after Brewday ABORT
 ```
 
-Event Log uses normalized runtime, so both Brewfather Brew Tracker and Manual Brewday can provide stage, step and target context.
-
-Important new diagnostic families:
-
-```text
-mash_in_gate_*
-rcl_active_hot_side_recovery_*
-rapt_brewzilla_*_age_seconds
-ba_owned_* utilization/reassert fields
-manual_brew_control_*
-manual_target_override_active
-manual_heat_override_active
-manual_pump_override_active
-```
-
-`last_target` prefers runtime target, but can fall back to requested/applied/device target values for action events where the runtime target was unavailable in older stored events.
-
----
-
-## Current timing guidance
-
-Observed water/system-test guidance after the latest supervised runs:
-
-```text
-Heat-strike time in Brewfather: about 30 min for the current small-test setup
-Ramp 66→72°C: 9 min is a better current test value than 5 min
-```
-
-Treat these as recipe/test-profile hints, not backend constants.
-
-Future equipment learning should compare planned vs actual timing by segment and present advisory Brewfather timing suggestions without automatically changing Brewfather or live control behavior.
+The CONFIRM button is visually pending-driven. ABORT is a separate red safety control and must never be confused with rejection of a pending plan.
 
 ---
 
@@ -474,15 +475,13 @@ Future equipment learning should compare planned vs actual timing by segment and
 Recommended next checks:
 
 ```text
-✅ Heat-strike still uses clean gate/safety/pump model
-✅ Event Log autostarts from active runtime
-✅ RCL recovery exposes diagnostics and does not change target/heat/pump
-✅ Mash-In Started cannot revert mash_in_complete
-✅ Manual Brew Control v2 loads cleanly in Home Assistant
-⏳ Physical Manual target persistence across repeated coordinator/RCL cycles
-⏳ Physical Manual heat/pump utilization persistence with AUTO disabled
-⏳ Mixed Manual/AUTO channel ownership on real BrewZilla
-⏳ Brewfather-active conflict/pause behavior in operator workflow
-⏳ Full boil ramp + 10 min boil validation
-⏳ Real-mash thermal validation, separate from Water only learning
+[ ] Physical Brewday ABORT: one press produces safe-down + runtime_state aborted
+[ ] Confirm Brewfather cannot reclaim ownership while operator_control_state is aborted
+[ ] Confirm HA restart preserves the operator ABORT latch
+[ ] Explicit REARM restores ownership eligibility but does not bypass hardware ABORT lockout
+[ ] Validate real-mash heat-strike and mash-in thermal behavior
+[ ] Validate full boil ramp/boil flow
+[ ] Validate Boil release of the external process sensor
+[ ] Validate CFC Chill/Transfer acquisition of that external sensor
+[ ] Continue Equipment Learning planned-vs-actual timing validation
 ```

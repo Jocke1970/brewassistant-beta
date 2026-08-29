@@ -13,6 +13,7 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 
 from . import brewday_runtime_core as core
+from .brewday_operator_abort import brewday_operator_abort_active
 
 PLANNING = "planning"
 BREWING = "brewing"
@@ -139,8 +140,12 @@ def brewfather_hot_side_active(hass: HomeAssistant) -> bool:
 
     The started latch is keyed to the tracker/batch identity. It preserves
     ownership when an already-started BrewTracker is later paused, while a new
-    Brewing batch parked on ``Starta mäsktimer`` remains ready-only.
+    Brewing batch parked on ``Starta mäsktimer`` remains ready-only. An explicit
+    Brewday operator ABORT outranks that latch and blocks ownership until rearm.
     """
+    if brewday_operator_abort_active(hass):
+        return False
+
     if brewfather_batch_phase(hass) != BREWING:
         return False
 
