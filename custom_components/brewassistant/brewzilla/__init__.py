@@ -28,6 +28,7 @@ from . import brewzilla_mash_in_gate as _mash_in_gate
 from . import brewzilla_mash_in_state_guard as _mash_in_state_guard
 from . import brewzilla_mash_in_target_patch as _mash_in_target_patch
 from . import brewzilla_manual_brew_control as _manual_brew_control
+from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
 from . import brewzilla_freshness_guard as _freshness_guard
 from . import brewzilla_stale_safe_guard as _runtime_safety
 from . import brewzilla_paused_guard as _paused_guard
@@ -91,3 +92,6 @@ _mash_in_state_guard.install_mash_in_state_guard()
 _active_rcl_recovery_guard.install_active_rcl_recovery_guard()
 _abort_lockout_final_guard.install_abort_lockout_final_guard()
 _manual_brew_control.install_manual_brew_control_guard()
+# Must be last: it sees final Manual/AUTO ownership and gates only positive
+# automatic hardware actions without pausing the underlying runtime clock.
+_supervised_runtime_guard.install_supervised_runtime_guard()
