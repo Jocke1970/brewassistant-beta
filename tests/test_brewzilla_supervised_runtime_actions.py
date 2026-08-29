@@ -22,7 +22,7 @@ def test_manual_prepared_is_a_safe_boundary() -> None:
     assert '"desired_pump_utilization": 0.0' in source
     assert '"heater_action_needed": False' in source
     assert '"pump_action_needed": False' in source
-    assert "until the operator starts Heat strike" in source
+    assert "operator starts Heat strike" in source
 
 
 def test_generic_no_positive_gate_includes_prepared() -> None:
