@@ -13,6 +13,32 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #142 — Explicit och hårdlåst Supervised Apply
+
+### Sammanfattning
+
+Manual Brewday visar nu tydligt när en positiv AUTO-plan mot BrewZilla väntar på operatörens kvittens. `Heat strike` har en separat startdialog som förklarar att runtimen går vidare direkt, medan positiva AUTO-åtgärder kräver efterföljande `BEKRÄFTA`. Den väntande planen visas i Manual Brewday-cockpit med sammanfattning samt `BEKRÄFTA`/`AVBRYT`.
+
+BrewZilla-planer körs nu via en registrerad Supervised Apply-exekutor som endast anropas från den explicita bekräftelseknappen. Vid kvittens byggs live-planen om och måste fortfarande matcha exakt plan-ID, runtime och säkerhetsläge. Vanliga coordinator-ticks kan inte konsumera kvittensen eller öppna den positiva exekveringsvägen. Flight recordern loggar dessutom `supervised_confirmed`, `supervised_executed`, `supervised_not_executed` och `supervised_cancelled` så nästa testlogg visar exakt vad operatören gjorde.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewassistant_manual_brewday.yaml`
+- `dashboard/cards/brewassistant_manual_brewday_sv.yaml`
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/supervised_apply.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_supervised_runtime_guard.py`
+- `tests/test_brewzilla_supervised_runtime_actions.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom Supervised Apply-backendens exekveringsväg ändras. Ersätt/reloada även Manual Brewday-kortet.
+
+---
+
 ## 2026-08-29 — PR #141 — Supervised BrewZilla runtime actions
 
 ### Sammanfattning
