@@ -13,6 +13,31 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #144 — AVBRYT suppressar oförändrad Supervised Apply-plan
+
+### Sammanfattning
+
+`AVBRYT` betyder nu att den exakta positiva BrewZilla-planen avvisas, inte bara att det aktuella pending-objektet tas bort. Samma plan skapas därför inte om av nästa coordinator-tick och heater/pump förblir säkra medan runtime får fortsätta.
+
+Avvisningen är bunden till planens runtime- och intention-context. När source/owner, runtime-state, stage/step, target eller själva positiva AUTO-planen ändras betraktas det som ny intention och Supervised Apply får skapa en ny kvittens. Flight recorder visar under tiden `cancelled_plan_suppressed` i stället för ett nytt `pending_confirmation`.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/supervised_apply.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_supervised_runtime_guard.py`
+- `tests/test_brewzilla_supervised_runtime_actions.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom Supervised Apply-backendens cancellation-state ändras.
+
+---
+
 ## 2026-08-29 — PR #143 — Ny flight-recorder-logg per bryggdag
 
 ### Sammanfattning

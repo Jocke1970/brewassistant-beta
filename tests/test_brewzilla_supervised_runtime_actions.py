@@ -81,6 +81,35 @@ def test_brewzilla_confirmation_uses_registered_explicit_executor() -> None:
     assert "Normal coordinator ticks never" in guard
 
 
+def test_cancelled_plan_is_suppressed_until_intent_changes() -> None:
+    guard = SUPERVISED.read_text(encoding="utf-8")
+    core = SUPERVISED_CORE.read_text(encoding="utf-8")
+    assert 'CANCELLED_KEY = "supervised_apply_cancelled_action"' in core
+    assert "def get_cancelled_action(" in core
+    assert "def cancelled_action_matches(" in core
+    assert "def clear_cancelled_action_from_source(" in core
+    assert 'cancelled["cancelled_at"]' in core
+    assert "def _cancelled_intent_matches(" in guard
+    assert "cancelled_action_matches(hass, action_id=plan_id, source=SOURCE)" in guard
+    assert '"apply_result": "cancelled_plan_suppressed"' in guard
+    assert '"has_pending_action": False' in guard
+    assert '"supervised_runtime_plan_pending": False' in guard
+    assert '"supervised_plan_cancelled": True' in guard
+    assert "clear_cancelled_action_from_source(hass, SOURCE)" in guard
+
+
+def test_plan_identity_includes_runtime_and_manual_ownership_context() -> None:
+    guard = SUPERVISED.read_text(encoding="utf-8")
+    assert '"runtime_source": snapshot.get("runtime_source")' in guard
+    assert '"runtime_state": snapshot.get("brewday_state")' in guard
+    assert '"stage": snapshot.get("runtime_stage")' in guard
+    assert '"step": snapshot.get("runtime_step")' in guard
+    assert '"requested_target": _num(snapshot.get("requested_target"))' in guard
+    assert '"manual_target_override_active": bool(' in guard
+    assert '"manual_heat_override_active": bool(' in guard
+    assert '"manual_pump_override_active": bool(' in guard
+
+
 def test_generic_supervised_fallback_retains_one_shot_grant() -> None:
     core = SUPERVISED_CORE.read_text(encoding="utf-8")
     assert "EXECUTION_GRANT_KEY" in core
