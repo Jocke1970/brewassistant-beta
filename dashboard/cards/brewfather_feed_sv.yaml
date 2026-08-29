@@ -1,7 +1,7 @@
 type: conditional
 conditions:
-  - entity: binary_sensor.brewassistant_runtime_brewfather_available
-    state: "on"
+  - entity: sensor.brewfather_brew_tracker_status
+    state_not: "inactive"
 card:
   type: vertical-stack
   cards:
@@ -10,6 +10,9 @@ card:
       name: Brewfather-flöde
       icon: |
         [[[
+          const bf = states['sensor.brewfather_brew_tracker_status'];
+          const batchStatus = String(bf?.attributes?.brew_tracker_batch_status ?? bf?.attributes?.batch_status ?? '').toLowerCase();
+          if (batchStatus === 'planning') return 'mdi:cloud-check-outline';
           const available = states['binary_sensor.brewassistant_runtime_brewfather_available']?.state === 'on';
           const age = Number(states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state);
           const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
@@ -50,6 +53,16 @@ card:
           function short(v, max = 48) {
             const s = String(v ?? '—');
             return s.length > max ? s.slice(0, max - 1) + '…' : s;
+          }
+          const bfEntity = states['sensor.brewfather_brew_tracker_status'];
+          const batchStatus = clean(bfEntity?.attributes?.brew_tracker_batch_status) || clean(bfEntity?.attributes?.batch_status) || '';
+          const planning = String(batchStatus).toLowerCase() === 'planning';
+          if (planning) {
+            return `<div style="line-height:1.25;min-width:0;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Brewfather · BrewTracker-källa · redo</div><div style="font-size:12px;font-weight:850;opacity:.66;">Planning · inkopplad och väntar</div></div><div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:rgba(76,175,80,.12);border:1px solid rgba(76,175,80,.24);font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="mdi:cloud-check-outline" style="width:14px;height:14px;"></ha-icon><span>Redo</span></div></div>
+              <div style="margin-top:8px;text-align:center;"><div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">BrewTracker Planning</div><div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">Brewfather är ansluten, men äger inte BrewAssistant ännu.</div></div>
+              <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:9px;background:rgba(76,175,80,.10);border:1px solid rgba(76,175,80,.20);"><ha-icon icon="mdi:shield-check-outline" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">Manual Brewday behåller hot-side-styrningen. Brewfather tar över först när batchen går till <b>Brewing</b>.</div></div>
+            </div>`;
           }
           const feed = states['binary_sensor.brewassistant_runtime_brewfather_available'];
           const source = attr('binary_sensor.brewassistant_runtime_brewfather_available', 'source') || attr('sensor.brewassistant_brewday_runtime_summary', 'source_entity') || 'Brewfather';
@@ -118,6 +131,9 @@ card:
           - overflow: hidden
           - background: |
               [[[
+                const bf = states['sensor.brewfather_brew_tracker_status'];
+                const batchStatus = String(bf?.attributes?.brew_tracker_batch_status ?? bf?.attributes?.batch_status ?? '').toLowerCase();
+                if (batchStatus === 'planning') return 'linear-gradient(135deg, rgba(76,175,80,.11), rgba(127,127,127,.035))';
                 const age = Number(states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state);
                 if (Number.isFinite(age) && age > 10) return 'linear-gradient(135deg, rgba(255,193,7,.12), rgba(127,127,127,.035))';
                 return 'linear-gradient(135deg, rgba(76,175,80,.11), rgba(127,127,127,.035))';
@@ -169,7 +185,7 @@ card:
               - font-size: 11px
               - font-weight: 950
         - type: custom:button-card
-          entity: binary_sensor.brewassistant_runtime_brewfather_available
+          entity: sensor.brewfather_brew_tracker_status
           name: Flödesdetaljer
           icon: mdi:cloud-search-outline
           tap_action:
@@ -178,18 +194,17 @@ card:
     - type: custom:expander-card
       title-card:
         type: custom:button-card
-        entity: binary_sensor.brewassistant_runtime_brewfather_available
+        entity: sensor.brewfather_brew_tracker_status
         name: Brewfather-flöde – detaljer
         icon: mdi:tune-variant
         show_state: false
         show_label: true
         label: |
           [[[
-            const state = states['binary_sensor.brewassistant_runtime_brewfather_available']?.state ?? 'off';
-            const source = states['binary_sensor.brewassistant_runtime_brewfather_available']?.attributes?.source ?? 'Ingen källa';
-            const status = states['binary_sensor.brewassistant_runtime_brewfather_available']?.attributes?.source_status ?? 'Ingen status';
-            const age = states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state ?? '—';
-            return `${state} · ${source} · ${status} · ${age} min`;
+            const bf = states['sensor.brewfather_brew_tracker_status'];
+            const batch = bf?.attributes?.brew_tracker_batch_status ?? bf?.attributes?.batch_status ?? bf?.state ?? '—';
+            const source = states['binary_sensor.brewassistant_runtime_brewfather_available']?.attributes?.source ?? 'Brewfather';
+            return `${batch} · ${source}`;
           ]]]
         styles:
           card:
@@ -220,6 +235,8 @@ card:
           title: Brewfather / BrewTracker-flöde
           show_header_toggle: false
           entities:
+            - entity: sensor.brewfather_brew_tracker_status
+              name: BrewTracker-status
             - entity: binary_sensor.brewassistant_runtime_brewfather_available
               name: Brewfather tillgänglig
             - entity: sensor.brewassistant_brewday_runtime_summary
@@ -242,6 +259,10 @@ card:
               name: Snapshot-ålder
             - entity: sensor.brewassistant_brewday_target_temperature
               name: Måltemperatur
+            - type: attribute
+              entity: sensor.brewfather_brew_tracker_status
+              attribute: brew_tracker_batch_status
+              name: Batchstatus
             - type: attribute
               entity: binary_sensor.brewassistant_runtime_brewfather_available
               attribute: source

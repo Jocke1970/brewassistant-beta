@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import DOMAIN
-from .brewday_runtime_core import brewfather_session_active
+from .brewday_runtime_core import BF_STATUS, brewfather_session_active, entity_candidates
 from .manual_brewday_runtime import ManualRuntimeSession, ManualRuntimeState
 
 KEY = "manual_brewday_session"
+HANDOFF_LISTENER_KEY = "manual_brewfather_handoff_listener"
+LAST_HANDOFF_SAFE_DOWN_KEY = "last_brewfather_handoff_safe_down"
 
 _ACTIVE_MANUAL_STATES = {
     ManualRuntimeState.PREPARED,
@@ -93,9 +96,48 @@ def _upgrade_session(
     return guarded
 
 
+def _ensure_brewfather_handoff_listener(hass: HomeAssistant) -> None:
+    """React immediately when Brewfather gains or releases hot-side ownership."""
+    data = hass.data.setdefault(DOMAIN, {})
+    if HANDOFF_LISTENER_KEY in data:
+        return
+
+    async def _handle_handoff() -> None:
+        # Entering Brewing: pause Manual immediately, but do not safe-down here;
+        # Brewfather is now authoritative and may legitimately keep outputs on.
+        if brewfather_brew_tracker_active(hass):
+            pause_manual_brewday_for_brewfather(hass)
+            return
+
+        # Leaving Brewing: Manual must remain paused and physical outputs must
+        # be driven safe immediately rather than waiting for the periodic
+        # coordinator/orchestration tick.
+        session = data.get(KEY)
+        if not isinstance(session, ManualRuntimeSession):
+            return
+        if session.state != ManualRuntimeState.PAUSED:
+            return
+
+        from ..brewzilla.brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
+
+        result = await async_apply_brewzilla_target_if_allowed(hass)
+        data[LAST_HANDOFF_SAFE_DOWN_KEY] = result
+
+    @callback
+    def _state_changed(_event: Event) -> None:
+        hass.async_create_task(_handle_handoff())
+
+    data[HANDOFF_LISTENER_KEY] = async_track_state_change_event(
+        hass,
+        list(entity_candidates(BF_STATUS)),
+        _state_changed,
+    )
+
+
 def get_manual_brewday_session(hass: HomeAssistant) -> ManualRuntimeSession:
     """Return the persistent guarded Manual Brewday session."""
     data = hass.data.setdefault(DOMAIN, {})
+    _ensure_brewfather_handoff_listener(hass)
     session = _upgrade_session(hass, data.get(KEY))
     data[KEY] = session
     return session
@@ -119,6 +161,7 @@ def pause_manual_brewday_for_brewfather(hass: HomeAssistant) -> bool:
 
 def new_manual_brewday_session(hass: HomeAssistant) -> ManualRuntimeSession:
     """Replace and return the guarded Manual Brewday session."""
+    _ensure_brewfather_handoff_listener(hass)
     session = GuardedManualRuntimeSession(hass)
     hass.data.setdefault(DOMAIN, {})[KEY] = session
     return session
