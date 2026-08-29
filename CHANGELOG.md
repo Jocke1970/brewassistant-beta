@@ -13,6 +13,48 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #150 — Brewday operator-ABORT + doc-sync
+
+### Sammanfattning
+
+Brewday-cockpitens tidigare `AVBRYT` bredvid Supervised Apply-kvittensen var endast ett avslag av väntande plan, medan BrewZilla-cockpitens `AVBRYT` körde riktig fysisk ABORT. De två betydelserna separeras nu tydligt: väntande plan heter `REJECT ACTION` / `AVVISA ÅTGÄRD`, medan en separat röd `ABORT BREWDAY` / `ABORT BRYGGDAG` kör BrewZillas auktoritativa safe-down, avvisar väntande positiv intention, återställer Manual Brewday och latchar BrewAssistants hot-side ownership i `aborted`.
+
+Operator-ABORT-latchen sparas i Home Assistant storage och laddas före coordinator/orchestration-beslut. En HA-omstart får därför inte tyst återaktivera en aborterad Brewday. Brewfather ownership-gaten respekterar latchen även om samma Brew Tracker fortfarande är running. `REARM CONTROL` / `ÅTERAKTIVERA STYRNING` släpper endast Brewday-latchen; BrewZillas separata hårdvaru-ABORT-lockout förblir auktoritativ.
+
+Doc-syncen uppdaterar samtidigt Brewday/BrewZilla-arkitektur, Flight Recorder-regressioner, dashboardbaseline och roadmap med fysisk #147–#149-validering samt det fasta sensorägarskapet: extern processgivare ägs av Brewday från Heat strike till Pre-boil, släpps vid Boil och används därefter av CFC som outlet/wort-out under Chill/Transfer.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewassistant_brewday.yaml`
+- `dashboard/cards/brewassistant_brewday_sv.yaml`
+
+### Nya/ändrade entiteter
+
+- `sensor.brewassistant_brewday_operator_control_state`
+- `button.brewassistant_abort_brewday`
+- `button.brewassistant_rearm_brewday_control`
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/brewday_operator_abort.py`
+- `custom_components/brewassistant/brewday/brewfather_ownership.py`
+- `custom_components/brewassistant/brewday/brewday_runtime.py`
+- `custom_components/brewassistant/brewday/brewday_runtime_sensor.py`
+- `custom_components/brewassistant/button.py`
+- `custom_components/brewassistant/coordinator.py`
+- `tests/test_brewday_operator_abort.py`
+- `docs/brewday-brewzilla.md`
+- `docs/brewday-audit.md`
+- `docs/dashboard-baselines.md`
+- `docs/roadmap.md`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom nya integration-owned sensor/button-entiteter och den persistenta ABORT-latchen tillkommer. Ersätt/reloada även Brewday-dashboardkortet.
+
+---
+
 ## 2026-08-29 — PR #149 — RCL readback-grace + samma Flight Recorder-logg vid BF Play
 
 ### Sammanfattning
