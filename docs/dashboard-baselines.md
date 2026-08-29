@@ -2,7 +2,7 @@
 
 This document summarizes the current BrewAssistant dashboard baseline.
 
-Dashboard YAML is a presentation and operator-action layer. Runtime interpretation, calculations, safety guards, BrewZilla orchestration and session state belong in the Python custom integration.
+Dashboard YAML is a presentation and explicit operator-action layer. Runtime interpretation, calculations, safety guards, BrewZilla orchestration, source ownership and session state belong in the Python custom integration.
 
 ---
 
@@ -14,11 +14,16 @@ dashboard/
   cards/
 ```
 
-`dashboard/brewassistant_sanity.yaml` is a compact post-update smoke-test dashboard.
+`dashboard/brewassistant_sanity.yaml` is the compact post-update smoke-test dashboard.
 
-`dashboard/cards/` contains reusable card snippets for the daily dashboard.
+`dashboard/cards/` contains reusable daily-dashboard snippets. The old plural `dashboards/` directory is not the current source of truth.
 
-The old plural `dashboards/` directory is not the current source of truth. Use singular `dashboard/`.
+Canonical dashboard language policy:
+
+```text
+English card = canonical machine-reference layout
+Swedish card = presentation mirror using the same entity/action references
+```
 
 ---
 
@@ -47,71 +52,135 @@ dashboard/cards/fermentation.yaml
 dashboard/cards/kegerator.yaml
 ```
 
+Every canonical card should have a corresponding `_sv.yaml` presentation mirror.
+
 ---
 
 ## BrewAssistant Hub
 
-File: `dashboard/cards/brewassistant_hub.yaml`
-
-Purpose: provide a compact mission-control overview above the domain cards.
-
-Current policy:
+File:
 
 ```text
-- Show the major BrewAssistant domains in one compact overview.
-- Show source/feed status as supporting status, not as a fifth primary workflow.
+dashboard/cards/brewassistant_hub.yaml
+```
+
+Purpose: compact mission-control overview above domain cards.
+
+Policy:
+
+```text
+- Show major BrewAssistant domains in one overview.
 - Keep inactive/disconnected modules visually calm.
-- Prioritize active cooling, active fermentation/cold-crash, active brewday and carbonation-ready states.
+- Prioritize active brewday, cooling, fermentation/cold-crash and carbonation states.
+- Source/feed status supports the workflow; it does not replace domain ownership state.
 ```
 
 ---
 
-## Brewday Runtime
+## Brewday Runtime operator cockpit
 
-File: `dashboard/cards/brewassistant_brewday.yaml`
+Files:
 
-Purpose: operator-facing normalized runtime card for Brewfather-driven and manual brewday state.
+```text
+dashboard/cards/brewassistant_brewday.yaml
+dashboard/cards/brewassistant_brewday_sv.yaml
+```
+
+Purpose: normalized operator cockpit for Brewfather-driven and Manual Brewday state.
 
 Current policy:
 
 ```text
-- Show normalized BrewAssistant runtime state, not raw Brewfather internals by default.
-- Brewfather/BrewTracker and Manual Brewday should feed the same operator mental model.
-- Keep direct hardware actions explicit and supervised.
-- Debug/source details belong in expanders or source health cards.
+- Show normalized BrewAssistant runtime, not raw Brewfather internals by default.
+- Brewfather and Manual Brewday share the same operator mental model.
+- Positive hardware actions are explicit and supervised.
+- Pending-plan rejection and physical ABORT must never share the same label/meaning.
+- Operator ABORT state must be visually obvious and require explicit rearm.
+```
+
+### Supervised Apply controls
+
+```text
+CONFIRM ACTION / BEKRÄFTA ÅTGÄRD
+  -> executes a still-valid pending positive plan
+  -> pulses only while a pending plan exists
+
+REJECT ACTION / AVVISA ÅTGÄRD
+  -> rejects the current pending plan
+  -> does not physically ABORT BrewZilla
+```
+
+The confirmation pulse remains reduced-motion safe through `prefers-reduced-motion`.
+
+### Brewday ABORT controls
+
+```text
+ABORT BREWDAY / ABORT BRYGGDAG
+  -> physical BrewZilla safe-down
+  -> persistent BrewAssistant ownership lock
+
+REARM CONTROL / ÅTERAKTIVERA STYRNING
+  -> visible when operator control state is aborted
+  -> releases the Brewday ownership lock
+  -> does not bypass BrewZilla's independent hardware ABORT lockout
+```
+
+Relevant entities:
+
+```text
+sensor.brewassistant_brewday_operator_control_state
+button.brewassistant_abort_brewday
+button.brewassistant_rearm_brewday_control
+```
+
+The cockpit should show a red ABORT presentation while:
+
+```text
+sensor.brewassistant_brewday_runtime_state = aborted
 ```
 
 ---
 
 ## BrewTracker Runtime
 
-File: `dashboard/cards/brewtracker_runtime.yaml`
-
-Purpose: show BrewTracker live state, current/next step, stage, progress, refresh and batch status.
-
-Current policy:
+File:
 
 ```text
-- Include brew_tracker_batch_status when available.
-- Keep batch status visible separately from paused/running tracker state.
-- Use this card for Brewfather/BrewTracker source visibility, not hidden backend logic.
+dashboard/cards/brewtracker_runtime.yaml
+```
+
+Purpose: source visibility for Brewfather/BrewTracker live state, current/next step, stage, progress, refresh and batch status.
+
+Policy:
+
+```text
+- Show brew_tracker_batch_status separately from tracker paused/running state.
+- Planning may be visible without being a hot-side owner.
+- Brewing pre-start may be visible without being a hot-side owner.
+- Raw Brewfather visibility must not imply BA physical-control authority.
 ```
 
 ---
 
-## Brewday Event Log
+## Brewday Event Log / Flight Recorder
 
-File: `dashboard/cards/brewassistant_brewday_event_log.yaml`
-
-Purpose: show event-log state, latest event information and explicit audit/log actions.
-
-Current policy:
+Files:
 
 ```text
-- UI wording should say Event Log.
-- Backend service names may still use brewday_audit_* for compatibility.
+dashboard/cards/brewassistant_brewday_event_log.yaml
+dashboard/cards/brewassistant_brewday_event_log_sv.yaml
+```
+
+Purpose: show event-log state, latest event, step/target evidence and explicit log actions.
+
+Policy:
+
+```text
+- UI wording may use Event Log / Flight Recorder.
+- Backend compatibility services may still use brewday_audit_* names.
 - Event count, latest event, latest step and latest target should be visible quickly.
-- Clear/reset actions should require confirmation.
+- Clear/reset actions require confirmation.
+- Use the event log as evidence for Confirm/Reject/ABORT testing.
 ```
 
 ---
@@ -129,61 +198,76 @@ dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
 ```
 
-Purpose:
+Responsibilities:
 
 ```text
-BrewZilla = operator/hardware cockpit
-BrewZilla Mash-In Confirm = explicit mash-in completion and circulation action
-BrewZilla Local Control = what BA handed to BZ and whether lease is active
-Brewday Advice = why BA selected a profile; hidden by default unless meaningful
-Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
-BrewZilla Learning = full advisory/recommendation review
+BrewZilla
+  = hardware cockpit + raw heater/pump visibility + physical ABORT
+
+Mash-In Confirm
+  = explicit mash-in/circulation transition controls
+
+Local Control
+  = target/local-regulation/lease visibility
+
+Brewday Advice
+  = why BA selected a control profile
+
+Safety/RCL
+  = freshness/guards/filter/ABORT diagnostics
+
+Learning
+  = advisory/evidence review
 ```
+
+The BrewZilla `AVBRYT`/ABORT control continues to use the hardware-level `brewassistant.abort_brewzilla` path. The Brewday-level ABORT button reuses that same physical path and adds the persistent Brewday ownership latch.
 
 ---
 
 ## BrewZilla mash-in operator baseline
 
-`dashboard/cards/brewzilla_mash_in_confirm.yaml` is the current beta.7 mash-in operator card.
+`dashboard/cards/brewzilla_mash_in_confirm.yaml` remains the explicit mash-in transition card.
 
-It depends on:
+Important entities include:
 
 ```text
 binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+button.brewassistant_brewzilla_mash_in_started
 button.brewassistant_brewzilla_mash_in_complete
 button.brewassistant_brewzilla_start_mash_circulation
 ```
 
-Expected behavior:
+Expected high-level flow:
 
 ```text
-1. Mash-in target is reached.
-2. BrewAssistant sets mash-in gate pending on.
-3. The conditional Mash-in button appears.
-4. Operator mashes in manually.
-5. Operator presses Mash-in klar & starta cirkulation.
-6. BrewAssistant confirms the gate and starts circulation using pump utilization plus pump switch.
+1. Heat-strike reaches readiness gate.
+2. Operator starts mash-in / grain addition.
+3. Pump remains stopped while grain is added.
+4. Brewfather Continue or fallback operator control completes mash-in.
+5. Circulation resumes.
 ```
 
-The fallback `Starta mäskcirkulation` button is a visible operator action for starting mash circulation. It should stay explicit and observable.
+The state machine is one-way; UI should not invite a stale transition backwards after mash-in is complete.
 
 ---
 
 ## Button-action policy
 
-Dashboard action cards should use BrewAssistant button entities for operator actions:
+Dashboard operator actions should use BrewAssistant button entities where a dedicated action entity exists:
 
 ```text
-button.press → button.brewassistant_*
+button.press -> button.brewassistant_*
 ```
 
-Do not create parallel workaround services for the same physical action. A single backend action path makes event logging, safety review and future cleanup easier.
+Do not create parallel workaround paths for the same physical action. A single backend path makes event logging, safety review and regression testing deterministic.
+
+Exceptions are compatibility services already established as authoritative infrastructure actions, for example the BrewZilla hardware ABORT service used by its hardware cockpit.
 
 ---
 
 ## Visibility policy
 
-Daily dashboard sections can be hidden or shown with BrewAssistant visibility switches such as:
+Daily dashboard sections may use BrewAssistant visibility switches such as:
 
 ```text
 switch.brewassistant_show_brewday
@@ -196,13 +280,13 @@ switch.brewassistant_show_carbonation
 switch.brewassistant_show_kegerator
 ```
 
-Diagnostic cards may also auto-show when risk, warning, missing context, guard activity or pending operator action is present.
+Diagnostic cards may auto-show when risk, warning, missing context, guard activity, pending confirmation or operator ABORT state is present.
 
 ---
 
 ## Frontend dependencies
 
-Install these Lovelace frontend cards through HACS before copying the dashboard examples:
+Install required Lovelace frontend cards through HACS before copying dashboard examples:
 
 ```text
 custom:button-card
