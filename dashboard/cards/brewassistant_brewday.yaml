@@ -18,6 +18,7 @@ card:
           const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'unknown';
           const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
 
+          if (state === 'aborted') return 'mdi:alert-octagon-outline';
           if (state === 'paused') return 'mdi:pause-circle-outline';
           if (state === 'completed' || state === 'finished') return 'mdi:check-decagram-outline';
           if (stage.includes('mash')) return 'mdi:pot-steam-outline';
@@ -46,11 +47,6 @@ card:
             return Number.isFinite(val) ? val : null;
           }
 
-          function fmt(v, unit = '', d = 1) {
-            if (!Number.isFinite(v)) return '—';
-            return `${v.toFixed(d)}${unit ? ' ' + unit : ''}`;
-          }
-
           function short(v, max = 48) {
             const s = String(v ?? '—');
             return s.length > max ? s.slice(0, max - 1) + '…' : s;
@@ -74,26 +70,32 @@ card:
           const eventCount = n('sensor.brewassistant_brewday_event_log_event_count');
           const lastEvent = clean(states['sensor.brewassistant_brewday_event_log_last_event']?.state) || '—';
 
-          let headline = 'Brewday aktiv';
+          let headline = 'Brewday active';
           let badge = 'Running';
           let badgeIcon = 'mdi:play-circle-outline';
           let chipBg = 'rgba(76,175,80,.12)';
           let chipBorder = 'rgba(76,175,80,.24)';
 
-          if (runtimeState === 'paused') {
-            headline = 'Brewday pausad';
+          if (runtimeState === 'aborted') {
+            headline = 'BREWDAY ABORTED';
+            badge = 'ABORT';
+            badgeIcon = 'mdi:alert-octagon-outline';
+            chipBg = 'rgba(244,67,54,.18)';
+            chipBorder = 'rgba(244,67,54,.46)';
+          } else if (runtimeState === 'paused') {
+            headline = 'Brewday paused';
             badge = 'Paused';
             badgeIcon = 'mdi:pause-circle-outline';
             chipBg = 'rgba(255,193,7,.14)';
             chipBorder = 'rgba(255,193,7,.28)';
           } else if (runtimeState === 'completed' || runtimeState === 'finished') {
-            headline = 'Brewday klar';
+            headline = 'Brewday complete';
             badge = 'Done';
             badgeIcon = 'mdi:check-decagram-outline';
             chipBg = 'rgba(76,175,80,.13)';
             chipBorder = 'rgba(76,175,80,.28)';
           } else if (runtimeState === 'awaiting_snapshot') {
-            headline = 'Väntar på snapshot';
+            headline = 'Waiting for snapshot';
             badge = 'Waiting';
             badgeIcon = 'mdi:cloud-sync-outline';
             chipBg = 'rgba(33,150,243,.12)';
@@ -146,6 +148,11 @@ card:
               </div>
             `;
           };
+
+          const statusBg = runtimeState === 'aborted' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
+          const statusBorder = runtimeState === 'aborted' ? 'rgba(244,67,54,.32)' : 'rgba(76,175,80,.24)';
+          const statusIcon = runtimeState === 'aborted' ? 'mdi:alert-octagon-outline' : 'mdi:check-circle-outline';
+          const statusText = runtimeState === 'aborted' ? summary : statusLine;
 
           return `
             <div style="line-height:1.25;min-width:0;">
@@ -210,12 +217,12 @@ card:
                 align-items:center;
                 border-radius:14px;
                 padding:8px 9px;
-                background:rgba(76,175,80,.10);
-                border:1px solid rgba(76,175,80,.24);
+                background:${statusBg};
+                border:1px solid ${statusBorder};
               ">
-                <ha-icon icon="mdi:check-circle-outline" style="width:15px;height:15px;opacity:.76;"></ha-icon>
+                <ha-icon icon="${statusIcon}" style="width:15px;height:15px;opacity:.76;"></ha-icon>
                 <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
-                  ${short(statusLine, 120)}
+                  ${short(statusText, 120)}
                 </div>
               </div>
             </div>
@@ -366,7 +373,7 @@ card:
             }
         - type: custom:button-card
           entity: button.brewassistant_cancel_supervised_apply
-          name: CANCEL
+          name: REJECT ACTION
           icon: mdi:cancel
           tap_action:
             action: call-service
@@ -374,21 +381,91 @@ card:
             target:
               entity_id: button.brewassistant_cancel_supervised_apply
             confirmation:
-              text: Cancel pending BrewAssistant supervised action?
+              text: Reject pending BrewAssistant supervised action?
           styles:
             card:
               - border-radius: 16px
               - padding: 10px
-              - background: rgba(244,67,54,.09)
-              - border: 1px solid rgba(244,67,54,.22)
+              - background: rgba(255,152,0,.09)
+              - border: 1px solid rgba(255,152,0,.24)
             name:
               - font-size: 12px
               - font-weight: 950
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_runtime_state
+          state_not: "idle"
+      card:
+        type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: button.brewassistant_abort_brewday
+            name: ABORT BREWDAY
+            icon: mdi:alert-octagon-outline
+            show_label: true
+            label: Safe-down + lock BA control
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewassistant_abort_brewday
+              confirmation:
+                text: ABORT Brewday? Heater and pump will stop, utilization will be zeroed and BrewAssistant control will remain locked until explicitly rearmed.
+            styles:
+              card:
+                - border-radius: 16px
+                - padding: 10px
+                - min-height: 62px
+                - background: rgba(244,67,54,.16)
+                - border: 2px solid rgba(244,67,54,.50)
+              icon:
+                - color: rgb(244,67,54)
+              name:
+                - font-size: 12px
+                - font-weight: 950
+              label:
+                - font-size: 9.5px
+                - font-weight: 850
+                - opacity: 0.78
+          - type: conditional
+            conditions:
+              - entity: sensor.brewassistant_brewday_operator_control_state
+                state: "aborted"
+            card:
+              type: custom:button-card
+              entity: button.brewassistant_rearm_brewday_control
+              name: REARM CONTROL
+              icon: mdi:shield-check-outline
+              show_label: true
+              label: Releases BA operator ABORT
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.brewassistant_rearm_brewday_control
+                confirmation:
+                  text: Rearm BrewAssistant control? BrewZilla's separate ABORT lockout remains authoritative until it expires.
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - min-height: 62px
+                  - background: rgba(255,193,7,.14)
+                  - border: 1px solid rgba(255,193,7,.34)
+                icon:
+                  - color: rgb(255,193,7)
+                name:
+                  - font-size: 11px
+                  - font-weight: 950
+                label:
+                  - font-size: 9.5px
+                  - font-weight: 850
+                  - opacity: 0.78
     - type: custom:expander-card
       title-card:
         type: custom:button-card
         entity: sensor.brewassistant_brewday_runtime_summary
-        name: Brewday detaljer
+        name: Brewday details
         icon: mdi:tune-variant
         show_state: false
         show_label: true
@@ -432,6 +509,8 @@ card:
               name: Runtime summary
             - entity: sensor.brewassistant_brewday_runtime_state
               name: Runtime state
+            - entity: sensor.brewassistant_brewday_operator_control_state
+              name: Operator control
             - entity: sensor.brewassistant_brewday_runtime_stage
               name: Runtime stage
             - entity: sensor.brewassistant_brewday_runtime_step
