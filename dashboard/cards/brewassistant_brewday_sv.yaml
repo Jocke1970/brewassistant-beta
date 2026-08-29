@@ -17,6 +17,7 @@ card:
         [[[
           const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'unknown';
           const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+          if (state === 'aborted') return 'mdi:alert-octagon-outline';
           if (state === 'paused') return 'mdi:pause-circle-outline';
           if (state === 'completed' || state === 'finished') return 'mdi:check-decagram-outline';
           if (stage.includes('mash')) return 'mdi:pot-steam-outline';
@@ -52,6 +53,7 @@ card:
             if (v === 'paused') return 'pausad';
             if (v === 'completed' || v === 'finished') return 'klar';
             if (v === 'awaiting_snapshot') return 'väntar på snapshot';
+            if (v === 'aborted') return 'ABORTERAD · styrning spärrad';
             if (v === 'idle') return 'vilar';
             return v;
           }
@@ -76,7 +78,10 @@ card:
           let badgeIcon = 'mdi:play-circle-outline';
           let chipBg = 'rgba(76,175,80,.12)';
           let chipBorder = 'rgba(76,175,80,.24)';
-          if (runtimeState === 'paused') {
+          if (runtimeState === 'aborted') {
+            headline = 'BRYGGDAG ABORTERAD'; badge = 'ABORT'; badgeIcon = 'mdi:alert-octagon-outline';
+            chipBg = 'rgba(244,67,54,.18)'; chipBorder = 'rgba(244,67,54,.46)';
+          } else if (runtimeState === 'paused') {
             headline = 'Bryggdag pausad'; badge = 'Pausad'; badgeIcon = 'mdi:pause-circle-outline';
             chipBg = 'rgba(255,193,7,.14)'; chipBorder = 'rgba(255,193,7,.28)';
           } else if (runtimeState === 'completed' || runtimeState === 'finished') {
@@ -99,6 +104,11 @@ card:
             return `<div style="min-width:0;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div></div>`;
           };
 
+          const statusBg = runtimeState === 'aborted' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
+          const statusBorder = runtimeState === 'aborted' ? 'rgba(244,67,54,.32)' : 'rgba(76,175,80,.24)';
+          const statusIcon = runtimeState === 'aborted' ? 'mdi:alert-octagon-outline' : 'mdi:check-circle-outline';
+          const statusText = runtimeState === 'aborted' ? summary : statusLine;
+
           return `<div style="line-height:1.25;min-width:0;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Operatörscockpit · runtime · fas · händelselogg</div><div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div></div><div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon><span>${badge}</span></div></div>
             <div style="margin-top:8px;text-align:center;"><div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div><div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">${stateLabel(runtimeState)} · ${stage} · ${short(step, 48)}<br>nästa: ${short(next, 60)}</div></div>
@@ -114,7 +124,7 @@ card:
               ${metric('Händelser', eventMain, eventSummary, 'mdi:clipboard-text-clock-outline', Number.isFinite(eventCount) && eventCount > 0 ? 'green' : 'neutral')}
               ${metric('Senast', short(lastEvent, 14), 'händelse', 'mdi:history', 'neutral')}
             </div>
-            <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:rgba(76,175,80,.10);border:1px solid rgba(76,175,80,.24);"><ha-icon icon="mdi:check-circle-outline" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${short(statusLine, 120)}</div></div>
+            <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${statusBg};border:1px solid ${statusBorder};"><ha-icon icon="${statusIcon}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${short(statusText, 120)}</div></div>
           </div>`;
         ]]]
       styles:
@@ -259,7 +269,7 @@ card:
             }
         - type: custom:button-card
           entity: button.brewassistant_cancel_supervised_apply
-          name: AVBRYT
+          name: AVVISA ÅTGÄRD
           icon: mdi:cancel
           tap_action:
             action: call-service
@@ -267,16 +277,86 @@ card:
             target:
               entity_id: button.brewassistant_cancel_supervised_apply
             confirmation:
-              text: Avbryt väntande övervakad BrewAssistant-åtgärd?
+              text: Avvisa väntande övervakad BrewAssistant-åtgärd?
           styles:
             card:
               - border-radius: 16px
               - padding: 10px
-              - background: rgba(244,67,54,.09)
-              - border: 1px solid rgba(244,67,54,.22)
+              - background: rgba(255,152,0,.09)
+              - border: 1px solid rgba(255,152,0,.24)
             name:
               - font-size: 12px
               - font-weight: 950
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_runtime_state
+          state_not: "idle"
+      card:
+        type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: button.brewassistant_abort_brewday
+            name: ABORT BRYGGDAG
+            icon: mdi:alert-octagon-outline
+            show_label: true
+            label: Safe-down + spärrar BA-styrning
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewassistant_abort_brewday
+              confirmation:
+                text: ABORT bryggdagen? Värmare och pump stoppas, utilization nollställs och BrewAssistant-styrning spärras tills du återaktiverar den.
+            styles:
+              card:
+                - border-radius: 16px
+                - padding: 10px
+                - min-height: 62px
+                - background: rgba(244,67,54,.16)
+                - border: 2px solid rgba(244,67,54,.50)
+              icon:
+                - color: rgb(244,67,54)
+              name:
+                - font-size: 12px
+                - font-weight: 950
+              label:
+                - font-size: 9.5px
+                - font-weight: 850
+                - opacity: 0.78
+          - type: conditional
+            conditions:
+              - entity: sensor.brewassistant_brewday_operator_control_state
+                state: "aborted"
+            card:
+              type: custom:button-card
+              entity: button.brewassistant_rearm_brewday_control
+              name: ÅTERAKTIVERA STYRNING
+              icon: mdi:shield-check-outline
+              show_label: true
+              label: Släpper BA:s operator-ABORT
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.brewassistant_rearm_brewday_control
+                confirmation:
+                  text: Återaktivera BrewAssistant-styrning? BrewZillas separata ABORT-lockout gäller fortfarande tills den löper ut.
+              styles:
+                card:
+                  - border-radius: 16px
+                  - padding: 10px
+                  - min-height: 62px
+                  - background: rgba(255,193,7,.14)
+                  - border: 1px solid rgba(255,193,7,.34)
+                icon:
+                  - color: rgb(255,193,7)
+                name:
+                  - font-size: 11px
+                  - font-weight: 950
+                label:
+                  - font-size: 9.5px
+                  - font-weight: 850
+                  - opacity: 0.78
     - type: custom:expander-card
       title-card:
         type: custom:button-card
@@ -325,6 +405,8 @@ card:
               name: Runtimesammanfattning
             - entity: sensor.brewassistant_brewday_runtime_state
               name: Runtimestatus
+            - entity: sensor.brewassistant_brewday_operator_control_state
+              name: Operatörsstyrning
             - entity: sensor.brewassistant_brewday_runtime_stage
               name: Runtimefas
             - entity: sensor.brewassistant_brewday_runtime_step
