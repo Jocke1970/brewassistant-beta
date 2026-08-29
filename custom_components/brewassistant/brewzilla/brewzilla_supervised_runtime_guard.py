@@ -8,7 +8,7 @@ intent and physical BrewZilla changes:
 * operator-owned Manual setpoints are transported immediately,
 * AUTO positive actions are bundled into one supervised plan,
 * confirmation re-evaluates the live plan before any positive action is sent,
-* a positive confirmed plan requires and consumes one exact one-shot grant.
+* BrewZilla plans can be executed only by the explicit supervised CONFIRM path.
 """
 
 from __future__ import annotations
@@ -29,9 +29,8 @@ from ..control_policy import (
 )
 from ..supervised_apply import (
     clear_pending_action_from_source,
-    consume_execution_grant,
-    get_execution_grant,
     get_pending_action,
+    register_supervised_executor,
     set_pending_action,
 )
 from . import brewzilla_orchestration as base
@@ -321,11 +320,73 @@ async def _apply_nonpositive_or_manual_actions(hass, snapshot: dict[str, Any]) -
     return actions
 
 
+async def async_execute_confirmed_plan(hass, pending: dict[str, Any]) -> dict[str, Any]:
+    """Execute exactly the live BrewZilla plan represented by pending.
+
+    This function is registered with the generic supervised runtime and is only
+    called from the explicit CONFIRM button path. Normal coordinator ticks never
+    call it and therefore cannot consume or inherit operator confirmation.
+    """
+    assert _BASE_BUILD is not None
+    assert _BASE_APPLY is not None
+
+    if pending.get("source") != SOURCE or pending.get("kind") != KIND:
+        return {
+            "applied": False,
+            "actions": [],
+            "apply_result": "supervised_plan_wrong_type",
+            "supervised_confirmation_consumed": False,
+        }
+
+    snapshot = _BASE_BUILD(hass)
+    positives = _positive_actions(snapshot)
+    live_plan_id = _plan_id(snapshot, positives) if positives else None
+    expected_plan_id = str(pending.get("id") or "")
+
+    blocked_reason: str | None = None
+    if snapshot.get("abort_lockout_active"):
+        blocked_reason = "abort_lockout_active"
+    elif not snapshot.get("can_apply_target"):
+        blocked_reason = "control_not_allowed"
+    elif not positives:
+        blocked_reason = "no_positive_actions_remaining"
+    elif live_plan_id != expected_plan_id:
+        blocked_reason = "live_plan_changed"
+    elif _plan_policy(hass, snapshot, positives) == "read_only":
+        blocked_reason = "policy_read_only"
+
+    if blocked_reason is not None:
+        result = {
+            **snapshot,
+            "applied": False,
+            "actions": [],
+            "apply_result": f"supervised_plan_stale:{blocked_reason}",
+            "supervised_confirmation_consumed": False,
+            "supervised_plan_id": live_plan_id,
+            "supervised_expected_plan_id": expected_plan_id,
+            "supervised_plan_summary": _plan_summary(snapshot, positives) if positives else None,
+            "executed_at": dt_util.utcnow().isoformat(),
+        }
+        await base.async_record_brewday_audit_tick(hass, brewzilla_result=result)
+        return result
+
+    result = await _BASE_APPLY(hass)
+    result = {
+        **result,
+        "supervised_confirmation_consumed": True,
+        "supervised_plan_id": live_plan_id,
+        "supervised_expected_plan_id": expected_plan_id,
+        "supervised_plan_summary": _plan_summary(snapshot, positives),
+    }
+    hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+    return result
+
+
 async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
     assert _BASE_APPLY is not None
     snapshot = base.build_orchestration_snapshot(hass)
 
-    # ABORT and existing hard safety guards must retain their original direct
+    # ABORT and existing hard safety guards retain their original direct
     # safe-down behavior without any confirmation layer in the way.
     if snapshot.get("abort_lockout_active") or not snapshot.get("can_apply_target"):
         if not snapshot.get("can_apply_target"):
@@ -340,48 +401,10 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
         return await _BASE_APPLY(hass)
 
     plan_id = _plan_id(snapshot, positives)
-
-    # Only the exact one-shot grant created by the generic BEKRÄFTA button may
-    # open the positive-action path. A stale/mismatched grant is never allowed
-    # to become a direct apply, even if a coordinator tick arrives meanwhile.
-    grant = get_execution_grant(hass)
-    if grant and grant.get("source") == SOURCE:
-        pending = get_pending_action(hass)
-        exact_pending = bool(
-            pending
-            and pending.get("source") == SOURCE
-            and pending.get("id") == plan_id
-        )
-        exact_grant = bool(grant.get("id") == plan_id)
-        if exact_pending and exact_grant and consume_execution_grant(
-            hass,
-            action_id=plan_id,
-            source=SOURCE,
-        ):
-            result = await _BASE_APPLY(hass)
-            result = {
-                **result,
-                "supervised_confirmation_consumed": True,
-                "supervised_plan_id": plan_id,
-                "supervised_plan_summary": _plan_summary(snapshot, positives),
-            }
-            hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
-            return result
-
-        result = {
-            **snapshot,
-            "applied": False,
-            "apply_result": "supervised_plan_stale",
-            "actions": [],
-            "supervised_confirmation_consumed": False,
-            "supervised_plan_id": plan_id,
-            "supervised_plan_summary": _plan_summary(snapshot, positives),
-            "executed_at": dt_util.utcnow().isoformat(),
-        }
-        await base.async_record_brewday_audit_tick(hass, brewzilla_result=result)
-        return result
-
     policy = _plan_policy(hass, snapshot, positives)
+
+    # Explicitly unlocked Direct Action remains direct by policy. In the normal
+    # first-brew Supervised Apply policy this branch is not reached.
     if policy == "direct":
         clear_pending_action_from_source(hass, SOURCE)
         return await _BASE_APPLY(hass)
@@ -431,6 +454,7 @@ def install_supervised_runtime_guard() -> None:
         return
     _BASE_BUILD = base.build_orchestration_snapshot
     _BASE_APPLY = base.async_apply_brewzilla_target_if_allowed
+    register_supervised_executor(SOURCE, KIND, async_execute_confirmed_plan)
     base.build_orchestration_snapshot = build_orchestration_snapshot
     base.async_apply_brewzilla_target_if_allowed = async_apply_brewzilla_target_if_allowed
     _INSTALLED = True
