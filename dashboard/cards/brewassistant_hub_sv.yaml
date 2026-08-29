@@ -190,10 +190,11 @@ cards:
             state: "on"
           - entity: sensor.brewassistant_manual_brewday_status
             state: "idle"
-          - entity: sensor.brewfather_brew_tracker_status
-            state_not: "active"
+          - entity: sensor.brewassistant_brewday_runtime_state
+            state: "idle"
         card:
           type: custom:button-card
+          entity: sensor.brewassistant_manual_brewday_status
           name: Förbered manuell bryggdag
           icon: mdi:clipboard-check-outline
           show_state: false
