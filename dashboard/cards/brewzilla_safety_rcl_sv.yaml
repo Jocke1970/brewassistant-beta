@@ -6,6 +6,7 @@ show_state: false
 show_label: true
 triggers_update:
   - switch.brewassistant_show_brewzilla_safety_rcl
+  - switch.brewassistant_show_safety_rcl
   - sensor.brewassistant_brewzilla_safety_state
   - sensor.brewassistant_brewzilla_orchestration_mode
   - sensor.brewassistant_brewzilla_control_reason
@@ -19,7 +20,8 @@ label: |
       const s = String(v);
       return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
     };
-    const manual = st['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+    const visibility = st['switch.brewassistant_show_brewzilla_safety_rcl'] || st['switch.brewassistant_show_safety_rcl'];
+    const manual = visibility?.state === 'on';
     const safety = clean(st['sensor.brewassistant_brewzilla_safety_state']?.state) || 'unknown';
     const mode = clean(st['sensor.brewassistant_brewzilla_orchestration_mode']?.state) || '—';
     const reason = clean(st['sensor.brewassistant_brewzilla_control_reason']?.state) || 'Inget aktivt säkerhets-/RCL-problem.';
@@ -58,7 +60,8 @@ styles:
         [[[
           const st = states;
           const attr = (id, key) => st[id]?.attributes?.[key];
-          const manual = st['switch.brewassistant_show_brewzilla_safety_rcl']?.state === 'on';
+          const visibility = st['switch.brewassistant_show_brewzilla_safety_rcl'] || st['switch.brewassistant_show_safety_rcl'];
+          const manual = visibility?.state === 'on';
           const safety = String(st['sensor.brewassistant_brewzilla_safety_state']?.state ?? '').toLowerCase();
           const issue = attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_active') === true
             || attr('sensor.brewassistant_brewzilla_orchestration_mode', 'rcl_freshness_guard_blocking') === true
