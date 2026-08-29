@@ -13,7 +13,7 @@ Varje funktionell ändring ska ange:
 
 ---
 
-## Unreleased — External temperature card visibility
+## 2026-08-29 — PR #139 — External temperature card visibility
 
 ### Sammanfattning
 
@@ -31,6 +31,7 @@ BLE-/extern temperaturdiagnostik visas bara när BrewZilla faktiskt har en anvä
 - `custom_components/brewassistant/brewzilla/brewzilla_temperature.py`
 - `custom_components/brewassistant/binary_sensor.py`
 - `tests/test_brewzilla_external_temperature_visibility.py`
+- `.github/pull_request_template.md`
 - `CHANGELOG.md`
 
 ### Ny entitet
