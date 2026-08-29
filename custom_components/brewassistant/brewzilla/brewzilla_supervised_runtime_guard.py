@@ -8,7 +8,8 @@ intent and physical BrewZilla changes:
 * operator-owned Manual setpoints are transported immediately,
 * AUTO positive actions are bundled into one supervised plan,
 * confirmation re-evaluates the live plan before any positive action is sent,
-* BrewZilla plans can be executed only by the explicit supervised CONFIRM path.
+* BrewZilla plans can be executed only by the explicit supervised CONFIRM path,
+* an explicitly cancelled plan stays suppressed until the live intent changes.
 """
 
 from __future__ import annotations
@@ -28,7 +29,10 @@ from ..control_policy import (
     effective_policy,
 )
 from ..supervised_apply import (
+    cancelled_action_matches,
+    clear_cancelled_action_from_source,
     clear_pending_action_from_source,
+    get_cancelled_action,
     get_pending_action,
     register_supervised_executor,
     set_pending_action,
@@ -153,6 +157,9 @@ def _plan_payload(snapshot: dict[str, Any], actions: list[dict[str, Any]]) -> di
         "raw_step_index": snapshot.get("runtime_raw_step_index"),
         "resolved_step_index": snapshot.get("runtime_resolved_step_index"),
         "requested_target": _num(snapshot.get("requested_target")),
+        "manual_target_override_active": bool(snapshot.get("manual_target_override_active")),
+        "manual_heat_override_active": bool(snapshot.get("manual_heat_override_active")),
+        "manual_pump_override_active": bool(snapshot.get("manual_pump_override_active")),
         "actions": actions,
     }
 
@@ -162,6 +169,16 @@ def _plan_id(snapshot: dict[str, Any], actions: list[dict[str, Any]]) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return f"brewzilla-runtime:{digest}"
+
+
+def _cancelled_intent_matches(snapshot: dict[str, Any], cancelled: dict[str, Any]) -> bool:
+    """Return true while runtime/ownership intent still matches a cancelled plan."""
+    context = cancelled.get("context")
+    if not isinstance(context, dict):
+        return False
+    current = _plan_payload(snapshot, [])
+    current.pop("actions", None)
+    return all(context.get(key) == value for key, value in current.items())
 
 
 def _plan_summary(snapshot: dict[str, Any], actions: list[dict[str, Any]]) -> str:
@@ -386,6 +403,18 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
     assert _BASE_APPLY is not None
     snapshot = base.build_orchestration_snapshot(hass)
 
+    # A cancellation is scoped to the exact runtime/intention that created it.
+    # Moving to a different runtime/source/step/target/ownership state rearms
+    # supervised apply even when the old plan never became physically active.
+    cancelled = get_cancelled_action(hass)
+    if (
+        cancelled is not None
+        and cancelled.get("source") == SOURCE
+        and not _cancelled_intent_matches(snapshot, cancelled)
+    ):
+        clear_cancelled_action_from_source(hass, SOURCE)
+        cancelled = None
+
     # ABORT and existing hard safety guards retain their original direct
     # safe-down behavior without any confirmation layer in the way.
     if snapshot.get("abort_lockout_active") or not snapshot.get("can_apply_target"):
@@ -401,6 +430,46 @@ async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
         return await _BASE_APPLY(hass)
 
     plan_id = _plan_id(snapshot, positives)
+
+    # AVBRYT means reject this exact plan, not merely remove the current pending
+    # object. Coordinator ticks therefore keep the hardware safe and do not
+    # recreate the same confirmation until the intent or plan actually changes.
+    if cancelled_action_matches(hass, action_id=plan_id, source=SOURCE):
+        direct_actions = await _apply_nonpositive_or_manual_actions(hass, snapshot)
+        clear_pending_action_from_source(hass, SOURCE)
+        cancelled = get_cancelled_action(hass)
+        summary = (
+            cancelled.get("summary")
+            if cancelled is not None
+            else _plan_summary(snapshot, positives)
+        )
+        result = {
+            **snapshot,
+            "applied": bool(direct_actions),
+            "apply_result": "cancelled_plan_suppressed",
+            "actions": direct_actions,
+            "has_pending_action": False,
+            "pending_action": None,
+            "pending_summary": None,
+            "supervised_runtime_plan_pending": False,
+            "supervised_plan_id": plan_id,
+            "supervised_plan_summary": summary,
+            "supervised_positive_actions": positives,
+            "supervised_plan_cancelled": True,
+            "supervised_cancelled_at": cancelled.get("cancelled_at") if cancelled else None,
+            "supervised_confirmation_consumed": False,
+            "executed_at": dt_util.utcnow().isoformat(),
+        }
+        hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
+        await base.async_record_brewday_audit_tick(hass, brewzilla_result=result)
+        return result
+
+    # A different positive plan is new operator intent and may request a fresh
+    # confirmation. Forget the previous cancellation before policy evaluation.
+    cancelled = get_cancelled_action(hass)
+    if cancelled is not None and cancelled.get("source") == SOURCE:
+        clear_cancelled_action_from_source(hass, SOURCE)
+
     policy = _plan_policy(hass, snapshot, positives)
 
     # Explicitly unlocked Direct Action remains direct by policy. In the normal
