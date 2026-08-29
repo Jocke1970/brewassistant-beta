@@ -35,6 +35,6 @@ def test_legacy_autostart_heuristic_is_patched_before_boundary_setup() -> None:
 
 def test_brewfather_prestart_to_play_is_documented_as_same_session() -> None:
     source = SOURCE.read_text(encoding="utf-8")
-    assert "ready-only pre-start" in source
+    assert "ready-only Brewing pre-start" in source
     assert "when Play then makes the runtime live" in source
     assert "incorrectly rotate the recorder" in source
