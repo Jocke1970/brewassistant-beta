@@ -13,6 +13,8 @@ PENDING_KEY = "supervised_apply_pending_action"
 LAST_RESULT_KEY = "supervised_apply_last_result"
 EXECUTION_GRANT_KEY = "supervised_apply_execution_grant"
 MODE_ENTITY = "select.brewassistant_apply_mode"
+PENDING_SENSOR = "sensor.brewassistant_brewzilla_pending_action"
+SAFETY_SENSOR = "sensor.brewassistant_brewzilla_safety_state"
 READ_ONLY_MODE = "Read only"
 SUPERVISED_MODE = "Supervised apply"
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
@@ -21,6 +23,20 @@ INVALID_STATES = {"unknown", "unavailable", "none", ""}
 def _runtime_data(hass: HomeAssistant) -> dict[str, Any]:
     """Return BrewAssistant hass.data bucket."""
     return hass.data.setdefault(DOMAIN_DATA, {})
+
+
+def _schedule_pending_sensor_refresh(hass: HomeAssistant) -> None:
+    """Refresh dashboard-facing supervised state without waiting for coordinator cadence."""
+    if not hass.services.has_service("homeassistant", "update_entity"):
+        return
+    hass.async_create_task(
+        hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {"entity_id": [PENDING_SENSOR, SAFETY_SENSOR]},
+            blocking=False,
+        )
+    )
 
 
 async def _record_supervised_event(
@@ -137,6 +153,7 @@ def set_pending_action(hass: HomeAssistant, action: dict[str, Any]) -> dict[str,
         grant.get("id") != pending.get("id") or grant.get("source") != pending.get("source")
     ):
         runtime.pop(EXECUTION_GRANT_KEY, None)
+    _schedule_pending_sensor_refresh(hass)
     return deepcopy(pending)
 
 
@@ -150,6 +167,7 @@ def clear_pending_action(hass: HomeAssistant, *, reason: str = "cleared") -> dic
         result["status"] = reason
         result["resolved_at"] = dt_util.utcnow().isoformat()
         runtime[LAST_RESULT_KEY] = result
+        _schedule_pending_sensor_refresh(hass)
         return deepcopy(result)
     return None
 
@@ -185,6 +203,7 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
         runtime[LAST_RESULT_KEY] = result
         runtime.pop(PENDING_KEY, None)
         runtime.pop(EXECUTION_GRANT_KEY, None)
+        _schedule_pending_sensor_refresh(hass)
         await _record_supervised_event(hass, "supervised_invalid_action", result)
         return deepcopy(result)
 
@@ -192,10 +211,13 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
     result["status"] = "executing"
     result["confirmed_at"] = dt_util.utcnow().isoformat()
     runtime[LAST_RESULT_KEY] = result
-    _issue_execution_grant(hass, pending)
     await _record_supervised_event(hass, "supervised_confirmed", pending)
 
     try:
+        # Issue the grant immediately before the nested apply call. There is no
+        # awaited work between grant creation and service dispatch, minimizing
+        # any chance that an unrelated coordinator tick can observe it first.
+        _issue_execution_grant(hass, pending)
         await hass.services.async_call(
             domain,
             service,
@@ -227,6 +249,7 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
     finally:
         runtime.pop(EXECUTION_GRANT_KEY, None)
         runtime.pop(PENDING_KEY, None)
+        _schedule_pending_sensor_refresh(hass)
 
     runtime[LAST_RESULT_KEY] = result
     return deepcopy(result)
