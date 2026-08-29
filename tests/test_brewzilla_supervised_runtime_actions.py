@@ -10,6 +10,9 @@ BREWZILLA_INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
 MANUAL_GUARD = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py"
 NO_POSITIVE = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_no_positive_gate.py"
 SUPERVISED = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_supervised_runtime_guard.py"
+SUPERVISED_CORE = ROOT / "custom_components/brewassistant/supervised_apply.py"
+MANUAL_CARD = ROOT / "dashboard/cards/brewassistant_manual_brewday.yaml"
+MANUAL_CARD_SV = ROOT / "dashboard/cards/brewassistant_manual_brewday_sv.yaml"
 
 
 def test_manual_prepared_is_a_safe_boundary() -> None:
@@ -58,9 +61,35 @@ def test_manual_owned_values_and_safe_down_bypass_confirmation() -> None:
     assert 'await base._call_switch(hass, "off", base.BREWZILLA_PUMP_SWITCH)' in source
 
 
-def test_confirmation_revalidates_live_plan() -> None:
-    source = SUPERVISED.read_text(encoding="utf-8")
-    assert 'last.get("status") == "executing"' in source
-    assert "_confirmation_matches(hass, plan_id)" in source
-    assert '"apply_result": "supervised_plan_stale"' in source
-    assert "Runtime progression is never paused by this guard" in source
+def test_confirmation_requires_exact_one_shot_execution_grant() -> None:
+    guard = SUPERVISED.read_text(encoding="utf-8")
+    core = SUPERVISED_CORE.read_text(encoding="utf-8")
+    assert "get_execution_grant(hass)" in guard
+    assert "consume_execution_grant(" in guard
+    assert '"supervised_confirmation_consumed": True' in guard
+    assert '"apply_result": "supervised_plan_stale"' in guard
+    assert "EXECUTION_GRANT_KEY" in core
+    assert "def consume_execution_grant(" in core
+    assert "_issue_execution_grant(hass, pending)" in core
+    assert '"supervised_confirmed"' in core
+    assert '"supervised_executed"' in core
+    assert '"supervised_cancelled"' in core
+    assert "Runtime progression is never paused by this guard" in guard
+
+
+def test_manual_heat_strike_has_explicit_ui_confirmation() -> None:
+    for path in (MANUAL_CARD, MANUAL_CARD_SV):
+        source = path.read_text(encoding="utf-8")
+        heat_pos = source.index("name: Heat strike")
+        next_pos = source.index("styles: *manual_action", heat_pos)
+        heat_block = source[heat_pos:next_pos]
+        assert "confirmation:" in heat_block
+        assert "separate" in heat_block.lower() or "separat" in heat_block.lower()
+
+
+def test_manual_card_surfaces_pending_supervised_plan() -> None:
+    for path in (MANUAL_CARD, MANUAL_CARD_SV):
+        source = path.read_text(encoding="utf-8")
+        assert "sensor.brewassistant_brewzilla_pending_action" in source
+        assert "button.brewassistant_confirm_supervised_apply" in source
+        assert "button.brewassistant_cancel_supervised_apply" in source
