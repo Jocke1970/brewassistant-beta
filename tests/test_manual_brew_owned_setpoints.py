@@ -79,10 +79,11 @@ def test_manual_pause_overrides_operator_ownership_with_safe_down() -> None:
 
 def test_manual_brewfather_handoff_uses_runtime_activity_predicate() -> None:
     source = STORE_SOURCE.read_text(encoding="utf-8")
-    assert "from .brewday_runtime_core import brewfather_session_active" in source
+    assert "brewfather_session_active" in source
     assert "return brewfather_session_active(hass)" in source
     assert "BREWDAY_ACTIVE_STATUS" not in source
-    assert "BF_STATUS" not in source
+    assert "async_track_state_change_event" in source
+    assert "async_apply_brewzilla_target_if_allowed(hass)" in source
 
 
 def test_manual_dashboard_uses_ba_owned_numeric_controls_in_both_languages() -> None:
