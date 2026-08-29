@@ -13,6 +13,53 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #146 — Deterministisk flight-recorder-rotation vid ny bryggdag
+
+### Sammanfattning
+
+Rättar racet som kunde göra att PR #143 missade att rensa föregående bryggdags logg. Ett separat session-boundary-guard armar nu en bryggdagsgräns när Brewday verkligen når terminalt läge utan aktiv Manual/Brewfather-owner. Gränsen sparas utanför den rullande eventloggen, så ett senare orchestration-/transition-event kan inte skriva över kunskapen om att föregående bryggdag är avslutad.
+
+När nästa Manual-session går `idle/completed → prepared`, eller en ny Brewfather-session går in i Planning/Brewing, roteras flight recordern innan den nya sessionen får fortsätta använda loggen. Guardens `started_at`-kontroll upptäcker om den äldre autostart-logiken redan hunnit rotera och förhindrar dubbel rotation. Manual ↔ Brewfather-handoff inom samma pågående bryggdag armar ingen terminal boundary och behåller därför samma logg.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/__init__.py`
+- `custom_components/brewassistant/brewday/brewday_audit_session_boundary.py`
+- `tests/test_brewday_flight_recorder.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom Brewday audit-autostartens setup-väg patchas vid integrationens initiering.
+
+---
+
+## 2026-08-29 — PR #145 — Improve BrewZilla heater and pump visualization
+
+### Sammanfattning
+
+BrewZilla-kortets heat- och pumpsektioner visar nu live utilization tydligare, med separata ON/OFF/PÅ/AV-lägen, utilization-bars samt diskret animation när heater respektive pump är aktiva. Svenska och engelska kort hålls synkade och animationerna respekterar reduced-motion.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewzilla.yaml`
+- `dashboard/cards/brewzilla_sv.yaml`
+
+### Övriga ändrade filer
+
+- Inga backendfiler.
+- `CHANGELOG.md` backfillades i PR #146 eftersom #145 mergades parallellt utan changelog-post.
+
+### HA-åtgärd
+
+Ingen backend-omstart krävs enbart för #145. Uppdatera/reloada BrewZilla-dashboardkortet.
+
+---
+
 ## 2026-08-29 — PR #144 — AVBRYT suppressar oförändrad Supervised Apply-plan
 
 ### Sammanfattning
