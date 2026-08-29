@@ -129,9 +129,9 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
 | `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
 | `brewassistant_source_health.yaml` | Source/feed health and integration status overview. |
-| `brewfather_feed.yaml` | Legacy combined Brewfather/BrewTracker feed card. |
+| `brewfather_feed.yaml` | Brewfather post-brew batch context, shown during the `fermenting` phase. |
 | `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
-| `brewtracker_runtime.yaml` | BrewTracker live runtime card with current step, next step, batch status, progress and refresh action. |
+| `brewtracker_runtime.yaml` | Brewday-focused BrewTracker card for Planning/ready, Brewing pre-start and active live runtime. |
 | `brewzilla.yaml` | BrewZilla orchestration/operator card. |
 | `brewzilla_ble_status.yaml` | Detailed BLE/external mash-temperature source status. |
 | `brewzilla_ble_indicator.yaml` | Compact BLE/external mash-temperature source indicator. |
@@ -147,16 +147,26 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 | `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
 | `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
 
-## Brewfather / BrewTracker split
+## Brewfather / BrewTracker process-phase roles
 
-The intended split is:
+The UI is split by process phase rather than by two competing views of the same source:
 
 ```text
-Brewfather Recipe = recipe, batch, current/next instructions
-BrewTracker Runtime = current live step, next step, batch status, target, remaining time, progress, refresh
+Planning / Brewing
+  -> BrewTracker Runtime is the primary Brewfather-derived brewday card
+  -> Planning and Brewing-before-Play are visible ready/pre-start states
+  -> hot-side ownership begins only after positive BrewTracker start evidence
+
+Fermenting
+  -> BrewTracker Runtime leaves the primary view
+  -> brewfather_feed.yaml becomes compact Brewfather batch/recipe context
+  -> detailed temperature, Pill and climate control remains in Fermentation Cockpit
+
+Technical feed/source health
+  -> belongs in Source Health rather than a second large Brewfather runtime card
 ```
 
-`brewfather_feed.yaml` remains for compatibility while the split cards are tested. The same split is preserved in the Swedish mirrors.
+The normalized `sensor.brewassistant_brewfather_batch_phase` is the presentation boundary and uses the same backend phase resolver as Brewfather hot-side ownership. Dashboard code should not invent a separate interpretation of `Planning`, `Brewing` or `Fermenting`.
 
 ## BrewZilla two-step mash-in controls
 
