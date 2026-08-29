@@ -13,11 +13,37 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #140 — Correct BLE card targets and restore temperature gauge
+
+### Sammanfattning
+
+Korrigerar #139: det var BLE-indikatorn, inte den generella dual-temperature-gaugen, som skulle döljas när extern processgivare saknas. Temperatur-gaugen återställs så BrewZillas interna temperatur fortfarande visas utan BLE/extern givare. Både BLE-indikator och BLE-status följer nu den BA-owned externa temperaturtillgängligheten.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewzilla_ble_indicator.yaml`
+- `dashboard/cards/brewzilla_ble_indicator_sv.yaml`
+- `dashboard/cards/brewzilla_dual_temperature_gauge.yaml`
+- `dashboard/cards/brewzilla_dual_temperature_gauge_sv.yaml`
+
+### Övriga ändrade filer
+
+- `tests/test_brewzilla_external_temperature_visibility.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+Ingen ny backend-entitet tillkommer i #140. Efter att #139 redan installerats räcker integration/dashboard update; full HA-omstart är inte nödvändig enbart för denna korrigering.
+
+---
+
 ## 2026-08-29 — PR #139 — External temperature card visibility
 
 ### Sammanfattning
 
 BLE-/extern temperaturdiagnostik visas bara när BrewZilla faktiskt har en användbar extern processgivare. En ny BA-owned connectivity-sensor skiljer "extern givare tillgänglig" från vilken temperaturkälla operatören för tillfället valt.
+
+**Korrigering:** PR #139 råkade gate:a `brewzilla_dual_temperature_gauge*` i stället för `brewzilla_ble_indicator*`. Detta rättas i PR #140.
 
 ### Dashboard/cards att ersätta
 
