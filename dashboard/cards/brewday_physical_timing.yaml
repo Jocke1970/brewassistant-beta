@@ -1,0 +1,157 @@
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_brewday
+    state: "on"
+  - entity: sensor.brewassistant_brewday_runtime_state
+    state_not: "idle"
+card:
+  type: custom:expander-card
+  title-card:
+    type: custom:button-card
+    entity: sensor.brewassistant_brewday_physical_timing_summary
+    name: Physical step timing
+    icon: mdi:timer-outline
+    show_state: false
+    show_label: true
+    triggers_update:
+      - sensor.brewassistant_brewday_physical_timing_summary
+      - sensor.brewassistant_brewday_physical_timing_mode
+      - sensor.brewassistant_brewday_physical_elapsed_seconds
+      - sensor.brewassistant_brewday_physical_remaining_seconds
+      - sensor.brewassistant_brewday_physical_progress
+      - sensor.brewassistant_brewday_physical_ramp_rate
+      - sensor.brewassistant_brewday_physical_target_temperature
+    label: |
+      [[[
+        const a = entity?.attributes || {};
+        const mode = String(states['sensor.brewassistant_brewday_physical_timing_mode']?.state ?? a.mode ?? 'idle');
+        const step = a.step_name || 'No active mash/ramp timer';
+        const target = Number(a.target_temperature);
+        const elapsed = Number(states['sensor.brewassistant_brewday_physical_elapsed_seconds']?.state ?? a.elapsed_seconds);
+        const remaining = Number(states['sensor.brewassistant_brewday_physical_remaining_seconds']?.state ?? a.remaining_seconds);
+        const mismatch = a.source_schedule_mismatch === true;
+        const fmt = (s) => {
+          if (!Number.isFinite(s)) return '—';
+          s = Math.max(0, Math.round(s));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          return h > 0
+            ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+            : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+        };
+        let clock = fmt(elapsed);
+        if (mode.startsWith('hold')) clock = `${fmt(remaining)} remaining`;
+        if (mode.startsWith('waiting_for_target')) clock = `waiting for ${Number.isFinite(target) ? target.toFixed(1) + ' °C' : 'target'}`;
+        const warn = mismatch ? ' · ⚠ BF ahead of physical process' : '';
+        return `${step} · ${clock}${warn}`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 12px
+        - background: rgba(0,188,212,.075)
+        - border: 1px solid rgba(0,188,212,.20)
+      grid:
+        - grid-template-areas: "\"i n\" \"i l\""
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 22px
+        - height: 22px
+        - color: rgb(0,188,212)
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 11.5px
+        - font-weight: 800
+        - opacity: 0.76
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_brewday_physical_timing_summary
+      show_name: false
+      show_icon: false
+      show_state: false
+      show_label: true
+      triggers_update:
+        - sensor.brewassistant_brewday_physical_timing_summary
+        - sensor.brewassistant_brewday_physical_timing_mode
+        - sensor.brewassistant_brewday_physical_elapsed_seconds
+        - sensor.brewassistant_brewday_physical_remaining_seconds
+        - sensor.brewassistant_brewday_physical_progress
+        - sensor.brewassistant_brewday_physical_ramp_rate
+        - sensor.brewassistant_brewday_physical_target_temperature
+      label: |
+        [[[
+          const a = entity?.attributes || {};
+          const mode = String(a.mode ?? 'idle');
+          const kind = String(a.step_kind ?? '—');
+          const step = a.step_name || '—';
+          const current = Number(a.current_temperature);
+          const target = Number(a.target_temperature);
+          const elapsed = Number(a.elapsed_seconds);
+          const wall = Number(a.wall_elapsed_seconds);
+          const remaining = Number(a.remaining_seconds);
+          const total = Number(a.total_seconds);
+          const progress = Number(a.progress_percent);
+          const rate = Number(a.average_c_per_min);
+          const mismatch = a.source_schedule_mismatch === true;
+          const context = a.context || 'Unknown';
+          const source = a.temperature_entity || '—';
+          const history = Array.isArray(a.history) ? a.history : [];
+          const fmt = (s) => {
+            if (!Number.isFinite(s)) return '—';
+            s = Math.max(0, Math.round(s));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return h > 0
+              ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+              : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+          };
+          const ftemp = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
+          const pct = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
+          const currentClock = kind === 'hold' && a.timer_started_at
+            ? `${fmt(remaining)} remaining · ${fmt(elapsed)} / ${fmt(total)}`
+            : kind === 'hold'
+              ? `Waiting for target · ${ftemp(current)} → ${ftemp(target)}`
+              : kind === 'ramp'
+                ? `${fmt(elapsed)} · ${ftemp(current)} → ${ftemp(target)}${Number.isFinite(rate) ? ` · ${rate.toFixed(2)} °C/min` : ''}`
+                : 'No active physical timer';
+          const rows = history.slice(-10).reverse().map((r) => {
+            const rk = String(r.kind || '');
+            const dur = fmt(Number(r.duration_seconds));
+            const wallDur = fmt(Number(r.wall_duration_seconds));
+            const rr = Number(r.average_c_per_min);
+            const from = Number(r.from_temperature);
+            const to = Number(r.target_temperature);
+            const detail = rk === 'ramp'
+              ? `${ftemp(from)} → ${ftemp(to)} · ${dur}${Number.isFinite(rr) ? ` · ${rr.toFixed(2)} °C/min` : ''}${wallDur !== dur ? ` · wall ${wallDur}` : ''}`
+              : `${ftemp(to)} · hold ${dur}`;
+            return `<div style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.10);"><div style="font-size:10px;font-weight:950;text-transform:uppercase;opacity:.62;">${rk || 'step'}</div><div style="font-size:11px;font-weight:800;">${r.name || '—'}<br><span style="opacity:.65;">${detail}</span></div></div>`;
+          }).join('');
+          return `<div style="line-height:1.3;min-width:0;">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">${kind} · ${context}</div><div style="font-size:20px;font-weight:950;margin-top:2px;">${step}</div></div><div style="font-size:11px;font-weight:950;padding:5px 8px;border-radius:999px;background:${mismatch ? 'rgba(255,193,7,.15)' : 'rgba(76,175,80,.11)'};border:1px solid ${mismatch ? 'rgba(255,193,7,.30)' : 'rgba(76,175,80,.22)'};white-space:nowrap;">${mismatch ? 'BF ≠ physical' : mode}</div></div>
+            <div style="margin-top:10px;font-size:25px;font-weight:950;text-align:center;letter-spacing:-.03em;">${currentClock}</div>
+            ${kind === 'hold' && a.timer_started_at ? `<div style="margin:9px auto 0;height:7px;border-radius:999px;background:rgba(127,127,127,.16);overflow:hidden;"><div style="width:${pct}%;height:7px;background:rgba(0,188,212,.75);"></div></div>` : ''}
+            <div style="margin-top:8px;font-size:10.5px;font-weight:750;opacity:.62;text-align:center;">Process sensor: ${source} · target reached ${a.target_reached_at || 'no'} · paused ${fmt(Number(a.paused_seconds))}</div>
+            ${mismatch ? `<div style="margin-top:9px;padding:8px;border-radius:12px;background:rgba(255,193,7,.11);border:1px solid rgba(255,193,7,.28);font-size:11px;font-weight:850;">⚠ Brewfather source schedule has advanced ahead of the physical timer. Telemetry keeps observing the physical step and does not alter control.</div>` : ''}
+            <div style="margin-top:12px;font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">Step and ramp history · current brew</div>
+            <div style="margin-top:4px;">${rows || '<div style="padding:8px 0;font-size:11px;font-weight:750;opacity:.60;">No completed physical ramp/hold yet.</div>'}</div>
+          </div>`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 16px
+          - padding: 12px
+          - background: rgba(127,127,127,.035)
+          - border: 1px solid rgba(127,127,127,.12)
+        label:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
