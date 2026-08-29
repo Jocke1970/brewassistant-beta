@@ -13,6 +13,7 @@ DOMAIN_DATA = "brewassistant"
 PENDING_KEY = "supervised_apply_pending_action"
 LAST_RESULT_KEY = "supervised_apply_last_result"
 EXECUTION_GRANT_KEY = "supervised_apply_execution_grant"
+CANCELLED_KEY = "supervised_apply_cancelled_action"
 MODE_ENTITY = "select.brewassistant_apply_mode"
 PENDING_SENSOR = "sensor.brewassistant_brewzilla_pending_action"
 SAFETY_SENSOR = "sensor.brewassistant_brewzilla_safety_state"
@@ -124,6 +125,36 @@ def get_execution_grant(hass: HomeAssistant) -> dict[str, Any] | None:
     return None
 
 
+def get_cancelled_action(hass: HomeAssistant) -> dict[str, Any] | None:
+    """Return the last explicitly cancelled supervised action, if retained."""
+    cancelled = _runtime_data(hass).get(CANCELLED_KEY)
+    if isinstance(cancelled, dict):
+        return deepcopy(cancelled)
+    return None
+
+
+def cancelled_action_matches(
+    hass: HomeAssistant,
+    *,
+    action_id: str,
+    source: str,
+) -> bool:
+    """Return true when the exact action was explicitly cancelled by the operator."""
+    cancelled = get_cancelled_action(hass)
+    if cancelled is None:
+        return False
+    return cancelled.get("id") == action_id and cancelled.get("source") == source
+
+
+def clear_cancelled_action_from_source(hass: HomeAssistant, source: str) -> None:
+    """Forget a retained cancellation when that source's intent has changed."""
+    runtime = _runtime_data(hass)
+    cancelled = runtime.get(CANCELLED_KEY)
+    if isinstance(cancelled, dict) and cancelled.get("source") == source:
+        runtime.pop(CANCELLED_KEY, None)
+        _schedule_pending_sensor_refresh(hass)
+
+
 def _issue_execution_grant(hass: HomeAssistant, pending: dict[str, Any]) -> dict[str, Any]:
     """Issue a one-shot grant for generic actions without a registered executor."""
     grant = {
@@ -156,13 +187,27 @@ def set_pending_action(hass: HomeAssistant, action: dict[str, Any]) -> dict[str,
     """Set or update pending supervised action."""
     now = dt_util.utcnow().isoformat()
     pending = deepcopy(action)
-    pending.setdefault("id", f"{pending.get('source', 'brewassistant')}:{pending.get('kind', 'action')}:{pending.get('entity_id', 'unknown')}")
+    pending.setdefault(
+        "id",
+        f"{pending.get('source', 'brewassistant')}:{pending.get('kind', 'action')}:{pending.get('entity_id', 'unknown')}",
+    )
     pending.setdefault("created_at", now)
     pending["updated_at"] = now
     pending["status"] = "pending"
     pending["requires_confirmation"] = True
     runtime = _runtime_data(hass)
     runtime[PENDING_KEY] = pending
+
+    # A genuinely changed plan supersedes a previous explicit cancellation. The
+    # exact cancelled action is intentionally retained until its source decides
+    # that the live intent has changed.
+    cancelled = runtime.get(CANCELLED_KEY)
+    if isinstance(cancelled, dict) and (
+        cancelled.get("id") != pending.get("id")
+        or cancelled.get("source") != pending.get("source")
+    ):
+        runtime.pop(CANCELLED_KEY, None)
+
     # A changed/re-created plan can never inherit a fallback grant from an older action.
     grant = runtime.get(EXECUTION_GRANT_KEY)
     if isinstance(grant, dict) and (
@@ -208,6 +253,13 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
         runtime[LAST_RESULT_KEY] = result
         await _record_supervised_event(hass, "supervised_no_pending_action", result)
         return deepcopy(result)
+
+    cancelled = runtime.get(CANCELLED_KEY)
+    if isinstance(cancelled, dict) and (
+        cancelled.get("id") == pending.get("id")
+        and cancelled.get("source") == pending.get("source")
+    ):
+        runtime.pop(CANCELLED_KEY, None)
 
     result = deepcopy(pending)
     result["status"] = "executing"
@@ -304,8 +356,14 @@ async def async_confirm_pending_action(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def cancel_pending_action(hass: HomeAssistant) -> dict[str, Any] | None:
-    """Cancel pending supervised action."""
+    """Cancel and retain the exact supervised action as explicitly rejected."""
     pending = get_pending_action(hass)
+    if pending is not None:
+        cancelled = deepcopy(pending)
+        cancelled["status"] = "cancelled"
+        cancelled["cancelled_at"] = dt_util.utcnow().isoformat()
+        _runtime_data(hass)[CANCELLED_KEY] = cancelled
+
     result = clear_pending_action(hass, reason="cancelled")
     if pending is not None:
         hass.async_create_task(_record_supervised_event(hass, "supervised_cancelled", pending))
@@ -317,6 +375,7 @@ def build_supervised_apply_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     pending = get_pending_action(hass)
     last_result = get_last_result(hass)
     grant = get_execution_grant(hass)
+    cancelled = get_cancelled_action(hass)
     mode = current_apply_mode(hass)
     return {
         "mode": mode,
@@ -329,6 +388,10 @@ def build_supervised_apply_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "pending_summary": pending.get("summary") if pending else None,
         "execution_grant_active": grant is not None,
         "execution_grant_action_id": grant.get("id") if grant else None,
+        "cancelled_action": cancelled,
+        "cancelled_action_id": cancelled.get("id") if cancelled else None,
+        "cancelled_source": cancelled.get("source") if cancelled else None,
+        "cancelled_summary": cancelled.get("summary") if cancelled else None,
         "last_result": last_result,
         "last_status": last_result.get("status") if last_result else None,
         "source": "python_supervised_apply_runtime",
