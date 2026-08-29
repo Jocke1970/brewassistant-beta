@@ -8,9 +8,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESOLVER = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_temperature.py"
 BINARY_SENSOR = ROOT / "custom_components/brewassistant/binary_sensor.py"
-CARDS = (
+EXTERNAL_CARDS = (
+    ROOT / "dashboard/cards/brewzilla_ble_indicator.yaml",
+    ROOT / "dashboard/cards/brewzilla_ble_indicator_sv.yaml",
     ROOT / "dashboard/cards/brewzilla_ble_status.yaml",
     ROOT / "dashboard/cards/brewzilla_ble_status_sv.yaml",
+)
+GAUGE_CARDS = (
     ROOT / "dashboard/cards/brewzilla_dual_temperature_gauge.yaml",
     ROOT / "dashboard/cards/brewzilla_dual_temperature_gauge_sv.yaml",
 )
@@ -34,8 +38,16 @@ def test_brewzilla_external_temperature_binary_sensor_is_registered() -> None:
     assert "BrewAssistantBrewZillaExternalTemperatureAvailableBinarySensor(coordinator)" in source
 
 
-def test_external_temperature_cards_are_hidden_without_external_sensor() -> None:
-    for path in CARDS:
+def test_ble_cards_are_hidden_without_external_sensor() -> None:
+    for path in EXTERNAL_CARDS:
         source = path.read_text(encoding="utf-8")
         assert EXTERNAL_AVAILABLE in source, f"external availability gate missing from {path.name}"
         assert 'state: "on"' in source, f"external availability state condition missing from {path.name}"
+
+
+def test_temperature_gauge_remains_available_without_external_sensor() -> None:
+    for path in GAUGE_CARDS:
+        source = path.read_text(encoding="utf-8")
+        assert EXTERNAL_AVAILABLE not in source, f"temperature gauge must not depend on external sensor in {path.name}"
+        assert "sensor.brewassistant_brewzilla_wort_temperature" in source
+        assert "sensor.brewassistant_brewzilla_mash_temperature" in source
