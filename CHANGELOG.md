@@ -13,6 +13,32 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #152 — Slå ihop BrewZilla Advice + Learning till Bryggråd
+
+### Sammanfattning
+
+De två BrewZilla-korten `brewzilla_advice_auto*` och `brewzilla_learning*` visade i praktiken samma rådgivningsdomän i två detaljnivåer. Det separata Advice-kortet pensioneras nu och `brewzilla_learning*` blir ensam operatörsyta för **Brewing Advice / Bryggråd**. Kortet innehåller redan aktuell rekommendation, temperatur/trend, risk och confidence, föreslagen värme, `APPLY/DENY` / `VERKSTÄLL/AVVISA` samt expanderbar learning-/diagnostikdata.
+
+Safety/RCL förblir separat eftersom det svarar på en annan fråga: om data och fysisk styrning är säker/frisk, inte vad BrewAssistant rekommenderar.
+
+### Dashboard/cards att ersätta
+
+- Ta bort `dashboard/cards/brewzilla_advice_auto.yaml` / `_sv.yaml` från lokala dashboards.
+- Behåll/reloada `dashboard/cards/brewzilla_learning.yaml` / `_sv.yaml` som enda Bryggråd-kort.
+
+### Övriga ändrade filer
+
+- `tests/test_brewzilla_advice_learning_consolidation.py`
+- `dashboard/README.md`
+- `docs/dashboard-baselines.md`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+Ingen backend eller entity ändras. **Ingen Home Assistant-omstart krävs**; dashboarden behöver bara uppdateras/reloadas så det gamla Advice-kortet tas bort.
+
+---
+
 ## 2026-08-29 — PR #151 — BrewTracker/Brewfather UI efter processfas
 
 ### Sammanfattning

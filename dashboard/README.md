@@ -30,7 +30,7 @@ CI enforces filename parity and machine-reference safety through `tests/test_das
 
 ## Current structure
 
-The current baseline contains 24 canonical cards, 24 Swedish mirrors, plus canonical and Swedish sanity dashboards.
+The current baseline contains 23 canonical cards, 23 Swedish mirrors, plus canonical and Swedish sanity dashboards.
 
 ```text
 dashboard/
@@ -71,8 +71,6 @@ dashboard/
     brewzilla_mash_in_controls_sv.yaml
     brewzilla_local_control.yaml
     brewzilla_local_control_sv.yaml
-    brewzilla_advice_auto.yaml
-    brewzilla_advice_auto_sv.yaml
     brewzilla_safety_rcl.yaml
     brewzilla_safety_rcl_sv.yaml
     brewzilla_learning.yaml
@@ -123,7 +121,7 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 | Canonical file | Purpose |
 | --- | --- |
 | `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
-| `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Brewday Advice and Safety/RCL cards. |
+| `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Bryggråd/Brewing Advice and Safety/RCL cards. |
 | `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
 | `brewassistant_brewday_bf_reload.yaml` | Compact Brewfather/BrewTracker reload button for placement on or near the Brewday Runtime card. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
@@ -139,13 +137,14 @@ Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
 | `brewzilla_mash_in_confirm.yaml` | Legacy mash-in confirmation and explicit mash-circulation action card. |
 | `brewzilla_mash_in_controls.yaml` | Two-step mash-in operator controls: Mash-In Started, then Mash-In Complete. |
 | `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
-| `brewzilla_advice_auto.yaml` | Brewday Advice conditional card; auto-shows on advice/risk/unknown context or by switch. |
-| `brewzilla_safety_rcl.yaml` | Safety/RCL conditional card; auto-shows on warning/guard/filter/abort or by switch. |
-| `brewzilla_learning.yaml` | Full BrewZilla learning/advisory card for deep manual review. |
+| `brewzilla_safety_rcl.yaml` | Safety/RCL conditional card; warning/guard/filter/abort diagnostics. |
+| `brewzilla_learning.yaml` | Single consolidated Brewing Advice/Bryggråd surface: recommendation, risk, trends, APPLY/DENY actions and expandable learning diagnostics. |
 | `carbonation.yaml` | Carbonation runtime/status/control card. |
 | `counterflow_chiller.yaml` | Counter Flow Chiller sanitation/ready controls. |
 | `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
 | `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
+
+`brewzilla_advice_auto.yaml` / `_sv.yaml` were retired when their compact advice content was consolidated into `brewzilla_learning.yaml` / `_sv.yaml`. Remove the old Advice card from local dashboards instead of keeping two parallel advisory surfaces.
 
 ## Brewfather / BrewTracker process-phase roles
 
@@ -205,11 +204,11 @@ The intended split is:
 BrewZilla = operator/hardware cockpit
 BrewZilla Mash-In Controls = explicit two-step mash-in handoff
 BrewZilla Local Control = what BA handed to BZ and whether lease is active
-Brewday Advice = why BA selected a profile; hidden by default unless meaningful
-Safety/RCL = freshness/guards/filter/abort; hidden by default unless meaningful
+Brewing Advice / Bryggråd = what BA recommends, why, risk/confidence and learning detail
+Safety/RCL = freshness/guards/filter/abort diagnostics
 ```
 
-`brewzilla_advice_auto.yaml` and `brewzilla_safety_rcl.yaml`, and their Swedish mirrors, use card-level display rules: they stay hidden during normal operation, but appear when there is a recommendation, warning, missing context, guard activity, or when the matching switch is enabled.
+`brewzilla_learning.yaml` / `_sv.yaml` is the single advice + learning operator surface. `brewzilla_safety_rcl.yaml` / `_sv.yaml` stays separate because it answers a different question: whether data/control is safe and healthy rather than what BA recommends.
 
 ## Brewfather reload placement
 
