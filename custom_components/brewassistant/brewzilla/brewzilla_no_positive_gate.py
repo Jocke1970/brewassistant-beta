@@ -3,7 +3,8 @@
 When Brewday Runtime is not in a trustworthy active step, BA may only drive the
 BrewZilla command surface toward a neutral safe state. This prevents stale
 Brewfather terminal/transition snapshots from starting a new target or changing
-outputs upward after Mash has ended or while BA is awaiting a fresh snapshot.
+outputs upward after Mash has ended, while BA is awaiting a fresh snapshot, or
+while Manual Brewday is only prepared and has not started Heat strike yet.
 """
 
 from __future__ import annotations
@@ -17,7 +18,16 @@ from . import brewzilla_orchestration as base
 _BASE_BUILD = None
 _BASE_APPLY = None
 _INSTALLED = False
-_NO_POSITIVE_STATES = {"", "idle", "inactive", "unknown", "unavailable", "none", "awaiting_snapshot"}
+_NO_POSITIVE_STATES = {
+    "",
+    "idle",
+    "inactive",
+    "unknown",
+    "unavailable",
+    "none",
+    "awaiting_snapshot",
+    "prepared",
+}
 
 
 def _state(snapshot: dict[str, Any]) -> str:
