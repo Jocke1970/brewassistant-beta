@@ -13,6 +13,35 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #141 — Supervised BrewZilla runtime actions
+
+### Sammanfattning
+
+Manual Brewday och Brewfather fortsätter styra runtime/timers som tidigare, men positiva AUTO-åtgärder mot BrewZilla går nu genom en samlad Supervised Apply-plan innan fysisk verkställning. Target-up, utilization-up, heater ON och pump ON kräver kvittens enligt befintlig sektionspolicy. Safe-down och operatörsägda MAN-setpoints får fortfarande verkställas direkt. Vid BEKRÄFTA räknas den aktuella runtime-planen om; en gammal/stale plan körs inte om BF/Manual hunnit avancera.
+
+Manual Brew `prepared` är samtidigt en explicit safe-down boundary: `Förbered` får aldrig energisätta BrewZilla. Först `Heat strike` flyttar Manual runtime till ett aktivt steg som får skapa positiv styrintention.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+Den befintliga `BEKRÄFTA`/`AVBRYT`-kontrollen i Brewday-cockpit används för den nya samlade orkesterplanen.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewzilla/__init__.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_no_positive_gate.py`
+- `custom_components/brewassistant/brewzilla/brewzilla_supervised_runtime_guard.py`
+- `tests/test_brewzilla_supervised_runtime_actions.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom BrewZilla backendens exekveringskedja ändras.
+
+---
+
 ## 2026-08-29 — PR #140 — Correct BLE card targets and restore temperature gauge
 
 ### Sammanfattning
