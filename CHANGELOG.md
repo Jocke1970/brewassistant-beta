@@ -13,6 +13,30 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #143 — Ny flight-recorder-logg per bryggdag
+
+### Sammanfattning
+
+Flight recordern roteras nu automatiskt när en ny bryggdag börjar. Om föregående logg fortfarande är aktiv men senaste runtime-läget visar att bryggdagen är avslutad (`completed`/`finished`, eller `idle`/`inactive` utan aktiv runtime-källa) rensas gamla events innan nästa Manual/Brewfather-session börjar loggas.
+
+Manual ↔ Brewfather-handoff inom samma bryggdag räknas inte som en ny session och behåller därför samma sammanhängande flight-recorder-logg.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/brewday_audit_autostart.py`
+- `tests/test_brewday_flight_recorder.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom flight-recorder-autostarten ändras.
+
+---
+
 ## 2026-08-29 — PR #142 — Explicit och hårdlåst Supervised Apply
 
 ### Sammanfattning

@@ -50,6 +50,13 @@ ACTIVE_RUNTIME_STATES = {
     "awaiting_confirm",
 }
 
+TERMINAL_SESSION_STATES = {
+    "idle",
+    "inactive",
+    "completed",
+    "finished",
+}
+
 BREWFATHER_BATCH_STATUS_ATTRIBUTES = (
     "brew_tracker_batch_status",
     "batch_status",
@@ -194,26 +201,54 @@ def _manual_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         return {"runtime_error": f"{type(exc).__name__}: {exc}"}
 
 
+def _last_audit_session_finished(hass: HomeAssistant) -> bool:
+    """Return true when the active recorder contains a finished prior brewday.
+
+    A completed/finished runtime is an explicit session boundary. Idle/inactive is
+    only treated as a completed boundary when no runtime source owns Brewday. This
+    keeps Manual <-> Brewfather handoffs in one continuous flight-recorder log.
+    """
+    log = get_brewday_audit_log(hass)
+    if not log.events:
+        return False
+
+    last_event = log.events[-1]
+    last_state = str(last_event.get("runtime_state") or last_event.get("status") or "").strip().lower()
+    last_source = str(last_event.get("source") or "").strip().lower()
+
+    if last_state in {"completed", "finished"}:
+        return True
+    return last_state in {"idle", "inactive"} and last_source in {"", "none"}
+
+
 def _autostart_allowed(hass: HomeAssistant) -> tuple[bool, str, dict[str, Any]]:
     runtime = _runtime_snapshot(hass)
-    if get_brewday_audit_log(hass).active:
-        return False, "audit_already_active", runtime
-
     manual = _manual_snapshot(hass)
     manual_state = str(manual.get("runtime_state") or manual.get("status") or "idle").lower()
-    if manual_state in ACTIVE_RUNTIME_STATES:
-        return True, f"manual_runtime_{manual_state}", runtime
 
     runtime_source = str(runtime.get("source") or "")
     runtime_state = _runtime_state(runtime)
-    if runtime_source not in {"", "None"} and runtime_state in ACTIVE_RUNTIME_STATES:
-        return True, f"runtime_active:{runtime_source}:{runtime_state}", runtime
+    brewfather_active = brewfather_session_active(hass)
+    brewfather_planning = _brewfather_status(hass) == PLANNING_STATUS
 
-    if brewfather_session_active(hass):
-        return True, "brewfather_session_active", runtime
+    active_reason: str | None = None
+    if manual_state in ACTIVE_RUNTIME_STATES:
+        active_reason = f"manual_runtime_{manual_state}"
+    elif runtime_source not in {"", "None"} and runtime_state in ACTIVE_RUNTIME_STATES:
+        active_reason = f"runtime_active:{runtime_source}:{runtime_state}"
+    elif brewfather_active:
+        active_reason = "brewfather_session_active"
+    elif brewfather_planning:
+        active_reason = "brewfather_planning"
 
-    if _brewfather_status(hass) == PLANNING_STATUS:
-        return True, "brewfather_planning", runtime
+    log = get_brewday_audit_log(hass)
+    if log.active:
+        if active_reason is not None and _last_audit_session_finished(hass):
+            return True, f"new_brewday:{active_reason}", runtime
+        return False, "audit_already_active", runtime
+
+    if active_reason is not None:
+        return True, active_reason, runtime
 
     return False, "brewday_runtime_not_active", runtime
 
@@ -328,7 +363,7 @@ async def async_maybe_autostart_brewday_audit_log(
     *,
     trigger: str,
 ) -> dict[str, Any]:
-    """Start the persistent audit automatically when any Brewday becomes active."""
+    """Start or rotate the persistent audit when a Brewday becomes active."""
     allowed, reason, runtime = _autostart_allowed(hass)
     if not allowed:
         result = {
@@ -343,11 +378,14 @@ async def async_maybe_autostart_brewday_audit_log(
         _store_autostart_result(hass, result)
         return result
 
-    note = f"Auto-started Brewday flight recorder ({trigger}; {reason})."
+    rotating = reason.startswith("new_brewday:")
+    verb = "rotated" if rotating else "started"
+    note = f"Auto-{verb} Brewday flight recorder ({trigger}; {reason})."
     snapshot = await async_start_brewday_audit_log(hass, note=note)
-    _LOGGER.info("Brewday flight recorder auto-started from %s (%s)", reason, trigger)
+    _LOGGER.info("Brewday flight recorder auto-%s from %s (%s)", verb, reason, trigger)
     result = {
         "started": True,
+        "rotated": rotating,
         "reason": reason,
         "trigger": trigger,
         "brewfather_status": _brewfather_status(hass),
@@ -391,7 +429,8 @@ def async_setup_brewday_audit_autostart(hass: HomeAssistant) -> Callable[[], Non
     async def _check(trigger: str) -> None:
         result = await async_maybe_autostart_brewday_audit_log(hass, trigger=trigger)
         if result.get("started"):
-            await _record_transition(hass, trigger=f"autostart:{trigger}")
+            prefix = "rotate" if result.get("rotated") else "autostart"
+            await _record_transition(hass, trigger=f"{prefix}:{trigger}")
         elif result.get("reason") != "audit_already_active":
             _LOGGER.debug("Brewday audit autostart skipped (%s): %s", trigger, result.get("reason"))
 

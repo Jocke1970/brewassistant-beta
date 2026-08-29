@@ -30,6 +30,23 @@ def test_brewfather_and_manual_use_one_persistent_flight_recorder() -> None:
     assert 'flight_recorder_transition' in source
 
 
+def test_new_brewday_rotates_active_flight_recorder() -> None:
+    source = SOURCE.read_text(encoding="utf-8")
+    assert 'def _last_audit_session_finished' in source
+    assert 'last_state in {"completed", "finished"}' in source
+    assert 'last_state in {"idle", "inactive"} and last_source in {"", "none"}' in source
+    assert 'return True, f"new_brewday:{active_reason}", runtime' in source
+    assert 'rotating = reason.startswith("new_brewday:")' in source
+    assert 'verb = "rotated" if rotating else "started"' in source
+    assert 'prefix = "rotate" if result.get("rotated") else "autostart"' in source
+
+
+def test_handoff_does_not_define_a_terminal_session_boundary() -> None:
+    source = SOURCE.read_text(encoding="utf-8")
+    assert 'Manual <-> Brewfather handoffs in one continuous flight-recorder log' in source
+    assert 'last_source in {"", "none"}' in source
+
+
 def test_flight_recorder_captures_ownership_setpoints_and_bz_readback() -> None:
     source = SOURCE.read_text(encoding="utf-8")
     expected = (
