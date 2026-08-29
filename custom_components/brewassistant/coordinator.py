@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .brewday.brewday_operator_abort import async_load_brewday_operator_abort
 from .brewday.brewday_refresh import maybe_request_brewfather_refresh
 from .brewzilla.brewzilla_learning import async_update_brewday_advice_notification
 from .brewzilla.brewzilla_orchestration import async_apply_brewzilla_target_if_allowed
@@ -326,6 +327,10 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
         self.config_entry = entry
 
     async def _async_update_data(self) -> BrewAssistantData:
+        # Load the persisted operator ABORT before any Brewday refresh or
+        # orchestration decision. A Home Assistant restart must never silently
+        # re-arm a previously aborted hot-side session.
+        await async_load_brewday_operator_abort(self.hass)
         await async_setup_fermentation_runtime(self.hass)
 
         refresh_result = await maybe_request_brewfather_refresh(self.hass)
