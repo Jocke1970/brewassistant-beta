@@ -13,6 +13,56 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-08-29 — PR #148 — Tydlig device-target i Flight Recorder + pulserande CONFIRM
+
+### Sammanfattning
+
+Fysisk Brewfather/Supervised Apply-validering visade att Flight Recorder-fältet `brewzilla_device_target` var felmärkt: det hämtades från BrewAssistants normaliserade/effective target och kunde därför gå till exempelvis 71.8 °C när Brewfather-runtime blev aktiv, trots att BrewZillas råa RAPT-target fortfarande låg kvar på 45 °C och den positiva planen väntade på kvittens. Flight Recorder skiljer nu explicit på `brewzilla_effective_target` och `brewzilla_device_target`, där device-fältet kommer från `sensor.brewassistant_brewzilla_device_target_temperature`.
+
+Den generella Brewday-cockpitens CONFIRM/BEKRÄFTA-knapp blir samtidigt tydligt pending-styrd. När `sensor.brewassistant_brewzilla_pending_action` innehåller en väntande plan ändras texten till `CONFIRM ACTION` / `BEKRÄFTA ÅTGÄRD`, knappen får starkare visuell vikt och en långsam 1.4 s puls. `CANCEL` / `AVBRYT` förblir statisk. `prefers-reduced-motion` behåller den starka statiska pending-markeringen men stänger av animationen.
+
+### Dashboard/cards att ersätta
+
+- `dashboard/cards/brewassistant_brewday.yaml`
+- `dashboard/cards/brewassistant_brewday_sv.yaml`
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/brewday_audit.py`
+- `tests/test_brewday_flight_recorder.py`
+- `tests/test_dashboard_language_parity.py`
+- `CHANGELOG.md`
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update för den korrigerade Flight Recorder-backenden. Ersätt/reloada även Brewday-dashboardkortet för pending-pulsen.
+
+---
+
+## 2026-08-29 — PR #147 — Brewfather tar över först när Brew Tracker faktiskt startar
+
+### Sammanfattning
+
+Rättar skillnaden mellan Brewfather-batchens fas `Brewing` och en faktiskt startad Brew Tracker. En batch kan vara `Brewing` och samtidigt exponera `active: true` medan trackern fortfarande står pausad på `Start / Starta mäsktimer`, steg 0, 0 % progress och full återstående stage-tid. Det läget är nu visible/ready men äger inte hot-side.
+
+Brewfather får hot-side ownership först när det finns positivt startbevis, exempelvis running/active-status, avancerat steg/progress eller nedräknad stage-tid. Starten latchas per tracker/batch-id så en legitim paus efter start behåller ownership. Samma fysiska payload avslöjade även ett equal-time-anchor-fel där pausat `Start` och följande ramp hade samma tidsankare; medan trackern är pausad respekteras nu Brewfathers explicita live-step i stället för att timerheuristiken hoppar fram till rampen.
+
+### Dashboard/cards att ersätta
+
+- Inga.
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/brewday/brewfather_ownership.py`
+- `tests/test_brewfather_hot_side_ownership.py`
+- `CHANGELOG.md` backfillades i PR #148 eftersom #147 mergades utan egen changelog-post.
+
+### HA-åtgärd
+
+**Omstart krävs** efter integration update eftersom Brewfather ownership-policy och runtime step-resolution ändras.
+
+---
+
 ## 2026-08-29 — PR #146 — Deterministisk flight-recorder-rotation vid ny bryggdag
 
 ### Sammanfattning
@@ -316,7 +366,7 @@ Ingen backend-omstart krävs enbart för kortändringen; uppdatera/reload dashbo
 
 ### Sammanfattning
 
-Den generella Brewday-cockpitten fick en direkt `Prepare Manual Brewday`-action när runtime är idle och BF inte äger bryggdagen.
+Den generella Brewday-cockpitten fick en direkt `Prepare Manual Brewday`-action när runtime är idle och BF inte blockerar Manual.
 
 ### Dashboard/cards att ersätta
 
