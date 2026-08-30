@@ -121,3 +121,14 @@ def test_brewday_supervised_action_row_is_only_rendered_for_real_pending_action(
         assert expected_guard in source
         assert "button.brewassistant_confirm_supervised_apply" in source
         assert "button.brewassistant_cancel_supervised_apply" in source
+
+
+def test_legacy_mash_circulation_fallback_is_tightly_scoped() -> None:
+    """The compatibility circulation button belongs only to post-mash-in active Mash."""
+    for filename in ("brewzilla_mash_in_confirm.yaml", "brewzilla_mash_in_confirm_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert "sensor.brewassistant_brewday_runtime_state" in source
+        assert "sensor.brewassistant_brewday_runtime_stage" in source
+        assert "runtimeStage.includes('mash')" in source
+        assert "const pumpStopped = !pumpOn && !Number.isNaN(util) && util <= 0.1;" in source
+        assert "(!pending && completed && activeMash && pumpStopped)" in source
