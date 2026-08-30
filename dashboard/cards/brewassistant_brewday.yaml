@@ -298,99 +298,110 @@ card:
             - font-weight: 750
             - opacity: 0.72
             - white-space: normal
-    - type: horizontal-stack
-      cards:
-        - type: custom:button-card
-          entity: button.brewassistant_confirm_supervised_apply
-          triggers_update:
-            - sensor.brewassistant_brewzilla_pending_action
-          name: |
-            [[[
-              const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-              const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
-              return pending ? 'CONFIRM ACTION' : 'CONFIRM';
-            ]]]
-          icon: mdi:check-decagram
-          show_label: true
-          label: |
-            [[[
-              const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-              const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
-              return pending ? 'CONFIRMATION REQUIRED' : 'No pending action';
-            ]]]
-          tap_action:
-            action: call-service
-            service: button.press
-            target:
-              entity_id: button.brewassistant_confirm_supervised_apply
-            confirmation:
-              text: Confirm pending BrewAssistant supervised action?
-          styles:
-            card:
-              - border-radius: 16px
-              - padding: 10px
-              - min-height: 58px
-              - background: |
-                  [[[
-                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                      ? 'rgba(76,175,80,.22)' : 'rgba(76,175,80,.10)';
-                  ]]]
-              - border: |
-                  [[[
-                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                      ? '2px solid rgba(76,175,80,.72)' : '1px solid rgba(76,175,80,.24)';
-                  ]]]
-              - box-shadow: |
-                  [[[
-                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                      ? '0 0 0 2px rgba(76,175,80,.12)' : 'none';
-                  ]]]
-              - animation: |
-                  [[[
-                    const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                    return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                      ? 'ba-confirm-pulse 1.4s ease-in-out infinite' : 'none';
-                  ]]]
-            icon:
-              - color: rgb(76,175,80)
-            name:
-              - font-size: 12px
-              - font-weight: 950
-            label:
-              - font-size: 9.5px
-              - font-weight: 900
-              - opacity: 0.72
-          extra_styles: |
-            @keyframes ba-confirm-pulse {
-              0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(76,175,80,.10); }
-              50% { transform: scale(1.018); box-shadow: 0 0 0 6px rgba(76,175,80,.18); }
-            }
-            @media (prefers-reduced-motion: reduce) {
-              #card { animation: none !important; transform: none !important; }
-            }
-        - type: custom:button-card
-          entity: button.brewassistant_cancel_supervised_apply
-          name: REJECT ACTION
-          icon: mdi:cancel
-          tap_action:
-            action: call-service
-            service: button.press
-            target:
-              entity_id: button.brewassistant_cancel_supervised_apply
-            confirmation:
-              text: Reject pending BrewAssistant supervised action?
-          styles:
-            card:
-              - border-radius: 16px
-              - padding: 10px
-              - background: rgba(255,152,0,.09)
-              - border: 1px solid rgba(255,152,0,.24)
-            name:
-              - font-size: 12px
-              - font-weight: 950
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unknown"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unavailable"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "none"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "idle"
+      card:
+        type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: button.brewassistant_confirm_supervised_apply
+            triggers_update:
+              - sensor.brewassistant_brewzilla_pending_action
+            name: |
+              [[[
+                const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
+                return pending ? 'CONFIRM ACTION' : 'CONFIRM';
+              ]]]
+            icon: mdi:check-decagram
+            show_label: true
+            label: |
+              [[[
+                const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
+                return pending ? 'CONFIRMATION REQUIRED' : 'No pending action';
+              ]]]
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewassistant_confirm_supervised_apply
+              confirmation:
+                text: Confirm pending BrewAssistant supervised action?
+            styles:
+              card:
+                - border-radius: 16px
+                - padding: 10px
+                - min-height: 58px
+                - background: |
+                    [[[
+                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                        ? 'rgba(76,175,80,.22)' : 'rgba(76,175,80,.10)';
+                    ]]]
+                - border: |
+                    [[[
+                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                        ? '2px solid rgba(76,175,80,.72)' : '1px solid rgba(76,175,80,.24)';
+                    ]]]
+                - box-shadow: |
+                    [[[
+                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                        ? '0 0 0 2px rgba(76,175,80,.12)' : 'none';
+                    ]]]
+                - animation: |
+                    [[[
+                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
+                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
+                        ? 'ba-confirm-pulse 1.4s ease-in-out infinite' : 'none';
+                    ]]]
+              icon:
+                - color: rgb(76,175,80)
+              name:
+                - font-size: 12px
+                - font-weight: 950
+              label:
+                - font-size: 9.5px
+                - font-weight: 900
+                - opacity: 0.72
+            extra_styles: |
+              @keyframes ba-confirm-pulse {
+                0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(76,175,80,.10); }
+                50% { transform: scale(1.018); box-shadow: 0 0 0 6px rgba(76,175,80,.18); }
+              }
+              @media (prefers-reduced-motion: reduce) {
+                #card { animation: none !important; transform: none !important; }
+              }
+          - type: custom:button-card
+            entity: button.brewassistant_cancel_supervised_apply
+            name: REJECT ACTION
+            icon: mdi:cancel
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.brewassistant_cancel_supervised_apply
+              confirmation:
+                text: Reject pending BrewAssistant supervised action?
+            styles:
+              card:
+                - border-radius: 16px
+                - padding: 10px
+                - background: rgba(255,152,0,.09)
+                - border: 1px solid rgba(255,152,0,.24)
+              name:
+                - font-size: 12px
+                - font-weight: 950
     - type: conditional
       conditions:
         - entity: sensor.brewassistant_brewday_runtime_state
