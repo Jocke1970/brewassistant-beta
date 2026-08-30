@@ -7,8 +7,8 @@ cards:
         state: "on"
     card:
       type: custom:button-card
-      entity: button.brewassistant_mash_in_complete
-      name: Inmäskning startad · vänta på BF FORTSÄTT
+      entity: button.brewassistant_mash_in_started
+      name: INMÄSKNING PÅBÖRJAD
       icon: mdi:barley
       show_state: false
       show_label: true
@@ -16,22 +16,22 @@ cards:
         action: perform-action
         perform_action: button.press
         target:
-          entity_id: button.brewassistant_mash_in_complete
+          entity_id: button.brewassistant_mash_in_started
         confirmation:
           text: >-
-            Manuell reservväg. I normalflödet trycker du FORTSÄTT i Brewfather
-            när inmäskningen är klar. BA känner då BF Running och markerar
-            inmäskningen klar automatiskt. Använd denna knapp bara om BF inte triggar.
+            Bekräfta att du faktiskt börjar mäska in nu. BA släpper då
+            strike-target till aktuell mäsktemperatur och stoppar pumpen medan
+            malten tillsätts.
       hold_action:
         action: more-info
       label: |
         [[[
-          const pending = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-          const target = pending?.attributes?.last_target ?? '—';
-          const step = pending?.attributes?.last_step ?? 'Mash-in';
-          const button = states['button.brewassistant_mash_in_complete'];
-          const buttonState = button ? 'reservknapp redo' : 'knapp saknas';
-          return `${step} · mål ${target} °C<br>Primärt: tryck FORTSÄTT i Brewfather. BA slutför inmäskningen och startar pump/cirkulation automatiskt.<br>Manuell reservväg: ${buttonState}`;
+          const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+          const target = gate?.attributes?.last_target ?? '—';
+          const temp = gate?.attributes?.current_temperature ?? gate?.attributes?.mash_in_gate_current_temperature ?? '—';
+          const button = states['button.brewassistant_mash_in_started'];
+          const buttonState = button ? 'knapp redo' : 'knapp saknas';
+          return `Strike ready · mål ${target} °C · process ${temp} °C<br>Tryck när inmäskningen faktiskt börjar. Pumpen ska då gå till OFF/0 och BA går till mash_in_started.<br>${buttonState}`;
         ]]]
       styles:
         card:
@@ -59,6 +59,65 @@ cards:
           - font-weight: 760
           - line-height: 1.22
           - opacity: 0.82
+
+  - type: custom:button-card
+    entity: button.brewassistant_mash_in_complete
+    name: Inmäskning pågår · BF FORTSÄTT
+    icon: mdi:barley
+    show_state: false
+    show_label: true
+    tap_action:
+      action: perform-action
+      perform_action: button.press
+      target:
+        entity_id: button.brewassistant_mash_in_complete
+      confirmation:
+        text: >-
+          Manuell reservväg. I normalflödet trycker du FORTSÄTT i Brewfather
+          när inmäskningen är klar. Använd denna knapp bara om BF inte triggar
+          Mash-In Complete automatiskt.
+    hold_action:
+      action: more-info
+    label: |
+      [[[
+        const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+        const started = gate?.attributes?.started_at ?? '—';
+        const effective = gate?.attributes?.effective_target ?? '—';
+        const pump = states['switch.brewzilla_pump']?.state ?? '—';
+        const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
+        return `mash_in_started · effective mål ${effective} °C · pump ${pump}/${util} %<br>Primärt: rör in malten och tryck sedan FORTSÄTT i Brewfather. BA ska då starta mäskcirkulationen.<br>Startad: ${started}`;
+      ]]]
+    styles:
+      card:
+        - display: >
+            [[[
+              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+              return gate?.attributes?.state === 'mash_in_started' ? 'block' : 'none';
+            ]]]
+        - min-height: 88px
+        - padding: 12px
+        - border-radius: 16px
+        - background: rgba(255,193,7,.10)
+        - border: 1px solid rgba(255,193,7,.34)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 23px
+        - color: rgb(255,193,7)
+      name:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 10.7px
+        - font-weight: 760
+        - line-height: 1.22
+        - opacity: 0.82
 
   - type: custom:button-card
     entity: button.brewassistant_start_mash_circulation
