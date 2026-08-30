@@ -98,3 +98,26 @@ def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -
         assert "1.4s ease-in-out infinite" in source
         assert "prefers-reduced-motion: reduce" in source
         assert "animation: none !important" in source
+
+
+def test_brewday_supervised_action_row_is_only_rendered_for_real_pending_action() -> None:
+    """CONFIRM/REJECT should disappear completely when no operator action is pending."""
+    expected_guard = '''    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unknown"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unavailable"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "none"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "idle"
+      card:
+        type: horizontal-stack
+'''
+
+    for filename in ("brewassistant_brewday.yaml", "brewassistant_brewday_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert expected_guard in source
+        assert "button.brewassistant_confirm_supervised_apply" in source
+        assert "button.brewassistant_cancel_supervised_apply" in source
