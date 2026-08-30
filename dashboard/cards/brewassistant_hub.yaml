@@ -7,7 +7,6 @@ cards:
     show_label: false
     triggers_update:
       - switch.brewzilla
-      - sensor.brewzilla_power
       - sensor.brewassistant_brewzilla_orchestration_mode
       - sensor.brewassistant_brewzilla_connection_state
       - sensor.brewassistant_brewzilla_wort_temperature
@@ -60,7 +59,6 @@ cards:
       head: |
         [[[ 
           const bzPower = states['switch.brewzilla']?.state ?? 'unknown';
-          const bzWatts = states['sensor.brewzilla_power']?.state ?? '—';
           const badgeBg = bzPower === 'on' ? 'rgba(76,175,80,.13)' : 'rgba(127,127,127,.10)';
           const badgeBorder = bzPower === 'on' ? 'rgba(76,175,80,.28)' : 'rgba(127,127,127,.18)';
           const badgeIcon = bzPower === 'on' ? 'mdi:power-plug' : 'mdi:power-plug-off-outline';
@@ -88,7 +86,7 @@ cards:
                 white-space:nowrap;
               ">
                 <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
-                BZ ${String(bzPower).toUpperCase()} · ${bzWatts} W
+                BZ ${String(bzPower).toUpperCase()}
               </div>
             </div>
           `;
@@ -194,9 +192,8 @@ cards:
           action: more-info
         label: |
           [[[ 
-            const power = states['sensor.brewzilla_power']?.state ?? '—';
             const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? '—';
-            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'} · ${power} W<br>${conn} · BZ cards follow power`;
+            return `${entity.state?.toUpperCase?.() ?? 'UNKNOWN'}<br>${conn} · BZ cards follow power`;
           ]]]
         styles: &hub_module_tile
           card:
