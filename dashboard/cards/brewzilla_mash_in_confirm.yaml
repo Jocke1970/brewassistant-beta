@@ -7,8 +7,8 @@ cards:
         state: "on"
     card:
       type: custom:button-card
-      entity: button.brewassistant_mash_in_complete
-      name: Mash-in startad · vänta på BF FORTSÄTT
+      entity: button.brewassistant_mash_in_started
+      name: MASH-IN STARTED
       icon: mdi:barley
       show_state: false
       show_label: true
@@ -16,22 +16,22 @@ cards:
         action: perform-action
         perform_action: button.press
         target:
-          entity_id: button.brewassistant_mash_in_complete
+          entity_id: button.brewassistant_mash_in_started
         confirmation:
           text: >-
-            Manuell fallback. I normalflödet trycker du FORTSÄTT i Brewfather
-            när mash-in är klar. BA känner då BF Running och gör Mash-In Complete
-            automatiskt. Använd denna knapp bara om BF inte triggar.
+            Confirm that mash-in is actually starting now. BA will release the
+            strike target to the effective mash target and stop the pump while
+            grain is being added.
       hold_action:
         action: more-info
       label: |
         [[[
-          const pending = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-          const target = pending?.attributes?.last_target ?? '—';
-          const step = pending?.attributes?.last_step ?? 'Mash-in';
-          const button = states['button.brewassistant_mash_in_complete'];
-          const buttonState = button ? 'fallback ready' : 'button saknas';
-          return `${step} · target ${target} °C<br>Primärt: tryck FORTSÄTT i Brewfather. BA gör Mash-In Complete + pump/cirkulation automatiskt.<br>Manuell fallback: ${buttonState}`;
+          const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+          const target = gate?.attributes?.last_target ?? '—';
+          const temp = gate?.attributes?.current_temperature ?? gate?.attributes?.mash_in_gate_current_temperature ?? '—';
+          const button = states['button.brewassistant_mash_in_started'];
+          const buttonState = button ? 'button ready' : 'button missing';
+          return `Strike ready · target ${target} °C · process ${temp} °C<br>Press when mash-in actually starts. Pump should go OFF/0 and BA should enter mash_in_started.<br>${buttonState}`;
         ]]]
       styles:
         card:
@@ -61,8 +61,67 @@ cards:
           - opacity: 0.82
 
   - type: custom:button-card
+    entity: button.brewassistant_mash_in_complete
+    name: Mash-in active · BF CONTINUE
+    icon: mdi:barley
+    show_state: false
+    show_label: true
+    tap_action:
+      action: perform-action
+      perform_action: button.press
+      target:
+        entity_id: button.brewassistant_mash_in_complete
+      confirmation:
+        text: >-
+          Manual fallback. Normally press CONTINUE in Brewfather once mash-in
+          is complete. Use this button only if BF does not trigger Mash-In
+          Complete automatically.
+    hold_action:
+      action: more-info
+    label: |
+      [[[
+        const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+        const started = gate?.attributes?.started_at ?? '—';
+        const effective = gate?.attributes?.effective_target ?? '—';
+        const pump = states['switch.brewzilla_pump']?.state ?? '—';
+        const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
+        return `mash_in_started · effective target ${effective} °C · pump ${pump}/${util} %<br>Primary path: stir in the grain and then press CONTINUE in Brewfather. BA should start mash circulation.<br>Started: ${started}`;
+      ]]]
+    styles:
+      card:
+        - display: >
+            [[[
+              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+              return gate?.attributes?.state === 'mash_in_started' ? 'block' : 'none';
+            ]]]
+        - min-height: 88px
+        - padding: 12px
+        - border-radius: 16px
+        - background: rgba(255,193,7,.10)
+        - border: 1px solid rgba(255,193,7,.34)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 23px
+        - color: rgb(255,193,7)
+      name:
+        - justify-self: start
+        - font-size: 13px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 10.7px
+        - font-weight: 760
+        - line-height: 1.22
+        - opacity: 0.82
+
+  - type: custom:button-card
     entity: button.brewassistant_start_mash_circulation
-    name: Starta mäskcirkulation
+    name: Start mash circulation
     icon: mdi:pump
     show_state: false
     show_label: true
@@ -78,7 +137,7 @@ cards:
         const pump = states['switch.brewzilla_pump']?.state ?? '—';
         const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
         const button = states['button.brewassistant_start_mash_circulation'];
-        const buttonState = button ? 'button ready' : 'button saknas';
+        const buttonState = button ? 'button ready' : 'button missing';
         return `Pump ${pump} · utilization ${util} %<br>Only shown during active Mash after completed mash-in, when pump is OFF/0 · ${buttonState}`;
       ]]]
     styles:
