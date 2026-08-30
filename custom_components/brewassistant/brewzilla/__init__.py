@@ -25,6 +25,7 @@ from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_s
 from . import brewzilla_strike_ready_hold_guard as _strike_ready_hold_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
+from . import brewzilla_mash_in_ready_hold_guard as _mash_in_ready_hold_guard
 from . import brewzilla_mash_in_state_guard as _mash_in_state_guard
 from . import brewzilla_mash_in_target_patch as _mash_in_target_patch
 from . import brewzilla_manual_brew_control as _manual_brew_control
@@ -77,6 +78,9 @@ _heat_strike_near_target_safety_guard.install_heat_strike_near_target_safety_gua
 _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
+# Reaching strike temperature is only a READY gate. Keep the physical
+# Heatstrike controller holding target/circulation until Mash-In Started.
+_mash_in_ready_hold_guard.install_mash_in_ready_hold_guard()
 _mash_in_target_patch.install_mash_in_target_patch()
 _freshness_guard.install_freshness_guard()
 _runtime_safety.install_stale_safe_guard()
