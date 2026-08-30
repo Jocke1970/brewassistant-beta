@@ -1,0 +1,113 @@
+type: conditional
+conditions:
+  - entity: switch.brewzilla
+    state: "on"
+card:
+  type: custom:expander-card
+  title-card:
+    type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_learning_status
+    name: Batch Context
+    icon: mdi:beaker-outline
+    show_state: false
+    show_label: true
+    label: |
+      [[[
+        const s = states['sensor.brewassistant_brewzilla_learning_status'];
+        const a = s?.attributes ?? {};
+        const ctx = states['select.brewassistant_brewzilla_learning_context']?.state ?? 'Unknown';
+        const src = a.batch_context_source ?? 'ingen källa';
+        const vol = Number(a.mash_water_l);
+        const volText = Number.isFinite(vol) ? `${vol.toFixed(2)} L` : '—';
+        return `${ctx} · effektiv mäsk-/testvolym ${volText} · ${src}`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 12px
+        - background: rgba(33,150,243,.07)
+        - border: 1px solid rgba(33,150,243,.18)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 22px
+        - height: 22px
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 11.5px
+        - font-weight: 750
+        - opacity: 0.72
+  cards:
+    - type: markdown
+      content: >-
+        **Manuella värden har företräde framför Brewfather.** Ett tomt värde betyder
+        fallback till recept/BrewTracker. Vid `Water only` ska mäskvattenvolymen vara
+        den faktiska vattenmängden i BrewZilla som deltar i temperaturtestet.
+    - type: entities
+      show_header_toggle: false
+      entities:
+        - entity: select.brewassistant_brewzilla_learning_context
+          name: Learning-kontext
+        - entity: number.brewassistant_batch_context_mash_water_l
+          name: Mäsk-/testvatten
+        - entity: number.brewassistant_batch_context_strike_water_l
+          name: Strike water
+        - entity: number.brewassistant_batch_context_grain_amount_kg
+          name: Maltmängd
+        - entity: number.brewassistant_batch_context_grain_temperature_c
+          name: Malttemperatur
+        - entity: number.brewassistant_batch_context_sparge_water_l
+          name: Lakvatten
+        - entity: number.brewassistant_batch_context_pre_boil_volume_l
+          name: Pre-boil-volym
+    - type: custom:button-card
+      entity: sensor.brewassistant_brewzilla_learning_status
+      name: Effektiv kontext som backend använder
+      icon: mdi:database-check-outline
+      show_state: false
+      show_label: true
+      label: |
+        [[[
+          const a = states['sensor.brewassistant_brewzilla_learning_status']?.attributes ?? {};
+          const f = (v, unit = '') => {
+            const n = Number(v);
+            return Number.isFinite(n) ? `${n.toFixed(2)}${unit ? ' ' + unit : ''}` : '—';
+          };
+          const src = a.batch_context_source ?? '—';
+          const missing = Array.isArray(a.batch_context_missing) && a.batch_context_missing.length
+            ? a.batch_context_missing.join(', ')
+            : 'inga';
+          return `källa ${src}<br>mäsk/test ${f(a.mash_water_l, 'L')} · malt ${f(a.grain_amount_kg, 'kg')} · lak ${f(a.sparge_water_l, 'L')} · pre-boil ${f(a.pre_boil_volume_l, 'L')} · malt-temp ${f(a.grain_temperature_c, '°C')}<br>saknas: ${missing}`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 14px
+          - padding: 10px
+          - background: rgba(127,127,127,.055)
+          - border: 1px solid rgba(127,127,127,.14)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 32px minmax(0,1fr)
+          - column-gap: 9px
+        icon:
+          - width: 20px
+          - height: 20px
+        name:
+          - justify-self: start
+          - font-size: 12.5px
+          - font-weight: 900
+        label:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
+          - font-size: 11px
+          - line-height: 1.35
+          - opacity: 0.76
