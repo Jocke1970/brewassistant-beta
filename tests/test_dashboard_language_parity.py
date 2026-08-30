@@ -149,3 +149,12 @@ def test_brewzilla_direct_service_controls_are_idle_only() -> None:
         assert "brewassistant.apply_brewzilla_target" in source
         assert "brewassistant.abort_brewzilla" in source
         assert "BZ SAFE-DOWN" in source
+
+
+def test_hub_does_not_claim_unowned_power_sensor_is_brewzilla_watts() -> None:
+    """Hub status must use BrewZilla power/connection state, not an unrelated watt sensor."""
+    for filename in ("brewassistant_hub.yaml", "brewassistant_hub_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert "sensor.brewzilla_power" not in source
+        assert "switch.brewzilla" in source
+        assert "sensor.brewassistant_brewzilla_connection_state" in source
