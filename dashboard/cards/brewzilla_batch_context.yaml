@@ -1,0 +1,113 @@
+type: conditional
+conditions:
+  - entity: switch.brewzilla
+    state: "on"
+card:
+  type: custom:expander-card
+  title-card:
+    type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_learning_status
+    name: Batch Context
+    icon: mdi:beaker-outline
+    show_state: false
+    show_label: true
+    label: |
+      [[[
+        const s = states['sensor.brewassistant_brewzilla_learning_status'];
+        const a = s?.attributes ?? {};
+        const ctx = states['select.brewassistant_brewzilla_learning_context']?.state ?? 'Unknown';
+        const src = a.batch_context_source ?? 'no source';
+        const vol = Number(a.mash_water_l);
+        const volText = Number.isFinite(vol) ? `${vol.toFixed(2)} L` : '—';
+        return `${ctx} · effective mash/test volume ${volText} · ${src}`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 12px
+        - background: rgba(33,150,243,.07)
+        - border: 1px solid rgba(33,150,243,.18)
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0,1fr)
+        - column-gap: 10px
+      icon:
+        - width: 22px
+        - height: 22px
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 950
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 11.5px
+        - font-weight: 750
+        - opacity: 0.72
+  cards:
+    - type: markdown
+      content: >-
+        **Manual values take precedence over Brewfather.** A blank value means
+        fallback to recipe/BrewTracker. For `Water only`, mash-water volume should
+        be the actual water volume in BrewZilla participating in the thermal test.
+    - type: entities
+      show_header_toggle: false
+      entities:
+        - entity: select.brewassistant_brewzilla_learning_context
+          name: Learning context
+        - entity: number.brewassistant_batch_context_mash_water_l
+          name: Mash/test water
+        - entity: number.brewassistant_batch_context_strike_water_l
+          name: Strike water
+        - entity: number.brewassistant_batch_context_grain_amount_kg
+          name: Grain amount
+        - entity: number.brewassistant_batch_context_grain_temperature_c
+          name: Grain temperature
+        - entity: number.brewassistant_batch_context_sparge_water_l
+          name: Sparge water
+        - entity: number.brewassistant_batch_context_pre_boil_volume_l
+          name: Pre-boil volume
+    - type: custom:button-card
+      entity: sensor.brewassistant_brewzilla_learning_status
+      name: Effective context used by backend
+      icon: mdi:database-check-outline
+      show_state: false
+      show_label: true
+      label: |
+        [[[
+          const a = states['sensor.brewassistant_brewzilla_learning_status']?.attributes ?? {};
+          const f = (v, unit = '') => {
+            const n = Number(v);
+            return Number.isFinite(n) ? `${n.toFixed(2)}${unit ? ' ' + unit : ''}` : '—';
+          };
+          const src = a.batch_context_source ?? '—';
+          const missing = Array.isArray(a.batch_context_missing) && a.batch_context_missing.length
+            ? a.batch_context_missing.join(', ')
+            : 'none';
+          return `source ${src}<br>mash/test ${f(a.mash_water_l, 'L')} · grain ${f(a.grain_amount_kg, 'kg')} · sparge ${f(a.sparge_water_l, 'L')} · pre-boil ${f(a.pre_boil_volume_l, 'L')} · grain temp ${f(a.grain_temperature_c, '°C')}<br>missing: ${missing}`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 14px
+          - padding: 10px
+          - background: rgba(127,127,127,.055)
+          - border: 1px solid rgba(127,127,127,.14)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 32px minmax(0,1fr)
+          - column-gap: 9px
+        icon:
+          - width: 20px
+          - height: 20px
+        name:
+          - justify-self: start
+          - font-size: 12.5px
+          - font-weight: 900
+        label:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
+          - font-size: 11px
+          - line-height: 1.35
+          - opacity: 0.76
