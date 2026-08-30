@@ -23,3 +23,12 @@ from .brewday_audit_session_boundary import (  # noqa: E402
 )
 
 install_audit_session_boundary_guard()
+
+# Physical mash/ramp timing follows actual controller actuation rather than the
+# Brewfather source schedule. In particular, a Brewfather pause at mash
+# additions must not freeze an active Heatstrike ramp clock.
+from .brewday_physical_timing_phase_patch import (  # noqa: E402
+    install_physical_timing_phase_patch,
+)
+
+install_physical_timing_phase_patch()
