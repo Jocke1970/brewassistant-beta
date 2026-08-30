@@ -270,6 +270,9 @@ card:
         - condition: state
           entity: sensor.brewzilla_connection
           state: Connected
+        - condition: state
+          entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
       card:
         type: horizontal-stack
         cards:
@@ -488,17 +491,20 @@ card:
         - condition: state
           entity: sensor.brewzilla_connection
           state: Connected
+        - condition: state
+          entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
       card:
         type: horizontal-stack
         cards:
           - type: custom:button-card
-            name: APPLY TARGET
+            name: SERVICE TARGET SYNC
             icon: mdi:target-account
             tap_action:
               action: call-service
               service: brewassistant.apply_brewzilla_target
               confirmation:
-                text: Apply current Brewday Runtime target to BrewZilla?
+                text: Apply the current BrewAssistant target to BrewZilla? Use only without an active Brewday.
             styles:
               card:
                 - border-radius: 16px
@@ -509,13 +515,13 @@ card:
                 - font-size: 12px
                 - font-weight: 950
           - type: custom:button-card
-            name: ABORT
+            name: BZ SAFE-DOWN
             icon: mdi:alert-octagon-outline
             tap_action:
               action: call-service
               service: brewassistant.abort_brewzilla
               confirmation:
-                text: ABORT BrewZilla heater and pump outputs?
+                text: Run BZ SAFE-DOWN? This stops BrewZilla heater and pump outputs but is not the same as ABORT BREWDAY.
             styles:
               card:
                 - border-radius: 16px

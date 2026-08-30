@@ -132,3 +132,20 @@ def test_legacy_mash_circulation_fallback_is_tightly_scoped() -> None:
         assert "runtimeStage.includes('mash')" in source
         assert "const pumpStopped = !pumpOn && !Number.isNaN(util) && util <= 0.1;" in source
         assert "(!pending && completed && activeMash && pumpStopped)" in source
+
+
+def test_brewzilla_direct_service_controls_are_idle_only() -> None:
+    """Direct heater/pump/target/safe-down controls must not compete with active Brewday ownership."""
+    idle_guard = '''        - condition: state
+          entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
+'''
+
+    for filename in ("brewzilla.yaml", "brewzilla_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert source.count(idle_guard) >= 2
+        assert "switch.brewzilla_heater" in source
+        assert "switch.brewzilla_pump" in source
+        assert "brewassistant.apply_brewzilla_target" in source
+        assert "brewassistant.abort_brewzilla" in source
+        assert "BZ SAFE-DOWN" in source

@@ -158,6 +158,9 @@ card:
         - condition: state
           entity: sensor.brewzilla_connection
           state: Connected
+        - condition: state
+          entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
       card:
         type: horizontal-stack
         cards:
@@ -376,17 +379,20 @@ card:
         - condition: state
           entity: sensor.brewzilla_connection
           state: Connected
+        - condition: state
+          entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
       card:
         type: horizontal-stack
         cards:
           - type: custom:button-card
-            name: VERKSTÄLL MÅL
+            name: SERVICE · MÅLSYNK
             icon: mdi:target-account
             tap_action:
               action: call-service
               service: brewassistant.apply_brewzilla_target
               confirmation:
-                text: Verkställ nuvarande mål från Bryggdagsruntime på BrewZilla?
+                text: Verkställ nuvarande BrewAssistant-mål på BrewZilla? Använd endast utan aktiv bryggdag.
             styles: &bz_action
               card:
                 - border-radius: 16px
@@ -397,13 +403,13 @@ card:
                 - font-size: 12px
                 - font-weight: 950
           - type: custom:button-card
-            name: AVBRYT
+            name: BZ SAFE-DOWN
             icon: mdi:alert-octagon-outline
             tap_action:
               action: call-service
               service: brewassistant.abort_brewzilla
               confirmation:
-                text: AVBRYT BrewZillas värmar- och pumputgångar?
+                text: Kör BZ SAFE-DOWN? Detta stoppar BrewZillas värmare och pump men är inte samma sak som ABORT BRYGGDAG.
             styles: *bz_action
     - type: vertical-stack
       cards:
