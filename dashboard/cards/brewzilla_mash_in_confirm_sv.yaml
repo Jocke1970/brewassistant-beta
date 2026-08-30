@@ -79,7 +79,7 @@ cards:
         const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
         const button = states['button.brewassistant_start_mash_circulation'];
         const buttonState = button ? 'knapp redo' : 'knapp saknas';
-        return `Pump ${pump} · utnyttjande ${util} %<br>Visas bara efter inmäskning tills pumpen är igång · ${buttonState}`;
+        return `Pump ${pump} · utnyttjande ${util} %<br>Visas endast i aktiv Mash efter avslutad inmäskning, när pumpen är OFF/0 · ${buttonState}`;
       ]]]
     styles:
       card:
@@ -90,12 +90,17 @@ cards:
               const gateState = gate?.attributes?.state || '';
               const completed = gate?.attributes?.completed_once === true || gateState === 'mash_in_complete' || !!gate?.attributes?.confirmed_at;
 
+              const runtimeState = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
+              const runtimeStage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+              const activeMash = ['running','live','paused','awaiting_confirm','awaiting_snapshot'].includes(runtimeState)
+                && runtimeStage.includes('mash');
+
               const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
               const utilRaw = states['number.brewzilla_pump_utilization']?.state;
               const util = Number.parseFloat(utilRaw);
-              const circulationOn = pumpOn && !Number.isNaN(util) && util > 0;
+              const pumpStopped = !pumpOn && !Number.isNaN(util) && util <= 0.1;
 
-              return (!pending && completed && !circulationOn) ? 'block' : 'none';
+              return (!pending && completed && activeMash && pumpStopped) ? 'block' : 'none';
             ]]]
         - min-height: 72px
         - padding: 11px
