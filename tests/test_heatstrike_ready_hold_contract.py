@@ -38,6 +38,14 @@ def test_ready_gate_keeps_existing_heatstrike_target_and_heat_logic() -> None:
     assert "until Mash-In Started is pressed" in ready_body
 
 
+def test_ready_notification_describes_maintained_strike_hold() -> None:
+    source = TARGET_PATCH.read_text(encoding="utf-8")
+    assert "fortsätter hålla strike-temperaturen" in source
+    assert "cirkulationen tills du bekräftar" in source
+    assert "Då pausas pumpen och strike-target släpps" in source
+    assert "gate._create_ready_notification = _create_ready_notification" in source
+
+
 def test_mash_in_started_is_the_explicit_release_boundary() -> None:
     gate_source = MASH_IN_GATE.read_text(encoding="utf-8")
     started_body = gate_source.split("def _mash_in_started_hold_snapshot", 1)[1].split(
