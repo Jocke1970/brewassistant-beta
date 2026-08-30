@@ -27,11 +27,15 @@ _INSTALLED = False
 _ORIGINAL_WITH_ADVICE: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]] | None = None
 
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
+_READY_TOLERANCE_C = 0.3
 
-# Nominal heat profile from the operator-facing strike gate temperature.  This
-# answers the question: how far is the mash/BLE/control probe from strike?
+# Nominal heat profile from the operator-facing strike gate temperature.  The
+# readiness probe must actually enter the same +/-0.3 C target band used by the
+# physical timer before Heatstrike settles at zero heat.  The 10% final-low-hold
+# is retained outside that band so the water cannot park roughly 1 C below
+# strike after thermal momentum is exhausted.
 _GATE_HEAT_PROFILE: tuple[tuple[float, float, bool, str], ...] = (
-    (1.0, 0.0, False, "clean_gate_final_coast"),
+    (_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast"),
     (3.0, 10.0, True, "clean_gate_final_low_hold"),
     (5.0, 25.0, True, "clean_gate_capture"),
     (8.0, 50.0, True, "clean_gate_approach"),
@@ -40,11 +44,14 @@ _GATE_HEAT_PROFILE: tuple[tuple[float, float, bool, str], ...] = (
 _GATE_FAR_HEAT = 100.0
 _GATE_FAR_PHASE = "clean_gate_far_ramp"
 
-# Safety heat cap from the hottest kettle/wort/internal view.  This answers the
-# question: is the hot side already too close to strike to keep pushing heat?
+# Safety heat cap from the hottest kettle/wort/internal view.  At/over strike it
+# still wins immediately with heater OFF.  Inside the ready tolerance it also
+# coasts.  If the vessel then drifts below that band before Mash-In Started,
+# 10% heat becomes available again while the pump keeps equalizing the water.
 _SAFETY_HEAT_CAPS: tuple[tuple[float, float, bool, str], ...] = (
     (0.0, 0.0, False, "clean_safety_at_or_over_strike"),
-    (1.0, 0.0, False, "clean_safety_final_coast"),
+    (_READY_TOLERANCE_C, 0.0, False, "clean_safety_ready_coast"),
+    (1.0, 10.0, True, "clean_safety_final_low_hold"),
     (3.0, 10.0, True, "clean_safety_final_low_hold"),
     (5.0, 25.0, True, "clean_safety_capture_cap"),
     (8.0, 50.0, True, "clean_safety_approach_cap"),

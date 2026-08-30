@@ -4,8 +4,8 @@ This patch is intentionally small and late-bound. The original mash-in gate is
 kept as the owner of the two-button flow, while this module fixes the process
 logic around the gate:
 
-* ready for mash-in: keep the pump running/circulating until the operator
-  presses Mash-In Started
+* ready for mash-in: preserve the existing Heatstrike target/heat request and
+  keep the pump running/circulating until the operator presses Mash-In Started
 * after Mash-In Started: prefer the active mash step target from Brewfather
   (`target_temperature` / `tracker_target`) over any latched strike target
 * while mash-in is started and pump is paused: never apply anti-drop heat when
@@ -24,6 +24,7 @@ _INSTALLED = False
 _ORIGINAL_EFFECTIVE_TARGET = None
 _ORIGINAL_STARTED_HOLD = None
 _ORIGINAL_FORCE_PUMP_PAUSE = None
+_ORIGINAL_READY_NOTIFICATION = None
 _TARGET_TOLERANCE_C = 0.05
 READY_PUMP_UTILIZATION = 50.0
 
@@ -117,11 +118,16 @@ def _effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | N
 def _force_pump_run_until_mash_in_started(snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
     """Keep pump ON while strike temp is reached and BA waits for mash-in start.
 
-    The original gate paused the pump as soon as mash-in was ready. That made the
-    strike water stratify while waiting for the operator. Desired process:
+    This READY state deliberately inherits the Heatstrike target and heat request
+    from the incoming snapshot. It only keeps circulation alive while the brewer
+    may be delayed before actually starting mash-in.
 
-    * heat strike / ready_for_mash_in: pump ON, circulate normally
-    * Mash-In Started pressed: pump OFF while malt is added
+    Desired process:
+
+    * heat strike / ready_for_mash_in: strike target + Heatstrike heat logic stay
+      active; pump ON at a stable circulation level
+    * Mash-In Started pressed: pump OFF while malt is added and strike target is
+      released to the effective mash target
     * Mash-In Complete pressed: pump ON again
     """
     current_pump_utilization = _num(snapshot.get("pump_utilization"))
@@ -147,10 +153,36 @@ def _force_pump_run_until_mash_in_started(snapshot: dict[str, Any], store: dict[
         "orchestration_mode": "direct-control" if can_apply_gate else snapshot.get("orchestration_mode"),
         **gate._gate_fields(store, snapshot, pending=True),
         "control_reason": (
-            f"{reason}; mash-in ready gate active, pump remains ON/circulating until "
-            "Mash-In Started is pressed."
+            f"{reason}; mash-in ready gate active. Heatstrike target/heat remain authoritative and pump "
+            "remains ON/circulating until Mash-In Started is pressed."
         ),
     }
+
+
+async def _create_ready_notification(hass, snapshot: dict[str, Any]) -> None:
+    """Describe READY as a maintained Heatstrike hold, not a pump pause."""
+    temperature = gate._temperature_for_gate(snapshot)
+    target = gate._target_for_gate(snapshot)
+    effective, effective_source, next_target, next_source = gate._effective_mash_in_target(hass, snapshot)
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "notification_id": gate.NOTIFICATION_ID,
+            "title": "🍺 BrewAssistant: dags för mash-in",
+            "message": (
+                "Strike target är nådd. BrewAssistant fortsätter hålla strike-temperaturen och "
+                "cirkulationen tills du bekräftar att inmäskningen faktiskt börjar.\n\n"
+                f"Mäsktemperatur: {temperature} °C  \n"
+                f"Strike/current target: {target} °C  \n"
+                f"Nästa/effective target: {effective} °C ({effective_source}, next={next_target}, source={next_source})\n\n"
+                "Tryck **BrewAssistant Mash-In Started** när du börjar hälla i malten. "
+                "Då pausas pumpen och strike-target släpps till Mash-In-logikens effective target. "
+                "När malten är inrörd och bädden är redo: tryck **BrewAssistant Mash-In Complete**."
+            ),
+        },
+        blocking=False,
+    )
 
 
 def _mash_in_started_hold_snapshot(hass, snapshot: dict[str, Any], store: dict[str, Any]) -> dict[str, Any]:
@@ -212,14 +244,16 @@ def _mash_in_started_hold_snapshot(hass, snapshot: dict[str, Any], store: dict[s
 
 def install_mash_in_target_patch() -> None:
     """Install late-bound mash-in target/pump/heat corrections."""
-    global _INSTALLED, _ORIGINAL_EFFECTIVE_TARGET, _ORIGINAL_STARTED_HOLD, _ORIGINAL_FORCE_PUMP_PAUSE
+    global _INSTALLED, _ORIGINAL_EFFECTIVE_TARGET, _ORIGINAL_STARTED_HOLD, _ORIGINAL_FORCE_PUMP_PAUSE, _ORIGINAL_READY_NOTIFICATION
     if _INSTALLED:
         return
 
     _ORIGINAL_EFFECTIVE_TARGET = gate._effective_mash_in_target
     _ORIGINAL_STARTED_HOLD = gate._mash_in_started_hold_snapshot
     _ORIGINAL_FORCE_PUMP_PAUSE = gate._force_pump_pause
+    _ORIGINAL_READY_NOTIFICATION = gate._create_ready_notification
     gate._effective_mash_in_target = _effective_mash_in_target
     gate._mash_in_started_hold_snapshot = _mash_in_started_hold_snapshot
     gate._force_pump_pause = _force_pump_run_until_mash_in_started
+    gate._create_ready_notification = _create_ready_notification
     _INSTALLED = True

@@ -31,9 +31,22 @@ def test_mash_in_started_explicit_zero_bypasses_local_heat_preserve() -> None:
     assert 'return "mash_in_started_explicit_zero"' in source
 
 
-def test_clean_heatstrike_has_explicit_zero_heat_phases() -> None:
+def test_clean_heatstrike_zero_is_reserved_for_ready_band_or_over_target() -> None:
     source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
-    assert '(1.0, 0.0, False, "clean_gate_final_coast")' in source
+    assert '_READY_TOLERANCE_C = 0.3' in source
+    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast")' in source
     assert '(0.0, 0.0, False, "clean_safety_at_or_over_strike")' in source
-    assert '(1.0, 0.0, False, "clean_safety_final_coast")' in source
+    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_safety_ready_coast")' in source
+    assert '(1.0, 10.0, True, "clean_safety_final_low_hold")' in source
     assert '"heater_stop_needed": heater_stop_needed' in source
+
+
+def test_clean_heatstrike_can_reheat_after_ready_band_drift() -> None:
+    source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
+    # Outside +/-0.3 C, low heat becomes available again instead of parking the
+    # vessel at the old 1.0 C permanent-coast threshold.
+    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast")' in source
+    assert '(3.0, 10.0, True, "clean_gate_final_low_hold")' in source
+    assert '(1.0, 10.0, True, "clean_safety_final_low_hold")' in source
+    assert '(1.0, 0.0, False, "clean_gate_final_coast")' not in source
+    assert '(1.0, 0.0, False, "clean_safety_final_coast")' not in source
