@@ -21,7 +21,7 @@ BREWZILLA_BLE_TEMP_SENSOR = "sensor.brewzilla_ble_thermometer_temperature"
 BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR = "sensor.brewzilla_control_device_temperature"
 
 BREWDAY_RUNTIME_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
-BREWDAY_RUNTIME_STAGE_SENSOR = "sensor.brewassistant_brewday_stage"
+BREWDAY_RUNTIME_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
 BREWDAY_RUNTIME_STEP_SENSOR = "sensor.brewassistant_brewday_runtime_step"
 
 MAX_EXTERNAL_MASH_TEMPERATURE_AGE_SECONDS = 180
