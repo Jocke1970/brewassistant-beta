@@ -7,7 +7,6 @@ cards:
     show_label: false
     triggers_update:
       - switch.brewzilla
-      - sensor.brewzilla_power
       - sensor.brewassistant_brewzilla_orchestration_mode
       - sensor.brewassistant_brewzilla_connection_state
       - sensor.brewassistant_brewzilla_wort_temperature
@@ -57,12 +56,11 @@ cards:
       head: |
         [[[ 
           const bzPower = states['switch.brewzilla']?.state ?? 'unknown';
-          const bzWatts = states['sensor.brewzilla_power']?.state ?? '—';
           const badgeBg = bzPower === 'on' ? 'rgba(76,175,80,.13)' : 'rgba(127,127,127,.10)';
           const badgeBorder = bzPower === 'on' ? 'rgba(76,175,80,.28)' : 'rgba(127,127,127,.18)';
           const badgeIcon = bzPower === 'on' ? 'mdi:power-plug' : 'mdi:power-plug-off-outline';
           const powerLabel = bzPower === 'on' ? 'PÅ' : bzPower === 'off' ? 'AV' : String(bzPower).toUpperCase();
-          return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><div style="min-width:0;"><div style="font-size:20px; font-weight:950; line-height:1.05; letter-spacing:-.02em;">BrewAssistant Hub</div><div style="font-size:12px; font-weight:750; opacity:.68; margin-top:3px;">Styrpanel · kompakta moduler</div></div><div style="border-radius:999px;padding:6px 10px;border:1px solid ${badgeBorder};background:${badgeBg};display:flex;align-items:center;gap:6px;font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>BZ ${powerLabel} · ${bzWatts} W</div></div>`;
+          return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><div style="min-width:0;"><div style="font-size:20px; font-weight:950; line-height:1.05; letter-spacing:-.02em;">BrewAssistant Hub</div><div style="font-size:12px; font-weight:750; opacity:.68; margin-top:3px;">Styrpanel · kompakta moduler</div></div><div style="border-radius:999px;padding:6px 10px;border:1px solid ${badgeBorder};background:${badgeBg};display:flex;align-items:center;gap:6px;font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>BZ ${powerLabel}</div></div>`;
         ]]]
       summary: |
         [[[ 
@@ -131,10 +129,9 @@ cards:
           action: more-info
         label: |
           [[[ 
-            const power = states['sensor.brewzilla_power']?.state ?? '—';
             const conn = states['sensor.brewassistant_brewzilla_connection_state']?.state ?? '—';
             const state = entity.state === 'on' ? 'PÅ' : entity.state === 'off' ? 'AV' : 'OKÄND';
-            return `${state} · ${power} W<br>${conn} · BZ-korten följer strömmen`;
+            return `${state}<br>${conn} · BZ-korten följer strömmen`;
           ]]]
         styles: &hub_module_tile
           card:
