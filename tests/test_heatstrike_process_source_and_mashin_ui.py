@@ -29,6 +29,7 @@ def test_auto_process_source_is_latched_during_active_hot_side() -> None:
 def test_hot_side_source_lock_is_released_at_boil_or_later() -> None:
     source = TEMPERATURE.read_text(encoding="utf-8")
 
+    assert 'BREWDAY_RUNTIME_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"' in source
     assert '_RELEASE_STAGE_WORDS = ("boil", "kok", "chill", "kyl", "transfer", "cleanup", "rengör")' in source
     assert 'if "pre-boil" in combined or "pre boil" in combined or "förkok" in combined:' in source
     assert 'return not any(word in combined for word in _RELEASE_STAGE_WORDS)' in source
