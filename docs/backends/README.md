@@ -1,7 +1,7 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-07-04
+Last synced: 2026-08-31
 
 This folder documents the purpose, ownership and control logic of BrewAssistant backend modules.
 
@@ -27,6 +27,7 @@ What should not be changed casually?
 | --- | --- | --- |
 | BrewZilla control and Brewday Advice | Active test baseline | [`brewzilla-backend.md`](./brewzilla-backend.md) |
 | BrewZilla control profile details | Active test notes | [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md) |
+| Cooling / CFC / immersion / manual cooling | Architecture fixed, implementation pending | [`cooling-backend.md`](./cooling-backend.md) |
 | Brewday Runtime resolver | TODO | `brewday-runtime.md` |
 | Brewday Event Log | TODO | `event-log.md` |
 | Fermentation control | TODO | `fermentation.md` |
