@@ -127,6 +127,101 @@ card:
               - white-space: normal
 
     - type: custom:button-card
+      entity: button.brewassistant_mash_in_override
+      name: Strike-beredskap
+      icon: mdi:cloud-alert
+      show_state: false
+      show_label: true
+      triggers_update:
+        - button.brewassistant_mash_in_override
+        - button.brewassistant_mash_in_started
+        - sensor.brewassistant_brewzilla_control_reason
+      label: |
+        [[[
+          const a = entity?.attributes || {};
+          const fresh = a.mash_in_override_process_temperature_fresh === true;
+          const available = a.mash_in_override_available === true;
+          const warning = a.mash_in_override_warning_required === true;
+          const process = Number(a.mash_in_override_process_temperature);
+          const age = Number(a.mash_in_override_process_temperature_age_seconds);
+          const wort = Number(a.mash_in_override_wort_temperature);
+          const target = Number(a.mash_in_override_local_target);
+          const autoTol = Number(a.mash_in_auto_ready_tolerance_c);
+          const manualTol = Number(a.mash_in_override_tolerance_c);
+          const source = a.mash_in_override_process_source || 'MASH/process';
+          const ftemp = (v) => Number.isFinite(v) ? `${v.toFixed(1)} °C` : '—';
+          const ageText = Number.isFinite(age) ? `${Math.floor(age / 60)}m ${Math.round(age % 60)}s` : 'okänd ålder';
+          if (!fresh) {
+            const status = warning
+              ? '<b>☁️ MASH-data är stale — manuell strike-kvittens är tillgänglig.</b>'
+              : '<b>☁️ MASH-data är stale — BrewZilla reglerar lokalt.</b>';
+            return `${status}<br>${source}: ${ftemp(process)} · ${ageText} gammal · WORT ${ftemp(wort)} · lokalt target ${ftemp(target)}.<br>Verifiera temperaturen fysiskt på BrewZilla/termometern. Auto ±${Number.isFinite(autoTol) ? autoTol.toFixed(1) : '1.0'} °C · manuell max ±${Number.isFinite(manualTol) ? manualTol.toFixed(1) : '2.0'} °C.`;
+          }
+          if (available) {
+            return `<b>Strike är nära, men utanför auto-bandet.</b><br>MASH ${ftemp(process)} · WORT ${ftemp(wort)} · lokalt target ${ftemp(target)}.<br>Auto ±${Number.isFinite(autoTol) ? autoTol.toFixed(1) : '1.0'} °C · manuell max ±${Number.isFinite(manualTol) ? manualTol.toFixed(1) : '2.0'} °C.`;
+          }
+          return '';
+        ]]]
+      styles:
+        card:
+          - display: |
+              [[[
+                const a = entity?.attributes || {};
+                const inScope = a.mash_in_override_in_scope === true;
+                const available = a.mash_in_override_available === true;
+                const fresh = a.mash_in_override_process_temperature_fresh === true;
+                return inScope && (available || !fresh) ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 11px
+          - background: rgba(255,152,0,.10)
+          - border: 1px solid rgba(255,152,0,.30)
+        icon:
+          - color: rgb(255,152,0)
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 11px
+          - font-weight: 800
+
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_override
+      name: GODKÄNN STRIKE MANUELLT
+      icon: mdi:hand-okay
+      show_state: false
+      show_label: true
+      label: Manuell reservväg · kvitterar endast READY-gaten
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_override
+        confirmation:
+          text: >-
+            Kontrollera strike-temperaturen fysiskt på BrewZilla/termometern innan
+            du fortsätter. Den här knappen kvitterar bara Mash-In READY; den ändrar
+            inte heat, pump eller target. Fortsätt därefter med INMÄSKNING PÅBÖRJAD.
+      styles:
+        card:
+          - display: |
+              [[[
+                return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none';
+              ]]]
+          - border-radius: 16px
+          - padding: 10px
+          - background: rgba(255,152,0,.16)
+          - border: 1px solid rgba(255,152,0,.42)
+        name:
+          - font-size: 11px
+          - font-weight: 950
+        label:
+          - white-space: normal
+          - font-size: 10.5px
+          - font-weight: 760
+          - opacity: 0.76
+
+    - type: custom:button-card
       entity: button.brewassistant_mash_in_started
       show_name: false
       show_icon: true
