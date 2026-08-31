@@ -28,34 +28,40 @@ _ORIGINAL_WITH_ADVICE: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]]
 
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 _READY_TOLERANCE_C = 0.3
+_SAFETY_OVERSHOOT_STOP_C = 0.5
 
-# Nominal heat profile from the operator-facing strike gate temperature.  The
-# readiness probe must actually enter the same +/-0.3 C target band used by the
-# physical timer before Heatstrike settles at zero heat.  The 10% final-low-hold
-# is retained outside that band so the water cannot park roughly 1 C below
-# strike after thermal momentum is exhausted.
+# Nominal demand from the operator-facing mash/BLE strike temperature.  Keep a
+# real positive utilization floor all the way through READY because BrewZilla's
+# own local thermostat still owns element cycling against the written target.
+# BA therefore limits available power; it must not disable the local thermostat
+# merely because the internal/wort view has reached target first.  This avoids a
+# dead zone where mash/BLE remains several degrees low while BA has removed the
+# only source of new energy.
 _GATE_HEAT_PROFILE: tuple[tuple[float, float, bool, str], ...] = (
-    (_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast"),
-    (3.0, 10.0, True, "clean_gate_final_low_hold"),
-    (5.0, 25.0, True, "clean_gate_capture"),
-    (8.0, 50.0, True, "clean_gate_approach"),
-    (10.0, 75.0, True, "clean_gate_late_ramp"),
+    (_READY_TOLERANCE_C, 25.0, True, "clean_gate_ready_local_hold"),
+    (1.0, 25.0, True, "clean_gate_final_trim"),
+    (3.0, 25.0, True, "clean_gate_final_approach"),
+    (5.0, 50.0, True, "clean_gate_capture"),
+    (8.0, 75.0, True, "clean_gate_approach"),
+    (10.0, 100.0, True, "clean_gate_late_ramp"),
 )
 _GATE_FAR_HEAT = 100.0
 _GATE_FAR_PHASE = "clean_gate_far_ramp"
 
-# Safety heat cap from the hottest kettle/wort/internal view.  At/over strike it
-# still wins immediately with heater OFF.  Inside the ready tolerance it also
-# coasts.  If the vessel then drifts below that band before Mash-In Started,
-# 10% heat becomes available again while the pump keeps equalizing the water.
+# Safety cap from the hottest kettle/wort/internal view.  Near the written
+# target BA keeps the BrewZilla heater master enabled and only limits available
+# power, letting BrewZilla's local thermostat decide whether the element should
+# actually fire.  BA sends an explicit 0%/heater-OFF only after a real hottest-
+# view overshoot (> target + 0.5 C), or when a separate hard safety/ABORT path
+# requests safe-down.
 _SAFETY_HEAT_CAPS: tuple[tuple[float, float, bool, str], ...] = (
-    (0.0, 0.0, False, "clean_safety_at_or_over_strike"),
-    (_READY_TOLERANCE_C, 0.0, False, "clean_safety_ready_coast"),
-    (1.0, 10.0, True, "clean_safety_final_low_hold"),
-    (3.0, 10.0, True, "clean_safety_final_low_hold"),
-    (5.0, 25.0, True, "clean_safety_capture_cap"),
-    (8.0, 50.0, True, "clean_safety_approach_cap"),
-    (10.0, 75.0, True, "clean_safety_late_ramp_cap"),
+    (-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop"),
+    (_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold"),
+    (1.0, 25.0, True, "clean_safety_final_trim_cap"),
+    (3.0, 50.0, True, "clean_safety_final_approach_cap"),
+    (5.0, 75.0, True, "clean_safety_capture_cap"),
+    (8.0, 100.0, True, "clean_safety_approach_cap"),
+    (10.0, 100.0, True, "clean_safety_late_ramp_cap"),
 )
 _SAFETY_FAR_CAP = 100.0
 _SAFETY_FAR_PHASE = "clean_safety_far_no_cap"
@@ -242,7 +248,8 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
         safety_cap, safety_heater_on, safety_phase = 100.0, True, "clean_safety_unknown_no_cap"
 
     clean_heat = min(float(gate_heat), float(safety_cap))
-    # If the safety view says heater off, it wins over the readiness gate.
+    # The hottest-view cap may still force a real safety stop after overshoot;
+    # otherwise BrewZilla remains locally enabled and regulates its own target.
     clean_heater_on = bool(gate_heater_on and safety_heater_on and clean_heat > advice_control.base.UTILIZATION_TOLERANCE)
     clean_phase = gate_phase if clean_heat == float(gate_heat) else safety_phase
 
