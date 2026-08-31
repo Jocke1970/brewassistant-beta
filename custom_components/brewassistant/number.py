@@ -19,6 +19,7 @@ from .carbonation_backend.carbonation_runtime import (
 from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .cooling.counterflow_chiller import async_set_counterflow_chiller, get_counterflow_chiller_snapshot
+from .cooling.cooling_runtime import get_cooling_runtime_settings, update_cooling_runtime_settings
 from .entity import BrewAssistantEntity
 
 
@@ -80,6 +81,31 @@ CFC_NUMBERS: dict[str, dict[str, Any]] = {
         "step": 5.0,
         "default": 100.0,
         "runtime_key": "pump_utilization",
+    },
+}
+
+COOLING_NUMBERS: dict[str, dict[str, Any]] = {
+    "cooling_target_temperature": {
+        "name": "BrewAssistant Cooling Target Temperature",
+        "object_id": "brewassistant_cooling_target_temperature",
+        "icon": "mdi:target",
+        "unit": "°C",
+        "min": 8.0,
+        "max": 30.0,
+        "step": 1.0,
+        "default": 18.0,
+        "runtime_key": "target_temperature",
+    },
+    "cooling_manual_temperature": {
+        "name": "BrewAssistant Cooling Manual Temperature",
+        "object_id": "brewassistant_cooling_manual_temperature",
+        "icon": "mdi:thermometer-edit",
+        "unit": "°C",
+        "min": -5.0,
+        "max": 110.0,
+        "step": 0.5,
+        "default": 20.0,
+        "runtime_key": "manual_temperature",
     },
 }
 
@@ -210,27 +236,67 @@ async def async_setup_entry(
     """Set up BrewAssistant number controls."""
     coordinator: BrewAssistantCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        [
-            BrewAssistantCarbonationNumber(coordinator, key, config)
-            for key, config in CARBONATION_NUMBERS.items()
-        ]
-        + [
-            BrewAssistantCounterflowChillerNumber(coordinator, key, config)
-            for key, config in CFC_NUMBERS.items()
-        ]
-        + [
-            BrewAssistantKegeratorFanNumber(coordinator, key, config)
-            for key, config in KEGERATOR_FAN_NUMBERS.items()
-        ]
-        + [
-            BrewAssistantManualBrewZillaNumber(coordinator, key, config)
-            for key, config in MANUAL_BREWZILLA_NUMBERS.items()
-        ]
-        + [
-            BrewAssistantBatchContextNumber(coordinator, key, config)
-            for key, config in BATCH_CONTEXT_NUMBERS.items()
-        ]
+        [BrewAssistantCarbonationNumber(coordinator, key, config) for key, config in CARBONATION_NUMBERS.items()]
+        + [BrewAssistantCounterflowChillerNumber(coordinator, key, config) for key, config in CFC_NUMBERS.items()]
+        + [BrewAssistantCoolingNumber(coordinator, key, config) for key, config in COOLING_NUMBERS.items()]
+        + [BrewAssistantKegeratorFanNumber(coordinator, key, config) for key, config in KEGERATOR_FAN_NUMBERS.items()]
+        + [BrewAssistantManualBrewZillaNumber(coordinator, key, config) for key, config in MANUAL_BREWZILLA_NUMBERS.items()]
+        + [BrewAssistantBatchContextNumber(coordinator, key, config) for key, config in BATCH_CONTEXT_NUMBERS.items()]
     )
+
+
+class BrewAssistantCoolingNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
+    """Python-owned Cooling Runtime v2 number control."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str, config: dict[str, Any]) -> None:
+        super().__init__(coordinator, key)
+        self._config = config
+        self._attr_unique_id = f"{DOMAIN}_number_{key}"
+        self._attr_name = str(config["name"])
+        self._attr_suggested_object_id = str(config["object_id"])
+        self.entity_id = f"number.{self._config['object_id']}"
+        self._attr_icon = str(config["icon"])
+        self._attr_native_unit_of_measurement = str(config["unit"])
+        self._attr_native_min_value = float(config["min"])
+        self._attr_native_max_value = float(config["max"])
+        self._attr_native_step = float(config["step"])
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state not in {"unknown", "unavailable", "none", ""}:
+            try:
+                update_cooling_runtime_settings(
+                    self.coordinator.hass,
+                    {str(self._config["runtime_key"]): float(last_state.state)},
+                )
+            except (TypeError, ValueError):
+                pass
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        settings = get_cooling_runtime_settings(self.coordinator.hass)
+        value = settings.get(str(self._config["runtime_key"]), self._config["default"])
+        return float(value)
+
+    async def async_set_native_value(self, value: float) -> None:
+        update_cooling_runtime_settings(
+            self.coordinator.hass,
+            {str(self._config["runtime_key"]): float(value)},
+        )
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "source": "cooling_runtime_v2",
+            "runtime_key": self._config["runtime_key"],
+            "default": self._config["default"],
+        }
 
 
 class BrewAssistantManualBrewZillaNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
@@ -255,11 +321,7 @@ class BrewAssistantManualBrewZillaNumber(BrewAssistantEntity, RestoreEntity, Num
     def _ensure_stable_entity_id(self) -> None:
         desired_entity_id = f"number.{self._config['object_id']}"
         registry = er.async_get(self.coordinator.hass)
-        current_entity_id = registry.async_get_entity_id(
-            "number",
-            DOMAIN,
-            str(self._attr_unique_id),
-        )
+        current_entity_id = registry.async_get_entity_id("number", DOMAIN, str(self._attr_unique_id))
         if current_entity_id is None or current_entity_id == desired_entity_id:
             return
         existing = registry.async_get(desired_entity_id)
@@ -289,7 +351,6 @@ class BrewAssistantManualBrewZillaNumber(BrewAssistantEntity, RestoreEntity, Num
             return None
 
     async def async_added_to_hass(self) -> None:
-        """Restore operator intent; initialize safely from current device readback."""
         await super().async_added_to_hass()
         self._ensure_stable_entity_id()
         last_state = await self.async_get_last_state()
@@ -307,18 +368,15 @@ class BrewAssistantManualBrewZillaNumber(BrewAssistantEntity, RestoreEntity, Num
 
     @property
     def native_value(self) -> float | None:
-        """Return persistent operator setpoint, never device readback."""
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set operator intent and immediately ask orchestration to reconcile it."""
         self._value = self._normalize(value)
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return command/readback separation diagnostics."""
         return {
             "source": "manual_brew_operator_setpoint",
             "device_readback_entity": self._config["device_entity"],
@@ -348,27 +406,14 @@ class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, Number
         self._attr_native_step = float(config["step"])
 
     def _ensure_stable_entity_id(self) -> None:
-        """Rename registry entry to the stable BrewAssistant entity ID.
-
-        Home Assistant may derive entity IDs from the device/config entry name.
-        Batch context controls are operator-facing BrewAssistant controls and
-        should keep stable repo-defined entity IDs.
-        """
         desired_entity_id = f"number.{self._config['object_id']}"
         registry = er.async_get(self.coordinator.hass)
-        current_entity_id = registry.async_get_entity_id(
-            "number",
-            DOMAIN,
-            str(self._attr_unique_id),
-        )
-
+        current_entity_id = registry.async_get_entity_id("number", DOMAIN, str(self._attr_unique_id))
         if current_entity_id is None or current_entity_id == desired_entity_id:
             return
-
         existing = registry.async_get(desired_entity_id)
         if existing is not None and existing.unique_id != self._attr_unique_id:
             return
-
         try:
             registry.async_update_entity(current_entity_id, new_entity_id=desired_entity_id)
             self.entity_id = desired_entity_id
@@ -376,7 +421,6 @@ class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, Number
             return
 
     async def async_added_to_hass(self) -> None:
-        """Restore number value after restart."""
         await super().async_added_to_hass()
         self._ensure_stable_entity_id()
         last_state = await self.async_get_last_state()
@@ -389,17 +433,14 @@ class BrewAssistantBatchContextNumber(BrewAssistantEntity, RestoreEntity, Number
 
     @property
     def native_value(self) -> float | None:
-        """Return current manual batch context value."""
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set current manual batch context value."""
         self._value = max(float(self._config["min"]), min(float(value), float(self._config["max"])))
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return diagnostics."""
         return {
             "source": "manual_batch_context",
             "source_key": self._config["source_key"],
@@ -426,7 +467,6 @@ class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, Number
         self._attr_native_step = float(config["step"])
 
     async def async_added_to_hass(self) -> None:
-        """Restore number value after restart."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is None:
@@ -438,21 +478,15 @@ class BrewAssistantKegeratorFanNumber(BrewAssistantEntity, RestoreEntity, Number
 
     @property
     def native_value(self) -> float | None:
-        """Return current value."""
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set current value."""
         self._value = max(float(self._config["min"]), min(float(value), float(self._config["max"])))
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return diagnostic attributes."""
-        return {
-            "source": "kegerator_fan_simple_control",
-            "default": self._config.get("default"),
-        }
+        return {"source": "kegerator_fan_simple_control", "default": self._config.get("default")}
 
 
 class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
@@ -473,7 +507,6 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
         self._attr_native_step = float(config["step"])
 
     async def async_added_to_hass(self) -> None:
-        """Restore the number value into the runtime."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is None:
@@ -487,7 +520,6 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
 
     @property
     def native_value(self) -> float | None:
-        """Return current value with a UI-friendly fallback."""
         runtime = get_carbonation_runtime(self.coordinator.hass)
         value = getattr(runtime, str(self._config["runtime_key"]), None)
         if value is not None:
@@ -495,14 +527,12 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
         return float(self._config.get("default", self._config["min"]))
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set current value."""
         update_carbonation_runtime(self.coordinator.hass, {str(self._config["runtime_key"]): float(value)})
         await async_save_carbonation_runtime(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return diagnostic attributes."""
         return {
             "source": "python_runtime_control",
             "runtime_key": self._config["runtime_key"],
@@ -511,7 +541,7 @@ class BrewAssistantCarbonationNumber(BrewAssistantEntity, RestoreEntity, NumberE
 
 
 class BrewAssistantCounterflowChillerNumber(BrewAssistantEntity, RestoreEntity, NumberEntity):
-    """Python-owned Counter Flow Chiller number control."""
+    """Python-owned legacy Counter Flow Chiller number control."""
 
     _attr_has_entity_name = True
 
@@ -528,7 +558,6 @@ class BrewAssistantCounterflowChillerNumber(BrewAssistantEntity, RestoreEntity, 
         self._attr_native_step = float(config["step"])
 
     async def async_added_to_hass(self) -> None:
-        """Restore the number value into the CFC backend."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is None:
@@ -537,14 +566,10 @@ class BrewAssistantCounterflowChillerNumber(BrewAssistantEntity, RestoreEntity, 
             value = float(last_state.state)
         except (TypeError, ValueError):
             return
-        await async_set_counterflow_chiller(
-            self.coordinator.hass,
-            {str(self._config["runtime_key"]): value},
-        )
+        await async_set_counterflow_chiller(self.coordinator.hass, {str(self._config["runtime_key"]): value})
 
     @property
     def native_value(self) -> float | None:
-        """Return current value."""
         snapshot = get_counterflow_chiller_snapshot(self.coordinator.hass)
         value = snapshot.get(str(self._config["runtime_key"]))
         if value is not None:
@@ -552,16 +577,11 @@ class BrewAssistantCounterflowChillerNumber(BrewAssistantEntity, RestoreEntity, 
         return float(self._config.get("default", self._config["min"]))
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set current value."""
-        await async_set_counterflow_chiller(
-            self.coordinator.hass,
-            {str(self._config["runtime_key"]): float(value)},
-        )
+        await async_set_counterflow_chiller(self.coordinator.hass, {str(self._config["runtime_key"]): float(value)})
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return diagnostic attributes."""
         return {
             **get_counterflow_chiller_snapshot(self.coordinator.hass),
             "source": "python_runtime_control",
