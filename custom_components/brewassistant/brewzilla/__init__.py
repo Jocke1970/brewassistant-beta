@@ -53,6 +53,21 @@ def _fresh_entity_age_seconds(entity_state: State | None) -> int | None:
 
 _orchestration._entity_age_seconds = _fresh_entity_age_seconds
 _learning._age_seconds = _fresh_entity_age_seconds
+
+# sensor.brewzilla_power is not a verified BrewZilla entity in this installation
+# and must never participate in control freshness/RCL recovery. The canonical BA
+# power entity now intentionally resolves unavailable until a real BrewZilla
+# power source is configured.
+_orchestration.BREWZILLA_POWER_SENSOR = "sensor.brewassistant_brewzilla_power"
+_orchestration.LOCAL_LIVE_ENTITY_IDS = ()
+_orchestration.RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS = (
+    _orchestration.RAPT_CONTROL_ENTITY_IDS + _orchestration.RAPT_CONFIG_ENTITY_IDS
+)
+_orchestration.RAPT_BREWZILLA_ENTITY_IDS = (
+    _orchestration.RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS
+    + _orchestration.RAPT_BREWZILLA_STATIC_ENTITY_IDS
+)
+
 _temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
