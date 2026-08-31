@@ -27,7 +27,6 @@ MAX_AUTO_PROCESS_AGE_SECONDS = 90
 
 _INSTALLED = False
 _ORIGINAL_AUGMENT: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]] | None = None
-_ORIGINAL_BUILD_GATE_SNAPSHOT: Callable[[HomeAssistant], dict[str, Any]] | None = None
 
 
 def _num(value: Any) -> float | None:
@@ -71,12 +70,44 @@ def _automatic_ready(snapshot: dict[str, Any]) -> bool:
     return abs(process - target) <= AUTO_READY_TOLERANCE_C
 
 
+def _locked_external_candidate(resolved: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the latched external candidate even when it is stale.
+
+    This is diagnostics only. A stale candidate must never become automatic
+    Mash-In readiness input, but keeping its last value/age makes the operator
+    UI useful during RAPT Cloud gaps.
+    """
+    lock_entity = resolved.get("mash_temperature_source_lock_entity")
+    candidates = resolved.get("external_temperature_candidates")
+    if not lock_entity or not isinstance(candidates, dict):
+        return None
+    for candidate in candidates.values():
+        if isinstance(candidate, dict) and candidate.get("entity_id") == lock_entity:
+            return candidate
+    return None
+
+
 def _resolved_process(hass: HomeAssistant) -> dict[str, Any]:
     resolved = temperature.brewzilla_temperature_snapshot(hass)
+    locked = _locked_external_candidate(resolved)
+
     value = _num(resolved.get("mash_temperature"))
     age = _num(resolved.get("mash_temperature_age_seconds"))
-    degraded = resolved.get("mash_temperature_source_lock_degraded_reason")
+    source = resolved.get("mash_temperature_source")
+    entity = resolved.get("mash_temperature_entity")
     external = bool(resolved.get("mash_temperature_external_mash_candidate"))
+
+    # The fail-passive ownership wrapper intentionally returns no active process
+    # source while the cloud value is degraded. Retain the latched candidate only
+    # as stale diagnostics so the UI can show last value + age to the operator.
+    if locked is not None and (value is None or age is None or not external):
+        value = _num(locked.get("value"))
+        age = _num(locked.get("age_seconds"))
+        source = locked.get("source") or source
+        entity = locked.get("entity_id") or entity
+        external = bool(locked.get("external_mash_candidate", True))
+
+    degraded = resolved.get("mash_temperature_source_lock_degraded_reason")
     owned = bool(resolved.get("hot_side_process_sensor_owned"))
     fresh = bool(
         value is not None
@@ -87,8 +118,8 @@ def _resolved_process(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "value": value,
         "age_seconds": age,
-        "source": resolved.get("mash_temperature_source"),
-        "entity": resolved.get("mash_temperature_entity"),
+        "source": source,
+        "entity": entity,
         "fresh": fresh,
         "degraded_reason": degraded,
         "owned": owned,
@@ -157,6 +188,7 @@ def _manual_override_diagnostics(
     return {
         "mash_in_auto_ready_tolerance_c": AUTO_READY_TOLERANCE_C,
         "mash_in_override_tolerance_c": MANUAL_OVERRIDE_TOLERANCE_C,
+        "mash_in_override_in_scope": in_scope,
         "mash_in_override_available": available,
         "mash_in_override_reason": reason,
         "mash_in_override_warning_required": bool(available and stale_local_near),
@@ -263,12 +295,11 @@ async def async_override_mash_in_ready(hass: HomeAssistant) -> dict[str, Any]:
 
 def install_mash_in_readiness_contract() -> None:
     """Make realistic readiness tolerance + explicit override authoritative."""
-    global _INSTALLED, _ORIGINAL_AUGMENT, _ORIGINAL_BUILD_GATE_SNAPSHOT
+    global _INSTALLED, _ORIGINAL_AUGMENT
     if _INSTALLED:
         return
 
     _ORIGINAL_AUGMENT = gate._augment_snapshot
-    _ORIGINAL_BUILD_GATE_SNAPSHOT = gate.build_mash_in_gate_snapshot
 
     gate.READY_TOLERANCE_C = AUTO_READY_TOLERANCE_C
     gate._temperature_for_gate = _canonical_process_temperature
