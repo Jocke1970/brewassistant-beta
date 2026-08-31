@@ -1,0 +1,232 @@
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_brewday
+    state: "on"
+  - entity: sensor.brewassistant_brewday_runtime_state
+    state_not: "idle"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:expander-card
+      title-card:
+        type: custom:button-card
+        entity: sensor.brewassistant_brewday_physical_timing_summary
+        name: Fysisk stegtid
+        icon: mdi:timer-outline
+        show_state: false
+        show_label: true
+        triggers_update:
+          - sensor.brewassistant_brewday_physical_timing_summary
+          - sensor.brewassistant_brewday_physical_timing_mode
+          - sensor.brewassistant_brewday_physical_elapsed_seconds
+          - sensor.brewassistant_brewday_physical_remaining_seconds
+          - sensor.brewassistant_brewday_physical_progress
+          - sensor.brewassistant_brewday_physical_ramp_rate
+          - sensor.brewassistant_brewday_physical_target_temperature
+        label: |
+          [[[
+            const a = entity?.attributes || {};
+            const mode = String(states['sensor.brewassistant_brewday_physical_timing_mode']?.state ?? a.mode ?? 'idle');
+            const step = a.step_name || 'Ingen aktiv fysisk timer';
+            const target = Number(a.target_temperature);
+            const elapsed = Number(states['sensor.brewassistant_brewday_physical_elapsed_seconds']?.state ?? a.elapsed_seconds);
+            const remaining = Number(states['sensor.brewassistant_brewday_physical_remaining_seconds']?.state ?? a.remaining_seconds);
+            const mismatch = a.source_schedule_mismatch === true;
+            const fmt = (s) => {
+              if (!Number.isFinite(s)) return '—';
+              s = Math.max(0, Math.round(s));
+              const m = Math.floor(s / 60);
+              const sec = s % 60;
+              return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+            };
+            let clock = fmt(elapsed);
+            if (mode.startsWith('hold')) clock = `${fmt(remaining)} kvar`;
+            if (mode.startsWith('waiting_for_target')) clock = `väntar på ${Number.isFinite(target) ? target.toFixed(1) + ' °C' : 'target'}`;
+            return `${step} · ${clock}${mismatch ? ' · ⚠ BF före fysisk process' : ''}`;
+          ]]]
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 12px
+            - background: rgba(0,188,212,.075)
+            - border: 1px solid rgba(0,188,212,.20)
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 34px minmax(0,1fr)
+            - column-gap: 10px
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: rgb(0,188,212)
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 950
+          label:
+            - justify-self: start
+            - text-align: left
+            - white-space: normal
+            - font-size: 11.5px
+            - font-weight: 800
+            - opacity: 0.76
+      cards:
+        - type: custom:button-card
+          entity: sensor.brewassistant_brewday_physical_timing_summary
+          show_name: false
+          show_icon: false
+          show_state: false
+          show_label: true
+          label: |
+            [[[
+              const a = entity?.attributes || {};
+              const kind = String(a.step_kind ?? '—');
+              const step = a.step_name || '—';
+              const current = Number(a.current_temperature);
+              const target = Number(a.target_temperature);
+              const elapsed = Number(a.elapsed_seconds);
+              const remaining = Number(a.remaining_seconds);
+              const rate = Number(a.average_c_per_min);
+              const source = a.temperature_entity || '—';
+              const history = Array.isArray(a.history) ? a.history : [];
+              const fmt = (s) => {
+                if (!Number.isFinite(s)) return '—';
+                s = Math.max(0, Math.round(s));
+                const m = Math.floor(s / 60);
+                return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+              };
+              const ftemp = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
+              const clock = kind === 'hold' && a.timer_started_at
+                ? `${fmt(remaining)} kvar`
+                : kind === 'hold'
+                  ? `Väntar på target · ${ftemp(current)} → ${ftemp(target)}`
+                  : kind === 'ramp'
+                    ? `${fmt(elapsed)} · ${ftemp(current)} → ${ftemp(target)}${Number.isFinite(rate) ? ` · ${rate.toFixed(2)} °C/min` : ''}`
+                    : 'Ingen aktiv fysisk timer';
+              const rows = history.slice(-6).reverse().map((r) => {
+                const rk = String(r.kind || 'steg');
+                const dur = fmt(Number(r.duration_seconds));
+                const from = Number(r.from_temperature);
+                const to = Number(r.target_temperature);
+                const rr = Number(r.average_c_per_min);
+                const detail = rk === 'ramp'
+                  ? `${ftemp(from)} → ${ftemp(to)} · ${dur}${Number.isFinite(rr) ? ` · ${rr.toFixed(2)} °C/min` : ''}`
+                  : `${ftemp(to)} · hold ${dur}`;
+                return `<div style="display:grid;grid-template-columns:66px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid rgba(127,127,127,.10);"><b style="font-size:10px;text-transform:uppercase;opacity:.62;">${rk}</b><span style="font-size:11px;font-weight:800;">${r.name || '—'}<br><span style="opacity:.65;">${detail}</span></span></div>`;
+              }).join('');
+              return `<div style="line-height:1.3;min-width:0;"><div style="font-size:10px;font-weight:950;opacity:.58;text-transform:uppercase;">${kind} · ${a.context || 'Unknown'}</div><div style="font-size:20px;font-weight:950;margin-top:2px;">${step}</div><div style="margin-top:8px;font-size:24px;font-weight:950;text-align:center;">${clock}</div><div style="margin-top:7px;font-size:10.5px;font-weight:750;opacity:.62;text-align:center;">Processgivare: ${source} · target nådd ${a.target_reached_at || 'nej'} · paus ${fmt(Number(a.paused_seconds))}</div><div style="margin-top:10px;font-size:10px;font-weight:950;opacity:.58;text-transform:uppercase;">Steg- och ramphistorik</div>${rows || '<div style="padding:7px 0;font-size:11px;opacity:.60;">Ingen avslutad fysisk ramp/hold ännu.</div>'}</div>`;
+            ]]]
+          styles:
+            card:
+              - border-radius: 16px
+              - padding: 12px
+              - background: rgba(127,127,127,.035)
+              - border: 1px solid rgba(127,127,127,.12)
+            label:
+              - justify-self: stretch
+              - text-align: left
+              - white-space: normal
+
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_started
+      show_name: false
+      show_icon: true
+      icon: mdi:barley
+      show_state: false
+      show_label: true
+      triggers_update:
+        - button.brewassistant_mash_in_started
+        - button.brewassistant_mash_in_complete
+        - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
+        - sensor.brewassistant_brewzilla_control_reason
+      label: |
+        [[[
+          const start = states['button.brewassistant_mash_in_started'];
+          const complete = states['button.brewassistant_mash_in_complete'];
+          const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+          const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+          const a = start?.attributes || complete?.attributes || {};
+          const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || oz.mash_in_gate_state || 'idle');
+          const effective = a.mash_in_effective_target ?? a.effective_target ?? oz.mash_in_effective_target ?? '—';
+          if (state === 'ready_for_mash_in') return `<b>Strike redo · dags för inmäskning</b><br>Tryck INMÄSKNING PÅBÖRJAD när du börjar tillsätta malten.`;
+          if (state === 'mash_in_started') return `<b>Inmäskning startad · vänta på BF FORTSÄTT</b><br>Primärt: tryck FORTSÄTT i Brewfather. BA slutför inmäskningen och startar pump/cirkulation automatiskt.<br>Effektivt mäskmål ${effective} °C · manuell reservväg finns nedan.`;
+          return '';
+        ]]]
+      styles:
+        card:
+          - display: |
+              [[[
+                const start = states['button.brewassistant_mash_in_started'];
+                const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+                const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                const state = String(start?.attributes?.mash_in_gate_state || start?.attributes?.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || oz.mash_in_gate_state || 'idle');
+                return ['ready_for_mash_in','mash_in_started'].includes(state) ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 11px
+          - background: rgba(255,193,7,.10)
+          - border: 1px solid rgba(255,193,7,.30)
+        icon:
+          - color: rgb(255,193,7)
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 11px
+          - font-weight: 800
+
+    - type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          entity: button.brewassistant_mash_in_started
+          name: INMÄSKNING PÅBÖRJAD
+          icon: mdi:barley
+          tap_action:
+            action: call-service
+            service: button.press
+            target:
+              entity_id: button.brewassistant_mash_in_started
+            confirmation:
+              text: Börjar du mäska in nu? BA stoppar pumpen och släpper strike-target till mäskmålet.
+          styles:
+            card:
+              - display: |
+                  [[[
+                    const a = entity?.attributes || {};
+                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+                    const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || 'idle');
+                    return state === 'ready_for_mash_in' ? 'block' : 'none';
+                  ]]]
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(255,193,7,.14)
+              - border: 1px solid rgba(255,193,7,.32)
+            name:
+              - font-size: 11px
+              - font-weight: 950
+        - type: custom:button-card
+          entity: button.brewassistant_mash_in_complete
+          name: INMÄSKNING KLAR · RESERV
+          icon: mdi:pump
+          tap_action:
+            action: call-service
+            service: button.press
+            target:
+              entity_id: button.brewassistant_mash_in_complete
+            confirmation:
+              text: Manuell reservväg. Normalt används FORTSÄTT i Brewfather efter inmäskning.
+          styles:
+            card:
+              - display: |
+                  [[[
+                    const a = entity?.attributes || {};
+                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+                    const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || 'idle');
+                    return state === 'mash_in_started' ? 'block' : 'none';
+                  ]]]
+              - border-radius: 16px
+              - padding: 10px
+              - background: rgba(76,175,80,.12)
+              - border: 1px solid rgba(76,175,80,.28)
+            name:
+              - font-size: 11px
+              - font-weight: 950
