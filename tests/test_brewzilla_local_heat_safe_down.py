@@ -31,22 +31,24 @@ def test_mash_in_started_explicit_zero_bypasses_local_heat_preserve() -> None:
     assert 'return "mash_in_started_explicit_zero"' in source
 
 
-def test_clean_heatstrike_zero_is_reserved_for_ready_band_or_over_target() -> None:
+def test_clean_heatstrike_zero_is_reserved_for_real_overshoot() -> None:
     source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
     assert '_READY_TOLERANCE_C = 0.3' in source
-    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast")' in source
-    assert '(0.0, 0.0, False, "clean_safety_at_or_over_strike")' in source
-    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_safety_ready_coast")' in source
-    assert '(1.0, 10.0, True, "clean_safety_final_low_hold")' in source
+    assert '_SAFETY_OVERSHOOT_STOP_C = 0.5' in source
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_gate_ready_local_hold")' in source
+    assert '(-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop")' in source
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold")' in source
     assert '"heater_stop_needed": heater_stop_needed' in source
 
 
-def test_clean_heatstrike_can_reheat_after_ready_band_drift() -> None:
+def test_clean_heatstrike_keeps_positive_authority_through_final_approach() -> None:
     source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
-    # Outside +/-0.3 C, low heat becomes available again instead of parking the
-    # vessel at the old 1.0 C permanent-coast threshold.
-    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast")' in source
-    assert '(3.0, 10.0, True, "clean_gate_final_low_hold")' in source
-    assert '(1.0, 10.0, True, "clean_safety_final_low_hold")' in source
-    assert '(1.0, 0.0, False, "clean_gate_final_coast")' not in source
-    assert '(1.0, 0.0, False, "clean_safety_final_coast")' not in source
+    # The local BrewZilla thermostat remains enabled near target. BA limits the
+    # maximum utilization, while the device itself decides whether to energize
+    # the element against the written target.
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_gate_ready_local_hold")' in source
+    assert '(3.0, 25.0, True, "clean_gate_final_approach")' in source
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold")' in source
+    assert '(3.0, 50.0, True, "clean_safety_final_approach_cap")' in source
+    assert 'clean_gate_ready_coast' not in source
+    assert 'clean_safety_ready_coast' not in source

@@ -13,13 +13,29 @@ INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
 PHASE_AUTHORITY = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_phase_authority.py"
 
 
-def test_strike_ready_band_can_reheat_if_temperature_drifts_low() -> None:
+def test_strike_ready_band_keeps_local_regulation_enabled_until_mash_in() -> None:
     source = CLEAN.read_text(encoding="utf-8")
     assert '_READY_TOLERANCE_C = 0.3' in source
-    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_gate_ready_coast")' in source
-    assert '(3.0, 10.0, True, "clean_gate_final_low_hold")' in source
-    assert '(_READY_TOLERANCE_C, 0.0, False, "clean_safety_ready_coast")' in source
-    assert '(1.0, 10.0, True, "clean_safety_final_low_hold")' in source
+    assert '_SAFETY_OVERSHOOT_STOP_C = 0.5' in source
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_gate_ready_local_hold")' in source
+    assert '(3.0, 25.0, True, "clean_gate_final_approach")' in source
+    assert '(-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop")' in source
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold")' in source
+    assert '(3.0, 50.0, True, "clean_safety_final_approach_cap")' in source
+    assert 'clean_safety_ready_coast' not in source
+
+
+def test_final_approach_profile_has_no_zero_heat_dead_zone_below_overshoot() -> None:
+    source = CLEAN.read_text(encoding="utf-8")
+    gate = source.split("_GATE_HEAT_PROFILE", 1)[1].split("_GATE_FAR_HEAT", 1)[0]
+    safety = source.split("_SAFETY_HEAT_CAPS", 1)[1].split("_SAFETY_FAR_CAP", 1)[0]
+
+    # The 2026-08-31 water test deadlocked at MASH 69.6 / WORT 71.5 / target
+    # 71.8: process delta 2.2 C, safety delta 0.3 C. Both profiles must now
+    # preserve positive local-regulation authority for that state.
+    assert '(3.0, 25.0, True, "clean_gate_final_approach")' in gate
+    assert '(_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold")' in safety
+    assert '(-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop")' in safety
 
 
 def test_ready_is_a_pure_operator_gate() -> None:
