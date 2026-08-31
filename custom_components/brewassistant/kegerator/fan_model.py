@@ -36,7 +36,6 @@ class FanInputs:
     power_sensor_ok: bool
     temperature_sensor_ok: bool
     temperature_context_available: bool
-    climate_conflict: bool
     hvac_action: str | None
     temperature_delta: float | None
     trend_c_per_hour: float | None
@@ -67,7 +66,7 @@ class FanDecision:
 
 
 def build_demand(inputs: FanInputs) -> FanDemand:
-    """Build temperature/trend circulation demand."""
+    """Build kegerator temperature/trend circulation demand."""
     too_warm = inputs.temperature_delta is not None and inputs.temperature_delta >= TOO_WARM_C
     too_cold = inputs.temperature_delta is not None and inputs.temperature_delta <= TOO_COLD_C
     cooling_requested = inputs.hvac_action == "cooling"
@@ -83,8 +82,8 @@ def build_demand(inputs: FanInputs) -> FanDemand:
         )
     )
 
-    if inputs.climate_conflict:
-        reason = "climate_conflict"
+    if not inputs.temperature_context_available:
+        reason = "temperature_context_unavailable"
     elif too_cold:
         reason = "too_cold"
     elif cooling_requested:
@@ -95,8 +94,6 @@ def build_demand(inputs: FanInputs) -> FanDemand:
         reason = "warming_fast"
     elif hysteresis_run:
         reason = "hysteresis_run"
-    elif not inputs.temperature_context_available:
-        reason = "temperature_context_unavailable"
     else:
         reason = "stable"
 
@@ -120,8 +117,6 @@ def warning_level(inputs: FanInputs, *, enabled: bool, mode: str) -> str:
         return "sensor_issue"
     if mode == MODE_SMART_AUTO and not inputs.temperature_sensor_ok:
         return "sensor_issue"
-    if inputs.climate_conflict:
-        return "warning"
     if inputs.temperature_delta is not None and abs(inputs.temperature_delta) >= 2.0:
         return "warning"
     if (
@@ -132,7 +127,11 @@ def warning_level(inputs: FanInputs, *, enabled: bool, mode: str) -> str:
     return "ok"
 
 
-def _smart_state(inputs: FanInputs, demand: FanDemand, afterrun_active: bool) -> tuple[str, str, bool]:
+def _smart_state(
+    inputs: FanInputs,
+    demand: FanDemand,
+    afterrun_active: bool,
+) -> tuple[str, str, bool]:
     if inputs.compressor_active:
         return "compressor_follow", "compressor_active", True
     if afterrun_active:
@@ -140,8 +139,7 @@ def _smart_state(inputs: FanInputs, demand: FanDemand, afterrun_active: bool) ->
     if demand.cooling_requested:
         return "circulating", "smart_cooling_requested", True
     if not inputs.temperature_context_available:
-        reason = "smart_climate_conflict" if inputs.climate_conflict else "smart_temperature_context_unavailable"
-        return "standby", reason, False
+        return "standby", "smart_temperature_context_unavailable", False
     if demand.too_cold:
         return "standby", "smart_too_cold", False
     if demand.too_warm:

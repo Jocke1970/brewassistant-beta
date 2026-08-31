@@ -1,14 +1,34 @@
 # Kegerator Fan Backend
 
-BrewAssistant's kegerator fan backend controls the circulation fan around the shared kegerator / fermentation-chamber refrigerator.
+BrewAssistant's kegerator fan backend controls only the kegerator circulation fan.
 
-The climate layer still owns cooling/heating targets and compressor cycling. Fan control owns only:
+Kegerator and Fermentation are separate logical backends. The kegerator fan backend must not read fermentation scope, fermentation climate targets, fermentation supervisor state or fermentation process entities.
+
+## Architecture boundary
+
+```text
+Kegerator backend
+  -> kegerator climate context
+  -> kegerator air temperature
+  -> physical kegerator power
+  -> physical kegerator fan
+
+Fermentation backend
+  -> separate backend
+  -> no dependency from kegerator fan control
+```
+
+The current installation may temporarily reuse the same physical refrigerator for fermentation. That hardware reuse is not represented as a cross-backend software dependency.
+
+Physical compressor activity is still observable through the configured kegerator power source, so compressor-follow and afterrun remain useful even when another controller temporarily causes the refrigerator compressor to run.
+
+## Control ownership
+
+The fan controller owns only:
 
 ```text
 switch.kegerator_fan
 ```
-
-## Control ownership
 
 The master control is:
 
@@ -21,7 +41,10 @@ The master switch is **off by default**. When it is off, BrewAssistant releases 
 When fan-auto is enabled, the fan section uses `Direct action` by default and is evaluated by one scheduler only:
 
 ```text
-BrewAssistant fan-auto switch timer -> fan backend -> policy router -> switch.kegerator_fan
+BrewAssistant fan-auto switch timer
+  -> kegerator fan backend
+  -> policy router
+  -> switch.kegerator_fan
 ```
 
 The switch timer runs every 30 seconds and performs an immediate tick when fan-auto is enabled. Changing the fan mode also requests an immediate fan evaluation.
@@ -44,8 +67,6 @@ Always on
 
 Fan-auto owns the fan and keeps it off.
 
-This differs from disabling the fan-auto master switch:
-
 ```text
 Fan auto OFF -> BrewAssistant releases the fan; physical state is unmanaged.
 Mode Off     -> BrewAssistant owns the fan and requests OFF.
@@ -53,7 +74,7 @@ Mode Off     -> BrewAssistant owns the fan and requests OFF.
 
 ### Cooling only
 
-The fan follows inferred compressor activity:
+The fan follows physical compressor activity:
 
 ```text
 compressor active -> fan ON
@@ -82,7 +103,15 @@ Afterrun is created only in `Afterrun` and `Smart auto`. Changing to a non-after
 
 ### Smart auto
 
-Smart auto combines compressor activity, afterrun, climate demand, temperature delta and temperature trend.
+Smart auto combines:
+
+```text
+physical compressor activity
+afterrun
+kegerator climate cooling demand
+kegerator air-temperature delta
+kegerator air-temperature trend
+```
 
 Decision priority:
 
@@ -93,10 +122,10 @@ Decision priority:
 2. active afterrun
    -> fan ON
 
-3. active climate reports hvac_action=cooling
+3. kegerator climate reports hvac_action=cooling
    -> fan ON
 
-4. air >= active target + 0.8 °C
+4. kegerator air >= kegerator target + 0.8 °C
    -> fan ON
 
 5. warming trend >= +0.20 °C/h and <= +5.00 °C/h
@@ -105,11 +134,11 @@ Decision priority:
 6. fan already running and temperature/trend still outside stop hysteresis
    -> keep fan ON
 
-7. stable near target
+7. stable near kegerator target
    -> fan OFF
 ```
 
-Smart auto uses hysteresis to avoid a fan state change on every 30-second tick:
+Smart auto hysteresis:
 
 ```text
 start delta threshold: +0.80 °C
@@ -118,9 +147,25 @@ start trend threshold: +0.20 °C/h
 stop trend threshold:  +0.05 °C/h
 ```
 
-A large apparent warming rate above +5 °C/h is ignored as a circulation trigger because restart/statistics spikes should not wake fan control.
+A warming rate above +5 °C/h is ignored as a circulation trigger because restart/statistics spikes should not wake fan control.
 
-If temperature/target context is unavailable, Smart auto fails passive after any compressor/afterrun requirement has ended. It does not invent a temperature-based circulation request.
+If the kegerator climate context is unavailable or disabled, Smart auto does not borrow a target from any other backend. After compressor/afterrun demand has ended, temperature-based circulation fails passive.
+
+That gives the current shared-hardware installation this behavior:
+
+```text
+kegerator climate unavailable/off
+  + compressor physically running
+    -> fan ON
+
+compressor stops
+  -> afterrun
+
+afterrun expires
+  -> fan OFF
+```
+
+No fermentation state is required for that behavior.
 
 ### Always on
 
@@ -156,27 +201,23 @@ or the configured fan-power source is above 2 W. The default fan-power source is
 sensor.kegerator_fan_power
 ```
 
-## Shared fridge climate context
+## Kegerator temperature context
 
-The physical refrigerator can be used both for serving/kegerator operation and as the fermentation chamber.
-
-Smart auto therefore resolves an **active climate context** rather than assuming that an enabled kegerator climate always owns the refrigerator.
-
-Priority:
+Smart temperature decisions use only:
 
 ```text
-active fermentation scope / fermentation supervisor
-  -> climate.fermentation_chamber
-
-otherwise active serving/kegerator climate
-  -> climate.kegerator_kylskap
+climate.kegerator_kylskap
+configured kegerator air-temperature source
+sensor.brewassistant_kegerator_air_temperature_average
 ```
 
-The fermentation effective-air-target scope is used as ownership evidence. Both climate entities merely existing or being enabled is not itself considered a conflict.
+The configured default air-temperature source is currently:
 
-A conflict is reported only when BrewAssistant fermentation ownership and an active serving/carbonation kegerator-supervisor scope claim the refrigerator simultaneously. Smart temperature circulation then fails passive until the ownership ambiguity is resolved; compressor and active afterrun still retain priority.
+```text
+sensor.kyl_temperatur_4
+```
 
-For a dual-setpoint fermentation climate, the cooling high target is used during cooling, the heating low target during heating, and the midpoint when idle.
+The backend never falls back to `climate.fermentation_chamber` or any fermentation target.
 
 ## Runtime and afterrun state
 
@@ -191,7 +232,7 @@ compressor_active_to_idle
 
 A falling compressor edge creates `afterrun_until` only when the active mode supports afterrun.
 
-Afterrun state is runtime state in `hass.data`; it is intentionally cleared when fan-auto is disabled and when incompatible modes are selected. Disabling fan-auto still does **not** turn the physical fan off.
+Afterrun state is runtime state in `hass.data`; it is cleared when fan-auto is disabled, when incompatible modes are selected and when the timer expires. Disabling fan-auto still does **not** turn the physical fan off.
 
 ## Apply locking
 
@@ -209,6 +250,7 @@ Key attributes include:
 
 ```text
 source
+architecture_scope
 strategy
 scheduler_owner
 controller_enabled
@@ -226,8 +268,9 @@ power_w
 afterrun_active
 afterrun_until
 afterrun_remaining_minutes
-active_climate_entity
-climate_conflict
+climate_entity
+climate_context_source
+climate_state
 current_temperature
 target_temperature
 temperature_delta
@@ -237,13 +280,34 @@ last_transition
 last_apply_result
 ```
 
-Backend version/source for this state machine:
+Backend source:
 
 ```text
-python_kegerator_fan_backend_v3_smart_auto
+python_kegerator_fan_backend_v4_separated
+```
+
+Architecture scope:
+
+```text
+kegerator_only
 ```
 
 When fan-auto is disabled the diagnostics explicitly report a disabled/unmanaged controller rather than a hypothetical physical request.
+
+## Separation contract
+
+Regression tests enforce that the kegerator fan backend contains no references to:
+
+```text
+climate.fermentation_chamber
+fermentation effective-air target
+fermentation supervisor
+fermentation scope
+shared-cooling bridge
+climate ownership conflict
+```
+
+This means a future dedicated fermentation vessel with integrated heating/cooling can be implemented by changing the Fermentation backend without changing kegerator fan control.
 
 ## Validation contract
 
@@ -255,24 +319,26 @@ master disabled -> physical fan unmanaged
 Mode Off -> fan OFF request
 Cooling only ignores stale afterrun
 Afterrun mode uses its active timer
-Smart auto starts on warm air
+Smart auto starts on warm kegerator air
 Smart auto hysteresis prevents chatter
-Smart auto fails passive without temperature context
-compressor activity has priority in Smart auto
+Smart auto fails passive without kegerator temperature context
+physical compressor activity overrides missing temperature context
+active afterrun overrides missing temperature context
+kegerator backend has no fermentation dependency
 only the fan-auto switch timer is the periodic fan scheduler
 old fan watchdog file remains retired
 ```
 
-Physical Home Assistant validation is still required after backend changes:
+Physical Home Assistant validation after merge/update/restart:
 
 ```text
 [ ] verify all five modes against switch.kegerator_fan
 [ ] verify compressor >20 W starts fan in Cooling only / Afterrun / Smart auto
 [ ] verify compressor falling edge starts configured afterrun
 [ ] verify fan stops after fixed Afterrun expiry
-[ ] verify Smart auto continues circulation when air/trend demand remains
+[ ] verify Smart auto continues circulation on kegerator temperature/trend demand
 [ ] verify Smart auto stops inside hysteresis stop band
 [ ] verify master OFF leaves current physical fan state untouched
-[ ] verify serving and fermentation climate-context handoff
+[ ] with kegerator climate OFF, verify compressor + afterrun still work
 [ ] verify multi-cycle behavior across Home Assistant restart
 ```
