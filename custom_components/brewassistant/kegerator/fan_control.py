@@ -1,4 +1,11 @@
-"""Home Assistant adapter/runtime for BrewAssistant kegerator fan control."""
+"""Home Assistant adapter/runtime for BrewAssistant kegerator fan control.
+
+Kegerator and Fermentation are intentionally separate backends. This module
+reads only kegerator-owned climate/sensor inputs and controls only the physical
+kegerator circulation fan. If today's refrigerator is temporarily reused by
+another backend, physical compressor power remains sufficient for compressor
+follow and afterrun without creating a cross-backend dependency.
+"""
 
 from __future__ import annotations
 
@@ -36,22 +43,17 @@ from .fan_model import (
 )
 
 CLIMATE = "climate.kegerator_kylskap"
-CHAMBER = "climate.fermentation_chamber"
 AIR_STATS = "sensor.brewassistant_kegerator_air_temperature_average"
 FAN = "switch.kegerator_fan"
 FAN_AUTO_SWITCH = "switch.brewassistant_kegerator_fan_auto_enabled"
 FAN_MODE_SELECT = "select.brewassistant_kegerator_fan_mode"
 AFTER_RUN_NUMBER = "number.brewassistant_kegerator_fan_afterrun_minutes"
-KEGERATOR_SUPERVISOR_SWITCH = "switch.brewassistant_climate_supervisor_enabled"
-FERMENTATION_SUPERVISOR_SWITCH = "switch.brewassistant_fermentation_climate_supervisor_enabled"
-FERMENTATION_AIR_TARGET = "sensor.brewassistant_fermentation_effective_air_target"
-CARBONATION_STATUS = "sensor.brewassistant_carbonation_status"
-ACTIVE_CARBONATION_STATES = {"carbonating", "conditioning", "ready to serve"}
 
 DATA_KEY = "kegerator_fan_auto"
 SECTION = "kegerator_fan"
 STRATEGY = "smart_temperature_afterrun"
 SCHEDULER_OWNER = "fan_auto_switch_timer"
+ARCHITECTURE_SCOPE = "kegerator_only"
 
 COMPRESSOR_W = 20.0
 FAN_W = 2.0
@@ -74,13 +76,9 @@ RUNTIME_APPLY_LOCK = "apply_lock"
 @dataclass(slots=True)
 class FanInputs:
     model: ModelInputs
-    kegerator_climate_state: str | None
-    fermentation_climate_state: str | None
-    active_climate_entity: str | None
     climate_state: str | None
     hvac_action: str | None
     climate_enabled: bool
-    climate_conflict: bool
     current_temperature: float | None
     target_temperature: float | None
     temperature_delta: float | None
@@ -126,7 +124,11 @@ def _state(hass: HomeAssistant, entity_id: str) -> str | None:
     return state.state
 
 
-def _state_by_suffix(hass: HomeAssistant, domain: str, suffix: str) -> tuple[str | None, str | None]:
+def _state_by_suffix(
+    hass: HomeAssistant,
+    domain: str,
+    suffix: str,
+) -> tuple[str | None, str | None]:
     exact = f"{domain}.{suffix}"
     value = _state(hass, exact)
     if value is not None:
@@ -135,15 +137,24 @@ def _state_by_suffix(hass: HomeAssistant, domain: str, suffix: str) -> tuple[str
     wanted_suffix = f"_{suffix}"
     for state in hass.states.async_all(domain):
         object_id = state.entity_id.split(".", 1)[1]
-        if (object_id == suffix or object_id.endswith(wanted_suffix)) and state.state not in BAD_STATES:
+        if (
+            object_id == suffix or object_id.endswith(wanted_suffix)
+        ) and state.state not in BAD_STATES:
             return state.state, state.entity_id
     return None, None
 
 
-def _number_by_suffix(hass: HomeAssistant, suffix: str, default: float) -> tuple[float, str | None]:
+def _number_by_suffix(
+    hass: HomeAssistant,
+    suffix: str,
+    default: float,
+) -> tuple[float, str | None]:
     raw, entity_id = _state_by_suffix(hass, "number", suffix)
     try:
-        return (float(str(raw).replace(",", ".")) if raw is not None else default), entity_id
+        return (
+            float(str(raw).replace(",", ".")) if raw is not None else default,
+            entity_id,
+        )
     except (TypeError, ValueError):
         return default, entity_id
 
@@ -182,27 +193,47 @@ def _parse_utc(raw: Any) -> Any:
 
 
 def _fan_auto_state(hass: HomeAssistant) -> tuple[bool, str]:
-    raw, entity_id = _state_by_suffix(hass, "switch", "brewassistant_kegerator_fan_auto_enabled")
+    raw, entity_id = _state_by_suffix(
+        hass,
+        "switch",
+        "brewassistant_kegerator_fan_auto_enabled",
+    )
     return raw == "on", entity_id or FAN_AUTO_SWITCH
 
 
 def _fan_mode(hass: HomeAssistant) -> str:
-    mode, _entity_id = _state_by_suffix(hass, "select", "brewassistant_kegerator_fan_mode")
+    mode, _entity_id = _state_by_suffix(
+        hass,
+        "select",
+        "brewassistant_kegerator_fan_mode",
+    )
     return mode if mode in FAN_MODE_OPTIONS else DEFAULT_FAN_MODE
 
 
 def _afterrun_minutes(hass: HomeAssistant) -> float:
-    value, _entity_id = _number_by_suffix(hass, "brewassistant_kegerator_fan_afterrun_minutes", AFTER_RUN_MIN)
+    value, _entity_id = _number_by_suffix(
+        hass,
+        "brewassistant_kegerator_fan_afterrun_minutes",
+        AFTER_RUN_MIN,
+    )
     return max(0.0, min(float(value), 60.0))
 
 
 def _fan_mode_entity(hass: HomeAssistant) -> str:
-    _value, entity_id = _state_by_suffix(hass, "select", "brewassistant_kegerator_fan_mode")
+    _value, entity_id = _state_by_suffix(
+        hass,
+        "select",
+        "brewassistant_kegerator_fan_mode",
+    )
     return entity_id or FAN_MODE_SELECT
 
 
 def _afterrun_entity(hass: HomeAssistant) -> str:
-    _value, entity_id = _number_by_suffix(hass, "brewassistant_kegerator_fan_afterrun_minutes", AFTER_RUN_MIN)
+    _value, entity_id = _number_by_suffix(
+        hass,
+        "brewassistant_kegerator_fan_afterrun_minutes",
+        AFTER_RUN_MIN,
+    )
     return entity_id or AFTER_RUN_NUMBER
 
 
@@ -210,85 +241,49 @@ def _climate_enabled(state: str | None) -> bool:
     return state not in {None, "off", "unknown", "unavailable", "none", ""}
 
 
-def _climate_target(hass: HomeAssistant, entity_id: str, hvac_action: str | None) -> float | None:
-    target = _num_attr(hass, entity_id, "temperature")
+def _climate_target(hass: HomeAssistant, hvac_action: str | None) -> float | None:
+    target = _num_attr(hass, CLIMATE, "temperature")
     if target is not None:
         return target
-    low = _num_attr(hass, entity_id, "target_temp_low")
-    high = _num_attr(hass, entity_id, "target_temp_high")
+
+    low = _num_attr(hass, CLIMATE, "target_temp_low")
+    high = _num_attr(hass, CLIMATE, "target_temp_high")
     if hvac_action == "cooling" and high is not None:
         return high
-    if hvac_action == "heating" and low is not None:
-        return low
     if low is not None and high is not None:
         return round((low + high) / 2.0, 2)
     return high if high is not None else low
 
 
-def _bool_attr(hass: HomeAssistant, entity_id: str, attr: str) -> bool:
-    value = _attr(hass, entity_id, attr)
-    return value is True or str(value).lower() == "true"
-
-
-def _carbonation_active(hass: HomeAssistant) -> bool:
-    state = (_state(hass, CARBONATION_STATUS) or "").lower()
-    return _bool_attr(hass, CARBONATION_STATUS, "active") or state in ACTIVE_CARBONATION_STATES
-
-
-def _climate_context(hass: HomeAssistant) -> tuple[str | None, str | None, str | None, bool, bool, str | None, str | None]:
-    """Resolve the climate context that currently owns the shared fridge.
-
-    The kegerator climate may stay enabled while the fridge is used as a
-    fermentation chamber. Fermentation scope/supervisor state therefore wins
-    over raw climate on/off state. A conflict is only reported when both
-    BrewAssistant supervisors actively claim a process scope at the same time.
-    """
-    k_state = _state(hass, CLIMATE)
-    f_state = _state(hass, CHAMBER)
-    k_enabled = _climate_enabled(k_state)
-    f_enabled = _climate_enabled(f_state)
-
-    fermentation_scope = _bool_attr(hass, FERMENTATION_AIR_TARGET, "scope_active")
-    fermentation_supervisor = hass.states.is_state(FERMENTATION_SUPERVISOR_SWITCH, "on")
-    kegerator_supervisor = hass.states.is_state(KEGERATOR_SUPERVISOR_SWITCH, "on")
-    fermentation_owner = fermentation_scope or fermentation_supervisor
-    kegerator_owner = kegerator_supervisor and _carbonation_active(hass)
-    conflict = fermentation_owner and kegerator_owner
-
-    if fermentation_owner and f_enabled:
-        entity = CHAMBER
-        state = f_state
-    elif k_enabled:
-        entity = CLIMATE
-        state = k_state
-    elif f_enabled:
-        entity = CHAMBER
-        state = f_state
-    else:
-        return None, None, None, False, conflict, k_state, f_state
-
-    action_raw = _attr(hass, entity, "hvac_action")
-    action = str(action_raw) if action_raw is not None else None
-    return entity, state, action, True, conflict, k_state, f_state
-
-
 def _read_inputs(hass: HomeAssistant) -> FanInputs:
-    air_entity = configured_entity(hass, CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY)
-    power_entity = configured_entity(hass, CONF_KEGERATOR_POWER_ENTITY, DEFAULT_KEGERATOR_POWER_ENTITY)
-    fan_power_entity = configured_entity(hass, CONF_KEGERATOR_FAN_POWER_ENTITY, DEFAULT_KEGERATOR_FAN_POWER_ENTITY)
+    air_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_POWER_ENTITY,
+        DEFAULT_KEGERATOR_POWER_ENTITY,
+    )
+    fan_power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_FAN_POWER_ENTITY,
+        DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
+    )
 
-    active_climate, climate_state, hvac_action, climate_enabled, climate_conflict, k_state, f_state = _climate_context(hass)
+    climate_state = _state(hass, CLIMATE)
+    climate_enabled = _climate_enabled(climate_state)
+    hvac_raw = _attr(hass, CLIMATE, "hvac_action")
+    hvac_action = str(hvac_raw) if climate_enabled and hvac_raw is not None else None
 
     current = _num_state(hass, air_entity)
-    if current is None and active_climate is not None:
-        current = _num_attr(hass, active_climate, "current_temperature")
     if current is None:
         current = _num_attr(hass, CLIMATE, "current_temperature")
-    if current is None:
-        current = _num_attr(hass, CHAMBER, "current_temperature")
 
-    target = _climate_target(hass, active_climate, hvac_action) if active_climate is not None else None
+    target = _climate_target(hass, hvac_action)
     delta = round(current - target, 2) if current is not None and target is not None else None
+
     trend = _num_attr(hass, AIR_STATS, "trend_c_per_hour")
     avg15 = _num_attr(hass, AIR_STATS, "average_15m")
     power = _num_state(hass, power_entity)
@@ -296,10 +291,17 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
     fan_power = _num_state(hass, fan_power_entity)
     compressor = power is not None and power > COMPRESSOR_W
     fan_running = fan_state == "on" or (fan_power is not None and fan_power > FAN_W)
-    temp_ok = _available(hass, air_entity) or (
-        active_climate is not None and _num_attr(hass, active_climate, "current_temperature") is not None
+
+    temp_ok = _available(hass, air_entity) or _num_attr(
+        hass,
+        CLIMATE,
+        "current_temperature",
+    ) is not None
+    temp_context_ok = (
+        climate_enabled
+        and current is not None
+        and target is not None
     )
-    temp_context_ok = current is not None and target is not None and not climate_conflict
 
     model = ModelInputs(
         compressor_active=compressor,
@@ -308,20 +310,15 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
         power_sensor_ok=power is not None,
         temperature_sensor_ok=temp_ok,
         temperature_context_available=temp_context_ok,
-        climate_conflict=climate_conflict,
         hvac_action=hvac_action,
         temperature_delta=delta,
         trend_c_per_hour=trend,
     )
     return FanInputs(
         model=model,
-        kegerator_climate_state=k_state,
-        fermentation_climate_state=f_state,
-        active_climate_entity=active_climate,
         climate_state=climate_state,
         hvac_action=hvac_action,
         climate_enabled=climate_enabled,
-        climate_conflict=climate_conflict,
         current_temperature=round(current, 2) if current is not None else None,
         target_temperature=round(target, 2) if target is not None else None,
         temperature_delta=delta,
@@ -343,7 +340,12 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
     )
 
 
-def _clear_afterrun(hass: HomeAssistant, reason: str, *, clear_previous: bool = False) -> None:
+def _clear_afterrun(
+    hass: HomeAssistant,
+    reason: str,
+    *,
+    clear_previous: bool = False,
+) -> None:
     data = _bucket(hass)
     data.pop(RUNTIME_AFTERRUN_UNTIL, None)
     data[RUNTIME_AFTERRUN_CLEARED_REASON] = reason
@@ -356,7 +358,9 @@ def _sync_mode_runtime(hass: HomeAssistant, enabled: bool, mode: str) -> None:
     previous_mode = data.get(RUNTIME_LAST_MODE)
     if not enabled:
         _clear_afterrun(hass, "fan_auto_disabled", clear_previous=True)
-    elif previous_mode != mode and (mode not in AFTERRUN_MODES or previous_mode not in AFTERRUN_MODES):
+    elif previous_mode != mode and (
+        mode not in AFTERRUN_MODES or previous_mode not in AFTERRUN_MODES
+    ):
         _clear_afterrun(hass, f"mode_change:{previous_mode}->{mode}")
     data[RUNTIME_LAST_MODE] = mode
 
@@ -376,12 +380,18 @@ def _sync_compressor_runtime(
         data[RUNTIME_LAST_COMPRESSOR_ACTIVE_AT] = now.isoformat()
         data.pop(RUNTIME_AFTERRUN_UNTIL, None)
         if previous is False:
-            data[RUNTIME_LAST_TRANSITION] = {"type": "compressor_idle_to_active", "at": now.isoformat()}
+            data[RUNTIME_LAST_TRANSITION] = {
+                "type": "compressor_idle_to_active",
+                "at": now.isoformat(),
+            }
         data[RUNTIME_PREVIOUS_COMPRESSOR_ACTIVE] = True
         return "compressor_idle_to_active" if previous is False else None
 
     if previous is True:
-        transition = {"type": "compressor_active_to_idle", "at": now.isoformat()}
+        transition = {
+            "type": "compressor_active_to_idle",
+            "at": now.isoformat(),
+        }
         if allow_afterrun and afterrun_minutes > 0:
             until = now + timedelta(minutes=afterrun_minutes)
             data[RUNTIME_AFTERRUN_UNTIL] = until.isoformat()
@@ -396,12 +406,20 @@ def _sync_compressor_runtime(
     return None
 
 
-def _afterrun_state(hass: HomeAssistant, inputs: FanInputs, *, enabled: bool, mode: str) -> tuple[bool, str | None, float]:
+def _afterrun_state(
+    hass: HomeAssistant,
+    inputs: FanInputs,
+    *,
+    enabled: bool,
+    mode: str,
+) -> tuple[bool, str | None, float]:
     if not enabled or mode not in AFTERRUN_MODES or inputs.compressor_active:
         return False, None, 0.0
+
     until = _parse_utc(_bucket(hass).get(RUNTIME_AFTERRUN_UNTIL))
     if until is None:
         return False, None, 0.0
+
     remaining = (until - dt_util.utcnow()).total_seconds()
     if remaining <= 0:
         return False, None, 0.0
@@ -413,7 +431,11 @@ def _afterrun_expired(hass: HomeAssistant) -> bool:
     return until is not None and until <= dt_util.utcnow()
 
 
-def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecision, bool, str | None, float]:
+def _evaluate(
+    hass: HomeAssistant,
+    *,
+    mutate: bool,
+) -> tuple[FanInputs, FanDecision, bool, str | None, float]:
     inputs = _read_inputs(hass)
     enabled, _auto_entity = _fan_auto_state(hass)
     mode = _fan_mode(hass)
@@ -431,18 +453,27 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
             )
 
     afterrun_active, afterrun_until, afterrun_remaining = _afterrun_state(
-        hass, inputs, enabled=enabled, mode=mode
+        hass,
+        inputs,
+        enabled=enabled,
+        mode=mode,
     )
     if mutate and not afterrun_active and _afterrun_expired(hass):
         _clear_afterrun(hass, "afterrun_expired")
         afterrun_until = None
 
-    decision = decide(enabled=enabled, mode=mode, inputs=inputs.model, afterrun_active=afterrun_active)
+    decision = decide(
+        enabled=enabled,
+        mode=mode,
+        inputs=inputs.model,
+        afterrun_active=afterrun_active,
+    )
 
     if mutate:
         _bucket(hass)[RUNTIME_LAST_DECISION] = {
             "at": dt_util.utcnow().isoformat(),
             "strategy": STRATEGY,
+            "architecture_scope": ARCHITECTURE_SCOPE,
             "mode": mode,
             "transition": transition,
             "inputs": asdict(inputs.model),
@@ -466,23 +497,54 @@ def _snapshot_from(
     afterrun_until: str | None,
     afterrun_remaining: float,
 ) -> dict[str, Any]:
-    air_entity = configured_entity(hass, CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY)
-    power_entity = configured_entity(hass, CONF_KEGERATOR_POWER_ENTITY, DEFAULT_KEGERATOR_POWER_ENTITY)
-    fan_power_entity = configured_entity(hass, CONF_KEGERATOR_FAN_POWER_ENTITY, DEFAULT_KEGERATOR_FAN_POWER_ENTITY)
+    air_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_AIR_TEMP_ENTITY,
+        DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
+    )
+    power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_POWER_ENTITY,
+        DEFAULT_KEGERATOR_POWER_ENTITY,
+    )
+    fan_power_entity = configured_entity(
+        hass,
+        CONF_KEGERATOR_FAN_POWER_ENTITY,
+        DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
+    )
     enabled, auto_entity = _fan_auto_state(hass)
     data = _bucket(hass)
     demand = decision.demand
     status = _status(decision)
-    delta_text = "—" if inputs.temperature_delta is None else f"{inputs.temperature_delta:+.1f} °C"
-    temp_text = "—" if inputs.current_temperature is None else f"{inputs.current_temperature:.1f} °C"
-    target_text = "—" if inputs.target_temperature is None else f"{inputs.target_temperature:.1f} °C"
-    trend_text = "collecting" if inputs.trend_c_per_hour is None else f"{inputs.trend_c_per_hour:+.2f} °C/h"
+
+    delta_text = (
+        "—"
+        if inputs.temperature_delta is None
+        else f"{inputs.temperature_delta:+.1f} °C"
+    )
+    temp_text = (
+        "—"
+        if inputs.current_temperature is None
+        else f"{inputs.current_temperature:.1f} °C"
+    )
+    target_text = (
+        "—"
+        if inputs.target_temperature is None
+        else f"{inputs.target_temperature:.1f} °C"
+    )
+    trend_text = (
+        "collecting"
+        if inputs.trend_c_per_hour is None
+        else f"{inputs.trend_c_per_hour:+.2f} °C/h"
+    )
+
     last_apply = data.get(RUNTIME_LAST_APPLY)
     policy_result = data.get(RUNTIME_LAST_POLICY_RESULT)
     last_decision = data.get(RUNTIME_LAST_DECISION)
 
     return {
-        "source": "python_kegerator_fan_backend_v3_smart_auto",
+        "source": "python_kegerator_fan_backend_v4_separated",
+        "architecture_scope": ARCHITECTURE_SCOPE,
         "strategy": STRATEGY,
         "scheduler_owner": SCHEDULER_OWNER,
         "controller_enabled": enabled,
@@ -498,7 +560,8 @@ def _snapshot_from(
         "desired_switch_state": decision.desired_switch_state,
         "actual_switch_state": inputs.fan_state,
         "summary": (
-            f"{status} · {temp_text} → {target_text} · Δ {delta_text} · {trend_text} · "
+            f"{status} · {temp_text} → {target_text} · Δ {delta_text} · "
+            f"{trend_text} · "
             f"{'compressor active' if inputs.compressor_active else 'compressor idle'} · "
             f"{'fan on' if inputs.fan_running else 'fan off'} · {decision.reason}"
         ),
@@ -506,15 +569,35 @@ def _snapshot_from(
         "policy_section": SECTION,
         "policy": section_policy(hass, SECTION),
         "last_policy_result": policy_result,
-        "last_policy_status": policy_result.get("status") if isinstance(policy_result, dict) else None,
-        "last_policy_summary": policy_result.get("summary") if isinstance(policy_result, dict) else None,
+        "last_policy_status": (
+            policy_result.get("status") if isinstance(policy_result, dict) else None
+        ),
+        "last_policy_summary": (
+            policy_result.get("summary") if isinstance(policy_result, dict) else None
+        ),
         "last_decision": last_decision,
-        "last_decision_at": last_decision.get("at") if isinstance(last_decision, dict) else None,
+        "last_decision_at": (
+            last_decision.get("at") if isinstance(last_decision, dict) else None
+        ),
         "last_apply": last_apply,
-        "last_apply_action": last_apply.get("action") if isinstance(last_apply, dict) else data.get("last_apply_action"),
-        "last_apply_reason": last_apply.get("reason") if isinstance(last_apply, dict) else data.get("last_apply_reason"),
-        "last_apply_at": last_apply.get("at") if isinstance(last_apply, dict) else data.get("last_apply_at"),
-        "last_apply_result": last_apply.get("result") if isinstance(last_apply, dict) else None,
+        "last_apply_action": (
+            last_apply.get("action")
+            if isinstance(last_apply, dict)
+            else data.get("last_apply_action")
+        ),
+        "last_apply_reason": (
+            last_apply.get("reason")
+            if isinstance(last_apply, dict)
+            else data.get("last_apply_reason")
+        ),
+        "last_apply_at": (
+            last_apply.get("at")
+            if isinstance(last_apply, dict)
+            else data.get("last_apply_at")
+        ),
+        "last_apply_result": (
+            last_apply.get("result") if isinstance(last_apply, dict) else None
+        ),
         "last_transition": data.get(RUNTIME_LAST_TRANSITION),
         "last_mode": data.get(RUNTIME_LAST_MODE),
         "afterrun_cleared_reason": data.get(RUNTIME_AFTERRUN_CLEARED_REASON),
@@ -524,15 +607,13 @@ def _snapshot_from(
         "temperature_demand_cooling_requested": demand.cooling_requested,
         "temperature_demand_warming_fast": demand.warming_fast,
         "temperature_demand_hysteresis_run": demand.hysteresis_run,
-        "climate_entity": inputs.active_climate_entity,
-        "active_climate_entity": inputs.active_climate_entity,
+        "climate_entity": CLIMATE,
+        "active_climate_entity": CLIMATE if inputs.climate_enabled else None,
+        "climate_context_source": "kegerator" if inputs.climate_enabled else "none",
         "climate_state": inputs.climate_state,
         "climate_enabled": inputs.climate_enabled,
-        "climate_conflict": inputs.climate_conflict,
         "kegerator_climate_entity": CLIMATE,
-        "kegerator_climate_state": inputs.kegerator_climate_state,
-        "fermentation_chamber_entity": CHAMBER,
-        "fermentation_chamber_state": inputs.fermentation_climate_state,
+        "kegerator_climate_state": inputs.climate_state,
         "hvac_action": inputs.hvac_action,
         "air_temperature_entity": air_entity,
         "current_temperature": inputs.current_temperature,
@@ -569,7 +650,9 @@ def _snapshot_from(
         "fan_power_w": inputs.fan_power_w,
         "fan_running": inputs.fan_running,
         "fan_should_run": decision.should_run,
-        "fan_recommendation": "run" if decision.should_run else "stop" if enabled else "unmanaged",
+        "fan_recommendation": (
+            "run" if decision.should_run else "stop" if enabled else "unmanaged"
+        ),
         "fan_action_needed": decision.action_needed,
         "apply_required": decision.action_needed,
         "fan_action": decision.action,
@@ -606,6 +689,7 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
                 source=SOURCE_BACKEND,
                 reason=f"Kegerator fan auto: {decision.reason}",
                 context={
+                    "architecture_scope": ARCHITECTURE_SCOPE,
                     "strategy": STRATEGY,
                     "scheduler_owner": SCHEDULER_OWNER,
                     "fan_mode": _fan_mode(hass),
@@ -617,8 +701,8 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
                     "afterrun_remaining_minutes": remaining,
                     "power_entity": inputs.power_entity,
                     "power_w": inputs.power_w,
-                    "active_climate_entity": inputs.active_climate_entity,
-                    "climate_conflict": inputs.climate_conflict,
+                    "climate_entity": CLIMATE,
+                    "climate_state": inputs.climate_state,
                     "temperature_delta": inputs.temperature_delta,
                     "trend_c_per_hour": inputs.trend_c_per_hour,
                 },
@@ -636,6 +720,7 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
 
         apply_result = {
             "at": dt_util.utcnow().isoformat(),
+            "architecture_scope": ARCHITECTURE_SCOPE,
             "strategy": STRATEGY,
             "scheduler_owner": SCHEDULER_OWNER,
             "action": decision.action,
@@ -647,8 +732,16 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
             "before_power_w": before_power,
             "after_state": after_inputs.fan_state,
             "after_power_w": after_inputs.fan_power_w,
-            "policy_status": policy_result.get("status") if isinstance(policy_result, dict) else None,
-            "policy_summary": policy_result.get("summary") if isinstance(policy_result, dict) else None,
+            "policy_status": (
+                policy_result.get("status")
+                if isinstance(policy_result, dict)
+                else None
+            ),
+            "policy_summary": (
+                policy_result.get("summary")
+                if isinstance(policy_result, dict)
+                else None
+            ),
             "result": result,
         }
         data = _bucket(hass)

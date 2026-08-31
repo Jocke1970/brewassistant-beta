@@ -16,7 +16,10 @@ WATCHDOG_PATH = ROOT / "custom_components/brewassistant/kegerator/fan_watchdog.p
 
 
 def _load_model():
-    spec = importlib.util.spec_from_file_location("brewassistant_kegerator_fan_model_test", MODEL_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "brewassistant_kegerator_fan_model_test",
+        MODEL_PATH,
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -35,7 +38,6 @@ def _inputs(**overrides):
         "power_sensor_ok": True,
         "temperature_sensor_ok": True,
         "temperature_context_available": True,
-        "climate_conflict": False,
         "hvac_action": "idle",
         "temperature_delta": 0.0,
         "trend_c_per_hour": 0.0,
@@ -115,7 +117,11 @@ def test_smart_auto_hysteresis_keeps_running_until_stop_band() -> None:
     decision = MODEL.decide(
         enabled=True,
         mode=MODEL.MODE_SMART_AUTO,
-        inputs=_inputs(fan_running=True, temperature_delta=0.4, trend_c_per_hour=0.08),
+        inputs=_inputs(
+            fan_running=True,
+            temperature_delta=0.4,
+            trend_c_per_hour=0.08,
+        ),
         afterrun_active=False,
     )
     assert decision.state == "circulating"
@@ -125,7 +131,11 @@ def test_smart_auto_hysteresis_keeps_running_until_stop_band() -> None:
     stopped = MODEL.decide(
         enabled=True,
         mode=MODEL.MODE_SMART_AUTO,
-        inputs=_inputs(fan_running=True, temperature_delta=0.1, trend_c_per_hour=0.0),
+        inputs=_inputs(
+            fan_running=True,
+            temperature_delta=0.1,
+            trend_c_per_hour=0.0,
+        ),
         afterrun_active=False,
     )
     assert stopped.state == "standby"
@@ -133,7 +143,7 @@ def test_smart_auto_hysteresis_keeps_running_until_stop_band() -> None:
     assert stopped.should_run is False
 
 
-def test_smart_auto_fails_passive_without_temperature_context() -> None:
+def test_smart_auto_fails_passive_without_kegerator_temperature_context() -> None:
     decision = MODEL.decide(
         enabled=True,
         mode=MODEL.MODE_SMART_AUTO,
@@ -151,16 +161,60 @@ def test_smart_auto_fails_passive_without_temperature_context() -> None:
     assert decision.warning_level == "sensor_issue"
 
 
-def test_compressor_has_priority_in_smart_auto() -> None:
+def test_compressor_has_priority_without_temperature_context() -> None:
     decision = MODEL.decide(
         enabled=True,
         mode=MODEL.MODE_SMART_AUTO,
-        inputs=_inputs(compressor_active=True, temperature_delta=-1.5),
+        inputs=_inputs(
+            compressor_active=True,
+            temperature_context_available=False,
+            temperature_delta=None,
+            trend_c_per_hour=None,
+        ),
         afterrun_active=False,
     )
     assert decision.state == "compressor_follow"
     assert decision.reason == "compressor_active"
     assert decision.should_run is True
+
+
+def test_afterrun_has_priority_without_temperature_context() -> None:
+    decision = MODEL.decide(
+        enabled=True,
+        mode=MODEL.MODE_SMART_AUTO,
+        inputs=_inputs(
+            temperature_context_available=False,
+            temperature_delta=None,
+            trend_c_per_hour=None,
+        ),
+        afterrun_active=True,
+    )
+    assert decision.state == "afterrun"
+    assert decision.reason == "afterrun"
+    assert decision.should_run is True
+
+
+def test_kegerator_backend_has_no_fermentation_dependency() -> None:
+    control = CONTROL_PATH.read_text(encoding="utf-8").lower()
+    model = MODEL_PATH.read_text(encoding="utf-8").lower()
+
+    forbidden = (
+        "climate.fermentation_chamber",
+        "fermentation_effective_air_target",
+        "fermentation_supervisor",
+        "fermentation_scope",
+        "shared_cooling",
+        "climate_conflict",
+    )
+    for token in forbidden:
+        assert token not in control
+        assert token not in model
+
+
+def test_kegerator_architecture_scope_is_explicit() -> None:
+    control = CONTROL_PATH.read_text(encoding="utf-8")
+    assert 'ARCHITECTURE_SCOPE = "kegerator_only"' in control
+    assert '"architecture_scope": ARCHITECTURE_SCOPE' in control
 
 
 def test_single_scheduler_contract() -> None:
