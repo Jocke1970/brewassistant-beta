@@ -2,9 +2,11 @@
 
 This document describes the current BrewAssistant hot-side control path from Brewfather Brew Tracker or Manual Brewday through BrewAssistant to BrewZilla/RAPT hardware.
 
-Status: **supervised hot-side beta baseline after the 2026-08-29 physical Brewfather/Supervised Apply and water-only validation**.
+Status: **supervised hot-side beta baseline after the 2026-08-29 ownership/ABORT validation and 2026-08-31 Heatstrike/Mash-In water validation**.
 
 BrewAssistant is intentionally an operator-supervised controller. Runtime progression and hardware execution are separate concerns: Brewday may understand the next process step without silently energizing hardware.
+
+For the latest physical near-strike findings and contracts, see [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md).
 
 ---
 
@@ -276,33 +278,24 @@ It is not the process-temperature delta.
 
 ---
 
-## Explicit heat safe-down precedence
+## Heat safe-down and local-regulation precedence
 
-The 2026-08-29 water-only run exposed an ordering bug: Clean Heatstrike correctly calculated 0% heat / heater OFF near strike, but a later local-target-preservation guard suppressed the safe-down because a valid BrewZilla target existed. The same pattern appeared after the target was lowered from 71.8°C to 66.0°C while the process was still above 70°C.
+The 2026-08-29 water-only run exposed an ordering bug: an explicit process/safety zero-heat request could be suppressed by local-target preservation. PR #173 fixed that precedence for real safe-down contexts.
 
-PR #173 fixes the precedence rule.
+The 2026-08-31 water test then showed the opposite edge case: an ordinary near-strike final coast could disable the BrewZilla heater master too early while the external process probe was still below strike. PR #193 fixed that final-approach dead zone.
 
-Current invariant:
+Current distinction:
 
 ```text
-explicit process/safety zero-heat request
+true explicit safety / overshoot / ABORT zero-heat request
   > ordinary local-target heat preservation
+
+normal Heatstrike final approach while process probe is still below strike
+  -> preserve BrewZilla local thermostat/heater enable
+  -> bound utilization instead of forcing ordinary 0% coast
 ```
 
-In particular:
-
-```text
-Clean Heatstrike final coast / hottest-view safety zero
-  -> 0% heat / heater OFF may be applied
-
-Mash-In Started explicit zero request
-  -> 0% heat / heater OFF may be applied
-
-process temperature > active requested target + 0.3°C
-  -> local-target preservation must not resurrect positive heat
-```
-
-This does not remove local BrewZilla thermostat preservation for ordinary stale/passive telemetry interpretation; it only prevents that preservation layer from overriding an intentional process/safety safe-down.
+A true hottest-view overshoot above approximately target +0.5°C may still produce explicit heat 0 / heater OFF. ABORT and hard safety remain authoritative.
 
 Implementation:
 
@@ -317,26 +310,45 @@ custom_components/brewassistant/brewzilla/brewzilla_local_regulation_heat_guard.
 The pre-mash-in model is physical-state dominant:
 
 ```text
-Mash/BLE/control probe = readiness gate
-BrewZilla internal/wort = safety view / overshoot limiter
-BrewZilla target = real strike target
-Pump = mixing/equalization tool
+MASH/external process probe = readiness authority
+BrewZilla internal/WORT     = safety view / overshoot limiter
+BrewZilla target            = real strike target
+Pump                         = mixing/equalization tool
 ```
 
-Current heat schedule from gate delta:
+Far from target, BrewAssistant progressively reduces requested heat authority as the process closes on strike.
+
+### Final approach after PR #193
+
+The 2026-08-31 water test reproduced the dead zone at approximately:
 
 ```text
->10°C below strike: 100%
-8–10°C below strike: 75%
-5–8°C below strike: 50%
-3–5°C below strike: 25%
-1–3°C below strike: 10%
-<=1°C below strike / overshoot: 0%, heater off
+strike target       71.8 °C
+MASH/process probe   69.6 °C
+WORT/internal        71.5 °C
 ```
 
-The hottest safety view can cap heat below this gate request. Pump mixing is used to reduce thermal stratification.
+The process probe still needed energy, but the old logic could disable the heater master because the internal safety view was already close to target.
 
-Pump-utilization increases remain positive physical actions and may require a new Supervised Apply confirmation even when the underlying Heatstrike strategy asks for stronger mixing near target.
+Current final-approach contract:
+
+```text
+process <=3 °C below strike
+  -> keep positive local-regulation authority
+
+safety headroom <=0.3 °C
+  -> bounded positive authority, typically 25%
+
+safety headroom <=3 °C
+  -> bounded positive authority, typically up to 50%
+
+true hottest-view overshoot > target +0.5 °C
+  -> explicit heat 0 / heater OFF allowed
+```
+
+The purpose is to leave BrewZilla's local thermostat active against the written strike target while BrewAssistant limits authority and observes both the external readiness probe and internal safety view.
+
+Pump mixing is used to reduce thermal stratification. Pump-utilization increases remain positive physical actions and may require a new Supervised Apply confirmation.
 
 Do not tune these thresholds casually; use Event Log evidence from real mash or controlled water tests.
 
@@ -357,19 +369,19 @@ Boil starts
   Brewday Runtime releases the external sensor
 
 Chill -> Transfer
-  owner: CFC backend
-  role: CFC outlet / wort-out temperature
+  owner: Cooling/CFC backend
+  role: CFC outlet / wort-out temperature when using CFC
 ```
 
-BrewZilla's internal temperature remains Brewday Runtime's primary kettle temperature throughout the hot-side process. The external sensor handoff prevents Brewday and CFC from competing for the same physical measurement role.
+BrewZilla's internal temperature remains Brewday Runtime's primary kettle temperature throughout the hot-side process. The external sensor handoff prevents Brewday and Cooling/CFC from competing for the same physical measurement role.
 
-The water-only run was aborted before Boil, so the release/acquisition handoff remains physically unverified.
+The water-only runs have not yet validated the Boil release / Chill acquisition handoff.
 
 ---
 
-## Mash-in state machine
+## Mash-In readiness and state machine
 
-Mash-in is a supervised one-way transition:
+Mash-In is a supervised one-way transition:
 
 ```text
 ready_for_mash_in
@@ -382,14 +394,37 @@ ready_for_mash_in
 
 A late/stale Mash-In Started action must not move an already completed mash-in backwards.
 
-The intended physical contract during `mash_in_started` is:
+### Automatic readiness after PR #194
+
+Automatic Mash-In READY now requires:
+
+```text
+fresh canonical external MASH/process temperature
+within strike target ±1.0 °C
+```
+
+A stale locked process value is retained only for diagnostics, including its age. It must never create automatic READY.
+
+### Bounded operator strike acceptance
+
+When RAPT Cloud process telemetry is stale or lagging but the vessel is physically near strike, the operator may use the bounded readiness action up to:
+
+```text
+strike target ±2.0 °C
+```
+
+The fallback is only physically plausible when BrewZilla's local target and internal/WORT state independently show a near-strike vessel condition.
+
+The operator action only latches `ready_for_mash_in`; it does **not** change target, heater, pump or utilization.
+
+The intended physical contract during `mash_in_started` remains:
 
 ```text
 pump OFF
 pump utilization 0%
 ```
 
-The 2026-08-29 water-only run showed pump ON / 50% in live UI around this transition, while the reviewed Flight Recorder sequence did not retain an unambiguous `mash_in_started` event before `mash_in_complete`. Do not infer a backend failure from that ambiguity alone. The next physical run must stop at Mash-In Started and verify gate state, timestamp and physical pump state before Brewfather Continue.
+The 2026-08-29 water-only run left this checkpoint ambiguous. The next continuous regression must stop at Mash-In Started and verify gate state, timestamp and physical pump state before Brewfather Continue.
 
 Required checkpoint:
 
@@ -429,12 +464,7 @@ If Brewfather/source schedule advances ahead of the physical process, telemetry 
 
 Current-brew history records ramp/hold duration, wall duration, pause duration, ΔT, average °C/min, process-temperature source, learning context and heat/pump utilization at start/end.
 
-Initial UI:
-
-```text
-dashboard/cards/brewday_physical_timing.yaml
-dashboard/cards/brewday_physical_timing_sv.yaml
-```
+The UI is now presented as part of the consolidated Brewday Runtime flow rather than a competing hardware cockpit.
 
 The first implementation is volatile across Home Assistant restart until field validation justifies persistence work.
 
@@ -455,6 +485,8 @@ mark freshness/recovery diagnostics
 RCL recovery itself must not change target, heat utilization, pump utilization, heater or pump.
 
 A true explicit ABORT/completed/process-safety safe-down context is different and remains authoritative.
+
+For Mash-In readiness specifically, stale external process temperature is diagnostic-only. It cannot satisfy automatic READY.
 
 ---
 
@@ -501,13 +533,22 @@ Verified:
 ✅ Bryggråd APPLY executed a 100% -> 95% heat-utilization recommendation
 ```
 
-Observed failures/ambiguities from the water-only run:
+The Mash-In Started physical pump-off checkpoint remained ambiguous and must still be retested explicitly.
+
+---
+
+## Physical findings 2026-08-31
+
+Observed and isolated:
 
 ```text
-❌ pre-#173 local-target preservation suppressed Heatstrike final zero-heat safe-down
-❌ pre-#173 local-target preservation could keep positive heat after 71.8 -> 66.0°C target downshift
-? Mash-In Started physical pump-off evidence was ambiguous and must be retested explicitly
+✅ Heatstrike final-approach dead zone reproduced at 71.8 / 69.6 / 71.5 °C
+✅ PR #193 merged with local-regulation final-approach contract
+✅ stale RAPT Cloud MASH/process telemetry reproduced near Mash-In
+✅ PR #194 merged with fresh-only automatic READY and bounded operator acceptance
 ```
+
+These fixes are covered by regression tests/CI, but the complete merged chain still needs one continuous physical water regression before the first real-mash run.
 
 ---
 
@@ -519,6 +560,15 @@ General Brewday cockpit:
 dashboard/cards/brewassistant_brewday.yaml
 dashboard/cards/brewassistant_brewday_sv.yaml
 ```
+
+Consolidated Brewday Runtime process flow:
+
+```text
+dashboard/cards/brewassistant_brewday_runtime_flow.yaml
+dashboard/cards/brewassistant_brewday_runtime_flow_sv.yaml
+```
+
+The runtime flow keeps physical timing and the Mash-In process handoff with Brewday, while generic pending/ABORT controls remain owned by the main Brewday cockpit. It must not become a second direct BrewZilla hardware cockpit.
 
 The operator controls are intentionally distinct:
 
@@ -544,8 +594,11 @@ Known compatibility-UI cleanup:
 Recommended next checks:
 
 ```text
-[ ] Water-only regression: Heatstrike final coast physically applies heat 0% / heater OFF
-[ ] Water-only regression: 71.8 -> 66.0°C target downshift suppresses positive heat while above target
+[ ] Continuous water regression: Heatstrike closes the final few degrees without the pre-#193 dead zone
+[ ] BrewZilla local regulation stays active through final approach / READY
+[ ] Automatic Mash-In READY only from fresh canonical process telemetry within ±1.0 °C
+[ ] Stale external process telemetry remains diagnostic-only
+[ ] Bounded operator strike acceptance behaves correctly when intentionally needed
 [ ] Explicit Mash-In Started checkpoint with pump OFF / utilization 0 before Continue
 [ ] #157: physical 66°C hold timer starts only on target reach
 [ ] #157: PAUSE freezes hold/ramp timing
@@ -554,6 +607,6 @@ Recommended next checks:
 [ ] First real-mash heat-strike and mash-in thermal behavior
 [ ] Full boil ramp/boil flow
 [ ] Boil release of the external process sensor
-[ ] CFC Chill/Transfer acquisition of that external sensor
+[ ] Cooling/CFC Chill/Transfer acquisition of that external sensor
 [ ] Continue Equipment Learning planned-vs-actual timing validation
 ```
