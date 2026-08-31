@@ -309,12 +309,40 @@ Current status:
 [ ] Dashboard section for Brewfather timing suggestions
 ```
 
-Learning remains advisory:
+Persistent learning feedback loop — later beta work:
+
+```text
+[ ] Store operator-approved learned profile overrides separately from built-in defaults
+[ ] Add explicit APPLY / DENY flow for learned profile candidates
+[ ] Match approved overrides by equipment + learning context + volume + grain + phase on a future brewday
+[ ] Load a matching approved override as profile input on the next brew without rewriting the Brewfather recipe
+[ ] Keep precedence explicit: hard safety / ABORT > active process guard > approved learned override > built-in profile default
+[ ] Record override provenance: evidence bucket, confidence, approved value, approval timestamp and source model version
+[ ] Expose which learned override is active, why it matched and which built-in value it replaced
+[ ] Provide reversible disable/revert/reset controls for accepted overrides
+[ ] Never promote a raw candidate into live control without explicit operator approval
+[ ] Add regression coverage proving Water only evidence cannot activate a Real mash override
+```
+
+Target feedback-loop model:
+
+```text
+current brew observations
+  -> persistent equipment/context evidence
+  -> learned candidate suggestion
+  -> explicit operator review / APPLY
+  -> persistent approved override
+  -> next matching brew loads override on top of built-in profile
+  -> live safety/ABORT remains authoritative at all times
+```
+
+Learning remains advisory until a candidate has been explicitly approved:
 
 ```text
 - no silent Brewfather recipe/profile rewrite
-- no automatic live target/heat/pump change from learning
+- no automatic live target/heat/pump change from an unreviewed learning candidate
 - operator reviews suggestions
+- approved overrides may influence a later matching brew through the normal controller/profile path
 - source/RCL quality affects confidence
 ```
 
