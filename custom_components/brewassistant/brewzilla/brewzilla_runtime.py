@@ -13,7 +13,10 @@ from homeassistant.core import HomeAssistant
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
 BREWZILLA_POWER_SWITCH = "switch.brewzilla"
-BREWZILLA_POWER_SENSOR = "sensor.brewzilla_power"
+# No verified physical BrewZilla power sensor is currently available. Do not
+# reuse sensor.brewzilla_power: that entity is installation-specific and is not
+# a trustworthy BrewZilla telemetry source.
+BREWZILLA_POWER_SENSOR: str | None = None
 BREWZILLA_CONNECTION_SENSOR = "sensor.brewzilla_connection"
 BREWZILLA_TEMP_SENSOR = "sensor.brewzilla_temperature"
 BREWZILLA_TARGET_NUMBER = "number.brewzilla_target_temperature"
@@ -22,6 +25,7 @@ BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_HEAT_UTILIZATION = "number.brewzilla_heat_utilization"
 BREWZILLA_PUMP_UTILIZATION = "number.brewzilla_pump_utilization"
 
+CONTROLLER_TARGET_SENSOR = "sensor.brewassistant_brewzilla_requested_target"
 RUNTIME_TARGET_SENSOR = "sensor.brewassistant_brewday_target_temperature"
 RUNTIME_STATE_SENSOR = "sensor.brewassistant_brewday_runtime_state"
 RUNTIME_STAGE_SENSOR = "sensor.brewassistant_brewday_runtime_stage"
@@ -37,14 +41,20 @@ ACTIVE_RUNTIME_STATES = {
 }
 
 
-def _state(hass: HomeAssistant, entity_id: str, default: str | None = None) -> str | None:
+def _state(
+    hass: HomeAssistant,
+    entity_id: str | None,
+    default: str | None = None,
+) -> str | None:
+    if not entity_id:
+        return default
     entity_state = hass.states.get(entity_id)
     if entity_state is None or entity_state.state in BAD_STATES:
         return default
     return entity_state.state
 
 
-def _float(hass: HomeAssistant, entity_id: str) -> float | None:
+def _float(hass: HomeAssistant, entity_id: str | None) -> float | None:
     raw = _state(hass, entity_id)
     if raw is None:
         return None
@@ -61,7 +71,9 @@ def _bool_on(hass: HomeAssistant, entity_id: str) -> bool | None:
     return raw.lower() in {"on", "true", "active", "running", "heat", "heating", "connected"}
 
 
-def _available(hass: HomeAssistant, entity_id: str) -> bool:
+def _available(hass: HomeAssistant, entity_id: str | None) -> bool:
+    if not entity_id:
+        return False
     entity_state = hass.states.get(entity_id)
     return entity_state is not None and entity_state.state not in BAD_STATES
 
@@ -69,7 +81,7 @@ def _available(hass: HomeAssistant, entity_id: str) -> bool:
 def _connection_ok(hass: HomeAssistant) -> bool:
     raw = _state(hass, BREWZILLA_CONNECTION_SENSOR)
     if raw is None:
-        return _available(hass, BREWZILLA_TEMP_SENSOR) or _available(hass, BREWZILLA_POWER_SENSOR)
+        return _available(hass, BREWZILLA_TEMP_SENSOR)
     return raw.lower() == "connected"
 
 
@@ -84,23 +96,29 @@ def _valid_target(value: float | None) -> bool:
 def _effective_target(
     *,
     runtime_state: str | None,
+    controller_target: float | None,
     runtime_target: float | None,
     device_target: float | None,
-) -> float | None:
-    """Prefer active Brewday Runtime target over stale device target.
+) -> tuple[float | None, str]:
+    """Resolve the target that physically owns BrewZilla right now.
 
-    Manual Brewday and Brew Tracker both expose their active step target through
-    sensor.brewassistant_brewday_target_temperature. The physical BrewZilla target
-    is still reported separately as device_target_temperature.
+    During an active Brewday the final orchestration requested target outranks
+    Brewfather's step target. This keeps Heatstrike at the latched strike target
+    even when BF has already advanced to the first mash hold. Mash-In Started
+    is the explicit boundary where orchestration changes that physical target.
     """
 
+    if _runtime_active(runtime_state) and _valid_target(controller_target):
+        return controller_target, "controller"
     if _runtime_active(runtime_state) and _valid_target(runtime_target):
-        return runtime_target
+        return runtime_target, "runtime"
     if _valid_target(device_target):
-        return device_target
+        return device_target, "device"
+    if _valid_target(controller_target):
+        return controller_target, "controller_stale"
     if _valid_target(runtime_target):
-        return runtime_target
-    return None
+        return runtime_target, "runtime_stale"
+    return None, "none"
 
 
 def _hardware_state(
@@ -208,13 +226,18 @@ def _summary(
 def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build a normalized BrewZilla hardware snapshot."""
     connected = _connection_ok(hass)
-    connection_state = _state(hass, BREWZILLA_CONNECTION_SENSOR, "Connected" if connected else "unknown")
+    connection_state = _state(
+        hass,
+        BREWZILLA_CONNECTION_SENSOR,
+        "Connected" if connected else "unknown",
+    )
     power_on = _bool_on(hass, BREWZILLA_POWER_SWITCH)
     pump_on = _bool_on(hass, BREWZILLA_PUMP_SWITCH)
     heater_on = _bool_on(hass, BREWZILLA_HEATER_SWITCH)
     power_w = _float(hass, BREWZILLA_POWER_SENSOR)
     current_temp = _float(hass, BREWZILLA_TEMP_SENSOR)
     device_target = _float(hass, BREWZILLA_TARGET_NUMBER)
+    controller_target = _float(hass, CONTROLLER_TARGET_SENSOR)
     runtime_target = _float(hass, RUNTIME_TARGET_SENSOR)
     heat_utilization = _float(hass, BREWZILLA_HEAT_UTILIZATION)
     pump_utilization = _float(hass, BREWZILLA_PUMP_UTILIZATION)
@@ -222,8 +245,9 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     runtime_stage = _state(hass, RUNTIME_STAGE_SENSOR, "Idle")
     runtime_step = _state(hass, RUNTIME_STEP_SENSOR, "Idle")
 
-    effective_target = _effective_target(
+    effective_target, effective_target_source = _effective_target(
         runtime_state=runtime_state,
+        controller_target=controller_target,
         runtime_target=runtime_target,
         device_target=device_target,
     )
@@ -262,8 +286,9 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "current_temperature": current_temp,
         "target_temperature": effective_target,
         "device_target_temperature": device_target,
+        "controller_target_temperature": controller_target,
         "runtime_target_temperature": runtime_target,
-        "effective_target_source": "runtime" if _runtime_active(runtime_state) and _valid_target(runtime_target) else "device",
+        "effective_target_source": effective_target_source,
         "temperature_delta": temp_delta,
         "pump_on": pump_on,
         "heater_on": heater_on,
@@ -287,6 +312,7 @@ def build_brewzilla_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             "connection_sensor": BREWZILLA_CONNECTION_SENSOR,
             "temperature_sensor": BREWZILLA_TEMP_SENSOR,
             "target_number": BREWZILLA_TARGET_NUMBER,
+            "controller_target_sensor": CONTROLLER_TARGET_SENSOR,
             "runtime_target_sensor": RUNTIME_TARGET_SENSOR,
             "pump_switch": BREWZILLA_PUMP_SWITCH,
             "heater_switch": BREWZILLA_HEATER_SWITCH,
