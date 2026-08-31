@@ -12,6 +12,7 @@ card:
       show_state: false
       show_label: true
       triggers_update:
+        - button.brewassistant_mash_in_override
         - button.brewassistant_mash_in_started
         - button.brewassistant_mash_in_complete
         - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
@@ -38,6 +39,8 @@ card:
           }
           const start = states['button.brewassistant_mash_in_started'];
           const complete = states['button.brewassistant_mash_in_complete'];
+          const override = states['button.brewassistant_mash_in_override'];
+          const oa = override?.attributes || {};
           const a = start?.attributes || complete?.attributes || {};
           const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
           const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
@@ -55,13 +58,20 @@ card:
           const pumpReason = clean(oz.clean_heat_strike_pump_reason) || '—';
           const effective = clean(a.effective_target || a.mash_in_effective_target || gate?.attributes?.effective_target || gate?.attributes?.mash_in_effective_target) || '—';
           const next = clean(a.next_target || a.mash_in_next_target || gate?.attributes?.next_target || gate?.attributes?.mash_in_next_target) || '—';
+          const process = Number(oa.mash_in_override_process_temperature);
+          const processAge = Number(oa.mash_in_override_process_temperature_age_seconds);
+          const processFresh = oa.mash_in_override_process_temperature_fresh === true;
+          const overrideAvailable = oa.mash_in_override_available === true;
+          const ageText = Number.isFinite(processAge) ? `${Math.floor(processAge / 60)}m ${Math.round(processAge % 60)}s` : 'okänd';
           const startOk = !!start;
           const completeOk = !!complete;
           let msg = 'Väntar på beredskap för inmäskning.';
-          if (!startOk || !completeOk) {
+          if (!startOk || !completeOk || !override) {
             msg = 'De nya knapp-entiteterna saknas ännu — kör pull + full HA-omstart.';
+          } else if (oa.mash_in_override_in_scope === true && !processFresh) {
+            msg = `RAPT Cloud MASH-data är stale (${ageText}). BrewZilla reglerar lokalt. ${overrideAvailable ? 'Manuell strike-kvittens är tillgänglig efter fysisk kontroll.' : 'Väntar tills WORT/lokalt target ligger inom säkert override-band.'}`;
           } else if (cleanHeat && gateState !== 'mash_in_started') {
-            msg = 'Heatstrike pågår. Mash/BLE/control-proben är beredskapsgate; wort/kettle används som säkerhetsbroms. Tryck INMÄSKNING PÅBÖRJAD först när gate-temperaturen är vid strike.';
+            msg = 'Heatstrike pågår. Färsk MASH/process-data ger automatisk READY inom ±1,0 °C. Manuell reservväg visas först inom ±2,0 °C.';
           } else if (startedVisible) {
             msg = 'Strike är redo. Tryck INMÄSKNING PÅBÖRJAD i BA när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.';
           } else if (completeVisible) {
@@ -69,10 +79,13 @@ card:
           } else if (gateState === 'mash_in_complete') {
             msg = 'Inmäskningen är klar. Brewfather är igång och BA har släppt vidare till normal mäskcirkulation.';
           }
+          const staleLine = oa.mash_in_override_in_scope === true && !processFresh
+            ? `<br>MASH ${fmt(process)} · stale ${ageText} · WORT ${fmt(Number(oa.mash_in_override_wort_temperature))} · lokalt target ${fmt(Number(oa.mash_in_override_local_target))}`
+            : '';
           const heatLine = cleanHeat
             ? `<br>strike ${fmt(strike)} · gate ${fmt(gateTemp)} / Δ ${fmt(gateDelta)} · säkerhet ${fmt(safetyTemp)} / Δ ${fmt(safetyDelta)} · värme ${Number.isFinite(heat) ? heat.toFixed(0) + ' %' : '—'} · pump ${Number.isFinite(pump) ? pump.toFixed(0) + ' %' : '—'} (${pumpReason})`
             : '';
-          return `${msg}<br>status ${gateState} · effektivt mål ${effective}°C · nästa ${next}°C${heatLine}`;
+          return `${msg}<br>status ${gateState} · effektivt mål ${effective}°C · nästa ${next}°C${staleLine}${heatLine}`;
         ]]]
       styles:
         card:
@@ -99,6 +112,42 @@ card:
           - font-weight: 760
           - line-height: 1.25
           - opacity: 0.78
+
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_override
+      name: GODKÄNN STRIKE MANUELLT
+      icon: mdi:hand-okay
+      show_state: false
+      show_label: true
+      label: Kvitterar endast READY-gaten · max ±2,0 °C
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_override
+        confirmation:
+          text: >-
+            Kontrollera strike-temperaturen fysiskt på BrewZilla/termometern.
+            Knappen kvitterar endast Mash-In READY och ändrar inte heat, pump
+            eller target. Fortsätt sedan med INMÄSKNING PÅBÖRJAD.
+      styles:
+        card:
+          - display: |
+              [[[
+                return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 12px
+          - background: rgba(255,152,0,.16)
+          - border: 1px solid rgba(255,152,0,.42)
+        name:
+          - font-size: 12px
+          - font-weight: 950
+        label:
+          - white-space: normal
+          - font-size: 10.5px
+          - font-weight: 750
+          - opacity: 0.76
 
     - type: horizontal-stack
       cards:
