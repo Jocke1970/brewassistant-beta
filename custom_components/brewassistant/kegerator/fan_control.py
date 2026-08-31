@@ -10,14 +10,16 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..configured_entities import configured_entity
+from ..configured_entities import configured_bool, configured_entity
 from ..const import (
     CONF_KEGERATOR_AIR_TEMP_ENTITY,
     CONF_KEGERATOR_FAN_POWER_ENTITY,
     CONF_KEGERATOR_POWER_ENTITY,
+    CONF_SHARED_KEGERATOR_FERMENTATION_COOLING,
     DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
     DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
     DEFAULT_KEGERATOR_POWER_ENTITY,
+    DEFAULT_SHARED_KEGERATOR_FERMENTATION_COOLING,
     DOMAIN,
 )
 from ..control_policy import SOURCE_BACKEND, request_action, section_policy
@@ -43,7 +45,6 @@ FAN_AUTO_SWITCH = "switch.brewassistant_kegerator_fan_auto_enabled"
 FAN_MODE_SELECT = "select.brewassistant_kegerator_fan_mode"
 AFTER_RUN_NUMBER = "number.brewassistant_kegerator_fan_afterrun_minutes"
 KEGERATOR_SUPERVISOR_SWITCH = "switch.brewassistant_climate_supervisor_enabled"
-FERMENTATION_SUPERVISOR_SWITCH = "switch.brewassistant_fermentation_climate_supervisor_enabled"
 FERMENTATION_AIR_TARGET = "sensor.brewassistant_fermentation_effective_air_target"
 CARBONATION_STATUS = "sensor.brewassistant_carbonation_status"
 ACTIVE_CARBONATION_STATES = {"carbonating", "conditioning", "ready to serve"}
@@ -52,6 +53,8 @@ DATA_KEY = "kegerator_fan_auto"
 SECTION = "kegerator_fan"
 STRATEGY = "smart_temperature_afterrun"
 SCHEDULER_OWNER = "fan_auto_switch_timer"
+ARCHITECTURE_SCOPE = "kegerator_fan_only"
+SHARED_COOLING_BRIDGE = "fermentation_uses_kegerator_cooling_hardware"
 
 COMPRESSOR_W = 20.0
 FAN_W = 2.0
@@ -72,15 +75,34 @@ RUNTIME_APPLY_LOCK = "apply_lock"
 
 
 @dataclass(slots=True)
+class ClimateContext:
+    """Resolved temperature/control context for the physical kegerator fan."""
+
+    entity: str | None
+    state: str | None
+    hvac_action: str | None
+    enabled: bool
+    conflict: bool
+    source: str
+    kegerator_state: str | None
+    fermentation_state: str | None
+    shared_bridge_enabled: bool
+    shared_bridge_active: bool
+
+
+@dataclass(slots=True)
 class FanInputs:
     model: ModelInputs
     kegerator_climate_state: str | None
     fermentation_climate_state: str | None
     active_climate_entity: str | None
+    climate_context_source: str
     climate_state: str | None
     hvac_action: str | None
     climate_enabled: bool
     climate_conflict: bool
+    shared_cooling_bridge_enabled: bool
+    shared_cooling_bridge_active: bool
     current_temperature: float | None
     target_temperature: float | None
     temperature_delta: float | None
@@ -176,6 +198,11 @@ def _num_attr(hass: HomeAssistant, entity_id: str, attr: str) -> float | None:
         return None
 
 
+def _bool_attr(hass: HomeAssistant, entity_id: str, attr: str) -> bool:
+    value = _attr(hass, entity_id, attr)
+    return value is True or str(value).lower() == "true"
+
+
 def _parse_utc(raw: Any) -> Any:
     parsed = dt_util.parse_datetime(str(raw)) if raw is not None else None
     return dt_util.as_utc(parsed) if parsed is not None else None
@@ -225,69 +252,105 @@ def _climate_target(hass: HomeAssistant, entity_id: str, hvac_action: str | None
     return high if high is not None else low
 
 
-def _bool_attr(hass: HomeAssistant, entity_id: str, attr: str) -> bool:
-    value = _attr(hass, entity_id, attr)
-    return value is True or str(value).lower() == "true"
-
-
 def _carbonation_active(hass: HomeAssistant) -> bool:
     state = (_state(hass, CARBONATION_STATUS) or "").lower()
     return _bool_attr(hass, CARBONATION_STATUS, "active") or state in ACTIVE_CARBONATION_STATES
 
 
-def _climate_context(hass: HomeAssistant) -> tuple[str | None, str | None, str | None, bool, bool, str | None, str | None]:
-    """Resolve the climate context that currently owns the shared fridge.
+def _shared_cooling_bridge_enabled(hass: HomeAssistant) -> bool:
+    return configured_bool(
+        hass,
+        CONF_SHARED_KEGERATOR_FERMENTATION_COOLING,
+        DEFAULT_SHARED_KEGERATOR_FERMENTATION_COOLING,
+    )
 
-    The kegerator climate may stay enabled while the fridge is used as a
-    fermentation chamber. Fermentation scope/supervisor state therefore wins
-    over raw climate on/off state. A conflict is only reported when both
-    BrewAssistant supervisors actively claim a process scope at the same time.
+
+def _climate_context(hass: HomeAssistant) -> ClimateContext:
+    """Resolve kegerator context with an explicit temporary fermentation bridge.
+
+    Kegerator and Fermentation remain separate logical backends. When the
+    compatibility bridge is enabled, an active fermentation scope may borrow
+    the physical kegerator cooling hardware and therefore its fan. Disabling
+    the bridge makes this backend ignore the fermentation climate entirely.
     """
     k_state = _state(hass, CLIMATE)
     f_state = _state(hass, CHAMBER)
     k_enabled = _climate_enabled(k_state)
     f_enabled = _climate_enabled(f_state)
+    bridge_enabled = _shared_cooling_bridge_enabled(hass)
 
     fermentation_scope = _bool_attr(hass, FERMENTATION_AIR_TARGET, "scope_active")
-    fermentation_supervisor = hass.states.is_state(FERMENTATION_SUPERVISOR_SWITCH, "on")
-    kegerator_supervisor = hass.states.is_state(KEGERATOR_SUPERVISOR_SWITCH, "on")
-    fermentation_owner = fermentation_scope or fermentation_supervisor
-    kegerator_owner = kegerator_supervisor and _carbonation_active(hass)
+    fermentation_owner = bridge_enabled and fermentation_scope
+    kegerator_owner = (
+        hass.states.is_state(KEGERATOR_SUPERVISOR_SWITCH, "on")
+        and _carbonation_active(hass)
+    )
     conflict = fermentation_owner and kegerator_owner
+
+    entity: str | None = None
+    state: str | None = None
+    source = "none"
+    bridge_active = False
 
     if fermentation_owner and f_enabled:
         entity = CHAMBER
         state = f_state
+        source = "fermentation_shared_cooling_bridge"
+        bridge_active = True
     elif k_enabled:
         entity = CLIMATE
         state = k_state
-    elif f_enabled:
-        entity = CHAMBER
-        state = f_state
-    else:
-        return None, None, None, False, conflict, k_state, f_state
+        source = "kegerator"
+
+    if entity is None:
+        return ClimateContext(
+            entity=None,
+            state=None,
+            hvac_action=None,
+            enabled=False,
+            conflict=conflict,
+            source=source,
+            kegerator_state=k_state,
+            fermentation_state=f_state,
+            shared_bridge_enabled=bridge_enabled,
+            shared_bridge_active=False,
+        )
 
     action_raw = _attr(hass, entity, "hvac_action")
     action = str(action_raw) if action_raw is not None else None
-    return entity, state, action, True, conflict, k_state, f_state
+    return ClimateContext(
+        entity=entity,
+        state=state,
+        hvac_action=action,
+        enabled=True,
+        conflict=conflict,
+        source=source,
+        kegerator_state=k_state,
+        fermentation_state=f_state,
+        shared_bridge_enabled=bridge_enabled,
+        shared_bridge_active=bridge_active,
+    )
 
 
 def _read_inputs(hass: HomeAssistant) -> FanInputs:
     air_entity = configured_entity(hass, CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY)
     power_entity = configured_entity(hass, CONF_KEGERATOR_POWER_ENTITY, DEFAULT_KEGERATOR_POWER_ENTITY)
     fan_power_entity = configured_entity(hass, CONF_KEGERATOR_FAN_POWER_ENTITY, DEFAULT_KEGERATOR_FAN_POWER_ENTITY)
-
-    active_climate, climate_state, hvac_action, climate_enabled, climate_conflict, k_state, f_state = _climate_context(hass)
+    context = _climate_context(hass)
 
     current = _num_state(hass, air_entity)
-    if current is None and active_climate is not None:
-        current = _num_attr(hass, active_climate, "current_temperature")
+    if current is None and context.entity is not None:
+        current = _num_attr(hass, context.entity, "current_temperature")
     if current is None:
         current = _num_attr(hass, CLIMATE, "current_temperature")
-    if current is None:
+    if current is None and context.shared_bridge_active:
         current = _num_attr(hass, CHAMBER, "current_temperature")
 
-    target = _climate_target(hass, active_climate, hvac_action) if active_climate is not None else None
+    target = (
+        _climate_target(hass, context.entity, context.hvac_action)
+        if context.entity is not None
+        else None
+    )
     delta = round(current - target, 2) if current is not None and target is not None else None
     trend = _num_attr(hass, AIR_STATS, "trend_c_per_hour")
     avg15 = _num_attr(hass, AIR_STATS, "average_15m")
@@ -297,9 +360,10 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
     compressor = power is not None and power > COMPRESSOR_W
     fan_running = fan_state == "on" or (fan_power is not None and fan_power > FAN_W)
     temp_ok = _available(hass, air_entity) or (
-        active_climate is not None and _num_attr(hass, active_climate, "current_temperature") is not None
+        context.entity is not None
+        and _num_attr(hass, context.entity, "current_temperature") is not None
     )
-    temp_context_ok = current is not None and target is not None and not climate_conflict
+    temp_context_ok = current is not None and target is not None and not context.conflict
 
     model = ModelInputs(
         compressor_active=compressor,
@@ -308,20 +372,23 @@ def _read_inputs(hass: HomeAssistant) -> FanInputs:
         power_sensor_ok=power is not None,
         temperature_sensor_ok=temp_ok,
         temperature_context_available=temp_context_ok,
-        climate_conflict=climate_conflict,
-        hvac_action=hvac_action,
+        climate_conflict=context.conflict,
+        hvac_action=context.hvac_action,
         temperature_delta=delta,
         trend_c_per_hour=trend,
     )
     return FanInputs(
         model=model,
-        kegerator_climate_state=k_state,
-        fermentation_climate_state=f_state,
-        active_climate_entity=active_climate,
-        climate_state=climate_state,
-        hvac_action=hvac_action,
-        climate_enabled=climate_enabled,
-        climate_conflict=climate_conflict,
+        kegerator_climate_state=context.kegerator_state,
+        fermentation_climate_state=context.fermentation_state,
+        active_climate_entity=context.entity,
+        climate_context_source=context.source,
+        climate_state=context.state,
+        hvac_action=context.hvac_action,
+        climate_enabled=context.enabled,
+        climate_conflict=context.conflict,
+        shared_cooling_bridge_enabled=context.shared_bridge_enabled,
+        shared_cooling_bridge_active=context.shared_bridge_active,
         current_temperature=round(current, 2) if current is not None else None,
         target_temperature=round(target, 2) if target is not None else None,
         temperature_delta=delta,
@@ -396,7 +463,13 @@ def _sync_compressor_runtime(
     return None
 
 
-def _afterrun_state(hass: HomeAssistant, inputs: FanInputs, *, enabled: bool, mode: str) -> tuple[bool, str | None, float]:
+def _afterrun_state(
+    hass: HomeAssistant,
+    inputs: FanInputs,
+    *,
+    enabled: bool,
+    mode: str,
+) -> tuple[bool, str | None, float]:
     if not enabled or mode not in AFTERRUN_MODES or inputs.compressor_active:
         return False, None, 0.0
     until = _parse_utc(_bucket(hass).get(RUNTIME_AFTERRUN_UNTIL))
@@ -413,7 +486,11 @@ def _afterrun_expired(hass: HomeAssistant) -> bool:
     return until is not None and until <= dt_util.utcnow()
 
 
-def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecision, bool, str | None, float]:
+def _evaluate(
+    hass: HomeAssistant,
+    *,
+    mutate: bool,
+) -> tuple[FanInputs, FanDecision, bool, str | None, float]:
     inputs = _read_inputs(hass)
     enabled, _auto_entity = _fan_auto_state(hass)
     mode = _fan_mode(hass)
@@ -431,13 +508,21 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
             )
 
     afterrun_active, afterrun_until, afterrun_remaining = _afterrun_state(
-        hass, inputs, enabled=enabled, mode=mode
+        hass,
+        inputs,
+        enabled=enabled,
+        mode=mode,
     )
     if mutate and not afterrun_active and _afterrun_expired(hass):
         _clear_afterrun(hass, "afterrun_expired")
         afterrun_until = None
 
-    decision = decide(enabled=enabled, mode=mode, inputs=inputs.model, afterrun_active=afterrun_active)
+    decision = decide(
+        enabled=enabled,
+        mode=mode,
+        inputs=inputs.model,
+        afterrun_active=afterrun_active,
+    )
 
     if mutate:
         _bucket(hass)[RUNTIME_LAST_DECISION] = {
@@ -445,6 +530,9 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
             "strategy": STRATEGY,
             "mode": mode,
             "transition": transition,
+            "climate_context_source": inputs.climate_context_source,
+            "shared_cooling_bridge_enabled": inputs.shared_cooling_bridge_enabled,
+            "shared_cooling_bridge_active": inputs.shared_cooling_bridge_active,
             "inputs": asdict(inputs.model),
             "decision": asdict(decision),
             "afterrun_active": afterrun_active,
@@ -484,6 +572,7 @@ def _snapshot_from(
     return {
         "source": "python_kegerator_fan_backend_v3_smart_auto",
         "strategy": STRATEGY,
+        "architecture_scope": ARCHITECTURE_SCOPE,
         "scheduler_owner": SCHEDULER_OWNER,
         "controller_enabled": enabled,
         "control_owner": SCHEDULER_OWNER if enabled else "none",
@@ -526,9 +615,14 @@ def _snapshot_from(
         "temperature_demand_hysteresis_run": demand.hysteresis_run,
         "climate_entity": inputs.active_climate_entity,
         "active_climate_entity": inputs.active_climate_entity,
+        "climate_context_source": inputs.climate_context_source,
         "climate_state": inputs.climate_state,
         "climate_enabled": inputs.climate_enabled,
         "climate_conflict": inputs.climate_conflict,
+        "shared_cooling_bridge": SHARED_COOLING_BRIDGE,
+        "shared_cooling_bridge_enabled": inputs.shared_cooling_bridge_enabled,
+        "shared_cooling_bridge_active": inputs.shared_cooling_bridge_active,
+        "shared_cooling_bridge_config_key": CONF_SHARED_KEGERATOR_FERMENTATION_COOLING,
         "kegerator_climate_entity": CLIMATE,
         "kegerator_climate_state": inputs.kegerator_climate_state,
         "fermentation_chamber_entity": CHAMBER,
@@ -607,6 +701,7 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
                 reason=f"Kegerator fan auto: {decision.reason}",
                 context={
                     "strategy": STRATEGY,
+                    "architecture_scope": ARCHITECTURE_SCOPE,
                     "scheduler_owner": SCHEDULER_OWNER,
                     "fan_mode": _fan_mode(hass),
                     "fan_reason": decision.reason,
@@ -618,7 +713,10 @@ async def async_apply_kegerator_fan_auto(hass: HomeAssistant) -> dict[str, Any]:
                     "power_entity": inputs.power_entity,
                     "power_w": inputs.power_w,
                     "active_climate_entity": inputs.active_climate_entity,
+                    "climate_context_source": inputs.climate_context_source,
                     "climate_conflict": inputs.climate_conflict,
+                    "shared_cooling_bridge_enabled": inputs.shared_cooling_bridge_enabled,
+                    "shared_cooling_bridge_active": inputs.shared_cooling_bridge_active,
                     "temperature_delta": inputs.temperature_delta,
                     "trend_c_per_hour": inputs.trend_c_per_hour,
                 },

@@ -31,6 +31,7 @@ CONF_KEGERATOR_AIR_TEMP_ENTITY = "kegerator_air_temp_entity"
 CONF_KEGERATOR_POWER_ENTITY = "kegerator_power_entity"
 CONF_KEGERATOR_FAN_POWER_ENTITY = "kegerator_fan_power_entity"
 CONF_FERMENTATION_HEAT_POWER_ENTITY = "fermentation_heat_power_entity"
+CONF_SHARED_KEGERATOR_FERMENTATION_COOLING = "shared_kegerator_fermentation_cooling"
 
 CONF_RUNTIME_RECIPE_NAME_ENTITY = "runtime_recipe_name_entity"
 CONF_RUNTIME_STATUS_ENTITY = "runtime_status_entity"
@@ -48,6 +49,7 @@ DEFAULT_KEGERATOR_AIR_TEMP_ENTITY = "sensor.kyl_temperatur_4"
 DEFAULT_KEGERATOR_POWER_ENTITY = "sensor.kegerator_power"
 DEFAULT_KEGERATOR_FAN_POWER_ENTITY = "sensor.kegerator_fan_power"
 DEFAULT_FERMENTATION_HEAT_POWER_ENTITY = "sensor.fermentation_heat_mat_power"
+DEFAULT_SHARED_KEGERATOR_FERMENTATION_COOLING = True
 
 DEFAULT_RUNTIME_RECIPE_NAME_ENTITY = "sensor.recipe_runtime_name"
 DEFAULT_RUNTIME_STATUS_ENTITY = "sensor.recipe_runtime_status"
