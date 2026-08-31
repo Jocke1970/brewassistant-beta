@@ -21,8 +21,10 @@ Legacy local packages      = compatibility/cleanup only
 | --- | --- |
 | Current roadmap | [`docs/roadmap.md`](docs/roadmap.md) |
 | Brewday ↔ BrewZilla operator/control flow | [`docs/brewday-brewzilla.md`](docs/brewday-brewzilla.md) |
+| Physical Brewday validation 2026-08-31 | [`docs/physical-validation-2026-08-31.md`](docs/physical-validation-2026-08-31.md) |
 | Flight Recorder / Event Log | [`docs/brewday-audit.md`](docs/brewday-audit.md) |
 | BrewZilla backend responsibilities | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
+| Cooling backend responsibilities | [`docs/backends/cooling-backend.md`](docs/backends/cooling-backend.md) |
 | BrewZilla Advice control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
 | Equipment Learning | [`docs/brewzilla-equipment-learning.md`](docs/brewzilla-equipment-learning.md) |
 | Dashboard baseline | [`docs/dashboard-baselines.md`](docs/dashboard-baselines.md) |
@@ -133,9 +135,9 @@ Rearm does not bypass BrewZilla's independent hardware ABORT lockout.
 
 ---
 
-## Physically validated 2026-08-29 chain
+## Physically validated hot-side chain
 
-The current Brewfather/BrewZilla supervised baseline has verified:
+The supervised Brewfather/BrewZilla baseline has verified:
 
 ```text
 ✅ Planning can start/keep Flight Recorder without owning hot side
@@ -152,19 +154,36 @@ The current Brewfather/BrewZilla supervised baseline has verified:
 ✅ hardware ABORT turns pump OFF
 ✅ hardware ABORT zeros both utilizations
 ✅ hardware ABORT lockout blocks recreated positive actions
+✅ Brewday ABORT performs physical safe-down and latches BA ownership off
+✅ Brewfather cannot reclaim BA ownership while Brewday control is aborted
+✅ HA restart preserves the Brewday operator ABORT latch
+✅ explicit rearm restores eligibility without bypassing hardware lockout
 ```
 
-The next short physical regression is the Brewday-level persistent operator ABORT/rearm path.
+The 2026-08-31 water validation then exposed and drove fixes for two near-strike edge cases:
+
+```text
+✅ Heatstrike final-approach dead zone identified and fixed in PR #193
+✅ BrewZilla local regulation now remains active through final approach / READY
+✅ Mash-In readiness stale-RAPT behavior bounded in PR #194
+✅ automatic Mash-In READY requires fresh canonical process telemetry within ±1.0 °C
+✅ stale process values are diagnostic-only and cannot create automatic READY
+✅ bounded operator strike acceptance is available up to ±2.0 °C without changing hardware state
+```
+
+See [`docs/physical-validation-2026-08-31.md`](docs/physical-validation-2026-08-31.md) for the detailed evidence and current contract.
 
 ---
 
 ## RAPT Cloud Link safeguards
 
-RCL can replay stale configuration after a successful write. BrewAssistant now keeps effective runtime target separate from physical device target and uses a narrow confirmed-plan readback grace so an old target/heat/pump number value does not immediately reopen confirmation for the same already-approved intention.
+RCL can replay stale configuration after a successful write. BrewAssistant keeps effective runtime target separate from physical device target and uses a narrow confirmed-plan readback grace so an old target/heat/pump number value does not immediately reopen confirmation for the same already-approved intention.
 
 The grace does not silently re-energize heater or pump and ABORT invalidates it immediately.
 
 Telemetry recovery is separate from physical control: stale RCL may trigger refresh/reload diagnostics, but recovery itself must not rewrite target/heat/pump when BrewZilla already has a valid local regulation target.
+
+For Mash-In readiness, stale external process temperature is retained for diagnostics only. Automatic READY requires fresh canonical process telemetry; the bounded operator acceptance path does not itself change target, heat, pump or utilization.
 
 ---
 
@@ -180,7 +199,7 @@ Boil starts
   Brewday releases external sensor ownership
 
 Chill -> Transfer
-  owner = CFC backend
+  owner = Cooling/CFC backend
   role = CFC outlet / wort-out temperature
 ```
 
@@ -204,10 +223,13 @@ BrewZilla internal temperature remains Brewday Runtime's primary kettle temperat
 ✅ confirmed RCL number-readback grace
 ✅ BrewZilla hardware ABORT + lockout
 ✅ Brewday persistent operator ABORT + explicit rearm
-✅ clean heat-strike + mash-in state machine
+✅ clean heat-strike + final-approach local-regulation model
+✅ Mash-In state machine + bounded readiness override
+✅ read-only physical ramp/hold timing telemetry
 ✅ RCL recovery/local-regulation preservation
 ✅ Manual channel-scoped target/heat/pump ownership
 ✅ passive BrewZilla Equipment Learning foundation
+✅ Cooling Runtime v2 / CFC + coil/manual-water method model
 ✅ Counterflow Wort Cooling backend/cockpit
 ✅ Carbonation Runtime/cockpit
 ✅ Climate Supervisor
@@ -221,15 +243,15 @@ BrewZilla internal temperature remains Brewday Runtime's primary kettle temperat
 ## Immediate validation focus
 
 ```text
-🧪 Brewday ABORT button: safe-down + runtime_state aborted
-🧪 Brewfather cannot reclaim ownership while operator control is aborted
-🧪 HA restart preserves operator ABORT latch
-🧪 explicit rearm restores eligibility without bypassing hardware lockout
+🧪 continuous water regression of the PR #193 Heatstrike final-approach contract
+🧪 automatic Mash-In READY only from fresh process telemetry within ±1.0 °C
+🧪 bounded operator strike acceptance when RAPT Cloud process telemetry is stale
+🧪 Mash-In Started checkpoint: pump OFF + pump utilization 0 before grain addition
+🧪 physical 66°C hold and separate 66 -> 72°C ramp timing
 🧪 first supervised real-mash heat-strike/mash-in validation
-🧪 66°C hold and 66 -> 72°C real-mash ramp
 🧪 boil ramp / boil validation
 🧪 external process-sensor release at Boil
-🧪 CFC acquisition during Chill/Transfer
+🧪 Cooling/CFC acquisition during Chill/Transfer
 🧪 Equipment Learning planned-vs-actual timing evidence
 ```
 
