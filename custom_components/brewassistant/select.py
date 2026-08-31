@@ -15,6 +15,7 @@ from .brewzilla.brewzilla_temperature import MASH_SOURCE_OPTIONS
 from .control_policy import POLICY_OPTIONS, SECTION_CONFIG, section_policy
 from .coordinator import BrewAssistantCoordinator
 from .entity import BrewAssistantEntity
+from .kegerator.fan_control import async_apply_kegerator_fan_auto
 from .supervised_apply import READ_ONLY_MODE, SUPERVISED_MODE, cancel_pending_action
 
 METHOD_OPTIONS = [
@@ -45,6 +46,7 @@ KEGERATOR_FAN_MODE_OPTIONS = [
     "Off",
     "Cooling only",
     "Afterrun",
+    "Smart auto",
     "Always on",
 ]
 
@@ -301,7 +303,7 @@ class BrewAssistantBrewZillaMashTemperatureSourceSelect(BrewAssistantEntity, Res
 
 
 class BrewAssistantKegeratorFanModeSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
-    """Simple kegerator fan mode selector."""
+    """Kegerator fan mode selector."""
 
     _attr_has_entity_name = False
     _attr_options = KEGERATOR_FAN_MODE_OPTIONS
@@ -312,7 +314,7 @@ class BrewAssistantKegeratorFanModeSelect(BrewAssistantEntity, RestoreEntity, Se
         self._attr_unique_id = f"{DOMAIN}_select_kegerator_fan_mode"
         self._attr_name = "BrewAssistant Kegerator Fan Mode"
         self._attr_suggested_object_id = f"{DOMAIN}_kegerator_fan_mode"
-        self._current_option = "Afterrun"
+        self._current_option = "Smart auto"
 
     async def async_added_to_hass(self) -> None:
         """Restore fan mode after restart."""
@@ -333,17 +335,19 @@ class BrewAssistantKegeratorFanModeSelect(BrewAssistantEntity, RestoreEntity, Se
             return
         self._current_option = option
         self.async_write_ha_state()
+        await async_apply_kegerator_fan_auto(self.coordinator.hass)
         await self.coordinator.async_request_refresh()
 
     @property
     def extra_state_attributes(self) -> dict[str, str | bool]:
         """Return fan mode diagnostics."""
         return {
-            "source": "kegerator_fan_simple_control",
-            "default": "Afterrun",
+            "source": "kegerator_fan_control",
+            "default": "Smart auto",
             "off": "Fan is kept off while fan-auto is enabled",
             "cooling_only": "Fan follows compressor activity",
             "afterrun": "Fan follows compressor activity and stays on after stop",
+            "smart_auto": "Fan uses compressor, afterrun, temperature delta and trend",
             "always_on": "Fan stays on while fan-auto is enabled",
         }
 
