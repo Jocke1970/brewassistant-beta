@@ -26,8 +26,6 @@ from . import brewzilla_manual_brew_control as _manual_brew_control
 from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
 from . import brewzilla_supervised_readback_grace as _supervised_readback_grace
 from . import brewzilla_phase_authority as _phase_authority
-from . import brewzilla_freshness_guard as _freshness_guard
-from . import brewzilla_stale_safe_guard as _runtime_safety
 from . import brewzilla_paused_guard as _paused_guard
 from . import brewzilla_paused_heatstrike_guard as _paused_heatstrike_guard
 from . import brewzilla_execution_guard as _gate
@@ -38,6 +36,7 @@ from . import brewzilla_no_positive_gate as _no_positive_gate
 from . import brewzilla_local_regulation_heat_guard as _local_regulation_heat_guard
 from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_safe_down_guard
 from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
+from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -88,8 +87,10 @@ _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
 
-_freshness_guard.install_freshness_guard()
-_runtime_safety.install_stale_safe_guard()
+# The older freshness/stale-safe pair deliberately is not installed. Those
+# layers translated ordinary stale cloud data into heater/pump OFF. BrewZilla
+# already regulates locally against its last applied target, so normal data loss
+# must be fail-passive instead of an automatic safe-down.
 _paused_guard.install_paused_guard()
 _paused_heatstrike_guard.install_paused_heatstrike_guard()
 _gate.install_execution_guard()
@@ -117,7 +118,12 @@ _manual_brew_control.install_manual_brew_control_guard()
 _supervised_runtime_guard.install_supervised_runtime_guard()
 # Stale confirmed readback grace belongs to generic supervised plans.
 _supervised_readback_grace.install_supervised_readback_grace()
-# Install last: Brewfather Play authorizes the physical Heatstrike/Mash-In phase,
-# so that controller may modulate heat/pump without per-write confirmations while
-# all lower ABORT/safety guards remain intact.
+# Brewfather Play authorizes the physical Heatstrike/Mash-In phase, so that
+# controller may modulate heat/pump without per-write confirmations while all
+# lower ABORT/safety guards remain intact.
 _phase_authority.install_phase_authority()
+
+# Install absolutely last: ordinary RCL/process telemetry loss stops BA writes
+# and leaves BrewZilla's last local target/output state untouched. ABORT and
+# explicit hard-safety paths are exempt and remain authoritative.
+_fail_passive_guard.install_fail_passive_guard()
