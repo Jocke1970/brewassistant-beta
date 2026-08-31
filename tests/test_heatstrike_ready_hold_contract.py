@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLEAN = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_clean_heat_strike_guard.py"
 CONTRACT = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_hot_side_contract.py"
+FAIL_PASSIVE = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_fail_passive_guard.py"
 INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
 PHASE_AUTHORITY = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_phase_authority.py"
 
@@ -32,7 +33,8 @@ def test_ready_is_a_pure_operator_gate() -> None:
     assert '"requested_target"' not in ready_body
     assert '"desired_heat_utilization"' not in ready_body
     assert '"desired_pump_utilization"' not in ready_body
-    assert "Heatstrike target/heat/pump remain authoritative" in ready_body
+    assert "Heatstrike target/heat/pump" in ready_body
+    assert "remain authoritative until Mash-In Started" in ready_body
 
 
 def test_mash_in_started_is_atomic_release_boundary() -> None:
@@ -69,6 +71,41 @@ def test_legacy_overlapping_layers_are_not_installed() -> None:
     assert "install_mash_in_target_patch()" not in source
     assert "install_mash_in_started_guard()" not in source
     assert "install_mash_in_state_guard()" not in source
+
+
+def test_old_stale_safe_layers_are_not_installed() -> None:
+    source = INIT.read_text(encoding="utf-8")
+    assert "install_freshness_guard()" not in source
+    assert "install_stale_safe_guard()" not in source
+    assert "_fail_passive_guard.install_fail_passive_guard()" in source
+    assert source.rfind("_fail_passive_guard.install_fail_passive_guard()") > source.rfind(
+        "_phase_authority.install_phase_authority()"
+    )
+
+
+def test_fail_passive_never_turns_outputs_off_for_ordinary_data_loss() -> None:
+    source = FAIL_PASSIVE.read_text(encoding="utf-8")
+    hold = source.split("def _hold_last_observed", 1)[1].split("def _augment_snapshot", 1)[0]
+    apply_body = source.split("async def async_apply_brewzilla_target_if_allowed", 1)[1].split(
+        "def _resolve_auto_without_internal_takeover", 1
+    )[0]
+
+    assert '"fail_passive_mode": "brewzilla_local_regulation"' in hold
+    assert '"fail_passive_no_new_writes": True' in hold
+    assert '"heater_stop_needed": False' in hold
+    assert '"pump_stop_needed": False' in hold
+    assert '"can_apply_target": False' in hold
+    assert '"actions": []' in apply_body
+    assert "_enforce_brewzilla_safe_state" not in source
+
+
+def test_owned_external_probe_is_not_replaced_by_internal_on_dropout() -> None:
+    source = FAIL_PASSIVE.read_text(encoding="utf-8")
+    resolver = source.split("def _resolve_auto_without_internal_takeover", 1)[1].split(
+        "def install_fail_passive_guard", 1
+    )[0]
+    assert "if lock_active and degraded_reason" in resolver
+    assert "return None, True, degraded_reason" in resolver
 
 
 def test_play_granted_authority_survives_ready_and_started_until_complete() -> None:
