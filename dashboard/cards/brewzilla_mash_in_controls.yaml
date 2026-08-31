@@ -12,6 +12,7 @@ card:
       show_state: false
       show_label: true
       triggers_update:
+        - button.brewassistant_mash_in_override
         - button.brewassistant_mash_in_started
         - button.brewassistant_mash_in_complete
         - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
@@ -38,6 +39,8 @@ card:
           }
           const start = states['button.brewassistant_mash_in_started'];
           const complete = states['button.brewassistant_mash_in_complete'];
+          const override = states['button.brewassistant_mash_in_override'];
+          const oa = override?.attributes || {};
           const a = start?.attributes || complete?.attributes || {};
           const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
           const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
@@ -55,24 +58,34 @@ card:
           const pumpReason = clean(oz.clean_heat_strike_pump_reason) || '—';
           const effective = clean(a.effective_target || a.mash_in_effective_target || gate?.attributes?.effective_target || gate?.attributes?.mash_in_effective_target) || '—';
           const next = clean(a.next_target || a.mash_in_next_target || gate?.attributes?.next_target || gate?.attributes?.mash_in_next_target) || '—';
+          const process = Number(oa.mash_in_override_process_temperature);
+          const processAge = Number(oa.mash_in_override_process_temperature_age_seconds);
+          const processFresh = oa.mash_in_override_process_temperature_fresh === true;
+          const overrideAvailable = oa.mash_in_override_available === true;
+          const ageText = Number.isFinite(processAge) ? `${Math.floor(processAge / 60)}m ${Math.round(processAge % 60)}s` : 'unknown';
           const startOk = !!start;
           const completeOk = !!complete;
-          let msg = 'Väntar på mash-in readiness.';
-          if (!startOk || !completeOk) {
-            msg = 'Nya knapp-entities saknas ännu — kör pull + full HA-restart.';
+          let msg = 'Waiting for mash-in readiness.';
+          if (!startOk || !completeOk || !override) {
+            msg = 'New button entities are missing — pull and perform a full HA restart.';
+          } else if (oa.mash_in_override_in_scope === true && !processFresh) {
+            msg = `RAPT Cloud MASH data is stale (${ageText}). BrewZilla is regulating locally. ${overrideAvailable ? 'Manual strike acceptance is available after physical verification.' : 'Waiting until WORT/local target is inside the safe override band.'}`;
           } else if (cleanHeat && gateState !== 'mash_in_started') {
-            msg = 'Heatstrike pågår. Mash/BLE/control-proben är readiness-gate; wort/kettle används som säkerhetsbroms. Tryck MASH-IN STARTED först när gate-temp är vid strike.';
+            msg = 'Heatstrike is active. Fresh MASH/process data gives automatic READY inside ±1.0 °C. The manual fallback appears only inside ±2.0 °C.';
           } else if (startedVisible) {
-            msg = 'Strike är redo. Tryck MASH-IN STARTED i BA när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.';
+            msg = 'Strike is ready. Press MASH-IN STARTED in BA when grain addition begins. Brewfather CONTINUE is the primary completion acknowledgement.';
           } else if (completeVisible) {
-            msg = 'Mash-in startad. Tillsätt malt och rör om. När du är klar: tryck FORTSÄTT i Brewfather. BA kör Mash-In Complete och startar cirkulation automatiskt.';
+            msg = 'Mash-in started. Add grain and stir. When done, press CONTINUE in Brewfather. BA completes mash-in and starts circulation automatically.';
           } else if (gateState === 'mash_in_complete') {
-            msg = 'Mash-in complete. Brewfather är igång och BA har släppt vidare till normal mäskcirkulation.';
+            msg = 'Mash-in is complete. Brewfather is running and BA has released normal mash circulation.';
           }
+          const staleLine = oa.mash_in_override_in_scope === true && !processFresh
+            ? `<br>MASH ${fmt(process)} · stale ${ageText} · WORT ${fmt(Number(oa.mash_in_override_wort_temperature))} · local target ${fmt(Number(oa.mash_in_override_local_target))}`
+            : '';
           const heatLine = cleanHeat
             ? `<br>strike ${fmt(strike)} · gate ${fmt(gateTemp)} / Δ ${fmt(gateDelta)} · safety ${fmt(safetyTemp)} / Δ ${fmt(safetyDelta)} · heat ${Number.isFinite(heat) ? heat.toFixed(0) + ' %' : '—'} · pump ${Number.isFinite(pump) ? pump.toFixed(0) + ' %' : '—'} (${pumpReason})`
             : '';
-          return `${msg}<br>state ${gateState} · effective ${effective}°C · next ${next}°C${heatLine}`;
+          return `${msg}<br>state ${gateState} · effective ${effective}°C · next ${next}°C${staleLine}${heatLine}`;
         ]]]
       styles:
         card:
@@ -100,6 +113,42 @@ card:
           - line-height: 1.25
           - opacity: 0.78
 
+    - type: custom:button-card
+      entity: button.brewassistant_mash_in_override
+      name: MANUALLY ACCEPT STRIKE
+      icon: mdi:hand-okay
+      show_state: false
+      show_label: true
+      label: Acknowledges only the READY gate · max ±2.0 °C
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_mash_in_override
+        confirmation:
+          text: >-
+            Verify strike temperature physically on BrewZilla/thermometer.
+            This button only acknowledges Mash-In READY and does not change
+            heat, pump or target. Continue with MASH-IN STARTED afterward.
+      styles:
+        card:
+          - display: |
+              [[[
+                return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 12px
+          - background: rgba(255,152,0,.16)
+          - border: 1px solid rgba(255,152,0,.42)
+        name:
+          - font-size: 12px
+          - font-weight: 950
+        label:
+          - white-space: normal
+          - font-size: 10.5px
+          - font-weight: 750
+          - opacity: 0.76
+
     - type: horizontal-stack
       cards:
         - type: custom:button-card
@@ -119,7 +168,7 @@ card:
               const target = oz.heat_strike_target ?? oz.heat_strike_clean_control_target ?? a.effective_target ?? a.mash_in_effective_target ?? '—';
               const gate = oz.clean_heat_strike_gate_temperature ?? '—';
               const safety = oz.clean_heat_strike_safety_temperature ?? '—';
-              return `Starta fysisk inmäskning · strike ${target}°C · gate ${gate}°C · safety ${safety}°C`;
+              return `Start physical mash-in · strike ${target}°C · gate ${gate}°C · safety ${safety}°C`;
             ]]]
           tap_action:
             action: call-service
@@ -128,11 +177,11 @@ card:
               entity_id: button.brewassistant_mash_in_started
             confirmation:
               text: >-
-                Börjar du mäska in nu? Kontrollera att Mash/BLE/control-proben är
-                vid strike-target och att wort/kettle inte springer iväg. BA släpper
-                strike-target, håller pumpen av och siktar på nästa mash-target med
-                låg anti-drop heat. När malten är inrörd fortsätter du normalt med
-                FORTSÄTT i Brewfather.
+                Start mash-in now? Verify that the Mash/BLE/control probe is at
+                strike target and that wort/kettle is not running away. BA releases
+                strike target, keeps the pump off and targets the next mash step with
+                limited anti-drop heat. Continue normally with CONTINUE in Brewfather
+                after the grain has been mixed in.
           styles:
             card:
               - display: |
@@ -157,7 +206,7 @@ card:
               - opacity: 0.74
         - type: custom:button-card
           entity: button.brewassistant_mash_in_complete
-          name: MANUELL MASH-IN COMPLETE
+          name: MANUAL MASH-IN COMPLETE
           icon: mdi:pump
           show_state: false
           show_label: true
@@ -165,7 +214,7 @@ card:
             [[[
               const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
               const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
-              return `Fallback · normalt: tryck FORTSÄTT i Brewfather · target ${target}°C · pump 50%`;
+              return `Fallback · normally press CONTINUE in Brewfather · target ${target}°C · pump 50%`;
             ]]]
           tap_action:
             action: call-service
@@ -174,9 +223,9 @@ card:
               entity_id: button.brewassistant_mash_in_complete
             confirmation:
               text: >-
-                Manuell fallback. I normalflödet trycker du FORTSÄTT i Brewfather
-                efter mash-in, så gör BA Mash-In Complete automatiskt. Använd denna
-                knapp bara om BF-flödet inte triggar.
+                Manual fallback. Normally press CONTINUE in Brewfather after mash-in
+                and BA completes mash-in automatically. Use this button only if the
+                Brewfather flow does not trigger.
           styles:
             card:
               - display: |
