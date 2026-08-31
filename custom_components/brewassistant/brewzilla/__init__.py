@@ -21,6 +21,7 @@ from . import brewzilla_active_rcl_recovery_guard as _active_rcl_recovery_guard
 from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
+from . import brewzilla_mash_in_readiness_contract as _mash_in_readiness_contract
 from . import brewzilla_hot_side_contract as _hot_side_contract
 from . import brewzilla_manual_brew_control as _manual_brew_control
 from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
@@ -86,6 +87,10 @@ _mash_priority_thermal_mix_guard.install_mash_priority_thermal_mix_guard()
 _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
+# Automatic Mash-In READY uses only fresh canonical process data inside ±1 °C.
+# A bounded ±2 °C operator override is exposed separately for physically verified
+# strike readiness, including RAPT Cloud stale-data fallback.
+_mash_in_readiness_contract.install_mash_in_readiness_contract()
 
 # The older freshness/stale-safe pair deliberately is not installed. Those
 # layers translated ordinary stale cloud data into heater/pump OFF. BrewZilla
