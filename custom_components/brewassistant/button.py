@@ -29,6 +29,10 @@ from .brewzilla.brewzilla_mash_in_gate import (
     async_start_mash_circulation,
     build_mash_in_gate_snapshot,
 )
+from .brewzilla.brewzilla_mash_in_readiness_contract import (
+    async_override_mash_in_ready,
+    build_mash_in_readiness_snapshot,
+)
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla
 from .brewzilla.brewzilla_owned_control import remember_owned_control_from_apply_result
 from .const import DOMAIN
@@ -57,6 +61,7 @@ async def async_setup_entry(
             BrewAssistantAbortBrewdayButton(coordinator),
             BrewAssistantRearmBrewdayControlButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
+            BrewAssistantBrewZillaMashInOverrideButton(coordinator),
             BrewAssistantBrewZillaMashInStartedButton(coordinator),
             BrewAssistantBrewZillaMashInCompleteButton(coordinator),
             BrewAssistantBrewZillaStartMashCirculationButton(coordinator),
@@ -151,13 +156,9 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
             step=str(runtime.get("step") or "Idle"),
         )
 
-        # A Brewday ABORT is stronger than rejecting one pending plan: pending
-        # positive intent is discarded and Manual Brewday is returned to idle.
         cancel_pending_action(hass)
         get_manual_brewday_session(hass).reset()
 
-        # Reuse the authoritative BrewZilla ABORT path for physical safe-down
-        # and its independent hardware lockout.
         result = await async_abort_brewzilla(hass)
         await async_record_brewday_audit_event(
             hass,
@@ -171,7 +172,6 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return operator ABORT latch diagnostics."""
         return brewday_operator_abort_snapshot(self.coordinator.hass)
 
 
@@ -186,7 +186,6 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_rearm_brewday_control"
 
     async def async_press(self) -> None:
-        """Release only the Brewday ownership latch; hardware ABORT lockout remains authoritative."""
         hass = self.coordinator.hass
         previous = brewday_operator_abort_snapshot(hass)
         await async_clear_brewday_operator_abort(hass)
@@ -204,7 +203,6 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return operator ABORT latch diagnostics."""
         return brewday_operator_abort_snapshot(self.coordinator.hass)
 
 
@@ -219,14 +217,32 @@ class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_counterflow_chiller_ready"
 
     async def async_press(self) -> None:
-        """Start the configured CFC sanitation circulation."""
         await async_counterflow_chiller_ready(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return CFC diagnostics."""
         return get_counterflow_chiller_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaMashInOverrideButton(BrewAssistantButtonEntity):
+    """Explicit operator acceptance of strike readiness inside bounded limits."""
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_mash_in_override")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_mash_in_override"
+        self._attr_translation_key = "brewzilla_mash_in_override"
+        self._attr_icon = "mdi:hand-okay"
+        self._attr_suggested_object_id = f"{DOMAIN}_mash_in_override"
+
+    async def async_press(self) -> None:
+        await async_override_mash_in_ready(self.coordinator.hass)
+        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return build_mash_in_readiness_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantBrewZillaMashInStartedButton(BrewAssistantButtonEntity):
@@ -240,14 +256,12 @@ class BrewAssistantBrewZillaMashInStartedButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_mash_in_started"
 
     async def async_press(self) -> None:
-        """Release strike target and hold pump paused while grain is added."""
         await async_mark_mash_in_started(self.coordinator.hass)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return mash-in gate diagnostics."""
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
@@ -262,14 +276,12 @@ class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_mash_in_complete"
 
     async def async_press(self) -> None:
-        """Release the mash-in pump pause gate and start circulation."""
         await async_confirm_mash_in_complete(self.coordinator.hass)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return mash-in gate diagnostics."""
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
@@ -284,14 +296,12 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity
         self._attr_suggested_object_id = f"{DOMAIN}_start_mash_circulation"
 
     async def async_press(self) -> None:
-        """Set pump utilization and turn the pump on."""
         await async_start_mash_circulation(self.coordinator.hass)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return mash-in gate/circulation diagnostics."""
         return build_mash_in_gate_snapshot(self.coordinator.hass)
 
 
@@ -306,14 +316,12 @@ class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_apply"
 
     async def async_press(self) -> None:
-        """Apply current recommendation."""
         result = await async_apply_brewzilla_learning_recommendation(self.coordinator.hass)
         remember_owned_control_from_apply_result(self.coordinator.hass, result)
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return recommendation diagnostics."""
         return build_brewzilla_learning_snapshot(self.coordinator.hass)
 
 
@@ -328,11 +336,9 @@ class BrewAssistantBrewZillaLearningDenyButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_brewzilla_learning_deny"
 
     async def async_press(self) -> None:
-        """Deny current recommendation."""
         await async_deny_brewzilla_learning_recommendation(self.coordinator.hass)
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return recommendation diagnostics."""
         return build_brewzilla_learning_snapshot(self.coordinator.hass)
