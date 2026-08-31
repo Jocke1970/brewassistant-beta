@@ -1,4 +1,4 @@
-"""UI contract for the consolidated Brewday Runtime flow card."""
+"""UI contract for the Brewday Runtime process companion card."""
 
 from pathlib import Path
 
@@ -20,19 +20,20 @@ def test_runtime_flow_contains_physical_timing_and_mash_in_actions() -> None:
         assert "binary_sensor.brewassistant_brewzilla_mash_in_gate_pending" in source
 
 
-def test_runtime_flow_distinguishes_physical_and_brewfather_targets() -> None:
+def test_runtime_flow_preserves_two_step_mash_in_contract() -> None:
     for path in CARDS:
         source = path.read_text(encoding="utf-8")
-        assert "sensor.brewassistant_brewzilla_runtime_target_temperature" in source
-        assert "sensor.brewassistant_brewday_target_temperature" in source
+        assert "ready_for_mash_in" in source
+        assert "mash_in_started" in source
+        assert "button.press" in source
 
 
-def test_runtime_flow_keeps_pending_and_abort_operator_paths() -> None:
+def test_runtime_flow_does_not_duplicate_generic_runtime_actions() -> None:
     for path in CARDS:
         source = path.read_text(encoding="utf-8")
-        assert "button.brewassistant_confirm_supervised_apply" in source
-        assert "button.brewassistant_cancel_supervised_apply" in source
-        assert "button.brewassistant_abort_brewday" in source
+        assert "button.brewassistant_confirm_supervised_apply" not in source
+        assert "button.brewassistant_cancel_supervised_apply" not in source
+        assert "button.brewassistant_abort_brewday" not in source
 
 
 def test_runtime_flow_does_not_expose_direct_brewzilla_hardware_toggles() -> None:
