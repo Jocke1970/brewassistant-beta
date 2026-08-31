@@ -26,7 +26,6 @@ from .fan_model import (
     DEFAULT_FAN_MODE,
     FAN_MODE_OPTIONS,
     MAX_REASONABLE_WARMING_C_H,
-    MODE_SMART_AUTO,
     SMART_STOP_DELTA_C,
     SMART_STOP_TREND_C_H,
     TOO_WARM_C,
@@ -46,6 +45,8 @@ AFTER_RUN_NUMBER = "number.brewassistant_kegerator_fan_afterrun_minutes"
 KEGERATOR_SUPERVISOR_SWITCH = "switch.brewassistant_climate_supervisor_enabled"
 FERMENTATION_SUPERVISOR_SWITCH = "switch.brewassistant_fermentation_climate_supervisor_enabled"
 FERMENTATION_AIR_TARGET = "sensor.brewassistant_fermentation_effective_air_target"
+CARBONATION_STATUS = "sensor.brewassistant_carbonation_status"
+ACTIVE_CARBONATION_STATES = {"carbonating", "conditioning", "ready to serve"}
 
 DATA_KEY = "kegerator_fan_auto"
 SECTION = "kegerator_fan"
@@ -229,13 +230,18 @@ def _bool_attr(hass: HomeAssistant, entity_id: str, attr: str) -> bool:
     return value is True or str(value).lower() == "true"
 
 
+def _carbonation_active(hass: HomeAssistant) -> bool:
+    state = (_state(hass, CARBONATION_STATUS) or "").lower()
+    return _bool_attr(hass, CARBONATION_STATUS, "active") or state in ACTIVE_CARBONATION_STATES
+
+
 def _climate_context(hass: HomeAssistant) -> tuple[str | None, str | None, str | None, bool, bool, str | None, str | None]:
     """Resolve the climate context that currently owns the shared fridge.
 
     The kegerator climate may stay enabled while the fridge is used as a
     fermentation chamber. Fermentation scope/supervisor state therefore wins
     over raw climate on/off state. A conflict is only reported when both
-    BrewAssistant supervisors explicitly claim the fridge at the same time.
+    BrewAssistant supervisors actively claim a process scope at the same time.
     """
     k_state = _state(hass, CLIMATE)
     f_state = _state(hass, CHAMBER)
@@ -246,7 +252,8 @@ def _climate_context(hass: HomeAssistant) -> tuple[str | None, str | None, str |
     fermentation_supervisor = hass.states.is_state(FERMENTATION_SUPERVISOR_SWITCH, "on")
     kegerator_supervisor = hass.states.is_state(KEGERATOR_SUPERVISOR_SWITCH, "on")
     fermentation_owner = fermentation_scope or fermentation_supervisor
-    conflict = fermentation_owner and kegerator_supervisor
+    kegerator_owner = kegerator_supervisor and _carbonation_active(hass)
+    conflict = fermentation_owner and kegerator_owner
 
     if fermentation_owner and f_enabled:
         entity = CHAMBER
@@ -395,8 +402,15 @@ def _afterrun_state(hass: HomeAssistant, inputs: FanInputs, *, enabled: bool, mo
     until = _parse_utc(_bucket(hass).get(RUNTIME_AFTERRUN_UNTIL))
     if until is None:
         return False, None, 0.0
-    remaining = max(0.0, (until - dt_util.utcnow()).total_seconds())
-    return remaining > 0, until.isoformat(), round(remaining / 60.0, 1)
+    remaining = (until - dt_util.utcnow()).total_seconds()
+    if remaining <= 0:
+        return False, None, 0.0
+    return True, until.isoformat(), round(remaining / 60.0, 1)
+
+
+def _afterrun_expired(hass: HomeAssistant) -> bool:
+    until = _parse_utc(_bucket(hass).get(RUNTIME_AFTERRUN_UNTIL))
+    return until is not None and until <= dt_util.utcnow()
 
 
 def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecision, bool, str | None, float]:
@@ -419,6 +433,10 @@ def _evaluate(hass: HomeAssistant, *, mutate: bool) -> tuple[FanInputs, FanDecis
     afterrun_active, afterrun_until, afterrun_remaining = _afterrun_state(
         hass, inputs, enabled=enabled, mode=mode
     )
+    if mutate and not afterrun_active and _afterrun_expired(hass):
+        _clear_afterrun(hass, "afterrun_expired")
+        afterrun_until = None
+
     decision = decide(enabled=enabled, mode=mode, inputs=inputs.model, afterrun_active=afterrun_active)
 
     if mutate:
