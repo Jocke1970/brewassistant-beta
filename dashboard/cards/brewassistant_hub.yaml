@@ -31,10 +31,14 @@ cards:
       - sensor.brewassistant_gravity
       - sensor.brewassistant_carbonation_status
       - sensor.brewassistant_carbonation_recommended_pressure_bar
-      - switch.brewassistant_counter_flow_chiller_enabled
-      - switch.brewassistant_show_cfc
-      - number.brewassistant_cfc_sanitize_minutes
-      - number.brewassistant_cfc_pump_utilization
+      - sensor.brewassistant_cooling_state
+      - sensor.brewassistant_cooling_method
+      - sensor.brewassistant_cooling_status
+      - sensor.brewassistant_cooling_process_temperature
+      - sensor.brewassistant_cooling_target_temperature
+      - sensor.brewassistant_cooling_target_ready
+      - number.brewassistant_cooling_target_temperature
+      - select.brewassistant_cooling_method
     styles:
       card:
         - border-radius: 20px 20px 8px 8px
@@ -352,7 +356,7 @@ cards:
         styles: *hub_module_tile
       - type: custom:button-card
         entity: switch.brewassistant_show_cfc
-        name: CFC
+        name: Cooling
         icon: mdi:snowflake-thermometer
         show_state: false
         show_label: true
@@ -362,12 +366,14 @@ cards:
           action: more-info
         label: |
           [[[ 
-            const cfc = states['switch.brewassistant_counter_flow_chiller_enabled'];
-            const status = cfc?.attributes?.status || cfc?.state || 'disabled';
-            const ready = cfc?.attributes?.ready === true ? 'ready' : 'not ready';
-            const min = states['number.brewassistant_cfc_sanitize_minutes']?.state || cfc?.attributes?.sanitize_minutes || '—';
-            const pump = states['number.brewassistant_cfc_pump_utilization']?.state || cfc?.attributes?.pump_utilization || '—';
+            const method = states['sensor.brewassistant_cooling_method']?.state || '—';
+            const status = states['sensor.brewassistant_cooling_status']?.state || 'standby';
+            const runtime = states['sensor.brewassistant_cooling_state']?.state || 'IDLE';
+            const tempRaw = Number(String(states['sensor.brewassistant_cooling_process_temperature']?.state ?? '').replace(',', '.'));
+            const targetRaw = Number(String(states['sensor.brewassistant_cooling_target_temperature']?.state ?? '').replace(',', '.'));
+            const temp = Number.isFinite(tempRaw) ? `${tempRaw.toFixed(1)} °C` : '—';
+            const target = Number.isFinite(targetRaw) ? `${targetRaw.toFixed(0)} °C` : '—';
             const visible = entity.state === 'on' ? 'Visible' : 'Hidden';
-            return `${status} · ${ready}<br>${visible} · ${min} min · pump ${pump}%`;
+            return `${runtime} · ${status}<br>${method} · ${temp} → ${target} · ${visible}`;
           ]]]
         styles: *hub_module_tile
