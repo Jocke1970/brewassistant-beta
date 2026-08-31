@@ -114,6 +114,7 @@
       "confirm_supervised_apply": {"name": "Confirm Supervised Apply"},
       "cancel_supervised_apply": {"name": "Cancel Supervised Apply"},
       "counterflow_chiller_ready": {"name": "CFC Ready"},
+      "brewzilla_mash_in_override": {"name": "Accept Strike Manually"},
       "brewzilla_mash_in_started": {"name": "Mash-In Started"},
       "brewzilla_mash_in_complete": {"name": "Mash-In Complete"},
       "brewzilla_start_mash_circulation": {"name": "Start Mash Circulation"},
