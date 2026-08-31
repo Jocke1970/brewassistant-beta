@@ -12,9 +12,6 @@ from . import brewzilla_mash_ramp_strategy as _mash_ramp
 from . import brewzilla_advice_control as _advice_control
 from . import brewzilla_mash_priority_thermal_mix_guard as _mash_priority_thermal_mix_guard
 from . import brewzilla_mash_wort_delta_pump_guard as _mash_wort_delta_pump_guard
-from . import brewzilla_heat_strike_pump_mix_guard as _heat_strike_pump_mix_guard
-from . import brewzilla_heat_strike_target_clamp_guard as _heat_strike_target_clamp_guard
-from . import brewzilla_heat_strike_near_target_safety_guard as _heat_strike_near_target_safety_guard
 from . import brewzilla_clean_heat_strike_guard as _clean_heat_strike_guard
 from . import brewzilla_equipment_learning_patch as _equipment_learning_patch
 from . import brewzilla_heat_strike_profile as _heat_strike_profile
@@ -22,11 +19,9 @@ from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_
 from . import brewzilla_rcl_value_recovery_guard as _rcl_value_recovery_guard
 from . import brewzilla_active_rcl_recovery_guard as _active_rcl_recovery_guard
 from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
-from . import brewzilla_strike_ready_hold_guard as _strike_ready_hold_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
-from . import brewzilla_mash_in_state_guard as _mash_in_state_guard
-from . import brewzilla_mash_in_target_patch as _mash_in_target_patch
+from . import brewzilla_hot_side_contract as _hot_side_contract
 from . import brewzilla_manual_brew_control as _manual_brew_control
 from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
 from . import brewzilla_supervised_readback_grace as _supervised_readback_grace
@@ -41,7 +36,6 @@ from . import brewzilla_local_control_lease_v2 as _local_control_lease
 from . import brewzilla_stale_heat_guard as _stale_heat_guard
 from . import brewzilla_no_positive_gate as _no_positive_gate
 from . import brewzilla_local_regulation_heat_guard as _local_regulation_heat_guard
-from . import brewzilla_mash_in_started_guard as _mash_in_started_guard
 from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_safe_down_guard
 from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
@@ -62,22 +56,23 @@ _learning._age_seconds = _fresh_entity_age_seconds
 _temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
+
+# Legacy Heatstrike profile is retained only for phase/strike-target latching
+# and RCL transition context. Physical target/heat/pump regulation is owned by
+# Clean Heatstrike below. The older target-clamp, ready-hold, pump-mix and
+# near-target-safety wrappers are intentionally no longer installed.
 _heat_strike_profile.install_heat_strike_profile()
-_heat_strike_target_clamp_guard.install_heat_strike_target_clamp_guard()
 _heat_strike_transition_guard.install_heat_strike_transition_guard()
 _rcl_value_recovery_guard.install_rcl_value_recovery_guard()
 _pre_mash_in_strike_sensor.install_pre_mash_in_strike_sensor_guard()
-_strike_ready_hold_guard.install_strike_ready_hold_guard()
 _equipment_learning_patch.install_equipment_learning_patch()
 _advice_control.install_advice_control()
 _mash_wort_delta_pump_guard.install_mash_wort_delta_pump_guard()
 _mash_priority_thermal_mix_guard.install_mash_priority_thermal_mix_guard()
-_heat_strike_pump_mix_guard.install_heat_strike_pump_mix_guard()
-_heat_strike_near_target_safety_guard.install_heat_strike_near_target_safety_guard()
 _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
-_mash_in_target_patch.install_mash_in_target_patch()
+
 _freshness_guard.install_freshness_guard()
 _runtime_safety.install_stale_safe_guard()
 _paused_guard.install_paused_guard()
@@ -88,9 +83,17 @@ _local_control_lease.install_local_control_lease()
 _stale_heat_guard.install_stale_heat_guard()
 _no_positive_gate.install_no_positive_gate()
 _local_regulation_heat_guard.install_local_regulation_heat_guard()
-_mash_in_started_guard.install_mash_in_started_guard()
+
+# Keep the narrow Brewfather paused->running auto-complete bridge. Its older
+# target-safe-down helpers are harmless once Mash-In Started has already made
+# the authoritative 71.8 -> mash-target downshift.
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
-_mash_in_state_guard.install_mash_in_state_guard()
+
+# Consolidated boundary installed after the lower safety/apply chain: canonical
+# process/safety roles, pure READY gate, atomic Mash-In Started transition and
+# one-way STARTED -> COMPLETE semantics.
+_hot_side_contract.install_hot_side_contract()
+
 _active_rcl_recovery_guard.install_active_rcl_recovery_guard()
 _abort_lockout_final_guard.install_abort_lockout_final_guard()
 _manual_brew_control.install_manual_brew_control_guard()
