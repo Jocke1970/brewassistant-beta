@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from ..configured_entities import configured_entity
 from ..const import CONF_KEGERATOR_AIR_TEMP_ENTITY, DEFAULT_KEGERATOR_AIR_TEMP_ENTITY
+from ..kegerator.temperature_preset import selected_target as selected_kegerator_target
 
 DOMAIN_DATA = "brewassistant"
 SUPERVISOR_ENABLED_KEY = "climate_supervisor_enabled_runtime"
@@ -31,8 +32,8 @@ CARBONATION_STATUS = "sensor.brewassistant_carbonation_status"
 CARBONATION_TEMP = "sensor.brewassistant_carbonation_temperature"
 
 DEFAULT_SERVING_TARGET = 4.0
-MIN_EFFECTIVE_TARGET = 3.4
-MAX_EFFECTIVE_TARGET = 5.0
+MIN_EFFECTIVE_TARGET = 1.0
+MAX_EFFECTIVE_TARGET = 12.0
 APPLY_INTERVAL_SECONDS = 30
 TARGET_APPLY_EPSILON = 0.05
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
@@ -90,27 +91,18 @@ def _carbonation_active(hass: HomeAssistant) -> bool:
 
 
 def _base_target(hass: HomeAssistant) -> float:
-    runtime = _runtime_data(hass)
-    value = runtime.get(SUPERVISOR_BASE_TARGET_KEY)
+    """Return the restored kegerator preset target as the supervisor base."""
     try:
-        if value is not None:
-            return round(float(value), 1)
+        return round(float(selected_kegerator_target(hass)), 1)
     except (TypeError, ValueError):
-        pass
-    return DEFAULT_SERVING_TARGET
+        return DEFAULT_SERVING_TARGET
 
 
 def _capture_base_target(hass: HomeAssistant) -> float:
-    """Capture base target when supervisor is enabled."""
-    runtime = _runtime_data(hass)
-    if runtime.get(SUPERVISOR_BASE_TARGET_KEY) is not None:
-        return _base_target(hass)
-
-    current_target = _float_attr(hass, KEGERATOR_CLIMATE, "temperature")
-    if current_target is None or current_target < 1.0 or current_target > 12.0:
-        current_target = DEFAULT_SERVING_TARGET
-    runtime[SUPERVISOR_BASE_TARGET_KEY] = round(current_target, 1)
-    return round(current_target, 1)
+    """Record the current preset target for diagnostics/legacy runtime readers."""
+    target = _base_target(hass)
+    _runtime_data(hass)[SUPERVISOR_BASE_TARGET_KEY] = target
+    return target
 
 
 def _effective_target(base_target: float, delta: float | None) -> tuple[float, str, str]:
