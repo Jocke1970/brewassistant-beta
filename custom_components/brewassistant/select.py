@@ -17,6 +17,14 @@ from .coordinator import BrewAssistantCoordinator
 from .cooling.cooling_runtime import METHOD_OPTIONS as COOLING_METHOD_OPTIONS, get_cooling_runtime_settings, update_cooling_runtime_settings
 from .entity import BrewAssistantEntity
 from .kegerator.fan_control import async_apply_kegerator_fan_auto
+from .kegerator.temperature_preset import (
+    DEFAULT_PRESET as DEFAULT_KEGERATOR_TEMPERATURE_PRESET,
+    PRESET_OPTIONS as KEGERATOR_TEMPERATURE_PRESET_OPTIONS,
+    PRESET_TARGETS as KEGERATOR_TEMPERATURE_PRESET_TARGETS,
+    async_apply_temperature_preset,
+    preset_from_temperature,
+    target_for_preset,
+)
 from .supervised_apply import READ_ONLY_MODE, SUPERVISED_MODE, cancel_pending_action
 
 METHOD_OPTIONS = ["Set-and-forget", "Burst carbonation", "Natural carbonation", "Conditioning"]
@@ -37,6 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             BrewAssistantApplyModeSelect(coordinator),
             BrewAssistantBrewZillaLearningContextSelect(coordinator),
             BrewAssistantBrewZillaMashTemperatureSourceSelect(coordinator),
+            BrewAssistantKegeratorTemperaturePresetSelect(coordinator),
             BrewAssistantKegeratorFanModeSelect(coordinator),
         ]
         + [BrewAssistantSectionPolicySelect(coordinator, section, config) for section, config in SECTION_CONFIG.items()]
@@ -259,6 +268,69 @@ class BrewAssistantBrewZillaMashTemperatureSourceSelect(BrewAssistantEntity, Res
     @property
     def extra_state_attributes(self) -> dict[str, str | bool]:
         return {"source": "brewzilla_temperature_resolver", "runtime_key": "mash_temperature_source", "default": "Auto", "auto_priority": "BLE > Control Device > Internal", "wort_temperature_source": "BrewZilla Internal"}
+
+
+class BrewAssistantKegeratorTemperaturePresetSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
+    """Persistent quick-select target for the kegerator climate."""
+
+    _attr_has_entity_name = False
+    _attr_options = KEGERATOR_TEMPERATURE_PRESET_OPTIONS
+    _attr_icon = "mdi:thermometer-auto"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "kegerator_temperature_preset")
+        self._attr_unique_id = f"{DOMAIN}_select_kegerator_temperature_preset"
+        self._attr_name = "BrewAssistant Kegerator Temperature Preset"
+        self._attr_suggested_object_id = f"{DOMAIN}_kegerator_temperature_preset"
+        self._current_option = DEFAULT_KEGERATOR_TEMPERATURE_PRESET
+        self._last_apply: dict | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in KEGERATOR_TEMPERATURE_PRESET_OPTIONS:
+            self._current_option = last_state.state
+        elif last_state is None:
+            climate = self.coordinator.hass.states.get("climate.kegerator_kylskap")
+            target = climate.attributes.get("temperature") if climate is not None else None
+            try:
+                self._current_option = preset_from_temperature(float(target)) if target is not None else DEFAULT_KEGERATOR_TEMPERATURE_PRESET
+            except (TypeError, ValueError):
+                self._current_option = DEFAULT_KEGERATOR_TEMPERATURE_PRESET
+        self.async_write_ha_state()
+        self._last_apply = await async_apply_temperature_preset(
+            self.coordinator.hass,
+            self._current_option,
+        )
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str | None:
+        return self._current_option
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in KEGERATOR_TEMPERATURE_PRESET_OPTIONS:
+            return
+        self._current_option = option
+        self.async_write_ha_state()
+        self._last_apply = await async_apply_temperature_preset(
+            self.coordinator.hass,
+            option,
+        )
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        return {
+            "source": "kegerator_temperature_preset",
+            "persistent": True,
+            "default": DEFAULT_KEGERATOR_TEMPERATURE_PRESET,
+            "target_temperature": target_for_preset(self._current_option),
+            "preset_targets": dict(KEGERATOR_TEMPERATURE_PRESET_TARGETS),
+            "template_attribute": "target_temperature",
+            "last_apply": self._last_apply,
+        }
 
 
 class BrewAssistantKegeratorFanModeSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):
