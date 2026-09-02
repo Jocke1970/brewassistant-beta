@@ -14,7 +14,7 @@ Storage    -> 3.0 °C
 Serving    -> 4.0 °C
 ```
 
-`Serving` is the fallback/default when no valid restored state exists. The select is a Home Assistant `RestoreEntity`, so the most recently selected preset is restored after a Home Assistant restart and immediately reapplied to:
+`Serving` is the fallback/default when no valid restored state exists. The select is a Home Assistant `RestoreEntity`, so the most recently selected preset is restored after a Home Assistant restart and reapplied to:
 
 ```text
 climate.kegerator_kylskap
@@ -22,32 +22,35 @@ climate.kegerator_kylskap
 
 If the kegerator climate is off during restoration, BrewAssistant requests `cool` mode before applying the restored target.
 
-## Template-friendly climate configuration
+## Generic Thermostat configuration
 
-The select exposes the numeric target as an attribute:
+The kegerator uses Home Assistant `generic_thermostat`, not Dual Smart Thermostat.
 
-```text
-target_temperature
-```
+Generic Thermostat has native target-temperature restore. When `target_temp` is omitted from its YAML configuration, Home Assistant restores the previously selected target temperature after restart when a previous value is available.
 
-Dual Smart Thermostat versions with template-based preset temperatures can therefore replace a fixed preset temperature with the BrewAssistant target. For example, if the kegerator uses the `home` thermostat preset:
+Therefore the kegerator climate configuration should not hard-code a startup target such as:
 
 ```yaml
-home_temp: "{{ state_attr('select.brewassistant_kegerator_temperature_preset', 'target_temperature') | float(4) }}"
+target_temp: 1.5
 ```
 
-Use the equivalent `*_temp` field if another Dual Smart Thermostat preset is used. The machine-state values remain the English backend values (`Cold Crash`, `Storage`, `Serving`); presentation cards may translate the labels.
+Instead, omit `target_temp` and keep the normal kegerator limits, tolerances and compressor protection. BrewAssistant quick presets set the climate target through `climate.set_temperature`, while Generic Thermostat provides the underlying target restore.
 
-This gives two compatible paths:
+The ownership model is:
 
 ```text
-BrewAssistant preset selection
-  -> applies climate.set_temperature immediately
+BrewAssistant preset select
+  -> remembers the selected named preset
+  -> applies climate.set_temperature
 
-Dual Smart Thermostat template
-  -> observes target_temperature
-  -> keeps its active preset target aligned with BrewAssistant
+Generic Thermostat
+  -> owns cooling hysteresis / compressor switching
+  -> restores its last target temperature across restart
 ```
+
+The select still exposes its numeric preset target as the `target_temperature` attribute for diagnostics and dashboard presentation. A thermostat template is not required for the kegerator.
+
+Dual Smart Thermostat belongs to the separate Fermentation backend and must not be used as the kegerator configuration contract.
 
 ## Climate Supervisor
 
