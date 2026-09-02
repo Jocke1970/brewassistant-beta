@@ -1,0 +1,84 @@
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_kegerator
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:mushroom-title-card
+      title: Temperature preset
+      subtitle: Last selection is restored after Home Assistant restart
+    - type: horizontal-stack
+      cards:
+        - type: custom:button-card
+          entity: select.brewassistant_kegerator_temperature_preset
+          name: Cold Crash
+          icon: mdi:snowflake-thermometer
+          show_state: false
+          show_label: true
+          label: 2.0 °C
+          tap_action:
+            action: call-service
+            service: select.select_option
+            service_data:
+              entity_id: select.brewassistant_kegerator_temperature_preset
+              option: Cold Crash
+          state:
+            - value: Cold Crash
+              styles:
+                card:
+                  - background: rgba(33, 150, 243, 0.18)
+                  - border: 1px solid rgba(33, 150, 243, 0.42)
+          styles: &preset_button_style
+            card:
+              - border-radius: 16px
+              - padding: 10px 6px
+            icon:
+              - width: 24px
+              - height: 24px
+            name:
+              - font-size: 12px
+              - font-weight: 900
+            label:
+              - font-size: 11px
+              - opacity: 0.72
+        - type: custom:button-card
+          entity: select.brewassistant_kegerator_temperature_preset
+          name: Storage
+          icon: mdi:archive-outline
+          show_state: false
+          show_label: true
+          label: 3.0 °C
+          tap_action:
+            action: call-service
+            service: select.select_option
+            service_data:
+              entity_id: select.brewassistant_kegerator_temperature_preset
+              option: Storage
+          state:
+            - value: Storage
+              styles:
+                card:
+                  - background: rgba(0, 188, 212, 0.16)
+                  - border: 1px solid rgba(0, 188, 212, 0.38)
+          styles: *preset_button_style
+        - type: custom:button-card
+          entity: select.brewassistant_kegerator_temperature_preset
+          name: Serving
+          icon: mdi:glass-mug-variant
+          show_state: false
+          show_label: true
+          label: 4.0 °C
+          tap_action:
+            action: call-service
+            service: select.select_option
+            service_data:
+              entity_id: select.brewassistant_kegerator_temperature_preset
+              option: Serving
+          state:
+            - value: Serving
+              styles:
+                card:
+                  - background: rgba(76, 175, 80, 0.16)
+                  - border: 1px solid rgba(76, 175, 80, 0.38)
+          styles: *preset_button_style
