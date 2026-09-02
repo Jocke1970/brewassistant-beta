@@ -1,6 +1,6 @@
 """Kegerator temperature presets and target application.
 
-The restored preset select is the persistent source of truth.  Kegerator
+The restored preset select is the persistent source of truth. Kegerator
 consumers can read the selected numeric target without coupling to dashboard
 state or to another BrewAssistant backend.
 """
@@ -26,8 +26,6 @@ PRESET_TARGETS: dict[str, float] = {
 PRESET_OPTIONS = list(PRESET_TARGETS)
 DEFAULT_PRESET = PRESET_SERVING
 DEFAULT_TARGET = PRESET_TARGETS[DEFAULT_PRESET]
-
-INVALID_STATES = {"unknown", "unavailable", "none", ""}
 
 
 def target_for_preset(preset: str | None) -> float:
@@ -64,7 +62,7 @@ async def async_apply_temperature_preset(
     *,
     ensure_cool: bool = True,
 ) -> dict[str, Any]:
-    """Apply one kegerator preset to the physical climate controller."""
+    """Apply one kegerator preset without making startup failures fatal."""
     normalized = preset if preset in PRESET_TARGETS else DEFAULT_PRESET
     target = target_for_preset(normalized)
     climate = hass.states.get(KEGERATOR_CLIMATE)
@@ -79,20 +77,25 @@ async def async_apply_temperature_preset(
     if climate is None:
         return result
 
-    if ensure_cool and climate.state in {"off", "unknown", "unavailable", "none", ""}:
+    try:
+        if ensure_cool and climate.state == "off":
+            await hass.services.async_call(
+                "climate",
+                "set_hvac_mode",
+                {"entity_id": KEGERATOR_CLIMATE, "hvac_mode": "cool"},
+                blocking=True,
+            )
+
         await hass.services.async_call(
             "climate",
-            "set_hvac_mode",
-            {"entity_id": KEGERATOR_CLIMATE, "hvac_mode": "cool"},
+            "set_temperature",
+            {"entity_id": KEGERATOR_CLIMATE, "temperature": target},
             blocking=True,
         )
-
-    await hass.services.async_call(
-        "climate",
-        "set_temperature",
-        {"entity_id": KEGERATOR_CLIMATE, "temperature": target},
-        blocking=True,
-    )
+    except Exception as err:  # noqa: BLE001 - surface HA service failure in attrs
+        result["result"] = "error"
+        result["error"] = str(err)
+        return result
 
     after = hass.states.get(KEGERATOR_CLIMATE)
     result["after_state"] = after.state if after is not None else None
