@@ -13,19 +13,35 @@ RUNTIME_FLOW_CARDS = (
 )
 
 
-def test_running_brewfather_alone_cannot_auto_complete_mash_in() -> None:
+def test_brewfather_resume_requires_pause_observed_after_mash_in_started() -> None:
+    source = BRIDGE.read_text(encoding="utf-8")
+    transition_body = source.split("def _brewfather_transition", 1)[1].split(
+        "def _runtime_allows_operator_safe_down", 1
+    )[0]
+    auto_body = source.split("def _auto_complete_allowed", 1)[1].split(
+        "async def _apply_brewfather_resume_auto_complete", 1
+    )[0]
+
+    assert "sensor.brewfather_brew_tracker_status" in source
+    assert "seen_paused_after_mash_in_started" in transition_body
+    assert "current in _PAUSED_STATES" in transition_body
+
+    assert "waiting_for_brewfather_pause_after_mash_in_started" in auto_body
+    assert "paused_to_running_after_mash_in_started" in auto_body
+    assert "running_after_observed_mash_in_pause" in auto_body
+    assert "running_after_mash_in_target_advanced" not in auto_body
+    assert "_gate_origin_target" not in source
+
+
+def test_running_brewfather_that_predates_mash_in_started_cannot_complete() -> None:
     source = BRIDGE.read_text(encoding="utf-8")
     body = source.split("def _auto_complete_allowed", 1)[1].split(
         "async def _apply_brewfather_resume_auto_complete", 1
     )[0]
 
-    assert "def _gate_origin_target" in source
-    assert "waiting_for_brewfather_progress" in body
-    assert "running_after_mash_in_target_advanced" in body
-    assert "paused_to_running_mash_target" in body
-    assert "paused_to_running_mash_stage" in body
-    assert "running_while_mash_in_started_mash_target" not in body
-    assert "running_while_mash_in_started_mash_stage" not in body
+    assert "if not seen_paused_after_mash_in_started" in body
+    assert "return False, \"waiting_for_brewfather_pause_after_mash_in_started\"" in body
+    assert "target change by itself" in source
 
 
 def test_runtime_flow_prefers_live_orchestration_mash_in_state() -> None:

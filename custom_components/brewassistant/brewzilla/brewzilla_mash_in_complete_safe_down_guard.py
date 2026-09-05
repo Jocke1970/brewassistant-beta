@@ -11,17 +11,13 @@ safe-down operations, not positive heating, and they avoid leaving the unit
 parked at strike target while the brewer is expected to resume Brewfather
 manually.
 
-If the brewer has marked Mash-In Started in BA and then resumes Brewfather from
-its mash-in pause, that Brewfather paused -> running transition is treated as
-the Mash-In Complete confirmation.  This avoids requiring a second BA button
-press while still keeping the auto-complete scope very narrow.
-
-Some Brewfather/RCL snapshots can miss the exact paused -> running edge.  In
-that case BA may also auto-complete only after the active Brewfather mash target
-has actually moved away from the strike target captured by the Mash-In gate.
-Merely seeing Brewfather in a running state is not enough: the pump must remain
-OFF throughout physical grain addition until genuine Brewfather progression is
-observed or the operator uses the explicit Mash-In Complete fallback.
+If the brewer has marked Mash-In Started in BA, automatic completion requires a
+real Brewfather pause observed after that operator boundary.  A later
+paused -> running transition is treated as the Mash-In Complete confirmation.
+If the exact edge is missed by a snapshot, BA may accept running only when a
+post-start paused state was already observed.  A running state that pre-dates
+Mash-In Started, or a target change by itself, is never enough to resume the
+pump.
 """
 
 from __future__ import annotations
@@ -42,6 +38,10 @@ _MASH_STAGE_WORDS = ("mash", "mäsk")
 _MASH_HOLD_WORDS = ("hold", "mash", "mäsk")
 _PAUSED_STATES = {"paused"}
 _RUNNING_STATES = {"live", "running", "awaiting_snapshot"}
+_BREWFATHER_STATUS_ENTITIES = (
+    "sensor.brewfather_brew_tracker_status",
+    "sensor.brewfather_brewtracker_status",
+)
 _AUTO_COMPLETE_DATA_KEY = "brewzilla_mash_in_bf_resume_auto_complete"
 
 
@@ -67,15 +67,50 @@ def _runtime_state(snapshot: dict[str, Any]) -> str:
     ).lower()
 
 
-def _runtime_transition(hass, snapshot: dict[str, Any]) -> tuple[str | None, str]:
+def _brewfather_status(hass) -> str:
+    """Return the live Brewfather Brew Tracker status."""
+    for entity_id in _BREWFATHER_STATUS_ENTITIES:
+        state = hass.states.get(entity_id)
+        if state is None:
+            continue
+        value = str(state.state or "").strip().lower()
+        if value not in {"", "unknown", "unavailable", "none"}:
+            return value
+    return "unknown"
+
+
+def _brewfather_transition(
+    hass,
+    snapshot: dict[str, Any],
+) -> tuple[str | None, str, bool]:
+    """Track BF status and require a pause observed after Mash-In Started."""
     data = hass.data.setdefault("brewassistant", {}).setdefault(
         _AUTO_COMPLETE_DATA_KEY,
-        {"last_state": None},
+        {
+            "last_status": None,
+            "mash_in_started_active_key": None,
+            "seen_paused_after_mash_in_started": False,
+        },
     )
-    current = _runtime_state(snapshot)
-    previous = data.get("last_state")
-    data["last_state"] = current
-    return previous, current
+    current = _brewfather_status(hass)
+    previous = data.get("last_status")
+
+    gate_state = str(snapshot.get("mash_in_gate_state") or "").strip().lower()
+    gate_key = str(snapshot.get("mash_in_gate_active_key") or "")
+
+    if gate_state == "mash_in_started":
+        if data.get("mash_in_started_active_key") != gate_key:
+            data["mash_in_started_active_key"] = gate_key
+            data["seen_paused_after_mash_in_started"] = False
+        if current in _PAUSED_STATES:
+            data["seen_paused_after_mash_in_started"] = True
+    else:
+        data["mash_in_started_active_key"] = None
+        data["seen_paused_after_mash_in_started"] = False
+
+    seen_paused = bool(data.get("seen_paused_after_mash_in_started"))
+    data["last_status"] = current
+    return previous, current, seen_paused
 
 
 def _runtime_allows_operator_safe_down(snapshot: dict[str, Any]) -> bool:
@@ -121,17 +156,6 @@ def _current_brewfather_mash_target(snapshot: dict[str, Any]) -> tuple[float | N
         if value is not None:
             return value, key
     return None, None
-
-
-def _gate_origin_target(snapshot: dict[str, Any]) -> float | None:
-    """Return the strike target captured when the current Mash-In gate opened."""
-    active_key = str(snapshot.get("mash_in_gate_active_key") or "")
-    if not active_key:
-        return None
-    parts = active_key.split("|")
-    if len(parts) < 2 or parts[-1] != "mash_in":
-        return None
-    return _num(parts[-2])
 
 
 def _patched_effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | None, str | None, float | None, str | None]:
@@ -254,47 +278,49 @@ async def _patched_start_mash_circulation(hass, snapshot: dict[str, Any], *, act
 
 def _auto_complete_allowed(
     snapshot: dict[str, Any],
-    previous_state: str | None,
-    current_state: str,
+    previous_status: str | None,
+    current_status: str,
+    seen_paused_after_mash_in_started: bool,
 ) -> tuple[bool, str]:
     if snapshot.get("mash_in_gate_state") != "mash_in_started":
         return False, "gate_not_mash_in_started"
-    if current_state not in _RUNNING_STATES:
+    if current_status not in _RUNNING_STATES:
         return False, "brewfather_not_running"
     if not _runtime_allows_operator_safe_down(snapshot):
         return False, "safe_down_not_allowed"
+    if not _mash_context_active(snapshot):
+        return False, "mash_context_not_active"
 
-    current_bf_target, _source = _current_brewfather_mash_target(snapshot)
+    # Automatic completion is intentionally edge-triggered. A Brewfather
+    # running state that already existed when Mash-In Started was pressed must
+    # not be interpreted as the operator's later GO/Continue action.
+    if not seen_paused_after_mash_in_started:
+        return False, "waiting_for_brewfather_pause_after_mash_in_started"
 
-    # A real paused -> running edge is explicit Brewfather progression and may
-    # complete Mash-In immediately.
-    if previous_state in _PAUSED_STATES:
-        if current_bf_target is not None:
-            return True, "paused_to_running_mash_target"
-        if _mash_context_active(snapshot):
-            return True, "paused_to_running_mash_stage"
+    if previous_status in _PAUSED_STATES:
+        return True, "paused_to_running_after_mash_in_started"
 
-    # Brewfather can report "running" both before and after the operator presses
-    # Mash-In Started.  Therefore running by itself must never resume the pump.
-    # The Mash-In gate key captures the strike target at READY; when the active
-    # BF mash target moves away from that value we have concrete progression.
-    origin_target = _gate_origin_target(snapshot)
-    if current_bf_target is not None and origin_target is not None:
-        if abs(current_bf_target - origin_target) > base.TARGET_SYNC_TOLERANCE:
-            return True, "running_after_mash_in_target_advanced"
-
-    return False, "waiting_for_brewfather_progress"
+    # Snapshot polling can miss the exact adjacent paused -> running edge. Once
+    # a post-start pause has definitely been observed, a later running state is
+    # sufficient progression evidence.
+    return True, "running_after_observed_mash_in_pause"
 
 
 async def _apply_brewfather_resume_auto_complete(
     hass,
     snapshot: dict[str, Any],
     *,
-    previous_state: str | None,
-    current_state: str,
+    previous_status: str | None,
+    current_status: str,
+    seen_paused_after_mash_in_started: bool,
 ) -> dict[str, Any] | None:
     assert _ORIGINAL_START_MASH_CIRCULATION is not None
-    allowed, auto_complete_reason = _auto_complete_allowed(snapshot, previous_state, current_state)
+    allowed, auto_complete_reason = _auto_complete_allowed(
+        snapshot,
+        previous_status,
+        current_status,
+        seen_paused_after_mash_in_started,
+    )
     if not allowed:
         return None
 
@@ -332,12 +358,13 @@ async def _apply_brewfather_resume_auto_complete(
         "mash_in_gate_confirmed_at": confirmed_at,
         "mash_in_auto_completed_by_brewfather_resume": True,
         "mash_in_auto_complete_reason": auto_complete_reason,
-        "mash_in_auto_complete_previous_brewday_state": previous_state,
-        "mash_in_auto_complete_current_brewday_state": current_state,
+        "mash_in_auto_complete_previous_brewfather_status": previous_status,
+        "mash_in_auto_complete_current_brewfather_status": current_status,
+        "mash_in_auto_complete_seen_paused_after_start": seen_paused_after_mash_in_started,
         "mash_in_waiting_for_brewfather_resume": False,
         "control_reason": (
             f"{resume_result.get('control_reason') or 'Direct production flow active'}; "
-            f"Brewfather progression was confirmed while BA was in mash_in_started ({auto_complete_reason}), so BA marked Mash-In Complete automatically."
+            f"Brewfather progression was confirmed after a post-start pause ({auto_complete_reason}), so BA marked Mash-In Complete automatically."
         ),
         "executed_at": dt_util.utcnow().isoformat(),
     }
@@ -349,6 +376,9 @@ async def _apply_brewfather_resume_auto_complete(
         "resume_allowed": result.get("mash_in_resume_allowed"),
         "auto_completed_by_brewfather_resume": True,
         "auto_complete_reason": auto_complete_reason,
+        "previous_brewfather_status": previous_status,
+        "current_brewfather_status": current_status,
+        "seen_paused_after_mash_in_started": seen_paused_after_mash_in_started,
         "executed_at": result.get("executed_at"),
     }
     hass.data.setdefault("brewassistant", {})["brewzilla_last_apply_result"] = result
@@ -358,13 +388,17 @@ async def _apply_brewfather_resume_auto_complete(
 async def _patched_apply(hass) -> dict[str, Any]:
     assert _ORIGINAL_APPLY is not None
     snapshot = base.build_orchestration_snapshot(hass)
-    previous_state, current_state = _runtime_transition(hass, snapshot)
+    previous_status, current_status, seen_paused_after_start = _brewfather_transition(
+        hass,
+        snapshot,
+    )
 
     auto_complete = await _apply_brewfather_resume_auto_complete(
         hass,
         snapshot,
-        previous_state=previous_state,
-        current_state=current_state,
+        previous_status=previous_status,
+        current_status=current_status,
+        seen_paused_after_mash_in_started=seen_paused_after_start,
     )
     if auto_complete is not None:
         await base.async_record_brewday_audit_tick(hass, brewzilla_result=auto_complete)
