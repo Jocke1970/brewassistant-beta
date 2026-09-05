@@ -2,9 +2,9 @@ name: HACS validation
 
 on:
   push:
-    branches: [main]
+    branches: [dev, beta, main]
   pull_request:
-    branches: [main]
+    branches: [dev, beta, main]
   workflow_dispatch:
 
 permissions:
