@@ -117,13 +117,27 @@ card:
           }
 
           const phaseLabel = planning ? 'planning' : prestart ? 'pre-start' : phase;
+          const chipBg = planning
+            ? 'rgba(255,193,7,.13)'
+            : prestart
+              ? 'rgba(76,175,80,.13)'
+              : phase === 'brewing'
+                ? 'rgba(244,67,54,.13)'
+                : 'rgba(33,150,243,.11)';
+          const chipBorder = planning
+            ? 'rgba(255,193,7,.28)'
+            : prestart
+              ? 'rgba(76,175,80,.30)'
+              : phase === 'brewing'
+                ? 'rgba(244,67,54,.30)'
+                : 'rgba(33,150,243,.24)';
           const fourthMain = preMashHeatstrike ? fmt(pump, '%', 0) : fmt(age, 'min');
           const fourthLabel = preMashHeatstrike ? 'pumpblandning' : 'snapshot';
 
           return `<div style="line-height:1.25;min-width:0;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
               <div style="min-width:0;"><div style="font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.62;text-transform:uppercase;">BrewTracker · bryggdag</div><div style="margin-top:3px;font-size:11px;font-weight:850;opacity:.72;">${statusText}</div></div>
-              <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${planning || prestart ? 'rgba(255,193,7,.13)' : 'rgba(33,150,243,.11)'};border:1px solid ${planning || prestart ? 'rgba(255,193,7,.28)' : 'rgba(33,150,243,.24)'};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${planning || prestart ? 'mdi:timer-sand' : 'mdi:timer-play-outline'}" style="width:14px;height:14px;"></ha-icon><span>${phaseLabel}</span></div>
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${planning || prestart ? 'mdi:timer-sand' : 'mdi:timer-play-outline'}" style="width:14px;height:14px;"></ha-icon><span>${phaseLabel}</span></div>
             </div>
             <div style="margin-top:10px;font-size:10px;font-weight:950;letter-spacing:.08em;opacity:.70;text-align:center;text-transform:uppercase;">AKTIVT NU</div>
             <div style="margin-top:3px;font-size:24px;font-weight:950;letter-spacing:-.04em;text-align:center;">${activeTitle}</div>
