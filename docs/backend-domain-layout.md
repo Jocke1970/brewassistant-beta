@@ -1,13 +1,17 @@
 # Backend Domain Layout
 
-BrewAssistant backend modules are grouped by responsibility under `custom_components/brewassistant/`.
+Status: active development  
+Last synced: 2026-09-05
 
-Home Assistant platform files remain at the integration root. Backend/domain logic lives in subpackages.
+BrewAssistant backend/domain logic is grouped by responsibility under `custom_components/brewassistant/`. Home Assistant platform entry files remain at the integration root.
+
+The code-local `README.md` in each backend directory is the canonical short-form description of current ownership and implementation. Documents under `docs/backends/` are deeper design/test/history references and may intentionally describe an earlier milestone.
 
 ## Current layout
 
 ```text
 custom_components/brewassistant/
+├── README.md
 ├── __init__.py
 ├── manifest.json
 ├── config_flow.py
@@ -22,85 +26,46 @@ custom_components/brewassistant/
 ├── number.py
 ├── services.yaml
 ├── brand/
-│   ├── icon.png
-│   └── logo.png
-├── carbonation.py
 ├── brewday/
+│   └── README.md
 ├── brewzilla/
+│   └── README.md
 ├── carbonation_backend/
+│   └── README.md
 ├── climate_backend/
+│   └── README.md
 ├── cooling/
+│   └── README.md
 ├── fermentation/
+│   └── README.md
+├── fermentation_chamber/
+│   └── README.md
+├── fermentation_tracking/
+│   └── README.md
 ├── kegerator/
+│   └── README.md
+├── modules/
+│   └── README.md
 ├── shared/
+│   └── README.md
 └── translations/
 ```
 
 ## Package responsibilities
 
-```text
-brewday/
-  Brewday runtime, Manual Brewday runtime, stage engine, event log and addition alerts.
-
-brewzilla/
-  BrewZilla runtime, temperature resolver, learning, energy and orchestration.
-
-carbonation_backend/
-  Python-owned carbonation runtime/session backend.
-
-climate_backend/
-  Climate Supervisor backend.
-
-cooling/
-  Counterflow/wort cooling and sanitation support.
-
-fermentation/
-  Fermentation and fermentation climate support.
-
-kegerator/
-  Kegerator guard, fan/compressor inference and fan-auto backend.
-  The climate integration owns the cooling target and compressor behavior.
-  The fan backend manages circulation fan decisions and diagnostics.
-
-shared/
-  Shared utilities such as temperature statistics.
-```
-
-## Kegerator responsibility split
-
-The kegerator backend is intentionally narrow:
-
-```text
-climate.kegerator_kylskap
-  cooling target and compressor behavior
-
-kegerator/guard.py
-  safety/watchdog diagnostics and climate restart restore guard
-
-kegerator/fan_control.py
-  compressor inference from sensor.kegerator_power
-  fan-auto runtime diagnostics
-  fan mode handling: Off / Always on / Afterrun
-  fan circulation decisions
-
-switch.kegerator_fan
-  circulation fan entity used by the fan backend
-```
-
-This keeps compressor-cycle responsibility in the climate layer rather than in fan automation.
-
-## Naming rule
-
-Do not create backend packages that collide with top-level Home Assistant platform/module names.
-
-Known avoided collisions:
-
-```text
-carbonation.py          + carbonation_backend/
-climate platform/module + climate_backend/
-```
-
-This avoids Python importing a package instead of the intended top-level module.
+| Package | Responsibility |
+| --- | --- |
+| `brewday/` | Normalized Brewday Runtime, Manual Brewday, stage engine, physical timing, addition alerts and persisted Flight Recorder |
+| `brewzilla/` | BrewZilla/RAPT hot-side adapter, physical control chain, Mash-In contract, telemetry recovery/fail-passive and ABORT |
+| `carbonation_backend/` | Persisted carbonation session, pressure/volume guidance and progress estimates |
+| `climate_backend/` | Kegerator Climate Supervisor; dynamic climate-target selection/application |
+| `cooling/` | Cooling Runtime v2 for CFC/immersion/manual cooling, sanitation context and cooling advice |
+| `fermentation_tracking/` | Independent fermentation observations, source resolution, SG/Brix correction, progress/stability/readiness |
+| `fermentation_chamber/` | Fermentation/cold-crash chamber-air recommendation plus Supervised Apply bridge |
+| `fermentation/` | Legacy compatibility bridges only; no new business logic |
+| `kegerator/` | Kegerator fan control/model, serving presets and legacy/policy guard/watchdog |
+| `modules/` | Module/capability metadata registry |
+| `shared/` | Domain-neutral support helpers such as rolling temperature stats |
 
 ## Platform-root rule
 
@@ -115,13 +80,61 @@ select.py
 number.py
 ```
 
-Those files should act as routers/registrars and import backend entities from the domain packages.
+They should act primarily as routers/registrars and import backend entities from domain packages.
 
-## Brand assets
+## Naming rule
 
-Home Assistant integration brand images live in:
+Avoid backend package names that collide with top-level Home Assistant platform/module files. Existing examples:
 
 ```text
-custom_components/brewassistant/brand/icon.png
-custom_components/brewassistant/brand/logo.png
+carbonation.py          + carbonation_backend/
+climate platform/module + climate_backend/
 ```
+
+## Important ownership splits
+
+### Fermentation
+
+```text
+fermentation_tracking
+  process observations/calculations/readiness
+
+fermentation_chamber
+  chamber-air recommendation/control bridge
+
+fermentation
+  compatibility only
+```
+
+### Kegerator
+
+```text
+climate.kegerator_kylskap
+  normal refrigeration/compressor behavior
+
+climate_backend/
+  dynamic target selection/application
+
+kegerator/fan_control.py
+  circulation fan only
+
+kegerator/guard.py
+  separate legacy/policy physical-switch guard + restart watchdog
+```
+
+### External process temperature
+
+```text
+Heat strike -> Pre-boil
+  hot-side Brewday/BrewZilla ownership
+
+BOIL start
+  handoff
+
+Chill -> Transfer
+  Cooling ownership as CFC outlet/process temperature when applicable
+```
+
+## Documentation maintenance
+
+When a backend contract changes, update its code-local README in the same PR. If a longer design/history document becomes stale, either sync it or label it clearly as historical/reference material instead of letting it silently compete with current code documentation.
