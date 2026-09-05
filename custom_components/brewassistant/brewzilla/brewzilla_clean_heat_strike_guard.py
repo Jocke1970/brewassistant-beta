@@ -29,6 +29,8 @@ _ORIGINAL_WITH_ADVICE: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]]
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 _READY_TOLERANCE_C = 0.3
 _SAFETY_OVERSHOOT_STOP_C = 0.5
+_SAFETY_HARD_OVERSHOOT_STOP_C = 1.5
+_GRADIENT_RELIEF_HEAT_CAP = 15.0
 
 # Nominal demand from the operator-facing mash/BLE strike temperature.  Keep a
 # real positive utilization floor all the way through READY because BrewZilla's
@@ -51,9 +53,12 @@ _GATE_FAR_PHASE = "clean_gate_far_ramp"
 # Safety cap from the hottest kettle/wort/internal view.  Near the written
 # target BA keeps the BrewZilla heater master enabled and only limits available
 # power, letting BrewZilla's local thermostat decide whether the element should
-# actually fire.  BA sends an explicit 0%/heater-OFF only after a real hottest-
-# view overshoot (> target + 0.5 C), or when a separate hard safety/ABORT path
-# requests safe-down.
+# actually fire.  A >0.5 C hottest-view overshoot normally requests explicit
+# safe-down.  The one exception is a real pre-mash-in temperature gradient:
+# when mash/BLE is still below strike and the internal view is only moderately
+# high, keep low positive authority plus full mixing so the local thermostat can
+# recover instead of deadlocking the readiness probe.  A >1.5 C hottest-view
+# overshoot remains a hard stop even with a gradient.
 _SAFETY_HEAT_CAPS: tuple[tuple[float, float, bool, str], ...] = (
     (-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop"),
     (_READY_TOLERANCE_C, 25.0, True, "clean_safety_local_regulation_hold"),
@@ -191,6 +196,33 @@ def _mash_wort_delta(out: dict[str, Any]) -> float | None:
     return round(float(wort) - float(mash), 2)
 
 
+def _gradient_relief_safety_cap(
+    gate_delta: float | None,
+    safety_delta: float | None,
+    mash_wort_delta: float | None,
+) -> tuple[float, bool, str] | None:
+    """Keep low local heat authority while a real strike-water gradient exists.
+
+    A moderately hot internal sensor must not permanently disable BrewZilla's
+    local thermostat while the operator-facing mash/BLE probe is still below
+    strike.  Limit authority to a small cap and let full recirculation converge
+    the two views.  Large hottest-view overshoot remains an explicit hard stop.
+    """
+    if gate_delta is None or safety_delta is None or mash_wort_delta is None:
+        return None
+
+    safety_overshoot = -float(safety_delta)
+    if not (
+        float(gate_delta) > _READY_TOLERANCE_C
+        and float(mash_wort_delta) >= _DELTA_PUMP_SMALL_C
+        and safety_overshoot > _SAFETY_OVERSHOOT_STOP_C
+        and safety_overshoot <= _SAFETY_HARD_OVERSHOOT_STOP_C
+    ):
+        return None
+
+    return _GRADIENT_RELIEF_HEAT_CAP, True, "clean_safety_gradient_equalize"
+
+
 def _pump_for_conditions(out: dict[str, Any], safety_delta: float | None, gate_delta: float | None) -> tuple[float, str, float | None]:
     mw_delta = _mash_wort_delta(out)
     if mw_delta is not None:
@@ -247,13 +279,20 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
     if safety_cap is None or safety_heater_on is None or safety_phase is None:
         safety_cap, safety_heater_on, safety_phase = 100.0, True, "clean_safety_unknown_no_cap"
 
+    pump_floor, pump_reason, mw_delta = _pump_for_conditions(out, safety_delta, gate_delta)
+    gradient_relief = _gradient_relief_safety_cap(gate_delta, safety_delta, mw_delta)
+    gradient_relief_active = gradient_relief is not None
+    if gradient_relief is not None:
+        safety_cap, safety_heater_on, safety_phase = gradient_relief
+        pump_floor = _PUMP_READY
+        pump_reason = "clean_strike_gradient_equalize"
+
     clean_heat = min(float(gate_heat), float(safety_cap))
     # The hottest-view cap may still force a real safety stop after overshoot;
     # otherwise BrewZilla remains locally enabled and regulates its own target.
     clean_heater_on = bool(gate_heater_on and safety_heater_on and clean_heat > advice_control.base.UTILIZATION_TOLERANCE)
     clean_phase = gate_phase if clean_heat == float(gate_heat) else safety_phase
 
-    pump_floor, pump_reason, mw_delta = _pump_for_conditions(out, safety_delta, gate_delta)
     desired_pump_current = _num(out.get("desired_pump_utilization"))
     clean_pump = pump_floor if desired_pump_current is None else max(float(desired_pump_current), pump_floor)
 
@@ -298,6 +337,9 @@ def _apply_clean_heatstrike(out: dict[str, Any]) -> dict[str, Any]:
             "clean_heat_strike_safety_delta_to_target": safety_delta,
             "clean_heat_strike_gate_heat_utilization": gate_heat,
             "clean_heat_strike_safety_heat_cap": safety_cap,
+            "clean_heat_strike_gradient_relief_active": gradient_relief_active,
+            "clean_heat_strike_gradient_relief_heat_cap": _GRADIENT_RELIEF_HEAT_CAP if gradient_relief_active else None,
+            "clean_heat_strike_safety_hard_stop_c": _SAFETY_HARD_OVERSHOOT_STOP_C,
             "clean_heat_strike_original_heat_utilization": previous_heat,
             "clean_heat_strike_original_pump_utilization": previous_pump,
             "clean_heat_strike_pump_reason": pump_reason,
