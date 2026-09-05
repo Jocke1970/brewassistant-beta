@@ -240,8 +240,8 @@ card:
           const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
           const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
           const a = start?.attributes || complete?.attributes || {};
-          const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || oz.mash_in_gate_state || 'idle');
-          const effective = a.mash_in_effective_target ?? a.effective_target ?? oz.mash_in_effective_target ?? '—';
+          const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
+          const effective = oz.mash_in_effective_target ?? gate?.attributes?.effective_target ?? a.mash_in_effective_target ?? a.effective_target ?? '—';
           if (state === 'ready_for_mash_in') return `<b>Strike ready · time for mash-in</b><br>Press MASH-IN STARTED when grain addition begins.`;
           if (state === 'mash_in_started') return `<b>Mash-in started · wait for BF CONTINUE</b><br>Primary path: press CONTINUE in Brewfather. BA completes mash-in and starts pump/circulation automatically.<br>Effective mash target ${effective} °C · manual fallback below.`;
           return '';
@@ -253,7 +253,7 @@ card:
                 const start = states['button.brewassistant_mash_in_started'];
                 const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
                 const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                const state = String(start?.attributes?.mash_in_gate_state || start?.attributes?.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || oz.mash_in_gate_state || 'idle');
+                const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || start?.attributes?.mash_in_gate_state || start?.attributes?.state || 'idle');
                 return ['ready_for_mash_in','mash_in_started'].includes(state) ? 'block' : 'none';
               ]]]
           - border-radius: 18px
@@ -288,7 +288,8 @@ card:
                   [[[
                     const a = entity?.attributes || {};
                     const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || 'idle');
+                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
                     return state === 'ready_for_mash_in' ? 'block' : 'none';
                   ]]]
               - border-radius: 16px
@@ -315,7 +316,8 @@ card:
                   [[[
                     const a = entity?.attributes || {};
                     const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const state = String(a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state || gate?.attributes?.state || 'idle');
+                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
                     return state === 'mash_in_started' ? 'block' : 'none';
                   ]]]
               - border-radius: 16px
