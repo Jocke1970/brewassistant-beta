@@ -41,6 +41,23 @@ def test_clean_heatstrike_zero_is_reserved_for_real_overshoot() -> None:
     assert '"heater_stop_needed": heater_stop_needed' in source
 
 
+def test_clean_heatstrike_gradient_relief_avoids_pre_mash_in_deadlock() -> None:
+    source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
+    # Field case: BLE still below strike while the internal kettle view has
+    # crossed strike. The soft +0.5 C stop may not remove all local heat
+    # authority while a genuine temperature gradient remains.
+    assert '_SAFETY_HARD_OVERSHOOT_STOP_C = 1.5' in source
+    assert '_GRADIENT_RELIEF_HEAT_CAP = 15.0' in source
+    assert 'float(gate_delta) > _READY_TOLERANCE_C' in source
+    assert 'float(mash_wort_delta) >= _DELTA_PUMP_SMALL_C' in source
+    assert 'safety_overshoot > _SAFETY_OVERSHOOT_STOP_C' in source
+    assert 'safety_overshoot <= _SAFETY_HARD_OVERSHOOT_STOP_C' in source
+    assert 'return _GRADIENT_RELIEF_HEAT_CAP, True, "clean_safety_gradient_equalize"' in source
+    assert 'pump_floor = _PUMP_READY' in source
+    assert 'pump_reason = "clean_strike_gradient_equalize"' in source
+    assert '"clean_heat_strike_gradient_relief_active": gradient_relief_active' in source
+
+
 def test_clean_heatstrike_keeps_positive_authority_through_final_approach() -> None:
     source = CLEAN_HEATSTRIKE.read_text(encoding="utf-8")
     # The local BrewZilla thermostat remains enabled near target. BA limits the
