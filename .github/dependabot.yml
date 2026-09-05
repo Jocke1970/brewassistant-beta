@@ -1,0 +1,16 @@
+# Keep GitHub Actions and CI tooling current, matching the ha-garmin watchdog setup.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "20:00"
+      timezone: "Europe/Stockholm"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "20:00"
+      timezone: "Europe/Stockholm"
