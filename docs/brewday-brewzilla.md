@@ -251,7 +251,8 @@ ready_for_mash_in
   -> pump OFF
   -> pump utilization 0%
   -> grain addition / stirring window
-  -> wait for real Brewfather progression
+  -> observe Brewfather PAUSED after Mash-In Started
+  -> later Brewfather RUNNING / Continue
   -> Mash-In Complete
   -> normal mash circulation resumes
 ```
@@ -260,27 +261,30 @@ A stale or late `Mash-In Started` action must never move a completed Mash-In bac
 
 ---
 
-## Brewfather progression after Mash-In — PR #202
+## Brewfather progression after Mash-In — PR #202 follow-up
 
-The 2026-09-05 test showed that a plain Brewfather `running` state is too weak as completion evidence because Brewfather may already report running while the operator is still physically mashing in.
+The 2026-09-05 accelerated test exposed an edge case in the first progression guard: if Brewfather was already in `running`/Play while Mash-In Started was pressed, an already-advanced mash target could make BA complete the handoff immediately.
 
-Automatic Mash-In Complete now requires real progression evidence:
-
-```text
-paused -> running transition
-OR
-active Brewfather mash target moves away from the strike target captured by the gate
-```
-
-Plain state:
+The completion contract is therefore intentionally edge-triggered and uses the live Brewfather Brew Tracker status sensor:
 
 ```text
-BF status = running
+Mash-In Started
+  -> BA must observe BF status = paused after that boundary
+  -> later BF status = running
+  -> Mash-In Complete may auto-complete
 ```
 
-by itself does **not** complete Mash-In.
+If polling misses the exact adjacent `paused -> running` sample, a later `running` is accepted only when BA has already recorded a post-start paused state for the same Mash-In gate.
 
-Until progression is observed:
+The following are **not** completion evidence by themselves:
+
+```text
+BF was already running when Mash-In Started was pressed
+active Brewfather mash target changed
+BA normalized runtime remained live/running
+```
+
+Until a post-start pause and subsequent resume have been observed:
 
 ```text
 mash_in_gate_state = mash_in_started
@@ -288,7 +292,7 @@ pump OFF
 pump utilization 0%
 ```
 
-Only after completion may normal mash circulation restart.
+Only after completion may normal mash circulation restart. The explicit Mash-In Complete/manual circulation path remains the fallback if the Brewfather transition cannot be observed reliably.
 
 ---
 
@@ -417,90 +421,3 @@ While latched, Brewfather cannot automatically reclaim BA hot-side ownership eve
 The operator ABORT latch survives Home Assistant restart.
 
 ---
-
-## Flight Recorder continuity
-
-One Brewfather batch should remain one Flight Recorder session through:
-
-```text
-Planning
-  -> Brewing pre-start
-  -> Play
-  -> running hot-side Brewday
-```
-
-The 2026-08-29 physical test verified the same `started_at` across that chain.
-
-Flight Recorder should capture:
-
-```text
-runtime source/state/stage/step
-effective + device target
-process + safety temperature and source/age
-heat/pump desired and actual state
-Mash-In gate state
-phase authority
-pending confirmation
-apply result/actions
-ABORT/lockout
-RCL freshness/recovery
-```
-
----
-
-## External process-temperature sensor ownership
-
-This architecture is fixed:
-
-```text
-Heat strike -> Mash -> Mash out -> Sparge -> Pre-boil
-  owner = Brewday / BrewZilla hot-side
-  role  = process/mash temperature
-
-Boil starts
-  hot-side releases external sensor ownership
-
-Chill -> Transfer
-  owner = Cooling/CFC when required
-  role  = CFC outlet / wort-out temperature
-```
-
-BrewZilla internal temperature remains the primary kettle temperature throughout hot-side operation.
-
-The Boil release / Chill acquisition handoff is not yet physically validated.
-
----
-
-## Current physical validation focus
-
-```text
-[ ] gradient relief converges MASH/BLE without unsafe hottest-view overshoot
-[ ] > +1.5 °C gradient overshoot still hard-stops heat
-[ ] Mash-In Started keeps pump OFF / 0% throughout grain addition
-[ ] Brewfather Continue/progression is the first event that permits pump restart
-[ ] Mash-In waiting box disappears immediately after completion
-[ ] physical 66 °C hold starts only on target reach
-[ ] PAUSE freezes #157 timing
-[ ] 66 -> 72 °C ramp is recorded separately
-[ ] first real-mash heat-strike / mash-in thermal response
-[ ] Mash out / Sparge / Pre-boil
-[ ] full Boil ramp / Boil
-[ ] external sensor release at Boil
-[ ] Cooling/CFC acquisition in Chill/Transfer
-```
-
----
-
-## Related implementation docs
-
-Canonical code-local BrewZilla architecture:
-
-[`../custom_components/brewassistant/brewzilla/README.md`](../custom_components/brewassistant/brewzilla/README.md)
-
-Repository roadmap:
-
-[`roadmap.md`](roadmap.md)
-
-Current beta.9 candidate notes:
-
-[`beta9-release-notes.md`](beta9-release-notes.md)
