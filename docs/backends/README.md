@@ -1,68 +1,69 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-08-31
+Last synced: 2026-09-05
 
-This folder documents the purpose, ownership and control logic of BrewAssistant backend modules.
+The canonical short-form documentation now lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
 
-The goal is to make it clear what each backend is responsible for, what it is not responsible for, what safety boundaries it respects, and which event-log fields are useful when debugging.
+This `docs/backends/` directory remains useful for deeper architecture notes, historical roadmaps and field-test evidence.
+
+## Canonical current backend READMEs
+
+| Area | Current README |
+| --- | --- |
+| Integration/backend map | [`../../custom_components/brewassistant/README.md`](../../custom_components/brewassistant/README.md) |
+| Brewday Runtime / Manual / Flight Recorder | [`../../custom_components/brewassistant/brewday/README.md`](../../custom_components/brewassistant/brewday/README.md) |
+| BrewZilla hot side | [`../../custom_components/brewassistant/brewzilla/README.md`](../../custom_components/brewassistant/brewzilla/README.md) |
+| Cooling | [`../../custom_components/brewassistant/cooling/README.md`](../../custom_components/brewassistant/cooling/README.md) |
+| Fermentation Tracking | [`../../custom_components/brewassistant/fermentation_tracking/README.md`](../../custom_components/brewassistant/fermentation_tracking/README.md) |
+| Fermentation Chamber | [`../../custom_components/brewassistant/fermentation_chamber/README.md`](../../custom_components/brewassistant/fermentation_chamber/README.md) |
+| Fermentation compatibility layer | [`../../custom_components/brewassistant/fermentation/README.md`](../../custom_components/brewassistant/fermentation/README.md) |
+| Carbonation | [`../../custom_components/brewassistant/carbonation_backend/README.md`](../../custom_components/brewassistant/carbonation_backend/README.md) |
+| Kegerator Climate Supervisor | [`../../custom_components/brewassistant/climate_backend/README.md`](../../custom_components/brewassistant/climate_backend/README.md) |
+| Kegerator / fan / legacy guard | [`../../custom_components/brewassistant/kegerator/README.md`](../../custom_components/brewassistant/kegerator/README.md) |
+| Module/capability registry | [`../../custom_components/brewassistant/modules/README.md`](../../custom_components/brewassistant/modules/README.md) |
+| Shared utilities | [`../../custom_components/brewassistant/shared/README.md`](../../custom_components/brewassistant/shared/README.md) |
+
+## Longer reference documents
+
+| Document | Role |
+| --- | --- |
+| [`brewzilla-backend.md`](./brewzilla-backend.md) | Detailed BrewZilla design/test baseline. Read together with the current code-local README because the wrapper/authority chain continues to evolve. |
+| [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md) | BrewZilla heat/pump tuning details and control-profile history. |
+| [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history. |
+| [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
+| [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
 
 ## Documentation pattern
 
-Each backend document should answer:
+A backend README should answer:
 
 ```text
-What problem does this backend solve?
-Which Home Assistant entities or runtime sources does it read?
-Which entities/services can it write to?
-Which safety guards can block it?
-Which event-log fields prove it worked?
-Which dashboard cards depend on it?
-What should not be changed casually?
+What does this backend own?
+What does it explicitly not own?
+Which runtime/sensor sources does it read?
+Which physical entities/services can it write?
+Which safety/confirmation boundary applies?
+What is persisted vs in-memory?
+Which public entities/services expose it?
+Which files are authoritative?
+Which compatibility layers or known gaps exist?
+What must not be changed casually?
 ```
 
-## Current backend docs
+## Source-of-truth order
 
-| Backend area | Status | Document |
-| --- | --- | --- |
-| BrewZilla control and Brewday Advice | Active test baseline | [`brewzilla-backend.md`](./brewzilla-backend.md) |
-| BrewZilla control profile details | Active test notes | [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md) |
-| Cooling / CFC / immersion / manual cooling | Architecture fixed, implementation pending | [`cooling-backend.md`](./cooling-backend.md) |
-| Brewday Runtime resolver | TODO | `brewday-runtime.md` |
-| Brewday Event Log | TODO | `event-log.md` |
-| Fermentation control | TODO | `fermentation.md` |
-| Kegerator / serving guard | TODO | `kegerator.md` |
-| Carbonation runtime | TODO | `carbonation.md` |
-| Notifications | TODO | `notifications.md` |
-
-## Backend doc rules
-
-Backend docs should describe intent and safety behavior, not just restate code.
-
-Prefer this:
+When documentation disagrees during active development, use this order:
 
 ```text
-The paused mash-hold maintenance backend allows limited hold-temperature correction while Brewfather reports a paused hold, but only when the target is already synced and no higher safety guard is active.
+current executable code
+  -> code-local backend README
+  -> current architecture/index docs
+  -> older roadmap/test/history docs
 ```
 
-Avoid this as the only explanation:
-
-```text
-Function X calls function Y.
-```
+Then fix the drift rather than preserving two competing descriptions.
 
 ## Event-log first workflow
 
-When testing hot-side automation, event logs are the source of truth.
-
-For each backend doc, include the event-log markers that prove expected behavior, for example:
-
-```yaml
-apply_result: direct_applied
-actions:
-  - set_target:42.0
-  - set_heat_utilization:30.0
-  - set_pump_utilization:70.0
-```
-
-This keeps debugging grounded in real BrewAssistant behavior instead of dashboard impressions alone.
+For hot-side testing, Brewday Flight Recorder evidence remains the preferred diagnostic truth. Documentation should identify the state/guard/action fields that prove expected behavior instead of relying only on dashboard appearance.
