@@ -47,11 +47,13 @@ work and regression checks
       dev
         |
         | PR: dev -> beta
+        | merge method: Create a merge commit
         v
       beta
         |
         | practical validation + green watchdogs
         | PR: beta -> main
+        | merge method: Create a merge commit
         v
       main
         |
@@ -60,18 +62,41 @@ work and regression checks
   released version
 ```
 
+### Promotion merge method
+
+`dev`, `beta` and `main` are permanent branches and must keep an explicit ancestry chain.
+
+For promotions:
+
+```text
+dev -> beta
+beta -> main
+```
+
+use **Create a merge commit**.
+
+Do **not** use Squash and merge or Rebase and merge for these promotion PRs. Squashing a permanent source branch creates a new commit only in the destination branch and makes later comparisons between the long-lived branches unnecessarily confusing.
+
+Squash remains fine for temporary contributor/fork PRs targeting `dev`, but the project itself should normally work directly on `dev` rather than creating persistent feature branches.
+
+## GitHub repository settings
+
+The repository must keep **Automatically delete head branches** disabled. `dev` and `beta` are permanent promotion sources and must not disappear after merge.
+
+GitHub branch protection/rules should additionally require pull requests for `beta` and `main`, so direct pushes cannot bypass the promotion model.
+
 The repository promotion guard rejects:
 
 - PRs to `beta` from anything other than `dev`
 - PRs to `main` from anything other than `beta`
-
-GitHub branch protection/rules should additionally require pull requests for `beta` and `main`, so direct pushes cannot bypass the promotion model.
 
 ## Branch cleanup
 
 Only `dev`, `beta` and `main` are long-lived repository branches.
 
 Temporary Dependabot branches may exist while an update pull request is open and should disappear after merge/close. Old development branches should not be retained as archives; merged work is preserved by Git history, pull requests, tags and releases.
+
+Known-good historical versions belong in GitHub tags/releases, not in branches such as `v8`, `v.8` or similar snapshot branches.
 
 ## Releases
 
@@ -86,9 +111,9 @@ v0.2.0-beta.10
 Release rules:
 
 1. Version is prepared on `dev`.
-2. `dev` is promoted to `beta`.
+2. `dev` is promoted to `beta` with a merge commit.
 3. The beta candidate is validated in Home Assistant and, where relevant, against real brewing hardware.
-4. `beta` is promoted to `main`.
+4. `beta` is promoted to `main` with a merge commit.
 5. Create the matching tag and GitHub Release from the resulting `main` commit.
 6. Mark beta versions as GitHub prereleases.
 
@@ -100,9 +125,11 @@ When BrewAssistant reaches a non-beta milestone, switch to normal semantic versi
 
 A promotion candidate should update documentation together with the behavior it describes. In particular, keep these current before promotion to `main`:
 
+- `README.md`
 - `CHANGELOG.md`
 - current release notes under `docs/`
 - `docs/roadmap.md`
+- `docs/brewday-brewzilla.md`
 - relevant backend/architecture documentation
 - physical-validation notes after meaningful hardware tests
 
