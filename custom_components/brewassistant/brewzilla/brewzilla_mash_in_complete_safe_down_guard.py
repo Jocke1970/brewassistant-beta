@@ -16,10 +16,12 @@ its mash-in pause, that Brewfather paused -> running transition is treated as
 the Mash-In Complete confirmation.  This avoids requiring a second BA button
 press while still keeping the auto-complete scope very narrow.
 
-Some Brewfather/RCL snapshots can miss the exact paused -> running edge.  If BA
-is still in mash_in_started and Brewfather is already running in a mash context,
-BA should also complete mash-in and start mash circulation instead of remaining
-stuck waiting for the missed edge.
+Some Brewfather/RCL snapshots can miss the exact paused -> running edge.  In
+that case BA may also auto-complete only after the active Brewfather mash target
+has actually moved away from the strike target captured by the Mash-In gate.
+Merely seeing Brewfather in a running state is not enough: the pump must remain
+OFF throughout physical grain addition until genuine Brewfather progression is
+observed or the operator uses the explicit Mash-In Complete fallback.
 """
 
 from __future__ import annotations
@@ -119,6 +121,17 @@ def _current_brewfather_mash_target(snapshot: dict[str, Any]) -> tuple[float | N
         if value is not None:
             return value, key
     return None, None
+
+
+def _gate_origin_target(snapshot: dict[str, Any]) -> float | None:
+    """Return the strike target captured when the current Mash-In gate opened."""
+    active_key = str(snapshot.get("mash_in_gate_active_key") or "")
+    if not active_key:
+        return None
+    parts = active_key.split("|")
+    if len(parts) < 2 or parts[-1] != "mash_in":
+        return None
+    return _num(parts[-2])
 
 
 def _patched_effective_mash_in_target(hass, snapshot: dict[str, Any]) -> tuple[float | None, str | None, float | None, str | None]:
@@ -252,20 +265,25 @@ def _auto_complete_allowed(
         return False, "safe_down_not_allowed"
 
     current_bf_target, _source = _current_brewfather_mash_target(snapshot)
-    if current_bf_target is not None:
-        if previous_state in _PAUSED_STATES:
+
+    # A real paused -> running edge is explicit Brewfather progression and may
+    # complete Mash-In immediately.
+    if previous_state in _PAUSED_STATES:
+        if current_bf_target is not None:
             return True, "paused_to_running_mash_target"
-        return True, "running_while_mash_in_started_mash_target"
-
-    # Fallback for snapshots where BF has already advanced enough that the active
-    # step text/target is not yet stable, but the runtime is clearly running in a
-    # mash stage while BA is still waiting at mash_in_started.
-    if _mash_context_active(snapshot):
-        if previous_state in _PAUSED_STATES:
+        if _mash_context_active(snapshot):
             return True, "paused_to_running_mash_stage"
-        return True, "running_while_mash_in_started_mash_stage"
 
-    return False, "not_mash_context"
+    # Brewfather can report "running" both before and after the operator presses
+    # Mash-In Started.  Therefore running by itself must never resume the pump.
+    # The Mash-In gate key captures the strike target at READY; when the active
+    # BF mash target moves away from that value we have concrete progression.
+    origin_target = _gate_origin_target(snapshot)
+    if current_bf_target is not None and origin_target is not None:
+        if abs(current_bf_target - origin_target) > base.TARGET_SYNC_TOLERANCE:
+            return True, "running_after_mash_in_target_advanced"
+
+    return False, "waiting_for_brewfather_progress"
 
 
 async def _apply_brewfather_resume_auto_complete(
@@ -319,7 +337,7 @@ async def _apply_brewfather_resume_auto_complete(
         "mash_in_waiting_for_brewfather_resume": False,
         "control_reason": (
             f"{resume_result.get('control_reason') or 'Direct production flow active'}; "
-            f"Brewfather is running while BA was in mash_in_started ({auto_complete_reason}), so BA marked Mash-In Complete automatically."
+            f"Brewfather progression was confirmed while BA was in mash_in_started ({auto_complete_reason}), so BA marked Mash-In Complete automatically."
         ),
         "executed_at": dt_util.utcnow().isoformat(),
     }
