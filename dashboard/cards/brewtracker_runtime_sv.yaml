@@ -23,7 +23,7 @@ card:
         - sensor.brewassistant_brewday_runtime_state
         - sensor.brewassistant_brewday_runtime_status
         - sensor.brewassistant_brewday_runtime_stage
-        - sensor.brewassistant_brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewday_runtime_step
         - sensor.brewassistant_brewday_runtime_next_step
         - sensor.brewassistant_brewday_live_progress
         - sensor.brewassistant_brewday_live_time_remaining_minutes
