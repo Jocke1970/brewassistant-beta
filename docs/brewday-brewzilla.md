@@ -2,12 +2,13 @@
 
 This document describes the current BrewAssistant hot-side control path from Brewfather Brew Tracker or Manual Brewday through BrewAssistant to BrewZilla/RAPT hardware.
 
-Status: **supervised hot-side beta baseline synced after the 2026-09-05 Heatstrike/Mash-In field test**.
+Status: **supervised hot-side beta baseline synced after the 2026-09-06 Heatstrike field test**.
 
 Latest physical evidence:
 
 - [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md)
 - [`physical-validation-2026-09-05.md`](physical-validation-2026-09-05.md)
+- [`physical-validation-2026-09-06.md`](physical-validation-2026-09-06.md)
 
 ---
 
@@ -115,7 +116,7 @@ Current pre-mash control is deliberately not generic per-modulation confirmation
 
 Outside dedicated phase authority, positive automatic control continues through the generic Supervised Apply path where applicable.
 
-This distinction prevents the operator from having to confirm every 25% -> 15% -> 25% Heatstrike adjustment while still keeping unrelated positive automation supervised.
+This distinction prevents the operator from having to confirm every Heatstrike modulation while still keeping unrelated positive automation supervised.
 
 ---
 
@@ -172,9 +173,9 @@ The 2026-08-31 water test exposed a final-approach dead zone and drove PR #193: 
 
 ---
 
-## Heatstrike gradient relief — PR #197
+## Heatstrike gradient relief — PR #197 + 2026-09-06 refinement
 
-The 2026-09-05 test reproduced a stronger temperature-gradient deadlock:
+The 2026-09-05 test reproduced a temperature-gradient deadlock:
 
 ```text
 strike target       ~71.8 °C
@@ -182,7 +183,15 @@ MASH/BLE             ~67.8 °C
 BrewZilla internal   ~72.7 °C
 ```
 
-The readiness probe still required energy, but the ordinary hottest-view overshoot rule could simultaneously request heat 0 / heater OFF.
+The 2026-09-06 run then showed the same final-approach problem closer to strike:
+
+```text
+strike target       71.8 °C
+MASH/BLE             69.1 °C
+BrewZilla internal   73.36 °C
+```
+
+The readiness probe still required energy while the hottest view had overshot by about +1.56 °C. The earlier +1.5 °C hard boundary therefore stopped heat slightly too early in this bounded gradient case.
 
 Current rule:
 
@@ -197,9 +206,9 @@ Narrow pre-mash-in exception:
 MASH/BLE is still below strike
 AND a real process/internal gradient exists
 AND hottest-view overshoot > +0.5 °C
-AND hottest-view overshoot <= +1.5 °C
+AND hottest-view overshoot <= +2.0 °C
 
-=> heat authority cap = 15%
+=> heat authority cap = 5%
 => heater master remains available to local thermostat
 => pump utilization = 100% for equalization
 ```
@@ -207,11 +216,13 @@ AND hottest-view overshoot <= +1.5 °C
 Hard boundary:
 
 ```text
-hottest-view overshoot > +1.5 °C
+hottest-view overshoot > +2.0 °C
   -> explicit heat 0 / heater OFF remains authoritative
 ```
 
-The gradient exception is not a general relaxation of overshoot safety. It only prevents the observed BLE-low/internal-high deadlock during pre-mash-in equalization.
+The lower 5% heat cap is intentionally gentler than the original 15% relief while the extra 0.5 °C gradient-only window avoids premature deadlock. This is not a general relaxation of Mash-In READY tolerance or overshoot safety.
+
+RCL telemetry may be tens of seconds old during the final approach. The current policy does not assume that additional `update_entity` requests can force fresher cloud data; the control law is therefore expected to tolerate bounded telemetry latency while existing stale/recovery guards remain active.
 
 ---
 
@@ -298,19 +309,23 @@ Only after completion may normal mash circulation restart. The explicit Mash-In 
 
 ## Mash-In status UI
 
-The yellow Mash-In waiting/status box must reflect live gate/orchestration state rather than stale button attributes.
+The compact Mash-In handoff inside the master Brewday card must reflect live gate/orchestration state rather than stale button attributes.
 
 Expected visibility:
 
 ```text
-ready_for_mash_in / mash_in_started
-  -> visible
+ready_for_mash_in
+  -> compact STRIKE READY / START MASH-IN action
+
+mash_in_started
+  -> compact pulsing WAITING FOR BF GO state
+  -> pump must report OFF / 0 %
 
 mash_in_complete
-  -> hidden
+  -> Mash-In card hidden
 ```
 
-PR #202 updates EN/SV runtime-flow cards to prefer live state.
+The larger standalone Mash-In card remains diagnostic/reference UI rather than the normal master-cockpit presentation.
 
 ---
 
