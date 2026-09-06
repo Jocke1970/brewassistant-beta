@@ -102,7 +102,7 @@ card:
           const metric = (title, main, sub, icon, kind = 'neutral') => {
             const bg = kind === 'blue' ? 'rgba(33,150,243,.09)' : kind === 'cyan' ? 'rgba(0,188,212,.10)' : kind === 'green' ? 'rgba(76,175,80,.11)' : kind === 'yellow' ? 'rgba(255,193,7,.13)' : kind === 'red' ? 'rgba(244,67,54,.11)' : 'rgba(127,127,127,.08)';
             const border = kind === 'blue' ? 'rgba(33,150,243,.20)' : kind === 'cyan' ? 'rgba(0,188,212,.22)' : kind === 'green' ? 'rgba(76,175,80,.24)' : kind === 'yellow' ? 'rgba(255,193,7,.26)' : kind === 'red' ? 'rgba(244,67,54,.24)' : 'rgba(127,127,127,.14)';
-            return `<div style="min-width:0;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div></div>`;
+            return `<div style="min-width:0;min-height:58px;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12px;font-weight:950;line-height:1.12;white-space:normal;overflow-wrap:anywhere;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.12;margin-top:2px;white-space:normal;overflow-wrap:anywhere;">${sub}</div></div></div>`;
           };
 
           const statusBg = runtimeState === 'aborted' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
@@ -119,13 +119,13 @@ card:
               <div style="margin-top:5px;font-size:10.8px;font-weight:800;opacity:.68;text-align:center;">${progressDetail}</div>
             </div>
             <div style="margin-top:11px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;">
-              ${metric('Fas', short(stage, 12), stageEngine, 'mdi:map-marker-path', 'blue')}
-              ${metric('Steg', short(step, 14), 'nuvarande', 'mdi:format-list-checks', 'cyan')}
-              ${metric('Nästa', short(next, 14), 'nästa', 'mdi:skip-next-circle-outline', 'neutral')}
+              ${metric('Fas', stage, stageEngine, 'mdi:map-marker-path', 'blue')}
+              ${metric('Steg', step, 'nuvarande', 'mdi:format-list-checks', 'cyan')}
+              ${metric('Nästa', next, 'nästa', 'mdi:skip-next-circle-outline', 'neutral')}
             </div>
             <div style="margin-top:7px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;">
-              ${metric('Åtgärd', short(suggestedAction, 22), 'föreslagen', 'mdi:gesture-tap-button', suggestedAction !== '—' ? 'yellow' : 'neutral')}
-              ${metric('Styrning', short(controlHint, 22), 'råd', 'mdi:shield-check-outline', 'neutral')}
+              ${metric('Åtgärd', suggestedAction, 'föreslagen', 'mdi:gesture-tap-button', suggestedAction !== '—' ? 'yellow' : 'neutral')}
+              ${metric('Styrning', controlHint, 'råd', 'mdi:shield-check-outline', 'neutral')}
             </div>
             <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${statusBg};border:1px solid ${statusBorder};"><ha-icon icon="${statusIcon}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${short(statusText, 120)}</div></div>
           </div>`;
@@ -581,38 +581,40 @@ card:
                 - justify-self: stretch
                 - text-align: left
                 - white-space: normal
-          - type: horizontal-stack
-            cards:
-              - type: custom:button-card
-                name: Uppdatera BF
-                icon: mdi:refresh
-                tap_action:
-                  action: call-service
-                  service: brewassistant.force_brewfather_refresh
-                styles:
-                  card:
-                    - border-radius: 15px
-                    - padding: 9px
-                    - background: rgba(33,150,243,.09)
-                    - border: 1px solid rgba(33,150,243,.22)
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
-              - type: custom:button-card
-                entity: sensor.brewfather_brew_tracker_status
-                name: BrewTracker-status
-                icon: mdi:cloud-sync-outline
-                tap_action:
-                  action: more-info
-                styles:
-                  card:
-                    - border-radius: 15px
-                    - padding: 9px
-                    - background: rgba(76,175,80,.09)
-                    - border: 1px solid rgba(76,175,80,.22)
-                  name:
-                    - font-size: 11px
-                    - font-weight: 950
+          - type: custom:button-card
+            name: Uppdatera BF
+            icon: mdi:refresh
+            show_label: true
+            label: Tvinga ny BrewTracker-snapshot från Brewfather
+            tap_action:
+              action: call-service
+              service: brewassistant.force_brewfather_refresh
+            styles:
+              card:
+                - border-radius: 15px
+                - padding: 9px
+                - min-height: 54px
+                - background: rgba(33,150,243,.09)
+                - border: 1px solid rgba(33,150,243,.22)
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 34px minmax(0,1fr)
+                - column-gap: 8px
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: rgb(33,150,243)
+              name:
+                - justify-self: start
+                - font-size: 11px
+                - font-weight: 950
+              label:
+                - justify-self: start
+                - text-align: left
+                - white-space: normal
+                - font-size: 9.5px
+                - font-weight: 750
+                - opacity: 0.68
     - type: conditional
       conditions:
         - entity: switch.brewassistant_show_brewday
