@@ -1,15 +1,21 @@
 # BrewZilla Backend
 
 Status: **active supervised hot-side beta**  
-Last synced: **2026-09-05**
+Last synced: **2026-09-06**
 
 This document is the repository-level architecture summary for BrewAssistant's BrewZilla/RAPT hot-side backend.
 
-The code-local canonical package guide is:
+Code-local package guide:
 
 [`../../custom_components/brewassistant/brewzilla/README.md`](../../custom_components/brewassistant/brewzilla/README.md)
 
-For end-to-end operator flow, see [`../brewday-brewzilla.md`](../brewday-brewzilla.md). For current field evidence, see [`../physical-validation-2026-09-05.md`](../physical-validation-2026-09-05.md).
+End-to-end operator flow:
+
+[`../brewday-brewzilla.md`](../brewday-brewzilla.md)
+
+Latest field evidence:
+
+[`../physical-validation-2026-09-06.md`](../physical-validation-2026-09-06.md)
 
 ---
 
@@ -25,10 +31,12 @@ Responsibilities:
 - resolve process/mash vs internal/wort temperature roles
 - regulate the dedicated Heatstrike/Mash-In phase
 - preserve valid BrewZilla local regulation during ordinary telemetry degradation
+- separate report freshness from physical value stagnation
+- actively request fresh RCL coordinator data during owned hot-side phases
 - enforce Manual Brew channel ownership
 - enforce generic Supervised Apply outside dedicated phase authority
 - enforce ABORT / hard-safety boundaries above normal ownership
-- expose enough diagnostics for Flight Recorder and physical regression
+- expose diagnostics for Flight Recorder and physical regression
 - feed passive Equipment Learning evidence without making learning a live control source
 ```
 
@@ -56,8 +64,6 @@ BrewAssistant normalizes the exact configured entity surface before making contr
 ---
 
 ## Temperature roles
-
-Two physical temperature roles must remain distinct:
 
 ```text
 process_temperature / mash_temperature
@@ -91,9 +97,7 @@ Chill -> Transfer
 
 `Brewfather Play` grants the dedicated Heatstrike/Mash-In controller phase authority.
 
-While this controller owns the phase, it may make bounded internal target/heat/pump adjustments without opening a new generic confirmation for every modulation.
-
-Lower ABORT and hard-safety guards remain authoritative.
+While this controller owns the phase, it may make bounded internal target/heat/pump adjustments without opening a new generic confirmation for every modulation. ABORT and hard-safety guards remain authoritative.
 
 Outside dedicated phase authority, new positive automatic control continues through generic Supervised Apply where applicable.
 
@@ -110,23 +114,9 @@ BrewZilla target            = real strike target
 pump                         = thermal mixing/equalization
 ```
 
-BrewAssistant does not use an artificially boosted strike target. It writes/holds the actual strike target and modulates authority around it.
+BrewAssistant writes/holds the actual strike target; it does not invent a boosted device target.
 
-PR #193 established that the BrewZilla heater master should remain available during ordinary final approach when the external process probe is still below strike.
-
----
-
-## Gradient relief — PR #197
-
-The 2026-09-05 physical run reproduced a deadlock with the external readiness probe low while the internal view had already crossed strike.
-
-Representative state:
-
-```text
-strike target       ~71.8 °C
-MASH/BLE             ~67.8 °C
-BrewZilla internal   ~72.7 °C
-```
+### Gradient relief — PR #197 + 2026-09-06 refinement
 
 Normal rule:
 
@@ -139,23 +129,23 @@ Narrow pre-mash gradient exception:
 
 ```text
 MASH/BLE still below strike
-AND a real external/internal gradient exists
-AND overshoot > +0.5 °C
-AND overshoot <= +1.5 °C
+AND real mash/wort gradient >= 1.5 °C
+AND hottest-view overshoot > +0.5 °C
+AND hottest-view overshoot <= +2.0 °C
 
-=> heat cap 15%
+=> heat authority cap 5 %
 => heater master remains available to BrewZilla local thermostat
-=> pump 100% for temperature equalization
+=> pump utilization 100 % for equalization
 ```
 
 Hard boundary:
 
 ```text
-overshoot > +1.5 °C
-  -> explicit hard stop
+hottest-view overshoot > +2.0 °C
+  -> explicit heat 0 / heater OFF
 ```
 
-Do not generalize the +1.5 °C boundary into a broad overshoot tolerance. It exists only to prevent the physically observed pre-mash gradient deadlock.
+The +2.0 °C limit exists only for the bounded gradient exception. Do not reinterpret it as a generic overshoot tolerance or READY band.
 
 Implementation focus:
 
@@ -165,35 +155,20 @@ brewzilla_clean_heat_strike_guard.py
 
 ---
 
-## Mash-In readiness
+## Mash-In readiness and handoff
 
-Automatic READY requires fresh canonical process telemetry near strike:
-
-```text
-fresh external MASH/process temperature
-within strike target ±1.0 °C
-```
-
-Stale locked process data is diagnostic-only.
-
-A bounded operator readiness acknowledgement may be used within approximately strike ±2.0 °C when the operator has physically verified a plausible near-strike vessel and BrewZilla local/internal context supports that condition.
-
-The acknowledgement only latches readiness. It does not itself change target, heater, pump or utilization.
-
----
-
-## Mash-In handoff — PR #202
+Automatic READY requires fresh canonical external process telemetry within the readiness band. A bounded operator acknowledgement can accept a physically verified near-strike condition without silently changing target/heat/pump.
 
 State machine:
 
 ```text
 ready_for_mash_in
   -> Mash-In Started
-  -> release strike target toward mash target
-  -> pump OFF
-  -> pump utilization 0%
+  -> release strike target toward actual mash target
+  -> pump OFF / utilization 0 %
   -> grain addition / stirring
-  -> wait for real Brewfather progression
+  -> observe Brewfather PAUSED after Mash-In Started
+  -> later Brewfather RUNNING / Continue
   -> Mash-In Complete
   -> normal circulation resumes
 ```
@@ -201,22 +176,63 @@ ready_for_mash_in
 Automatic completion evidence is intentionally strict:
 
 ```text
-paused -> running
-OR
-active Brewfather mash target leaves the captured strike target
+post-start BF PAUSED observed
+THEN later BF RUNNING
 ```
 
-A plain Brewfather `running` state alone must not complete Mash-In.
+Not sufficient by themselves:
 
-Until completion evidence exists, the physical pump hold remains authoritative.
+```text
+BF already running when Mash-In Started is pressed
+active Brewfather target movement
+normalized BA runtime remaining live/running
+```
+
+The 2026-09-06 second field run confirms that this backend transition can complete correctly. UI presentation still needs a clearer completion transition.
+
+---
+
+## RCL report freshness, value age and active polling
+
+The 2026-09-06 run exposed a semantic bug: stable values were being treated as stale transport because `last_updated` was used as if it were poll/report age.
+
+Current contract:
+
+```text
+report/control freshness
+  -> entity last_reported
+  -> fallback entity last_updated
+  -> used by orchestration and fail-passive trust
+
+value age / stagnation
+  -> last_updated + explicit value-change tracking
+  -> diagnostics only
+  -> must not redefine canonical process-temperature freshness
+
+active hot-side refresh
+  -> every 30 seconds while Brewday owns an active hot-side phase
+  -> homeassistant.update_entity on one BrewZilla CoordinatorEntity
+  -> CoordinatorEntity forwards to DataUpdateCoordinator.async_request_refresh()
+  -> one trigger entity only, avoiding duplicate cloud fetch fan-out
+```
+
+Hard recovery remains separate:
+
+```text
+hard connection loss / extreme report staleness
+  -> reload_config_entry may be requested
+  -> minimum 15 minutes between reload requests
+```
+
+A stable temperature/target is valid data when reports continue. Value stagnation may still be useful diagnostically, but it cannot by itself trigger fail-passive control loss.
 
 ---
 
 ## Fail-passive telemetry loss
 
-Ordinary telemetry degradation is not an instruction to shut down an otherwise locally regulated BrewZilla.
+Ordinary **report** degradation is not an instruction to shut down an otherwise locally regulated BrewZilla.
 
-Expected fail-passive behavior:
+Expected behavior:
 
 ```text
 no new BrewAssistant writes
@@ -225,23 +241,13 @@ request/indicate telemetry recovery
 wait for trustworthy data
 ```
 
-This does not override:
-
-```text
-ABORT
-hard safety
-explicit process safe-down
-```
-
-Recovery requests are diagnostic/recovery actions, not permission to casually rewrite target/heat/pump.
+This does not override ABORT, hard safety or explicit process safe-down.
 
 ---
 
 ## Generic Supervised Apply
 
-Outside dedicated phase authority, positive automatic actions remain supervised where applicable.
-
-Examples:
+Outside dedicated phase authority, positive automatic actions remain supervised where applicable:
 
 ```text
 target increase
@@ -251,7 +257,7 @@ heater ON
 pump ON
 ```
 
-Expected flow:
+Flow:
 
 ```text
 orchestration computes plan
@@ -268,9 +274,7 @@ Risk-reducing safe-down actions may execute without waiting for confirmation.
 
 ## RCL readback grace
 
-RAPT Cloud Link may briefly republish an old value after a successful write.
-
-BrewAssistant keeps bounded confirmed-write grace for matching runtime intent so stale target/utilization readback does not immediately recreate the same positive plan.
+RAPT Cloud Link may briefly republish an old value after a successful write. BrewAssistant keeps bounded confirmed-write grace for matching runtime intent so stale target/utilization readback does not immediately recreate the same positive plan.
 
 Limits:
 
@@ -278,7 +282,7 @@ Limits:
 - bounded time window
 - same runtime/source/stage/step/target intention
 - no silent heater/pump re-energization
-- persistent mismatch requires a new supervised decision
+- persistent mismatch requires a new decision
 - ABORT invalidates grace immediately
 ```
 
@@ -286,9 +290,7 @@ Limits:
 
 ## Manual Brew ownership
 
-Manual Brew may split target, heat and pump ownership independently.
-
-Conceptually:
+Manual Brew may split ownership independently:
 
 ```text
 target                     = operator or BA
@@ -296,13 +298,13 @@ heater + heat utilization  = operator or BA
 pump + pump utilization    = operator or BA
 ```
 
-Manual ownership suppresses normal BA control for the operator-owned channel. It does not bypass an already active safety/ABORT block.
+Manual ownership suppresses normal BA control for the operator-owned channel. It does not bypass an active safety/ABORT block.
 
 ---
 
 ## ABORT
 
-The physical BrewZilla ABORT path is authoritative:
+Physical BrewZilla ABORT is authoritative:
 
 ```text
 heater OFF
@@ -312,28 +314,27 @@ pump utilization 0
 positive-action lockout
 ```
 
-Brewday operator ABORT wraps the same physical safe-down with a separate persistent Brewday ownership latch.
-
-No normal orchestration, advice, learning or Manual ownership path may re-enable positive hardware while the applicable ABORT lockout is active.
+Brewday operator ABORT reuses the physical safe-down and adds a persistent Brewday ownership latch.
 
 ---
 
 ## Ordered wrapper/guard architecture
 
-The package is implemented as an ordered wrapper/guard chain. Installation order in `custom_components/brewassistant/brewzilla/__init__.py` is functional architecture.
+Installation order in `custom_components/brewassistant/brewzilla/__init__.py` is functional architecture.
 
 Current active concepts include:
 
 ```text
 temperature role resolution
 Heatstrike target/context
-RCL recovery / process-sensor guards
+RCL/value-stagnation diagnostics
 learning/advice evidence
 thermal/pump guards
 Clean Heatstrike controller
 Mash-In readiness/state machine
 paused/execution/target-trust/local-regulation safety
 hot-side contract
+active RCL polling/recovery
 ABORT boundary
 Manual ownership
 Supervised Apply/readback grace
@@ -359,54 +360,30 @@ Do not reorder wrappers casually.
 | `brewzilla_supervised_runtime_guard.py` | Generic positive-plan confirmation outside dedicated authority |
 | `brewzilla_supervised_readback_grace.py` | Stale readback grace after confirmed writes |
 | `brewzilla_manual_brew_control.py` | Channel-scoped Manual ownership |
-| `brewzilla_fail_passive_guard.py` | No-new-writes behavior on ordinary telemetry loss |
+| `brewzilla_fail_passive_guard.py` | No-new-writes behavior on real telemetry loss |
 | `brewzilla_abort_lockout_final_guard.py` | Final ABORT/lockout protection |
-| `brewzilla_active_rcl_recovery_guard.py` / `brewzilla_rcl_value_recovery_guard.py` | Recovery diagnostics/policy |
+| `brewzilla_active_rcl_recovery_guard.py` | Active 30 s coordinator refresh + hard recovery policy |
+| `brewzilla_rcl_value_recovery_guard.py` | Heatstrike value-stagnation diagnostics only |
 | `brewzilla_learning.py` / `brewzilla_equipment_learning.py` | Passive/advisory learning evidence |
-
-The code-local package README should be preferred when file-level details differ from this repository summary.
-
----
-
-## Diagnostics / Flight Recorder evidence
-
-Useful evidence when debugging:
-
-```text
-runtime source/state/stage/step
-effective target vs device target
-process temperature + source/age
-safety/internal temperature
-heat/pump requested vs actual utilization
-heater/pump state
-Mash-In gate state
-phase authority state
-pending confirmation
-apply_result / actions
-fail-passive reason
-RCL freshness/recovery
-ABORT/lockout state
-```
-
-Physical fixes should be driven by Flight Recorder evidence rather than UI appearance alone.
 
 ---
 
 ## Current physical validation backlog
 
 ```text
-[ ] gradient relief converges external process temperature safely
-[ ] > +1.5 °C gradient overshoot still hard-stops heat
-[ ] Mash-In Started holds pump OFF / 0% for the full grain-addition window
-[ ] BF progression is the first event permitting circulation restart
-[ ] Mash-In UI clears immediately after completion
+[ ] 30 s active coordinator refresh produces bounded report age in HA
+[ ] stable values no longer cause false fail-passive blocking
+[ ] 5 % / 100 % gradient relief converges external process temperature safely
+[ ] > +2.0 °C hottest-view overshoot hard-stops heat
+[ ] Mash-In Started holds pump OFF / 0 % during grain addition
+[ ] post-start BF PAUSED -> later RUNNING permits circulation restart
+[ ] Mash-In completion is visually obvious
 [ ] physical 66 °C hold and 66 -> 72 °C ramp timing
-[ ] first real-mash heat-strike / mash-in thermal behavior
+[ ] first real-mash thermal behavior
 [ ] Mash out / Sparge / Pre-boil
 [ ] full Boil ramp / Boil
 [ ] external process-sensor release at Boil
 [ ] Cooling/CFC acquisition during Chill/Transfer
-[ ] Equipment Learning planned-vs-actual timing evidence
 ```
 
 ---
@@ -417,8 +394,9 @@ Physical fixes should be driven by Flight Recorder evidence rather than UI appea
 2. External process and internal safety temperature roles are not interchangeable.
 3. READY is not the same transition as Mash-In Started.
 4. Mash-In Started owns a physical pump-off window.
-5. Plain BF `running` is not Mash-In completion evidence.
-6. The +1.5 °C gradient boundary is not a generic overshoot tolerance.
-7. Ordinary data loss is fail-passive, not automatic shutdown.
-8. ABORT and hard safety always outrank ownership, advice and learning.
-9. Cooling owns the external process sensor after the Boil handoff; hot-side must release it.
+5. Automatic completion requires post-start BF PAUSED followed by later RUNNING.
+6. The +2.0 °C boundary is a narrow gradient exception, not generic overshoot tolerance.
+7. Report freshness and value-change age are separate concepts.
+8. Ordinary real data loss is fail-passive, not automatic shutdown.
+9. ABORT and hard safety always outrank ownership, advice and learning.
+10. Cooling owns the external process sensor after the Boil handoff; hot-side must release it.

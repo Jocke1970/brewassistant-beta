@@ -6,21 +6,25 @@ BrewAssistant keeps runtime state, process interpretation, safety guards and har
 
 ```text
 Python integration = runtime + ownership + logic + safety + hardware decisions
-Dashboard YAML      = presentation + explicit operator actions
+Dashboard layer     = presentation + explicit operator actions
 ```
+
+The dashboard is still primarily YAML, with a BrewAssistant-specific JavaScript/SVG card pilot now being evaluated for complex instruments.
 
 ---
 
 ## Current project phase
 
-The current hot-side baseline includes the 2026-08-29 ownership/ABORT validation, the 2026-08-31 Heatstrike/Mash-In regression work, the 2026-09-05 Heatstrike gradient/Mash-In handoff fixes and the 2026-09-06 final-Heatstrike refinement.
+The current hot-side baseline includes the 2026-08-29 ownership/ABORT validation, the 2026-08-31 Heatstrike/Mash-In regression work, the 2026-09-05 gradient/handoff fixes and both 2026-09-06 physical runs.
 
 Current sequence:
 
 ```text
 beta.9 candidate / supervised Heatstrike + Mash-In validation
 ↓
-continuous physical regression of PR #197 + PR #202 follow-ups
+validate 30 s active RCL coordinator refresh + report-freshness semantics
+↓
+repeat full Heatstrike -> READY -> Mash-In handoff
 ↓
 first supervised real-mash 66 °C hold + 66 -> 72 °C ramp validation
 ↓
@@ -32,15 +36,9 @@ Cooling/CFC Chill / Transfer ownership handoff validation
 ↓
 BrewZilla Equipment Learning timing/profile evidence pass
 ↓
-RAPT Cloud Link profile-orchestration investigation
+Climate Supervisor / Carbonation / Fermentation full-cycle validation
 ↓
-Climate Supervisor full-cycle validation
-↓
-Carbonation runtime validation
-↓
-Fermentation cockpit/runtime validation
-↓
-remaining YAML/business-logic retirement and release hardening
+remaining dashboard/business-logic retirement and release hardening
 ```
 
 Latest physical evidence:
@@ -48,25 +46,7 @@ Latest physical evidence:
 - [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md)
 - [`physical-validation-2026-09-05.md`](physical-validation-2026-09-05.md)
 - [`physical-validation-2026-09-06.md`](physical-validation-2026-09-06.md)
-
-The 2026-09-05/06 runs exposed and refined two deterministic edge cases:
-
-```text
-1. Heatstrike gradient / final approach
-   external MASH/BLE still below strike
-   internal BrewZilla view already above strike
-   -> bounded gradient-relief mode
-   -> heat cap 5%
-   -> pump 100% for equalization
-   -> relief window only from > +0.5 to <= +2.0 °C hottest-view overshoot
-   -> > +2.0 °C hottest-view overshoot remains hard stop
-
-2. Mash-In handoff / early circulation restart
-   plain Brewfather running state was too weak as completion evidence
-   -> Mash-In Started owns pump OFF / 0%
-   -> BA must observe Brewfather PAUSED after Mash-In Started
-   -> only a later RUNNING / Continue may auto-complete the handoff
-```
+- [`parking-checkpoint-2026-09-06.md`](parking-checkpoint-2026-09-06.md)
 
 ---
 
@@ -95,9 +75,9 @@ Rules:
 - Dependabot targets `dev`;
 - CI, HACS and Hassfest run on `dev`, `beta` and `main`;
 - releases are created only from `main`;
-- beta releases are GitHub prereleases such as `v0.2.0-beta.9`.
+- beta releases are prereleases such as `v0.2.0-beta.9`.
 
-See [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
+Current parking note: HACS and Hassfest are green for the RCL patch, and the RCL regression tests pass. General CI remains blocked by older EN/SV cockpit content-parity drift. The JS gauge filename pair is fixed by the parking sync; the remaining cockpit parity must be resolved deliberately before promotion.
 
 ---
 
@@ -161,32 +141,23 @@ Implemented:
 [x] Fresh-only automatic Mash-In READY (#194)
 [x] Bounded operator strike acceptance (#194)
 [x] Heatstrike gradient-relief mode (#197)
-[x] +2.0 °C gradient hard-stop boundary with 5% relief cap (2026-09-06 refinement)
+[x] +2.0 °C gradient hard-stop boundary with 5 % relief cap
 [x] Mash-In Started target release
-[x] Mash-In Started pump OFF / 0% ownership window (#202)
-[x] Brewfather progression-based Mash-In Complete (#202)
-[x] Plain BF running state forbidden as completion evidence (#202)
-[x] Post-Mash-In-Started BF PAUSED required before auto-resume completion
-[x] Live Mash-In UI state preferred over stale button attributes (#202)
-[x] Compact Mash-In handoff integrated into Brewday master cockpit
-[x] Runtime phase/step/action tiles wrap full operational text
-[x] Redundant BrewTracker status action removed from normal cockpit
-[x] RCL recovery / local-regulation preservation
+[x] Mash-In Started pump OFF / 0 % ownership window (#202)
+[x] Strict post-start BF PAUSED -> RUNNING automatic Mash-In completion
+[x] Plain BF running and target movement forbidden as standalone completion evidence
+[x] Live Mash-In UI state preferred over stale button attributes
 [x] Fail-passive ordinary telemetry loss
+[x] Report freshness separated from value-change age
+[x] Active hot-side RCL coordinator refresh every 30 s using one trigger entity
+[x] Hard RCL reload kept separate and throttled
 [x] Hardware ABORT + positive-action lockout
 [x] Manual channel ownership
 [x] Generic Supervised Apply outside dedicated phase authority
 [x] Confirmed readback grace
-[x] BrewZilla live heat/pump visualization
-[x] BrewZilla thermal-state gauge background
-[x] Heatstrike target emphasized in dual-temperature gauge text
 ```
 
 ### Current Heatstrike contract
-
-Normal hottest-view overshoot above approximately target +0.5 °C remains a safe-down trigger by default.
-
-A narrow exception exists only during the physically observed pre-mash-in gradient state:
 
 ```text
 MASH/BLE still below strike
@@ -194,14 +165,14 @@ AND real mash/wort gradient >= 1.5 °C
 AND hottest-view overshoot > +0.5 °C
 AND hottest-view overshoot <= +2.0 °C
 
-=> heat authority cap 5%
+=> heat authority cap 5 %
 => heater master remains available to BrewZilla local thermostat
-=> pump 100% for temperature equalization
+=> pump 100 % for temperature equalization
 ```
 
-If hottest-view overshoot exceeds +2.0 °C, explicit hard stop remains authoritative even when a gradient exists.
+If hottest-view overshoot exceeds +2.0 °C, explicit hard stop remains authoritative.
 
-This does not widen Mash-In READY. The extra 0.5 °C applies only to the bounded internal/wort gradient-relief safety window.
+This does not widen Mash-In READY.
 
 ### Current Mash-In contract
 
@@ -209,49 +180,67 @@ This does not widen Mash-In READY. The extra 0.5 °C applies only to the bounded
 ready_for_mash_in
   -> Mash-In Started
   -> target releases toward mash target
-  -> pump OFF / utilization 0%
+  -> pump OFF / utilization 0 %
   -> operator adds/stirs grain
-  -> BA observes Brewfather PAUSED after Mash-In Started
-  -> operator/BF Continue gives later RUNNING
+  -> BA observes BF PAUSED after Mash-In Started
+  -> later BF RUNNING / Continue
   -> Mash-In Complete
   -> normal mash circulation resumes
 ```
 
-Valid automatic completion evidence:
+Not sufficient by themselves:
 
 ```text
-post-start PAUSED observed
-THEN later RUNNING / Continue
-```
-
-These are not sufficient by themselves:
-
-```text
-BF already running when Mash-In Started is pressed
+BF already running at Mash-In Started
 active Brewfather mash target changing
-BA normalized runtime remaining live/running
+normalized BA runtime remaining live/running
 ```
+
+The second 2026-09-06 field run confirms the backend handoff can complete correctly. UI completion feedback still needs polish.
+
+### Current RCL freshness contract
+
+```text
+control/report freshness
+  -> last_reported, fallback last_updated
+
+value age / stagnation
+  -> last_updated + explicit value-change tracking
+  -> diagnostics only
+
+active hot-side polling
+  -> one BrewZilla CoordinatorEntity
+  -> update_entity / coordinator async_request_refresh()
+  -> every 30 seconds
+
+hard recovery
+  -> reload_config_entry only for hard loss/extreme report staleness
+  -> minimum 15 minutes between reload requests
+```
+
+The new contract is regression-tested but not yet physically validated.
 
 ---
 
 ## Physical validation still required
 
-Immediate checks:
+Immediate next-run checks:
 
 ```text
-[ ] 5% / 100% Heatstrike gradient relief converges MASH/BLE toward strike without unsafe internal overshoot
-[ ] > +2.0 °C hottest-view overshoot still produces intended hard stop
-[ ] Mash-In Started visibly holds pump OFF / 0% for the entire grain-addition window
-[ ] BA observes BF PAUSED only after Mash-In Started before accepting later Continue/RUNNING
-[ ] Brewfather Continue/progression is the first event that permits circulation restart
-[ ] Mash-In waiting/status box disappears immediately after confirmed completion
-[ ] Physical #157 66 °C hold starts only on actual target reach
-[ ] #157 PAUSE freezes timer
-[ ] #157 66 -> 72 °C ramp is recorded separately and starts next hold only on target reach
-[ ] Brewsteps follows BrewTracker-owned physical process phase correctly
-[ ] First supervised real-mash heat-strike / mash-in temperature-drop behavior
-[ ] Real-mash 66 °C hold + 66 -> 72 °C ramp
-[ ] Full boil ramp / boil
+[ ] active RCL report age stays bounded under BA 30 s refresh cadence
+[ ] stable temperature/target does not create false stale/fail-passive blocking
+[ ] 5 % / 100 % Heatstrike gradient relief converges safely
+[ ] > +2.0 °C hottest-view overshoot still hard-stops heat
+[ ] READY still depends on process probe / bounded operator acknowledgement only
+[ ] Mash-In Started visibly holds pump OFF / 0 % during grain addition
+[ ] BF PAUSED is observed only after Mash-In Started
+[ ] later RUNNING is the first automatic completion evidence
+[ ] target becomes actual mash target, e.g. 66.0 °C
+[ ] normal mash circulation resumes after completion
+[ ] completion is immediately obvious in the master UI
+[ ] #157 66 °C hold starts only on actual target reach
+[ ] #157 PAUSE freezes timing
+[ ] #157 66 -> 72 °C ramp is recorded separately and next hold starts on reach
 ```
 
 ---
@@ -273,7 +262,7 @@ Chill -> Transfer
   role  = CFC outlet / wort-out temperature
 ```
 
-BrewZilla internal temperature remains the primary kettle temperature throughout the hot-side path.
+BrewZilla internal temperature remains primary kettle context throughout the hot side.
 
 Validation still required:
 
@@ -282,7 +271,7 @@ Validation still required:
 [ ] no competing Brewday/Cooling interpretation during Boil
 [ ] Cooling/CFC acquisition during Chill
 [ ] continued wort-out use during Transfer
-[ ] traditional immersion-coil/manual-temperature path without unnecessary external-sensor dependency
+[ ] immersion-coil/manual-temperature path without unnecessary external-sensor dependency
 ```
 
 ---
@@ -291,7 +280,7 @@ Validation still required:
 
 The #157 physical timing layer remains read-only and must not influence live control.
 
-Implemented evidence fields include:
+Evidence fields include:
 
 ```text
 ramp/hold duration
@@ -304,8 +293,6 @@ water-only vs real-mash context
 heat/pump utilization start/end
 ```
 
-Next Equipment Learning work should use validated physical timing rather than source-schedule timing alone.
-
 Planned later work:
 
 ```text
@@ -317,7 +304,6 @@ Planned later work:
 [ ] operator-reviewed learned profile candidates
 [ ] persistent approved overrides
 [ ] reversible disable/revert/reset
-[ ] water-only evidence can never silently activate real-mash override
 ```
 
 Learning remains advisory until explicitly approved.
@@ -344,6 +330,25 @@ Next validation:
 
 ---
 
+## Dashboard direction
+
+Current production/test UI remains YAML-based.
+
+A pilot BrewAssistant JavaScript/SVG pre-boil temperature gauge is now present. The purpose is to validate a future architecture where complex BrewAssistant-specific presentation moves from very large YAML cards into reusable JS cards while YAML becomes a thin configuration wrapper.
+
+Current rule:
+
+```text
+pilot first
+-> validate geometry/state behavior
+-> do not rewrite all cards during beta.9 hot-side validation
+-> if successful, plan staged YAML -> JS migration separately
+```
+
+The existing `gauge-card-pro` card remains available until the pilot is accepted.
+
+---
+
 ## Other active backends
 
 Already present in Python Core:
@@ -358,8 +363,6 @@ Already present in Python Core:
 [x] EN canonical + SV presentation mirror policy
 ```
 
-These remain secondary to completing deterministic hot-side and cooling ownership validation.
-
 ---
 
 ## Beta.9 release path
@@ -371,10 +374,12 @@ Current candidate release notes:
 Required before release:
 
 ```text
-1. keep `dev` green under CI + HACS + Hassfest
-2. promote `dev -> beta` with Create a merge commit
-3. run intended physical beta validation
-4. fix regressions on `dev`, then promote again if needed
-5. promote validated `beta -> main` with Create a merge commit
-6. create GitHub prerelease v0.2.0-beta.9 from the resulting main commit
+1. make dev green under CI + HACS + Hassfest
+2. complete the next physical RCL + Heatstrike + Mash-In regression
+3. validate first real-mash hold/ramp path
+4. promote dev -> beta with Create a merge commit
+5. run intended beta validation
+6. fix regressions on dev, then promote again if needed
+7. promote validated beta -> main with Create a merge commit
+8. create GitHub prerelease v0.2.0-beta.9 from main
 ```
