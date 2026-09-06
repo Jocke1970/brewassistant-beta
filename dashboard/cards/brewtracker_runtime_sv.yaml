@@ -23,7 +23,7 @@ card:
         - sensor.brewassistant_brewday_runtime_state
         - sensor.brewassistant_brewday_runtime_status
         - sensor.brewassistant_brewday_runtime_stage
-        - sensor.brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewassistant_brewday_runtime_step
         - sensor.brewassistant_brewday_runtime_next_step
         - sensor.brewassistant_brewday_live_progress
         - sensor.brewassistant_brewday_live_time_remaining_minutes
@@ -168,35 +168,37 @@ card:
           - justify-self: stretch
           - text-align: left
           - white-space: normal
-    - type: horizontal-stack
-      cards:
-        - type: custom:button-card
-          name: Uppdatera BF
-          icon: mdi:refresh
-          tap_action:
-            action: call-service
-            service: brewassistant.force_brewfather_refresh
-          styles:
-            card:
-              - border-radius: 15px
-              - padding: 9px
-              - background: rgba(33,150,243,.09)
-              - border: 1px solid rgba(33,150,243,.22)
-            name:
-              - font-size: 11px
-              - font-weight: 950
-        - type: custom:button-card
-          entity: sensor.brewfather_brew_tracker_status
-          name: BrewTracker-status
-          icon: mdi:cloud-sync-outline
-          tap_action:
-            action: more-info
-          styles:
-            card:
-              - border-radius: 15px
-              - padding: 9px
-              - background: rgba(76,175,80,.09)
-              - border: 1px solid rgba(76,175,80,.22)
-            name:
-              - font-size: 11px
-              - font-weight: 950
+    - type: custom:button-card
+      name: Uppdatera BF
+      icon: mdi:refresh
+      show_label: true
+      label: Tvinga ny BrewTracker-snapshot från Brewfather
+      tap_action:
+        action: call-service
+        service: brewassistant.force_brewfather_refresh
+      styles:
+        card:
+          - border-radius: 15px
+          - padding: 9px
+          - min-height: 54px
+          - background: rgba(33,150,243,.09)
+          - border: 1px solid rgba(33,150,243,.22)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 34px minmax(0,1fr)
+          - column-gap: 8px
+        icon:
+          - width: 22px
+          - height: 22px
+          - color: rgb(33,150,243)
+        name:
+          - justify-self: start
+          - font-size: 11px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 9.5px
+          - font-weight: 750
+          - opacity: 0.68
