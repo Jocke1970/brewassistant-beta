@@ -13,14 +13,14 @@ Dashboard YAML      = presentation + explicit operator actions
 
 ## Current project phase
 
-The current hot-side baseline includes the 2026-08-29 ownership/ABORT validation, the 2026-08-31 Heatstrike/Mash-In regression work, and the 2026-09-05 Heatstrike gradient/Mash-In handoff fixes.
+The current hot-side baseline includes the 2026-08-29 ownership/ABORT validation, the 2026-08-31 Heatstrike/Mash-In regression work, the 2026-09-05 Heatstrike gradient/Mash-In handoff fixes and the 2026-09-06 final-Heatstrike refinement.
 
 Current sequence:
 
 ```text
 beta.9 candidate / supervised Heatstrike + Mash-In validation
 ↓
-continuous physical regression of PR #197 + PR #202
+continuous physical regression of PR #197 + PR #202 follow-ups
 ↓
 first supervised real-mash 66 °C hold + 66 -> 72 °C ramp validation
 ↓
@@ -47,23 +47,25 @@ Latest physical evidence:
 
 - [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md)
 - [`physical-validation-2026-09-05.md`](physical-validation-2026-09-05.md)
+- [`physical-validation-2026-09-06.md`](physical-validation-2026-09-06.md)
 
-The 2026-09-05 run confirmed that Heatstrike/Mash-In progressed farther but exposed two deterministic edge cases now covered by PR #197 and PR #202:
+The 2026-09-05/06 runs exposed and refined two deterministic edge cases:
 
 ```text
-1. Heatstrike gradient deadlock
+1. Heatstrike gradient / final approach
    external MASH/BLE still below strike
    internal BrewZilla view already above strike
-   -> narrow gradient-relief mode
-   -> heat cap 15%
+   -> bounded gradient-relief mode
+   -> heat cap 5%
    -> pump 100% for equalization
-   -> > +1.5 °C hottest-view overshoot remains hard stop
+   -> relief window only from > +0.5 to <= +2.0 °C hottest-view overshoot
+   -> > +2.0 °C hottest-view overshoot remains hard stop
 
 2. Mash-In handoff / early circulation restart
    plain Brewfather running state was too weak as completion evidence
    -> Mash-In Started owns pump OFF / 0%
-   -> completion waits for real BF progression
-   -> paused -> running OR BF mash target leaving strike target
+   -> BA must observe Brewfather PAUSED after Mash-In Started
+   -> only a later RUNNING / Continue may auto-complete the handoff
 ```
 
 ---
@@ -159,12 +161,16 @@ Implemented:
 [x] Fresh-only automatic Mash-In READY (#194)
 [x] Bounded operator strike acceptance (#194)
 [x] Heatstrike gradient-relief mode (#197)
-[x] +1.5 °C gradient hard-stop boundary (#197)
+[x] +2.0 °C gradient hard-stop boundary with 5% relief cap (2026-09-06 refinement)
 [x] Mash-In Started target release
 [x] Mash-In Started pump OFF / 0% ownership window (#202)
 [x] Brewfather progression-based Mash-In Complete (#202)
 [x] Plain BF running state forbidden as completion evidence (#202)
+[x] Post-Mash-In-Started BF PAUSED required before auto-resume completion
 [x] Live Mash-In UI state preferred over stale button attributes (#202)
+[x] Compact Mash-In handoff integrated into Brewday master cockpit
+[x] Runtime phase/step/action tiles wrap full operational text
+[x] Redundant BrewTracker status action removed from normal cockpit
 [x] RCL recovery / local-regulation preservation
 [x] Fail-passive ordinary telemetry loss
 [x] Hardware ABORT + positive-action lockout
@@ -173,6 +179,7 @@ Implemented:
 [x] Confirmed readback grace
 [x] BrewZilla live heat/pump visualization
 [x] BrewZilla thermal-state gauge background
+[x] Heatstrike target emphasized in dual-temperature gauge text
 ```
 
 ### Current Heatstrike contract
@@ -183,15 +190,18 @@ A narrow exception exists only during the physically observed pre-mash-in gradie
 
 ```text
 MASH/BLE still below strike
+AND real mash/wort gradient >= 1.5 °C
 AND hottest-view overshoot > +0.5 °C
-AND hottest-view overshoot <= +1.5 °C
+AND hottest-view overshoot <= +2.0 °C
 
-=> heat authority cap 15%
+=> heat authority cap 5%
 => heater master remains available to BrewZilla local thermostat
 => pump 100% for temperature equalization
 ```
 
-If hottest-view overshoot exceeds +1.5 °C, explicit hard stop remains authoritative even when a gradient exists.
+If hottest-view overshoot exceeds +2.0 °C, explicit hard stop remains authoritative even when a gradient exists.
+
+This does not widen Mash-In READY. The extra 0.5 °C applies only to the bounded internal/wort gradient-relief safety window.
 
 ### Current Mash-In contract
 
@@ -201,7 +211,8 @@ ready_for_mash_in
   -> target releases toward mash target
   -> pump OFF / utilization 0%
   -> operator adds/stirs grain
-  -> wait for real Brewfather progression
+  -> BA observes Brewfather PAUSED after Mash-In Started
+  -> operator/BF Continue gives later RUNNING
   -> Mash-In Complete
   -> normal mash circulation resumes
 ```
@@ -209,12 +220,17 @@ ready_for_mash_in
 Valid automatic completion evidence:
 
 ```text
-paused -> running
-OR
-active Brewfather mash target moves away from captured strike target
+post-start PAUSED observed
+THEN later RUNNING / Continue
 ```
 
-A plain `running` state alone is not completion evidence.
+These are not sufficient by themselves:
+
+```text
+BF already running when Mash-In Started is pressed
+active Brewfather mash target changing
+BA normalized runtime remaining live/running
+```
 
 ---
 
@@ -223,9 +239,10 @@ A plain `running` state alone is not completion evidence.
 Immediate checks:
 
 ```text
-[ ] Heatstrike gradient relief converges MASH/BLE toward strike without unsafe internal overshoot
-[ ] > +1.5 °C hottest-view overshoot still produces intended hard stop
+[ ] 5% / 100% Heatstrike gradient relief converges MASH/BLE toward strike without unsafe internal overshoot
+[ ] > +2.0 °C hottest-view overshoot still produces intended hard stop
 [ ] Mash-In Started visibly holds pump OFF / 0% for the entire grain-addition window
+[ ] BA observes BF PAUSED only after Mash-In Started before accepting later Continue/RUNNING
 [ ] Brewfather Continue/progression is the first event that permits circulation restart
 [ ] Mash-In waiting/status box disappears immediately after confirmed completion
 [ ] Physical #157 66 °C hold starts only on actual target reach
