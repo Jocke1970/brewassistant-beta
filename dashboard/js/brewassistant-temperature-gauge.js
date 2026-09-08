@@ -1,5 +1,5 @@
 const CARD_TYPE = 'brewassistant-temperature-gauge';
-const CARD_VERSION = '0.1.0-draft';
+const CARD_VERSION = '0.1.1-draft';
 
 class BrewAssistantTemperatureGauge extends HTMLElement {
   constructor() {
@@ -160,14 +160,6 @@ class BrewAssistantTemperatureGauge extends HTMLElement {
     };
   }
 
-  _backgroundState(process, target) {
-    if (!Number.isFinite(process) || !Number.isFinite(target)) return 'neutral';
-    const delta = process - target;
-    if (delta > Number(this._config.background_tolerance)) return 'overshoot';
-    if (Math.abs(delta) <= Number(this._config.background_tolerance)) return 'target';
-    return 'heating';
-  }
-
   _clamp(value) {
     const min = Number(this._config.min);
     const max = Number(this._config.max);
@@ -206,11 +198,11 @@ class BrewAssistantTemperatureGauge extends HTMLElement {
     return points.join(' ');
   }
 
-  _needle(value, radius = 87) {
+  _needle(value, radius = 87, startRadius = 16) {
     const angle = this._angle(value);
     if (angle === null) return null;
     return {
-      start: this._point(angle, 16),
+      start: this._point(angle, startRadius),
       end: this._point(angle, radius),
     };
   }
@@ -231,13 +223,11 @@ class BrewAssistantTemperatureGauge extends HTMLElement {
     const mash = this._stateNum(c.mash_entity);
     const wort = this._stateNum(c.wort_entity);
     const target = this._target();
-    const process = mash ?? wort;
     const delta = mash !== null && wort !== null ? wort - mash : null;
     const phase = this._phase();
-    const bgState = this._backgroundState(process, target);
 
-    const mashNeedle = this._needle(mash);
-    const wortNeedle = this._needle(wort);
+    const mashNeedle = this._needle(mash, 87, 16);
+    const wortNeedle = this._needle(wort, 69, 20);
     const targetMarker = this._marker(target);
     const quality = Number(c.quality_tolerance);
     const precision = Number(c.precision_tolerance);
@@ -262,24 +252,8 @@ class BrewAssistantTemperatureGauge extends HTMLElement {
           border-radius: 18px;
           border: 1px solid var(--divider-color);
           min-height: 190px;
-          transition: background .35s ease, border-color .35s ease, box-shadow .35s ease;
+          background: var(--ha-card-background, var(--card-background-color));
         }
-        ha-card.bg-heating {
-          background: linear-gradient(135deg, rgba(255,193,7,.23), rgba(255,152,0,.08));
-          border-color: rgba(255,193,7,.44);
-          box-shadow: 0 0 12px rgba(255,193,7,.10);
-        }
-        ha-card.bg-target {
-          background: linear-gradient(135deg, rgba(76,175,80,.22), rgba(76,175,80,.07));
-          border-color: rgba(76,175,80,.42);
-          box-shadow: 0 0 12px rgba(76,175,80,.10);
-        }
-        ha-card.bg-overshoot {
-          background: linear-gradient(135deg, rgba(244,67,54,.25), rgba(244,67,54,.09));
-          border-color: rgba(244,67,54,.46);
-          box-shadow: 0 0 14px rgba(244,67,54,.13);
-        }
-        ha-card.bg-neutral { background: var(--ha-card-background, var(--card-background-color)); }
         .wrap { padding: 10px 12px 9px; }
         .top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; min-height:30px; }
         .target-pill {
@@ -315,7 +289,7 @@ class BrewAssistantTemperatureGauge extends HTMLElement {
         .bands { margin-top:5px; text-align:center; font-size:9px; font-weight:760; opacity:.55; }
       </style>
 
-      <ha-card class="bg-${bgState}">
+      <ha-card>
         <div class="wrap">
           <div class="top">
             <div class="target-pill">
