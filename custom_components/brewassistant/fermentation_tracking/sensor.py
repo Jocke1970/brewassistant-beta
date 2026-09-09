@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
-from ..const import CONF_GRAVITY_ENTITY, CONF_LIQUID_TEMP_ENTITY, DOMAIN
+from ..const import CONF_GRAVITY_ENTITY, CONF_LIQUID_TEMP_ENTITY, CONF_RECIPE_TARGET_ENTITY, DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
 from .snapshot import build_fermentation_snapshot
@@ -44,8 +44,32 @@ def _external_numeric(
     return value, state.last_updated, entity_id
 
 
+def _external_target(
+    coordinator: BrewAssistantCoordinator,
+) -> tuple[float | None, str | None, str | None]:
+    """Return recipe/Brewfather target, preferring explicit schedule metadata."""
+    entity_id = coordinator.configured_entities.get(CONF_RECIPE_TARGET_ENTITY)
+    state = coordinator.hass.states.get(entity_id) if entity_id else None
+    if state is None:
+        return None, entity_id, None
+
+    scheduled = state.attributes.get("schedule_target_temperature")
+    if scheduled is not None and str(scheduled).lower() not in INVALID_STATES:
+        try:
+            return float(str(scheduled).replace(",", ".")), entity_id, "brewfather_schedule"
+        except (TypeError, ValueError):
+            pass
+
+    if str(state.state).lower() in INVALID_STATES:
+        return None, entity_id, None
+    try:
+        return float(str(state.state).replace(",", ".")), entity_id, "recipe_target_entity"
+    except (TypeError, ValueError):
+        return None, entity_id, None
+
+
 def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    """Build tracking with independently resolved automatic SG and temperature."""
+    """Build tracking with independently resolved SG, temperature, and schedule target."""
     external_sg, gravity_updated_at, gravity_entity = _external_numeric(
         coordinator,
         CONF_GRAVITY_ENTITY,
@@ -54,6 +78,7 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
         coordinator,
         CONF_LIQUID_TEMP_ENTITY,
     )
+    external_target, target_entity, target_source = _external_target(coordinator)
     return build_fermentation_snapshot(
         coordinator.hass,
         external_sg=external_sg,
@@ -62,6 +87,9 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
         external_temperature_c=external_temperature,
         external_temperature_updated_at=temperature_updated_at,
         external_temperature_entity=temperature_entity,
+        external_target_temperature_c=external_target,
+        external_target_temperature_entity=target_entity,
+        external_target_source=target_source,
     )
 
 
