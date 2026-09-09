@@ -14,6 +14,10 @@ from ..entity import BrewAssistantEntity
 from .snapshot import build_fermentation_snapshot
 
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
+BREWFATHER_TARGET_CANDIDATES = (
+    "sensor.brewfather_target_temperature",
+    "sensor.brewfather_brewfather_target_temperature",
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,28 +48,50 @@ def _external_numeric(
     return value, state.last_updated, entity_id
 
 
+def _scheduled_target_from_state(state: Any) -> float | None:
+    """Read Brewfather's precise read-only schedule target metadata."""
+    if state is None:
+        return None
+    scheduled = state.attributes.get("schedule_target_temperature")
+    if scheduled is None or str(scheduled).lower() in INVALID_STATES:
+        return None
+    try:
+        return float(str(scheduled).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
 def _external_target(
     coordinator: BrewAssistantCoordinator,
 ) -> tuple[float | None, str | None, str | None]:
     """Return recipe/Brewfather target, preferring explicit schedule metadata."""
-    entity_id = coordinator.configured_entities.get(CONF_RECIPE_TARGET_ENTITY)
-    state = coordinator.hass.states.get(entity_id) if entity_id else None
-    if state is None:
-        return None, entity_id, None
+    configured_entity = coordinator.configured_entities.get(CONF_RECIPE_TARGET_ENTITY)
+    configured_state = coordinator.hass.states.get(configured_entity) if configured_entity else None
 
-    scheduled = state.attributes.get("schedule_target_temperature")
-    if scheduled is not None and str(scheduled).lower() not in INVALID_STATES:
-        try:
-            return float(str(scheduled).replace(",", ".")), entity_id, "brewfather_schedule"
-        except (TypeError, ValueError):
-            pass
+    scheduled = _scheduled_target_from_state(configured_state)
+    if scheduled is not None:
+        return scheduled, configured_entity, "brewfather_schedule"
 
-    if str(state.state).lower() in INVALID_STATES:
-        return None, entity_id, None
+    # The generic recipe-target helper may not preserve source attributes. Check
+    # Brewfather's native target sensor as a read-only schedule source as well.
+    for entity_id in BREWFATHER_TARGET_CANDIDATES:
+        if entity_id == configured_entity:
+            continue
+        state = coordinator.hass.states.get(entity_id)
+        scheduled = _scheduled_target_from_state(state)
+        if scheduled is not None:
+            return scheduled, entity_id, "brewfather_schedule"
+
+    if configured_state is None or str(configured_state.state).lower() in INVALID_STATES:
+        return None, configured_entity, None
     try:
-        return float(str(state.state).replace(",", ".")), entity_id, "recipe_target_entity"
+        return (
+            float(str(configured_state.state).replace(",", ".")),
+            configured_entity,
+            "recipe_target_entity",
+        )
     except (TypeError, ValueError):
-        return None, entity_id, None
+        return None, configured_entity, None
 
 
 def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
