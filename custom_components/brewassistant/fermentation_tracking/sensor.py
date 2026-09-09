@@ -64,7 +64,7 @@ def _scheduled_target_from_state(state: Any) -> float | None:
 def _external_target(
     coordinator: BrewAssistantCoordinator,
 ) -> tuple[float | None, str | None, str | None]:
-    """Return recipe/Brewfather target, preferring explicit schedule metadata."""
+    """Return an explicit Brewfather schedule target when one is exposed."""
     configured_entity = coordinator.configured_entities.get(CONF_RECIPE_TARGET_ENTITY)
     configured_state = coordinator.hass.states.get(configured_entity) if configured_entity else None
 
@@ -82,16 +82,10 @@ def _external_target(
         if scheduled is not None:
             return scheduled, entity_id, "brewfather_schedule"
 
-    if configured_state is None or str(configured_state.state).lower() in INVALID_STATES:
-        return None, configured_entity, None
-    try:
-        return (
-            float(str(configured_state.state).replace(",", ".")),
-            configured_entity,
-            "recipe_target_entity",
-        )
-    except (TypeError, ValueError):
-        return None, configured_entity, None
+    # Do not let an ordinary recipe-target state silently replace the existing
+    # manual/SG-based fermentation tracking rules. Only explicit schedule metadata
+    # is allowed to take ownership of recommended_temperature_c.
+    return None, configured_entity, None
 
 
 def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
