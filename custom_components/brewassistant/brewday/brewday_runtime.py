@@ -1,10 +1,11 @@
 """Compatibility wrapper for Brewday Runtime normalization.
 
 BrewZilla local RAPT profiles are the highest-priority external process source.
-When one is active, the BrewZilla executes the profile locally and BrewAssistant
-supervises it without issuing competing target/heat/pump control. Brewfather
-Brew Tracker remains the external fallback, followed by Python-owned Manual
-Brewday.
+RAPT/RAPT Cloud Link supplies profile/step/target intent, BrewAssistant remains
+the hot-side controller for target/heat/pump, RAPT Cloud Link transports those
+commands, and the BrewZilla profile runner owns local step/timer progression.
+Brewfather Brew Tracker remains the external fallback, followed by Python-owned
+Manual Brewday.
 """
 
 from __future__ import annotations
