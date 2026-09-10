@@ -1,10 +1,10 @@
 """Compatibility wrapper for Brewday Runtime normalization.
 
-The public functions in this module are imported by Brewday Runtime sensors.
-The actual Brewfather resolver lives in brewday_runtime_core.py and is adjusted
-by brewday_ramp_target_gate.py so temperature ramps do not advance before target.
-Manual Brewday can be routed through its Python engine adapter without changing
-the sensor platform.
+BrewZilla local RAPT profiles are the highest-priority external process source.
+When one is active, the BrewZilla executes the profile locally and BrewAssistant
+supervises it without issuing competing target/heat/pump control. Brewfather
+Brew Tracker remains the external fallback, followed by Python-owned Manual
+Brewday.
 """
 
 from __future__ import annotations
@@ -17,12 +17,21 @@ from .brewday_operator_abort import (
     brewday_operator_abort_active,
     brewday_operator_abort_snapshot,
 )
-from .brewday_ramp_target_gate import build_core_snapshot, core_attrs, source
+from .brewday_ramp_target_gate import (
+    build_core_snapshot,
+    core_attrs,
+    source as core_source,
+)
 from .manual_brewday_adapter import build_manual_engine_snapshot
 from .manual_brewday_runtime import ManualRuntimeState
 from .manual_brewday_store import (
     get_manual_brewday_session,
     pause_manual_brewday_for_brewfather,
+)
+from .rapt_profile_runtime import (
+    RAPT_PROFILE_SOURCE,
+    build_rapt_profile_runtime_snapshot,
+    rapt_profile_runtime_claims_source,
 )
 
 
@@ -39,6 +48,18 @@ def _manual_engine_is_active(hass: HomeAssistant) -> bool:
     """Return true when the Python-owned manual runtime session is active."""
     session = get_manual_brewday_session(hass)
     return session.state in MANUAL_RUNTIME_ACTIVE_STATES
+
+
+def _pause_manual_brewday_for_rapt(hass: HomeAssistant) -> bool:
+    """Pause positive Manual Brewday progress while a RAPT profile owns runtime."""
+    session = get_manual_brewday_session(hass)
+    if session.state not in {
+        ManualRuntimeState.RUNNING,
+        ManualRuntimeState.AWAITING_CONFIRM,
+    }:
+        return False
+    session.pause()
+    return True
 
 
 def _with_operator_control_state(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -81,18 +102,38 @@ def _operator_aborted_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     return _with_operator_control_state(hass, snapshot)
 
 
-def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
-    """Build a normalized brewday runtime snapshot.
+def source(hass: HomeAssistant) -> str:
+    """Return the currently selected Brewday runtime source."""
+    if rapt_profile_runtime_claims_source(hass):
+        return RAPT_PROFILE_SOURCE
+    return core_source(hass)
 
-    External live Brewfather Brew Tracker data must win over Manual Brewday.
-    Manual runtime is a fallback only when there is no active Brewfather source.
-    An explicit operator ABORT outranks both sources and keeps the runtime
-    non-owning until control is explicitly rearmed.
+
+def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
+    """Build the normalized Brewday Runtime with explicit source arbitration.
+
+    Priority is:
+
+    1. operator ABORT lockout;
+    2. active/uncertain/stopped-handoff RAPT BrewZilla profile;
+    3. actually started Brewfather Brew Tracker;
+    4. Python-owned Manual Brewday;
+    5. idle.
+
+    A RAPT source loss after an observed active profile intentionally keeps the
+    RAPT handoff instead of silently switching to Brewfather. A confirmed STOP
+    also keeps a stop guard after safe-off so another process source cannot
+    take over the same brewday without an explicit/new handoff.
     """
     if brewday_operator_abort_active(hass):
         return _operator_aborted_snapshot(hass)
 
-    runtime_source = source(hass)
+    rapt_snapshot = build_rapt_profile_runtime_snapshot(hass)
+    if rapt_snapshot is not None:
+        _pause_manual_brewday_for_rapt(hass)
+        return _with_operator_control_state(hass, rapt_snapshot)
+
+    runtime_source = core_source(hass)
     if runtime_source == "Brewfather Brew Tracker":
         pause_manual_brewday_for_brewfather(hass)
         return _with_operator_control_state(hass, build_core_snapshot(hass))
