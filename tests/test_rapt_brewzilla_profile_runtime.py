@@ -10,11 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 RAPT_RUNTIME = ROOT / "custom_components/brewassistant/brewday/rapt_profile_runtime.py"
 RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
 MANUAL_STORE = ROOT / "custom_components/brewassistant/brewday/manual_brewday_store.py"
-ORCHESTRATION = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_orchestration.py"
+RAPT_CONTROL_BRIDGE = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_rapt_profile_control_bridge.py"
+BREWZILLA_INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
 
 
 def test_rapt_profile_python_sources_parse() -> None:
-    for path in (RAPT_RUNTIME, RUNTIME, MANUAL_STORE):
+    for path in (RAPT_RUNTIME, RUNTIME, MANUAL_STORE, RAPT_CONTROL_BRIDGE, BREWZILLA_INIT):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -29,14 +30,37 @@ def test_rapt_profile_wins_source_arbitration_before_brewfather() -> None:
     assert "_pause_manual_brewday_for_rapt(hass)" in arbitration
 
 
-def test_local_profile_runner_is_not_direct_ba_control_state() -> None:
-    runtime = RAPT_RUNTIME.read_text(encoding="utf-8")
-    orchestration = ORCHESTRATION.read_text(encoding="utf-8")
-    assert 'RAPT_PROFILE_RUNTIME_STATE = "external_executor"' in runtime
-    active_set = orchestration.split("_ACTIVE_RUNTIME_STATES = {", 1)[1].split("}", 1)[0]
-    assert '"external_executor"' not in active_set
-    assert '"direct_brewzilla_control_allowed": False' in runtime
-    assert '"process_executor": "brewzilla_local_profile_runner"' in runtime
+def test_active_rapt_profile_feeds_existing_ba_controller() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    init = BREWZILLA_INIT.read_text(encoding="utf-8")
+
+    assert '"runtime_state": "running"' in bridge
+    assert '"control_owner": "brewassistant"' in bridge
+    assert '"brewassistant_role": "hot_side_controller"' in bridge
+    assert '"direct_brewzilla_control_allowed": True' in bridge
+    assert '"rapt_profile_role": "process_and_target_source"' in bridge
+    assert '"heat_pump_owner": "brewassistant"' in bridge
+    assert "rapt_runtime._active_snapshot = _active_snapshot" in bridge
+    assert "install_rapt_profile_control_bridge()" in init
+
+
+def test_rapt_generic_profile_steps_map_to_existing_ba_stage_kinds() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    assert 'end_type == "temperature"' in bridge
+    assert 'f"Ramp · {raw_name}"' in bridge
+    assert 'end_type == "duration"' in bridge
+    assert 'f"Mash Hold · {raw_name}"' in bridge
+    assert 'target >= 95.0' in bridge
+    assert 'return "Boil"' in bridge
+
+
+def test_rapt_uses_same_supervised_policy_and_phase_authority_as_bt() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    assert "supervised._request_source = _request_source" in bridge
+    assert "return supervised.SOURCE_BREW_TRACKER" in bridge
+    assert "phase_authority._phase_authority_active = _phase_authority_active" in bridge
+    assert "phase_authority._brewtracker_pre_mash_in = _rapt_pre_mash_in" in bridge
+    assert 'out["phase_authority_source"] = "rapt_profile_active"' in bridge
 
 
 def test_source_loss_does_not_silently_fall_back() -> None:
