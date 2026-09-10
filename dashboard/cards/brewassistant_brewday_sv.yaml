@@ -32,6 +32,7 @@ card:
     - sensor.brewassistant_brewday_live_time_remaining_minutes
     - sensor.brewassistant_brewday_stage_suggested_action
     - sensor.brewassistant_brewday_stage_control_hint
+    - binary_sensor.brewzilla_profile_active
   tap_action:
     action: more-info
   hold_action:
@@ -60,21 +61,28 @@ card:
       const remaining = num('sensor.brewassistant_brewday_live_time_remaining_minutes');
       const action = clean(states['sensor.brewassistant_brewday_stage_suggested_action']?.state) || '—';
       const control = clean(states['sensor.brewassistant_brewday_stage_control_hint']?.state) || '—';
+      const rapt = states['binary_sensor.brewzilla_profile_active'];
+      const raptObserved = rapt?.state === 'on' && rapt?.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime';
+      const lockedRapt = state === 'aborted' && source === 'None' && raptObserved;
+      const sourceIsRapt = source === 'RAPT BrewZilla Profile' || lockedRapt;
 
-      const sourceLabel = source === 'RAPT BrewZilla Profile'
-        ? 'RAPT PROFILE'
-        : source === 'Brewfather Brew Tracker'
-          ? 'BREWTRACKER'
-          : source === 'Manual Brewday'
-            ? 'MANUAL'
-            : 'INGEN KÄLLA';
-      const sourceIcon = source === 'RAPT BrewZilla Profile'
+      const sourceLabel = lockedRapt
+        ? 'RAPT PROFILE · OBSERVERAD'
+        : source === 'RAPT BrewZilla Profile'
+          ? 'RAPT PROFILE'
+          : source === 'Brewfather Brew Tracker'
+            ? 'BREWTRACKER'
+            : source === 'Manual Brewday'
+              ? 'MANUAL'
+              : 'INGEN KÄLLA';
+      const sourceIcon = sourceIsRapt
         ? 'mdi:playlist-play'
         : source === 'Brewfather Brew Tracker'
           ? 'mdi:timer-play-outline'
           : source === 'Manual Brewday'
             ? 'mdi:hand-back-right-outline'
             : 'mdi:minus-circle-outline';
+      const baLabel = state === 'aborted' ? 'BREWASSISTANT LÅST' : 'BREWASSISTANT';
       const chip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.5px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
 
       let headline = 'Bryggdag aktiv';
@@ -99,12 +107,13 @@ card:
 
       const pct = Number.isFinite(progress) ? `${progress.toFixed(0)} %` : '—';
       const rem = Number.isFinite(remaining) ? `${remaining.toFixed(0)} min` : '—';
+      const sourceNote = lockedRapt ? '<br>RAPT-profil observerad · BA:s styrspärr är fortfarande aktiv' : '';
       const metric = (title, main, sub) => `<div style="min-width:0;border-radius:12px;padding:7px 5px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><div style="font-size:8.5px;font-weight:950;opacity:.55;text-transform:uppercase;">${title}</div><div style="font-size:11.5px;font-weight:950;line-height:1.12;white-space:normal;overflow-wrap:anywhere;">${main}</div><div style="font-size:9px;font-weight:780;opacity:.58;margin-top:2px;">${sub}</div></div>`;
 
       return `<div style="line-height:1.25;min-width:0;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="font-size:11px;font-weight:850;opacity:.64;">Översikt · processkälla · runtime</div><div style="padding:5px 8px;border-radius:999px;background:${badgeBg};border:1px solid ${badgeBorder};font-size:10px;font-weight:950;white-space:nowrap;">${badge}</div></div>
-        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">${chip(sourceLabel,sourceIcon,source === 'RAPT BrewZilla Profile' ? 'rgba(156,39,176,.10)' : 'rgba(33,150,243,.09)',source === 'RAPT BrewZilla Profile' ? 'rgba(156,39,176,.25)' : 'rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip('BREWASSISTANT','mdi:brain','rgba(33,150,243,.09)','rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.08)','rgba(0,188,212,.20)')}<span style="opacity:.45;">→</span>${chip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.08)','rgba(76,175,80,.20)')}</div>
-        <div style="margin-top:9px;text-align:center;"><div style="font-size:22px;font-weight:950;letter-spacing:-.035em;">${headline}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.72;">${stage} · ${short(step)}<br>nästa: ${short(next, 64)}</div></div>
+        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">${chip(sourceLabel,sourceIcon,sourceIsRapt ? 'rgba(156,39,176,.10)' : 'rgba(33,150,243,.09)',sourceIsRapt ? 'rgba(156,39,176,.25)' : 'rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip(baLabel,'mdi:brain',state === 'aborted' ? 'rgba(244,67,54,.10)' : 'rgba(33,150,243,.09)',state === 'aborted' ? 'rgba(244,67,54,.25)' : 'rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.08)','rgba(0,188,212,.20)')}<span style="opacity:.45;">→</span>${chip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.08)','rgba(76,175,80,.20)')}</div>
+        <div style="margin-top:9px;text-align:center;"><div style="font-size:22px;font-weight:950;letter-spacing:-.035em;">${headline}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.72;">${stage} · ${short(step)}<br>nästa: ${short(next, 64)}${sourceNote}</div></div>
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">${metric('Fas',stage,'nu')}${metric('Förlopp',pct,rem + ' kvar')}${metric('Åtgärd',short(action,24),'föreslagen')}${metric('Styrning',short(control,24),'råd')}</div>
       </div>`;
     ]]]
