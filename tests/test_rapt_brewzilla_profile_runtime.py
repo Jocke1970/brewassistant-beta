@@ -11,11 +11,23 @@ RAPT_RUNTIME = ROOT / "custom_components/brewassistant/brewday/rapt_profile_runt
 RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
 MANUAL_STORE = ROOT / "custom_components/brewassistant/brewday/manual_brewday_store.py"
 RAPT_CONTROL_BRIDGE = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_rapt_profile_control_bridge.py"
+FAIL_PASSIVE = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_fail_passive_guard.py"
 BREWZILLA_INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
+RAPT_CARD = ROOT / "dashboard/cards/rapt_profile_runtime.yaml"
+RAPT_CARD_SV = ROOT / "dashboard/cards/rapt_profile_runtime_sv.yaml"
+BREWDAY_CARD = ROOT / "dashboard/cards/brewassistant_brewday.yaml"
+BREWDAY_CARD_SV = ROOT / "dashboard/cards/brewassistant_brewday_sv.yaml"
 
 
 def test_rapt_profile_python_sources_parse() -> None:
-    for path in (RAPT_RUNTIME, RUNTIME, MANUAL_STORE, RAPT_CONTROL_BRIDGE, BREWZILLA_INIT):
+    for path in (
+        RAPT_RUNTIME,
+        RUNTIME,
+        MANUAL_STORE,
+        RAPT_CONTROL_BRIDGE,
+        FAIL_PASSIVE,
+        BREWZILLA_INIT,
+    ):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -35,23 +47,64 @@ def test_active_rapt_profile_feeds_existing_ba_controller() -> None:
     init = BREWZILLA_INIT.read_text(encoding="utf-8")
 
     assert '"runtime_state": "running"' in bridge
+    assert '"process_source": "rapt_cloud_link"' in bridge
+    assert '"directive_source": "rapt_profile"' in bridge
     assert '"control_owner": "brewassistant"' in bridge
     assert '"brewassistant_role": "hot_side_controller"' in bridge
-    assert '"direct_brewzilla_control_allowed": True' in bridge
+    assert '"direct_brewzilla_control_allowed": not cooling_marker' in bridge
     assert '"rapt_profile_role": "process_and_target_source"' in bridge
-    assert '"heat_pump_owner": "brewassistant"' in bridge
+    assert '"heat_pump_owner": "brewassistant" if not cooling_marker else "cooling_handoff"' in bridge
     assert "rapt_runtime._active_snapshot = _active_snapshot" in bridge
     assert "install_rapt_profile_control_bridge()" in init
 
 
-def test_rapt_generic_profile_steps_map_to_existing_ba_stage_kinds() -> None:
+def test_rapt_heatstrike_and_profile_steps_map_to_existing_ba_stage_kinds() -> None:
     bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    assert '"heatstrike", "heat strike", "strike water"' in bridge
+    assert 'return "Mash", "Heat Strike"' in bridge
     assert 'end_type == "temperature"' in bridge
     assert 'f"Ramp · {raw_name}"' in bridge
     assert 'end_type == "duration"' in bridge
     assert 'f"Mash Hold · {raw_name}"' in bridge
     assert 'target >= 95.0' in bridge
     assert 'return "Boil"' in bridge
+
+
+def test_rapt_mash_out_single_step_switches_from_ramp_to_hold_at_target() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    assert '_TARGET_REACHED_TOLERANCE_C = 0.3' in bridge
+    assert 'current < target - _TARGET_REACHED_TOLERANCE_C' in bridge
+    assert 'return "Mash", f"Ramp · {raw_name}"' in bridge
+    assert 'return "Mash", f"Mash Hold · {raw_name}"' in bridge
+
+
+def test_manual_rapt_mash_in_holds_previous_strike_target_until_operator_starts() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    assert "def _previous_profile_target" in bridge
+    assert "def _manual_mash_in" in bridge
+    assert 'gate_state not in _MASH_IN_STARTED_STATES' in bridge
+    assert 'out["target_temperature"] = strike_hold_target' in bridge
+    assert '"rapt_previous_heatstrike_until_mash_in_started"' in bridge
+    assert '"rapt_mash_in_strike_hold_active": strike_hold_active' in bridge
+    assert '"rapt_directive_target_temperature": raw_target' in bridge
+    assert '"rapt_effective_ba_target_temperature": _num(out.get("target_temperature"))' in bridge
+
+
+def test_rapt_cooling_marker_never_becomes_hot_side_target() -> None:
+    bridge = RAPT_CONTROL_BRIDGE.read_text(encoding="utf-8")
+    fail_passive = FAIL_PASSIVE.read_text(encoding="utf-8")
+
+    assert 'out["target_temperature"] = None' in bridge
+    assert '"rapt_cooling_marker_ignored"' in bridge
+    assert '"requested_target": None' in bridge
+    assert '"target_sync_needed": False' in bridge
+    assert '"desired_heat_utilization": 0.0' in bridge
+    assert '"desired_heater_on": False' in bridge
+    assert '"desired_pump_on": None' in bridge
+    assert '"pump_stop_needed": False' in bridge
+    assert '"rapt_cooling_handoff_active": True' in bridge
+    assert '"brewzilla_pump_owner": "cooling_runtime_or_operator"' in bridge
+    assert 'snapshot.get("rapt_cooling_handoff_active")' in fail_passive
 
 
 def test_rapt_uses_same_supervised_policy_and_phase_authority_as_bt() -> None:
@@ -103,3 +156,31 @@ def test_manual_positive_control_respects_rapt_handoff() -> None:
     assert "allow_stopped_takeover=True" in source
     assert "raise _rapt_ownership_error()" in source
     assert 'reason="manual_operator_takeover"' in source
+
+
+def test_rapt_runtime_cards_make_directive_and_control_ownership_explicit() -> None:
+    for path in (RAPT_CARD, RAPT_CARD_SV):
+        source = path.read_text(encoding="utf-8")
+        assert "RAPT BrewZilla Profile" in source
+        assert "RAPT PROFILE" in source
+        assert "BREWASSISTANT" in source
+        assert "RCL" in source
+        assert "BREWZILLA" in source
+        assert "step_target_temperature" in source
+        assert "next_step_target_temperature" in source
+        assert "step_end_type" in source
+        assert "step_duration_type" in source
+
+
+def test_brewday_cards_show_dynamic_source_chain() -> None:
+    for path in (BREWDAY_CARD, BREWDAY_CARD_SV):
+        source = path.read_text(encoding="utf-8")
+        assert "sensor.brewassistant_brewday_runtime_source" in source
+        assert "RAPT BrewZilla Profile" in source
+        assert "Brewfather Brew Tracker" in source
+        assert "Manual Brewday" in source
+        assert "RAPT PROFILE" in source
+        assert "BREWTRACKER" in source
+        assert "BREWASSISTANT" in source
+        assert "RCL" in source
+        assert "BREWZILLA" in source
