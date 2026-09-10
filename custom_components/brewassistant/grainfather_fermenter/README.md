@@ -1,10 +1,12 @@
 # Grainfather Fermenter backend
 
-Status: phase 1 scaffold / read-only discovery  
+Status: phase 1 scaffold / read-only discovery / parked until live hardware  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
 This package is intentionally separate from BrewAssistant's reserved `grainfather` hot-side adapter. The existing `grainfather` module remains available for Grainfather brewing systems such as G30/G40-class hardware. This package is for fermentation hardware.
+
+Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)
 
 ## Phase 1 goal
 
@@ -130,3 +132,11 @@ When a GF30 is available, verify before enabling control:
 8. behavior with Grainfather cooling accessories versus heating-only operation.
 
 After that validation the next implementation step is a registered Supervised Apply executor plus explicit provider selection between the existing chamber and the GF30.
+
+## Current parking point
+
+Phase 1 is intentionally the stopping point until physical hardware is available.
+
+Keep the discovery/normalization scaffold, documentation and regression guards. Do **not** add guessed GF30 entity IDs, model-name heuristics, direct actuator assumptions or automatic target writes while those behaviors cannot be verified against a real controller.
+
+When hardware arrives, resume with live characterization/readback validation first. The detailed milestone sequence is maintained in the roadmap document linked above.
