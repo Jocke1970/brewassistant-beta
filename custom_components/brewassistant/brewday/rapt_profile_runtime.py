@@ -1,9 +1,10 @@
 """RAPT BrewZilla profile runtime adapter for BrewAssistant.
 
-The BrewZilla executes a RAPT profile locally. BrewAssistant observes that
-local runner through RAPT Cloud Link and treats it as an external executor,
-not as a target/heat/pump control source. This avoids two controllers fighting
-for the same hardware while still exposing one normalized Brewday Runtime.
+RAPT/RAPT Cloud Link supplies the active BrewZilla profile, current process
+step, target and next-step context. BrewAssistant normalizes that information
+into Brewday Runtime. The BrewZilla profile runner owns step/timer progression;
+BrewAssistant owns hot-side target transport and heat/pump regulation while the
+RAPT control bridge is installed.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 RAPT_PROFILE_SOURCE = "RAPT BrewZilla Profile"
 RAPT_PROFILE_ENTITY = "binary_sensor.brewzilla_profile_active"
 RAPT_PROFILE_BA_SOURCE = "rapt_cloud_link_brewzilla_profile_runtime"
-RAPT_PROFILE_RUNTIME_STATE = "external_executor"
+RAPT_PROFILE_RUNTIME_STATE = "running"
 
 BREWZILLA_HEATER_SWITCH = "switch.brewzilla_heater"
 BREWZILLA_PUMP_SWITCH = "switch.brewzilla_pump"
@@ -170,10 +171,11 @@ def _remember_active(hass: HomeAssistant, state: State) -> dict[str, Any]:
         }
     )
 
-    # A local RAPT profile is the executor now. Any BA-owned utilization from
-    # an earlier Brewfather/Manual flow must not be reasserted into it later.
+    # RAPT now owns process intent. Drop utilization remembered from an earlier
+    # Brewfather/Manual session so that the new RAPT session starts with fresh
+    # BA calculations rather than inheriting stale Advice ownership.
     if session_key and store.get("control_cleared_for_session") != session_key:
-        clear_owned_control(hass, reason="rapt_profile_executor_started")
+        clear_owned_control(hass, reason="rapt_profile_source_started")
         store["control_cleared_for_session"] = session_key
 
     return known
@@ -354,7 +356,7 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
         "target_temperature": target,
         "target_temperature_source": "rapt_profile_step",
         "actual_temperature": _actual_temperature(hass),
-        "summary": f"external executor · {profile_name} · {step_name}",
+        "summary": f"RAPT directive · {profile_name} · {step_name}",
         "source_entity": state.entity_id,
         "source_entity_candidates": [RAPT_PROFILE_ENTITY],
         "snapshot_entity": state.entity_id,
@@ -400,9 +402,9 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
                 "steps": steps,
             }
         ],
-        "process_executor": "brewzilla_local_profile_runner",
-        "control_owner": "brewzilla_profile_runner",
-        "brewassistant_role": "supervisor",
+        "process_executor": "rapt_profile_step_runner",
+        "control_owner": "brewassistant",
+        "brewassistant_role": "hot_side_controller",
         "profile_active": True,
         "profile_contract_complete": bool(known.get("profile_contract_complete")),
         "profile_id": known.get("profile_id"),
@@ -424,7 +426,7 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
         "profile_source_available": True,
         "profile_stop_guard_active": False,
         "profile_stop_confirmed": False,
-        "direct_brewzilla_control_allowed": False,
+        "direct_brewzilla_control_allowed": True,
     }
 
 
@@ -464,9 +466,9 @@ def _unavailable_snapshot(hass: HomeAssistant, store: dict[str, Any]) -> dict[st
         "current_step_remaining_seconds": None,
         "current_step_remaining_minutes": None,
         "timeline": [],
-        "process_executor": "brewzilla_local_profile_runner_unknown_state",
+        "process_executor": "rapt_profile_step_runner_unknown_state",
         "control_owner": "unknown_preserve_rapt_handoff",
-        "brewassistant_role": "supervisor",
+        "brewassistant_role": "control_suspended_source_unavailable",
         "profile_active": None,
         "profile_id": known.get("profile_id"),
         "profile_name": known.get("profile_name"),
