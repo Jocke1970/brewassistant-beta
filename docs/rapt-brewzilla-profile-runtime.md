@@ -1,6 +1,6 @@
 # RAPT BrewZilla profile runtime
 
-Status: **feature branch / supervised test required**  
+Status: **feature branch / supervised physical test required**  
 Date: 2026-09-10
 
 ## Purpose
@@ -8,7 +8,7 @@ Date: 2026-09-10
 BrewAssistant can use an active RAPT BrewZilla profile as the hot-side process
 and target source instead of Brewfather Brew Tracker or Manual Brewday.
 
-The important ownership rule is:
+The ownership model is:
 
 ```text
 RAPT profile / Brew Tracker / Manual Brewday
@@ -19,212 +19,283 @@ RAPT profile / Brew Tracker / Manual Brewday
 ```
 
 A RAPT profile is therefore analogous to Brewfather Brew Tracker from the
-BrewAssistant controller's point of view. It supplies the current process step,
-target temperature and next-step context. It is **not** expected to contain the
-heat-utilisation or pump-utilisation strategy that BrewAssistant already owns.
+BrewAssistant controller's point of view. It supplies process directives such as
+the current step, target temperature, duration/end condition and next-step
+context. RAPT profile heat/pump utilisation values are metadata only; they are
+not the BrewAssistant control strategy.
 
-The BrewZilla/RAPT profile runner may still advance the profile steps locally.
-BrewAssistant consumes those active-step transitions and continuously applies
-its own existing control strategy to the target supplied by that step.
+## Source and control ownership
 
-## Runtime ownership
-
-Source priority is:
+Automatic source priority is currently:
 
 ```text
 operator ABORT
-  -> RAPT BrewZilla profile / RAPT handoff guard
+  -> active/held RAPT BrewZilla profile
   -> actually started Brewfather Brew Tracker
   -> Manual Brewday
   -> idle
 ```
 
-An active RAPT profile therefore outranks Brewfather even when Brewfather is
-still available as recipe metadata or as a background Brew Tracker source.
-BrewAssistant does not combine process steps from the two sources.
+An active RAPT profile therefore outranks Brewfather even if Brewfather remains
+available for recipe metadata. BrewAssistant does not mix process steps from two
+active sources.
 
-The RAPT runtime adapter consumes the operational RCL binary sensor marked:
+The long-term source UI model is `Auto / RAPT / Brewfather / Manual`. The
+explicit selector is intentionally deferred until after physical validation;
+the feature branch currently implements the automatic arbitration above.
+
+The RAPT adapter consumes the RCL binary sensor marked:
 
 ```text
 ba_source: rapt_cloud_link_brewzilla_profile_runtime
 ```
 
-The expected default entity is:
+Expected default entity:
 
 ```text
 binary_sensor.brewzilla_profile_active
 ```
 
-The adapter also supports discovery by the `ba_source` marker if the device
-name causes Home Assistant to generate another entity id.
-
 ## BA control rule
 
-While the RAPT profile is active the control bridge presents the normalized
-runtime as an active BrewAssistant control source:
+During a normal active RAPT hot-side step the normalized runtime exposes RAPT as
+the directive source and BrewAssistant as controller:
 
 ```text
 source: RAPT BrewZilla Profile
-status: running
 runtime_state: running
-rapt_profile_role: process_and_target_source
-process_executor: rapt_profile_step_runner
+process_source: rapt_cloud_link
+directive_source: rapt_profile
 control_owner: brewassistant
-brewassistant_role: hot_side_controller
+transport: rapt_cloud_link
+hardware_executor: brewzilla
+rapt_profile_role: process_and_target_source
 target_intent_owner: rapt_profile
 heat_pump_owner: brewassistant
-direct_brewzilla_control_allowed: true
 ```
 
-Current RAPT step target is exposed as the normal Brewday Runtime
-`target_temperature`. BrewAssistant then transports/reasserts that target to the
-BrewZilla and calculates heat/pump behaviour with the same existing hot-side
-logic used when Brew Tracker is the process source.
+The current RAPT step target becomes the normal Brewday Runtime target.
+BrewAssistant transports/reasserts that target and calculates heat/pump behaviour
+with the same existing hot-side controller used for Brew Tracker.
 
-This means a RAPT profile can intentionally omit heat/pump utilisation tuning.
-For example:
+Example:
 
 ```text
-RAPT active step target = 68 C
+RAPT step target = 68 C
   -> Brewday Runtime requested target = 68 C
-  -> BA target transport = 68 C
-  -> BA Heat Strike / ramp / mash-hold regulator chooses heat utilisation
-  -> BA chooses pump state/utilisation
-  -> RCL writes those values to BrewZilla
+  -> BA writes target 68 C
+  -> BA calculates heat utilisation from delta/rate/safety logic
+  -> BA calculates pump state/utilisation from phase/mix logic
+  -> RCL transports BA commands to BrewZilla
 ```
 
-If the RAPT runner writes its own default heat/pump values on a step transition,
-BrewAssistant sees the readback difference and may reassert the current BA
-desired values on the next control pass.
+If RAPT/BrewZilla rewrites heat or pump utilisation during a profile transition,
+BA may reassert its current desired values on a subsequent control pass.
+
+## BrewAssistant RAPT reference profile v1
+
+The first supervised reference profile is deliberately simple. RAPT already
+supports starting a step timer only when target temperature is reached, so
+separate ramp steps are not required.
+
+```text
+Heatstrike
+  target: 70 C
+  next: target temperature reached
+
+Mash In
+  target: 68 C
+  next: button press on device (manual)
+
+Mash Rest
+  target: 68 C
+  duration: 60 min
+  timer starts: target temperature reached
+  next: step timer finished
+
+Mash Out
+  target: 78 C
+  duration: 10 min
+  timer starts: target temperature reached
+  next: step timer finished
+
+Boil
+  target: 100 C
+  duration: 60 min
+  timer starts: target temperature reached
+  next: step timer finished
+
+ChillOut
+  target: 0 C (marker only for BA)
+  next: button press on device (manual)
+```
+
+`Heatstrike` is normalized to the existing BA semantic `Heat Strike` so it enters
+the established physical heat-strike controller.
+
+A single timed `Mash Out` step is interpreted as a ramp while the measured
+process temperature is below target and as a mash hold after target is reached.
+This matches the RAPT profile model where the timer can start at target rather
+than requiring a separate ramp step.
+
+## Mash-In handoff
+
+RAPT automatically advances from `Heatstrike 70 C` to the manual `Mash In 68 C`
+when strike target is reached. That creates a deliberate difference between the
+new RAPT directive target and the physical target BrewAssistant must hold until
+the brewer actually starts adding grain.
+
+BrewAssistant therefore uses this sequence:
+
+```text
+RAPT Heatstrike 70 C
+  -> BA heats/regulates to 70 C
+  -> RAPT automatically enters manual Mash In and advertises 68 C
+  -> BA keeps the previous 70 C strike target latched
+  -> operator presses BrewAssistant Mash-In Started
+  -> BA releases the strike latch and uses 68 C
+  -> pump remains paused while grain is added/mixed
+  -> operator presses BrewAssistant Mash-In Complete
+  -> BA starts normal mash circulation
+  -> operator advances the manual RAPT Mash In step on BrewZilla
+  -> RAPT enters Mash Rest 68 C / 60 min
+```
+
+The final manual RAPT step advance remains necessary because a verified
+Next/Continue Profile Step API endpoint has not yet been reverse engineered.
+If such an endpoint is later verified, Mash-In Complete can become the single
+atomic BA action that both finishes the physical gate and advances RAPT.
+
+## ChillOut / cooling handoff
+
+`ChillOut` uses `0 C` only as a convenient RAPT profile marker in the current
+reference profile. BrewAssistant must never transport that value as a hot-side
+BrewZilla target.
+
+When the active RAPT step is recognized as Cooling/ChillOut, the bridge:
+
+```text
+ignores RAPT target 0 C for hot-side target transport
+sets desired hot-side heat utilisation to 0 %
+requests BrewZilla heater OFF
+stops BA target synchronization
+releases BrewZilla pump ownership to Cooling Runtime/operator
+```
+
+The pump is intentionally not forced OFF by the ChillOut boundary because CFC
+cooling may require wort flow and the current Cooling Runtime treats that pump
+as operator-owned. Existing cooling-method logic then decides whether the CFC,
+immersion-chiller or manual cooling path is active.
 
 ## RAPT step semantics
 
-Explicitly named RAPT steps are preferred because names such as `Heat Strike`,
-`Mash`, `Mash Out`, `Boil` and `Whirlpool` give BrewAssistant the strongest
-process context.
+Meaningful RAPT step names are preferred. The bridge recognizes names such as
+`Heatstrike`, `Mash In`, `Mash Rest`, `Mash Out`, `Boil`, `Whirlpool/Hopstand`
+and `ChillOut`.
 
-For generic RAPT names such as `Step 1`, the bridge provides conservative
-fallback semantics:
+For generic RAPT names such as `Step 1`, conservative fallbacks remain:
 
 ```text
-endType Temperature / controlType Ramp -> Mash ramp
-endType Duration                       -> Mash hold
->=95 C temperature/duration target     -> Boil heat/hold
+endType Temperature / controlType Ramp -> mash ramp
+endType Duration                       -> mash hold
+>=95 C temperature/duration target     -> boil heat/hold
 ```
 
-Those normalized words intentionally feed the existing BrewAssistant
-`stage_kind`, Heat Strike, ramp, mash-hold, thermal-mix and pump logic rather
-than creating a second RAPT-specific regulator.
-
-During the pre-mash-in phase an active RAPT profile receives the same physical
-phase authority as Brew Tracker: once the profile itself is active, BA's
-Heatstrike/Mash-In controller can modulate target/heat/pump without asking for a
-new generic confirmation on every small regulator write. Lower ABORT, safety,
-freshness and fail-passive guards remain installed.
-
-Outside that dedicated physical phase, RAPT profile-driven positive actions use
-the same supervised control-policy class as Brew Tracker.
+These semantic labels feed the existing BA stage/advice/heat/pump logic; they do
+not create a separate RAPT regulator.
 
 ## Source loss
 
 If RAPT Cloud Link becomes missing, restored-only, unknown or unavailable after
-BrewAssistant has observed an active profile, BrewAssistant keeps the RAPT
-runtime handoff with:
+BrewAssistant has observed an active profile, BrewAssistant holds RAPT ownership
+with:
 
 ```text
 runtime_state: source_unavailable
 ```
 
-It does **not** silently fall back to Brewfather or Manual Brewday and it does
-not infer STOP from stale/missing data. New BA positive writes are blocked by
-the existing fail-passive path; BrewZilla keeps the last locally applied target
-and output configuration until communication returns or an explicit safety path
-acts.
+It does not silently fall back to Brewfather or Manual, and missing/stale data is
+not interpreted as STOP. Ordinary source loss remains fail-passive: no new BA
+writes are issued and BrewZilla keeps the last locally applied target/output
+state until trustworthy telemetry returns or an explicit safety path acts.
 
 ## Confirmed STOP and safe-off
 
-A profile STOP is confirmed only when BrewAssistant has previously observed an
-active RAPT profile and receives a fresh operational RCL binary-sensor state of
-`off`. Restored state is not accepted as STOP evidence.
+A profile STOP is confirmed only after BrewAssistant has observed an active RAPT
+profile and then receives a fresh operational RCL profile state of `off`.
+Restored state is not accepted as STOP evidence.
 
-On confirmed STOP BrewAssistant automatically clears old BA-owned utilisation
-state and sends the safe-off commands:
+Confirmed STOP performs full safe-off:
 
 ```text
-switch.brewzilla_heater           -> OFF
-switch.brewzilla_pump             -> OFF
-number.brewzilla_heat_utilization -> 0 %
-number.brewzilla_pump_utilization -> 0 %
+switch.brewzilla_heater            -> OFF
+switch.brewzilla_pump              -> OFF
+number.brewzilla_heat_utilization  -> 0 %
+number.brewzilla_pump_utilization  -> 0 %
 ```
 
-This is required because live testing showed that RAPT can end a profile while
-leaving BrewZilla's generic target and heater-enabled state behind.
-
-After safe-off BrewAssistant keeps an in-memory RAPT STOP handoff guard. It does
-not immediately switch to an already-running Brewfather source. A new RAPT
-profile clears the guard automatically. An explicit Manual Brewday
-positive-control action may release a confirmed STOP guard and take manual
-ownership; it cannot release an active or unavailable-after-active RAPT handoff.
+A STOP handoff guard prevents an already-running Brewfather source from silently
+taking over the same brewday. An explicit Manual takeover may release only a
+confirmed STOP guard; it cannot release an active or uncertain RAPT handoff.
 
 ## RCL command surface
 
-The BrewAssistant RAPT Cloud Link branch exposes:
+The BrewAssistant RCL branch exposes:
 
 ```text
 rapt_cloud_link.start_brewzilla_profile
 rapt_cloud_link.end_brewzilla_profile
 ```
 
-The implementation mirrors the RAPT Portal requests observed live on
-2026-09-10:
+Reverse-engineered RAPT Portal requests used by the implementation:
 
 ```text
 POST /api/ProfileSessions/StartProfileSession
 GET  /api/ProfileSessions/EndBrewZillaProfileSession?brewZillaId=...
 ```
 
-After either command RCL requests a fresh `GetBrewZillas` update. The live
-`activeProfile*` fields, not the command response alone, are the runtime truth.
+After either command, RCL requests a fresh `GetBrewZillas` update. Live
+`activeProfile*` data remains the runtime truth; HTTP success alone is not used
+as proof of the physical runner state.
 
-## Supervised test checklist
+## Supervised physical test checklist
 
-1. Install/update RCL from `ba/brewassistant-rapt-cloud-link`.
+1. Update RCL from `ba/brewassistant-rapt-cloud-link` and verify
+   `binary_sensor.brewzilla_profile_active` plus start/end services exist.
 2. Install BrewAssistant from `feature/rapt-brewzilla-profile-runtime`.
-3. With no profile running, verify normal Brewfather/Manual behaviour is
-   unchanged.
-4. Start a harmless RAPT test profile. It does not need meaningful heat/pump
-   utilisation values; keep the first target conservative for the physical test.
-5. Verify Brewday Runtime source becomes `RAPT BrewZilla Profile` and state
-   becomes `running`.
-6. Verify current step, next step and requested target follow BrewZilla profile
-   step changes.
-7. Verify BA writes/reasserts the RAPT step target and chooses heat/pump
-   utilisation from the existing BA regulator rather than requiring those values
-   from the RAPT profile.
-8. Verify a temperature-ended generic step is interpreted as a ramp and a
-   duration-ended generic step as a hold; explicitly named steps should retain
-   their stronger semantic meaning.
-9. Temporarily reload/disconnect RCL and verify runtime becomes
-   `source_unavailable` without switching to Brewfather and without accidental
-   safe-off.
-10. Restore RCL and verify the same RAPT profile resumes as source and BA control
-    resumes from current readback.
-11. Stop the profile locally or via the RCL end service.
-12. Wait for fresh RCL `off` and verify all four safe-off values are applied.
-13. Verify Brewday Runtime remains on the stopped RAPT handoff rather than
-    silently adopting an already-active Brewfather tracker.
+3. Keep the test supervised and use the reference RAPT profile above.
+4. Start the RAPT profile and verify Brewday Runtime source becomes
+   `RAPT BrewZilla Profile`.
+5. Verify the UI chain shows `RAPT PROFILE -> BREWASSISTANT -> RCL -> BREWZILLA`.
+6. During Heatstrike, verify BA uses 70 C as target and controls heat/pump with
+   the existing BA heat-strike strategy.
+7. When RAPT advances to manual Mash In and advertises 68 C, verify RAPT target
+   shows 68 C while BA effective target remains 70 C until Mash-In Started.
+8. Press Mash-In Started and verify BA target becomes 68 C while pump remains
+   paused.
+9. Press Mash-In Complete and verify mash circulation starts; then manually
+   advance the RAPT Mash In step on BrewZilla.
+10. Verify Mash Rest timer does not start until 68 C is reached and BA continues
+    to regulate heat/pump from the RAPT directive.
+11. Verify Mash Out behaves as ramp-to-78 followed by the timed 10 min hold.
+12. Verify Boil target/time transition without letting BA invent a second RAPT
+    timer.
+13. On ChillOut, verify RAPT raw target can be 0 C but BA does not write 0 C as
+    BrewZilla target; heat is removed and cooling owns/uses the pump separately.
+14. Temporarily lose/reload RCL and verify `source_unavailable` without source
+    fallback or accidental safe-off.
+15. Restore RCL and verify the same RAPT profile resumes as directive source.
+16. Stop the profile and verify fresh inactive RCL state causes full safe-off.
 
 ## Known first-pass limits
 
-- The handoff guard is in memory; a full Home Assistant/BrewAssistant restart
-  clears it. An actually active RAPT profile is rediscovered from RCL after
-  restart.
-- RAPT step `length` is exposed as raw metadata but is not assumed to be a
-  reliable countdown for all step end types.
-- Generic step semantic inference is intentionally conservative; meaningful
-  profile step names remain preferable.
-- BrewAssistant does not yet expose a profile selector or its own Start/Stop
-  profile buttons; the RCL services are the initial command surface.
-- Operator ABORT while a RAPT profile is running still needs an explicit
-  integration test before this feature is merged to `main`; remote profile
-  termination must be included in that safety path before unsupervised use.
+- The RAPT STOP handoff guard is in memory; a full Home Assistant/BrewAssistant
+  restart clears it. An actually active RAPT profile is rediscovered from RCL.
+- RAPT `length`/duration metadata is exposed, but BA does not invent a countdown
+  for RAPT steps unless the runtime contract proves enough timing information.
+- The explicit `Auto / RAPT / Brewfather / Manual` selector is architectural
+  follow-up; automatic arbitration is the current implementation.
+- BrewAssistant has no verified RAPT Next/Continue Step command yet, so the
+  manual Mash In profile step must still be advanced on the BrewZilla.
+- Operator ABORT while RAPT is active still requires explicit physical
+  integration validation before this feature is merged to `main`.
