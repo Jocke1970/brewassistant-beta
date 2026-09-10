@@ -29,6 +29,13 @@ card:
         ]]]
       show_state: false
       show_label: true
+      triggers_update:
+        - sensor.brewassistant_brewday_runtime_summary
+        - sensor.brewassistant_brewday_runtime_source
+        - sensor.brewassistant_brewday_runtime_state
+        - sensor.brewassistant_brewday_runtime_stage
+        - sensor.brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewday_runtime_next_step
       tap_action:
         action: more-info
       hold_action:
@@ -53,6 +60,7 @@ card:
           }
 
           const summary = clean(states['sensor.brewassistant_brewday_runtime_summary']?.state) || '—';
+          const runtimeSource = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || 'None';
           const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
           const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
           const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
@@ -94,19 +102,37 @@ card:
             badgeIcon = 'mdi:check-decagram-outline';
             chipBg = 'rgba(76,175,80,.13)';
             chipBorder = 'rgba(76,175,80,.28)';
-          } else if (runtimeState === 'awaiting_snapshot') {
-            headline = 'Waiting for snapshot';
-            badge = 'Waiting';
-            badgeIcon = 'mdi:cloud-sync-outline';
-            chipBg = 'rgba(33,150,243,.12)';
-            chipBorder = 'rgba(33,150,243,.24)';
-          } else if (runtimeState === 'idle') {
-            headline = 'Idle';
-            badge = 'Idle';
+          } else if (runtimeState === 'awaiting_snapshot' || runtimeState === 'source_unavailable') {
+            headline = runtimeState === 'source_unavailable' ? 'RAPT source temporarily unavailable' : 'Waiting for snapshot';
+            badge = runtimeState === 'source_unavailable' ? 'SOURCE LOST' : 'Waiting';
+            badgeIcon = 'mdi:cloud-alert-outline';
+            chipBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.15)' : 'rgba(33,150,243,.12)';
+            chipBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.34)' : 'rgba(33,150,243,.24)';
+          } else if (runtimeState === 'idle' || runtimeState === 'inactive') {
+            headline = runtimeState === 'inactive' ? 'Process source stopped' : 'Idle';
+            badge = runtimeState === 'inactive' ? 'Stopped' : 'Idle';
             badgeIcon = 'mdi:sleep';
             chipBg = 'rgba(127,127,127,.12)';
             chipBorder = 'rgba(127,127,127,.20)';
           }
+
+          const directiveLabel = runtimeSource === 'RAPT BrewZilla Profile'
+            ? 'RAPT PROFILE'
+            : runtimeSource === 'Brewfather Brew Tracker'
+              ? 'BREWTRACKER'
+              : runtimeSource === 'Manual Brewday'
+                ? 'MANUAL'
+                : 'NO SOURCE';
+          const directiveIcon = runtimeSource === 'RAPT BrewZilla Profile'
+            ? 'mdi:playlist-play'
+            : runtimeSource === 'Brewfather Brew Tracker'
+              ? 'mdi:timer-play-outline'
+              : runtimeSource === 'Manual Brewday'
+                ? 'mdi:hand-back-right-outline'
+                : 'mdi:minus-circle-outline';
+          const directiveBg = runtimeSource === 'RAPT BrewZilla Profile' ? 'rgba(156,39,176,.10)' : 'rgba(33,150,243,.09)';
+          const directiveBorder = runtimeSource === 'RAPT BrewZilla Profile' ? 'rgba(156,39,176,.25)' : 'rgba(33,150,243,.21)';
+          const chainChip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.5px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
 
           const progressMain = Number.isFinite(liveProgress) ? `${liveProgress.toFixed(0)} %` : '—';
           const remainingMain = Number.isFinite(remaining) ? `${remaining.toFixed(0)} min` : '—';
@@ -149,9 +175,9 @@ card:
             `;
           };
 
-          const statusBg = runtimeState === 'aborted' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
-          const statusBorder = runtimeState === 'aborted' ? 'rgba(244,67,54,.32)' : 'rgba(76,175,80,.24)';
-          const statusIcon = runtimeState === 'aborted' ? 'mdi:alert-octagon-outline' : 'mdi:check-circle-outline';
+          const statusBg = runtimeState === 'aborted' || runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
+          const statusBorder = runtimeState === 'aborted' || runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.32)' : 'rgba(76,175,80,.24)';
+          const statusIcon = runtimeState === 'aborted' || runtimeState === 'source_unavailable' ? 'mdi:alert-octagon-outline' : 'mdi:check-circle-outline';
           const statusText = runtimeState === 'aborted' ? summary : statusLine;
 
           return `
@@ -176,6 +202,13 @@ card:
                   <ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon>
                   <span>${badge}</span>
                 </div>
+              </div>
+
+              <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">
+                ${chainChip(directiveLabel,directiveIcon,directiveBg,directiveBorder)}<span style="opacity:.45;">→</span>
+                ${chainChip('BREWASSISTANT','mdi:brain','rgba(33,150,243,.09)','rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>
+                ${chainChip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.08)','rgba(0,188,212,.20)')}<span style="opacity:.45;">→</span>
+                ${chainChip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.08)','rgba(76,175,80,.20)')}
               </div>
 
               <div style="margin-top:8px;text-align:center;">
@@ -483,10 +516,11 @@ card:
         label: |
           [[[
             const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? '—';
+            const source = states['sensor.brewassistant_brewday_runtime_source']?.state ?? '—';
             const stage = states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '—';
             const step = states['sensor.brewassistant_brewday_runtime_step']?.state ?? '—';
             const events = states['sensor.brewassistant_brewday_event_log_event_count']?.state ?? '0';
-            return `${state} · ${stage} · ${step} · events ${events}`;
+            return `${source} · ${state} · ${stage} · ${step} · events ${events}`;
           ]]]
         styles:
           card:
@@ -518,6 +552,8 @@ card:
           entities:
             - entity: sensor.brewassistant_brewday_runtime_summary
               name: Runtime summary
+            - entity: sensor.brewassistant_brewday_runtime_source
+              name: Process directive source
             - entity: sensor.brewassistant_brewday_runtime_state
               name: Runtime state
             - entity: sensor.brewassistant_brewday_operator_control_state
