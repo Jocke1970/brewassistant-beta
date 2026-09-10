@@ -184,3 +184,17 @@ def test_brewday_cards_show_dynamic_source_chain() -> None:
         assert "BREWASSISTANT" in source
         assert "RCL" in source
         assert "BREWZILLA" in source
+
+
+def test_brewday_cards_distinguish_observed_rapt_from_control_ownership_during_abort() -> None:
+    en = BREWDAY_CARD.read_text(encoding="utf-8")
+    sv = BREWDAY_CARD_SV.read_text(encoding="utf-8")
+    for source in (en, sv):
+        assert "binary_sensor.brewzilla_profile_active" in source
+        assert "rapt_cloud_link_brewzilla_profile_runtime" in source
+        assert "lockedRapt = state === 'aborted'" in source
+        assert "sourceIsRapt" in source
+    assert "RAPT PROFILE · OBSERVED" in en
+    assert "BREWASSISTANT LOCKED" in en
+    assert "RAPT PROFILE · OBSERVERAD" in sv
+    assert "BREWASSISTANT LÅST" in sv
