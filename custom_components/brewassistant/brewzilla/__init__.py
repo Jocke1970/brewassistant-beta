@@ -27,6 +27,7 @@ from . import brewzilla_manual_brew_control as _manual_brew_control
 from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
 from . import brewzilla_supervised_readback_grace as _supervised_readback_grace
 from . import brewzilla_phase_authority as _phase_authority
+from . import brewzilla_rapt_profile_control_bridge as _rapt_profile_control_bridge
 from . import brewzilla_paused_guard as _paused_guard
 from . import brewzilla_paused_heatstrike_guard as _paused_heatstrike_guard
 from . import brewzilla_execution_guard as _gate
@@ -127,6 +128,11 @@ _supervised_readback_grace.install_supervised_readback_grace()
 # controller may modulate heat/pump without per-write confirmations while all
 # lower ABORT/safety guards remain intact.
 _phase_authority.install_phase_authority()
+
+# RAPT profile data is another process/target source, not another heat/pump
+# controller. Feed its active step/target into the same BA regulator and
+# supervised policy used for Brew Tracker while keeping source-loss fail-passive.
+_rapt_profile_control_bridge.install_rapt_profile_control_bridge()
 
 # Install absolutely last: ordinary RCL/process telemetry loss stops BA writes
 # and leaves BrewZilla's last local target/output state untouched. ABORT and
