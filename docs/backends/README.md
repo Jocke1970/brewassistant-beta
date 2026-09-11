@@ -17,6 +17,7 @@ This `docs/backends/` directory remains useful for deeper architecture notes, pr
 | Cooling | [`../../custom_components/brewassistant/cooling/README.md`](../../custom_components/brewassistant/cooling/README.md) |
 | Fermentation Tracking | [`../../custom_components/brewassistant/fermentation_tracking/README.md`](../../custom_components/brewassistant/fermentation_tracking/README.md) |
 | Fermentation Chamber provider | [`../../custom_components/brewassistant/fermentation_chamber/README.md`](../../custom_components/brewassistant/fermentation_chamber/README.md) |
+| Grainfather Fermenter provider scaffold | [`../../custom_components/brewassistant/grainfather_fermenter/README.md`](../../custom_components/brewassistant/grainfather_fermenter/README.md) |
 | Fermentation compatibility layer | [`../../custom_components/brewassistant/fermentation/README.md`](../../custom_components/brewassistant/fermentation/README.md) |
 | Carbonation | [`../../custom_components/brewassistant/carbonation_backend/README.md`](../../custom_components/brewassistant/carbonation_backend/README.md) |
 | Kegerator Climate Supervisor | [`../../custom_components/brewassistant/climate_backend/README.md`](../../custom_components/brewassistant/climate_backend/README.md) |
@@ -28,7 +29,7 @@ This `docs/backends/` directory remains useful for deeper architecture notes, pr
 
 | Document | Role |
 | --- | --- |
-| [`fermentation-control.md`](./fermentation-control.md) | Common fermentation strategy -> selected physical provider -> local regulator contract. Defines chamber as the current provider and the rules future providers such as Grainfather fermenters must follow. |
+| [`fermentation-control.md`](./fermentation-control.md) | Common fermentation strategy -> selected physical provider -> local regulator contract. Defines chamber as the current writable provider and Grainfather fermenter as a parked read-only provider scaffold awaiting live hardware validation. |
 
 ## Longer reference documents
 
