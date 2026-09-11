@@ -92,8 +92,9 @@ cards:
             {% set stage_active = stage.get('active') or (current_stage_index is not none and current_stage_index | int == stage_index) %}
             {% set stage_paused = stage.get('paused') %}
             {% set stage_passed = current_stage_index is not none and stage_index < current_stage_index | int %}
-            {% set stage_marker = '⏸' if stage_active and stage_paused else '▶' if stage_active else '✓' if stage.get('completed') or stage_passed else '○' %}
-          ### {{ stage_marker }} {{ stage_name }}
+            {% set stage_marker = '▶' if stage_active else '✓' if stage.get('completed') or stage_passed else '○' %}
+            {% set stage_state = ' · paused' if stage_active and stage_paused else '' %}
+          ### {{ stage_marker }} {{ stage_name }}{{ stage_state }}
           {% set stage_duration = stage.get('duration') | float(0) %}
           {% if stage_duration > 0 %}_{{ (stage_duration / 60) | round(0) | int }} min total_{% endif %}
 
@@ -110,9 +111,15 @@ cards:
               {% set at_seconds = step.get('time') | float(0) %}
               {% set value = step.get('value') %}
               {% set value_num = value | float(0) if value is not none else 0 %}
+              {% if value_num == (value_num | int) %}
+                {% set temp_display = value_num | int %}
+              {% else %}
+                {% set temp_display = value_num | round(1) %}
+              {% endif %}
               {% set raw_active = stage_active and raw_step_index is not none and raw_step_index | int == step_index %}
               {% set passed = stage_passed or (stage_active and raw_step_index is not none and step_index < raw_step_index | int) %}
-              {% set marker = '⏸' if raw_active and stage_paused else '▶' if step.get('active') or raw_active else '✓' if step.get('completed') or passed else '○' %}
+              {% set marker = '▶' if step.get('active') or raw_active else '✓' if step.get('completed') or passed else '○' %}
+              {% set active_state = ' · paused' if raw_active and stage_paused else '' %}
               {% set checkpoint = step.get('pause_before') or step.get('pauseBefore') or name_l.startswith('paus') %}
 
               {% if kind == 'mash' and name_l == 'start' %}
@@ -134,7 +141,7 @@ cards:
               {% elif stage_name_l == 'boil' and ('boil addition' in desc_l or 'boil addition' in tooltip_l or 'kokgiva' in desc_l or 'kokgiva' in tooltip_l) %}
                 {% set label = 'Boil addition' %}
               {% elif kind in ['ramp', 'event'] and value_num > 0 %}
-                {% set label = tooltip or desc or ('Heat to ' ~ value_num ~ ' °C') %}
+                {% set label = tooltip or desc or ('Heat to ' ~ temp_display ~ ' °C') %}
               {% elif raw_name %}
                 {% set label = raw_name %}
               {% elif desc %}
@@ -143,10 +150,14 @@ cards:
                 {% set label = 'Step ' ~ loop.index %}
               {% endif %}
 
+              {% set detail = desc %}
+              {% if label in ['Mash additions', 'Boil addition', 'Spices'] and '</br>' in desc %}
+                {% set detail = desc.split('</br>', 1)[1] %}
+              {% endif %}
               {% set show_temp = value is not none and value_num > 0 and not (kind in ['ramp', 'event'] and (tooltip or desc)) %}
-              {% set show_anchor = at_seconds > 0 and duration_seconds <= 0 and not (name_l == 'start' and kind in ['mash', 'boil']) %}
-          - {{ marker }} **{{ label }}**{% if checkpoint %} · ⏸ confirm{% endif %}{% if show_temp %} · {{ value_num | round(1) }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif show_anchor %} · at {{ (at_seconds / 60) | round(0) | int }} min remaining{% endif %}{% if desc and desc != label %}  
-            _{{ desc }}_{% endif %}
+              {% set show_anchor = at_seconds > 0 and duration_seconds <= 0 and not (name_l == 'start' and kind in ['mash', 'boil']) and not (kind in ['ramp', 'event'] and value_num > 0) %}
+          - {{ marker }} **{{ label }}**{{ active_state }}{% if checkpoint %} · confirm{% endif %}{% if show_temp %} · {{ temp_display }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif show_anchor %} · at {{ (at_seconds / 60) | round(0) | int }} min remaining{% endif %}{% if detail and detail != label %}  
+            _{{ detail }}_{% endif %}
             {% endfor %}
           {% endfor %}
 
