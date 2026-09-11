@@ -89,9 +89,43 @@ def test_swedish_cards_keep_same_action_references() -> None:
         )
 
 
-def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -> None:
-    """The general Brewday CONFIRM control must only pulse for a pending plan."""
+def test_brewday_modular_cards_exist() -> None:
+    """Reusable Brewday building blocks must remain separately distributable."""
+    for filename in (
+        "brewassistant_brewday.yaml",
+        "brewday_operator_actions.yaml",
+        "brewday_details.yaml",
+        "brewday_physical_timing.yaml",
+        "brewtracker_runtime.yaml",
+        "rapt_profile_runtime.yaml",
+        "brewzilla_mash_in_controls.yaml",
+        "brewassistant_brewday_runtime_flow.yaml",
+    ):
+        assert (CARDS_DIR / filename).is_file()
+        assert (CARDS_DIR / filename.replace(".yaml", "_sv.yaml")).is_file()
+
+
+def test_brewday_overview_stays_action_free() -> None:
+    """The Brewday overview is a reusable status card, not a personal cockpit."""
+    forbidden = (
+        "brewassistant.manual_brewday_prepare",
+        "button.brewassistant_confirm_supervised_apply",
+        "button.brewassistant_cancel_supervised_apply",
+        "button.brewassistant_abort_brewday",
+        "button.brewassistant_rearm_brewday_control",
+        "button.brewassistant_mash_in_started",
+        "button.brewassistant_mash_in_complete",
+    )
     for filename in ("brewassistant_brewday.yaml", "brewassistant_brewday_sv.yaml"):
+        source = (CARDS_DIR / filename).read_text(encoding="utf-8")
+        assert "name: Brewday" in source
+        for ref in forbidden:
+            assert ref not in source
+
+
+def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -> None:
+    """The modular Brewday CONFIRM control must only pulse for a pending plan."""
+    for filename in ("brewday_operator_actions.yaml", "brewday_operator_actions_sv.yaml"):
         source = (CARDS_DIR / filename).read_text(encoding="utf-8")
         assert "sensor.brewassistant_brewzilla_pending_action" in source
         assert "ba-confirm-pulse" in source
@@ -102,22 +136,23 @@ def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -
 
 def test_brewday_supervised_action_row_is_only_rendered_for_real_pending_action() -> None:
     """CONFIRM/REJECT should disappear completely when no operator action is pending."""
-    block_start = """    - type: conditional
+    expected_guard = '''    - type: conditional
       conditions:
         - entity: sensor.brewassistant_brewzilla_pending_action
-"""
-    block_end = """      card:
+          state_not: "unknown"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "unavailable"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "none"
+        - entity: sensor.brewassistant_brewzilla_pending_action
+          state_not: "idle"
+      card:
         type: horizontal-stack
-"""
+'''
 
-    for filename in ("brewassistant_brewday.yaml", "brewassistant_brewday_sv.yaml"):
+    for filename in ("brewday_operator_actions.yaml", "brewday_operator_actions_sv.yaml"):
         source = (CARDS_DIR / filename).read_text(encoding="utf-8")
-        assert block_start in source
-        tail = source.split(block_start, 1)[1]
-        assert block_end in tail
-        guard = tail.split(block_end, 1)[0]
-        for state in ("unknown", "unavailable", "none", "idle"):
-            assert re.search(rf"state_not:\s*['\"]?{state}['\"]?", guard)
+        assert expected_guard in source
         assert "button.brewassistant_confirm_supervised_apply" in source
         assert "button.brewassistant_cancel_supervised_apply" in source
 

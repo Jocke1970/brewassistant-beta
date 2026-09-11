@@ -27,6 +27,8 @@ from . import brewzilla_manual_brew_control as _manual_brew_control
 from . import brewzilla_supervised_runtime_guard as _supervised_runtime_guard
 from . import brewzilla_supervised_readback_grace as _supervised_readback_grace
 from . import brewzilla_phase_authority as _phase_authority
+from . import brewzilla_brewtracker_pause_checkpoint_guard as _brewtracker_pause_checkpoint_guard
+from . import brewzilla_rapt_profile_control_bridge as _rapt_profile_control_bridge
 from . import brewzilla_paused_guard as _paused_guard
 from . import brewzilla_paused_heatstrike_guard as _paused_heatstrike_guard
 from . import brewzilla_execution_guard as _gate
@@ -44,7 +46,7 @@ from .brewzilla_temp_filter import install_temp_filter as _install_temp
 def _reported_entity_age_seconds(entity_state: State | None) -> int | None:
     """Return age since HA last received/reported this entity.
 
-    CoordinatorEntity may report the same value repeatedly.  Control freshness
+    CoordinatorEntity may report the same value repeatedly. Control freshness
     must follow that report traffic rather than treating an unchanged physical
     value as a dead cloud connection.
     """
@@ -66,9 +68,9 @@ def _value_entity_age_seconds(entity_state: State | None) -> int | None:
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
 
 
-# RCL/control freshness and physical process freshness use report age.  A stable
+# RCL/control freshness and physical process freshness use report age. A stable
 # temperature or target is a valid value and must not become "stale" merely
-# because it has not changed.  Learning keeps value-change age separately.
+# because it has not changed. Learning keeps value-change age separately.
 _orchestration._entity_age_seconds = _reported_entity_age_seconds
 _learning._age_seconds = _value_entity_age_seconds
 
@@ -125,7 +127,7 @@ _local_regulation_heat_guard.install_local_regulation_heat_guard()
 
 # Keep the narrow Brewfather paused->running auto-complete bridge. Its older
 # target-safe-down helpers are harmless once Mash-In Started has already made
-# the authoritative 71.8 -> mash-target downshift.
+# the authoritative strike -> mash-target downshift.
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
 
 # Consolidated boundary installed after the lower safety/apply chain: canonical
@@ -145,6 +147,17 @@ _supervised_readback_grace.install_supervised_readback_grace()
 # controller may modulate heat/pump without per-write confirmations while all
 # lower ABORT/safety guards remain intact.
 _phase_authority.install_phase_authority()
+
+# Explicit zero-minute PAUS/PAUSE recipe checkpoints keep Brewfather's own
+# timeline frozen while BA/BZ finishes only the checkpoint's current target.
+# Install after the generic/supervised chain so next-step/strike latches cannot
+# pre-actuate a later target; independent safety/fail-passive guards still win.
+_brewtracker_pause_checkpoint_guard.install_brewtracker_pause_checkpoint_guard()
+
+# RAPT profile data is another process/target source, not another heat/pump
+# controller. Feed its active step/target into the same BA regulator and
+# supervised policy used for Brew Tracker while keeping source-loss fail-passive.
+_rapt_profile_control_bridge.install_rapt_profile_control_bridge()
 
 # Install absolutely last: ordinary RCL/process telemetry loss stops BA writes
 # and leaves BrewZilla's last local target/output state untouched. ABORT and

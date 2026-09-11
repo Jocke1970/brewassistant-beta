@@ -1,1066 +1,149 @@
 type: conditional
 conditions:
   - entity: switch.brewassistant_show_brewday
-    state: 'on'
+    state: "on"
 card:
-  type: vertical-stack
-  cards:
-    - type: custom:button-card
-      entity: sensor.brewassistant_brewday_runtime_summary
-      name: Bryggdagsruntime
-      icon: |
-        [[[
-          const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'unknown';
-          const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
-          if (state === 'aborted') return 'mdi:alert-octagon-outline';
-          if (state === 'paused') return 'mdi:pause-circle-outline';
-          if (state === 'completed' || state === 'finished') return 'mdi:check-decagram-outline';
-          if (stage.includes('mash')) return 'mdi:pot-steam-outline';
-          if (stage.includes('boil')) return 'mdi:kettle-steam-outline';
-          if (stage.includes('cool') || stage.includes('chill')) return 'mdi:snowflake-thermometer';
-          if (state === 'running' || state === 'live') return 'mdi:play-circle-outline';
-          return 'mdi:beer-outline';
-        ]]]
-      show_state: false
-      show_label: true
-      tap_action:
-        action: more-info
-      hold_action:
-        action: more-info
-      label: |
-        [[[
-          function clean(v) {
-            if (v === undefined || v === null) return null;
-            const s = String(v);
-            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-          }
-          function n(id) {
-            const raw = states[id]?.state;
-            const val = Number(String(raw ?? '').replace(',', '.'));
-            return Number.isFinite(val) ? val : null;
-          }
-          function short(v, max = 48) {
-            const s = String(v ?? '—');
-            return s.length > max ? s.slice(0, max - 1) + '…' : s;
-          }
-          function stateLabel(v) {
-            if (v === 'running' || v === 'live') return 'kör';
-            if (v === 'paused') return 'pausad';
-            if (v === 'completed' || v === 'finished') return 'klar';
-            if (v === 'awaiting_snapshot') return 'väntar på snapshot';
-            if (v === 'aborted') return 'ABORTERAD · styrning spärrad';
-            if (v === 'idle') return 'vilar';
-            return v;
-          }
+  type: custom:button-card
+  entity: sensor.brewassistant_brewday_runtime_summary
+  name: Brewday
+  icon: |
+    [[[
+      const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? 'unknown';
+      const stage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
+      if (state === 'aborted') return 'mdi:alert-octagon-outline';
+      if (state === 'paused') return 'mdi:pause-circle-outline';
+      if (state === 'completed' || state === 'finished') return 'mdi:check-decagram-outline';
+      if (stage.includes('mash')) return 'mdi:pot-steam-outline';
+      if (stage.includes('boil')) return 'mdi:kettle-steam-outline';
+      if (stage.includes('cool') || stage.includes('chill')) return 'mdi:snowflake-thermometer';
+      if (state === 'running' || state === 'live') return 'mdi:play-circle-outline';
+      return 'mdi:beer-outline';
+    ]]]
+  show_state: false
+  show_label: true
+  triggers_update:
+    - sensor.brewassistant_brewday_runtime_summary
+    - sensor.brewassistant_brewday_runtime_source
+    - sensor.brewassistant_brewday_runtime_state
+    - sensor.brewassistant_brewday_runtime_stage
+    - sensor.brewassistant_brewday_runtime_step
+    - sensor.brewassistant_brewday_runtime_next_step
+    - sensor.brewassistant_brewday_live_progress
+    - sensor.brewassistant_brewday_live_time_remaining_minutes
+    - sensor.brewassistant_brewday_stage_suggested_action
+    - sensor.brewassistant_brewday_stage_control_hint
+    - binary_sensor.brewzilla_profile_active
+  tap_action:
+    action: more-info
+  hold_action:
+    action: more-info
+  label: |
+    [[[
+      const clean = (v) => {
+        if (v === undefined || v === null) return null;
+        const s = String(v);
+        return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+      };
+      const num = (id) => {
+        const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+        return Number.isFinite(n) ? n : null;
+      };
+      const short = (v, max = 54) => {
+        const s = String(v ?? '—');
+        return s.length > max ? s.slice(0, max - 1) + '…' : s;
+      };
+      const source = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || 'None';
+      const state = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
+      const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
+      const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
+      const next = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
+      const progress = num('sensor.brewassistant_brewday_live_progress');
+      const remaining = num('sensor.brewassistant_brewday_live_time_remaining_minutes');
+      const action = clean(states['sensor.brewassistant_brewday_stage_suggested_action']?.state) || '—';
+      const control = clean(states['sensor.brewassistant_brewday_stage_control_hint']?.state) || '—';
+      const rapt = states['binary_sensor.brewzilla_profile_active'];
+      const raptObserved = rapt?.state === 'on' && rapt?.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime';
+      const lockedRapt = state === 'aborted' && source === 'None' && raptObserved;
+      const sourceIsRapt = source === 'RAPT BrewZilla Profile' || lockedRapt;
 
-          const summary = clean(states['sensor.brewassistant_brewday_runtime_summary']?.state) || '—';
-          const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
-          const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
-          const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
-          const next = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
-          const liveProgress = n('sensor.brewassistant_brewday_live_progress');
-          const remaining = n('sensor.brewassistant_brewday_live_time_remaining_minutes');
-          const stageEngine = clean(states['sensor.brewassistant_brewday_stage']?.state) || '—';
-          const statusLine = clean(states['sensor.brewassistant_brewday_stage_status_line']?.state) || summary;
-          const suggestedAction = clean(states['sensor.brewassistant_brewday_stage_suggested_action']?.state) || '—';
-          const controlHint = clean(states['sensor.brewassistant_brewday_stage_control_hint']?.state) || '—';
-          let headline = 'Bryggdag aktiv';
-          let badge = 'Kör';
-          let badgeIcon = 'mdi:play-circle-outline';
-          let chipBg = 'rgba(76,175,80,.12)';
-          let chipBorder = 'rgba(76,175,80,.24)';
-          if (runtimeState === 'aborted') {
-            headline = 'BRYGGDAG ABORTERAD'; badge = 'ABORT'; badgeIcon = 'mdi:alert-octagon-outline';
-            chipBg = 'rgba(244,67,54,.18)'; chipBorder = 'rgba(244,67,54,.46)';
-          } else if (runtimeState === 'paused') {
-            headline = 'Bryggdag pausad'; badge = 'Pausad'; badgeIcon = 'mdi:pause-circle-outline';
-            chipBg = 'rgba(255,193,7,.14)'; chipBorder = 'rgba(255,193,7,.28)';
-          } else if (runtimeState === 'completed' || runtimeState === 'finished') {
-            headline = 'Bryggdag klar'; badge = 'Klar'; badgeIcon = 'mdi:check-decagram-outline';
-            chipBg = 'rgba(76,175,80,.13)'; chipBorder = 'rgba(76,175,80,.28)';
-          } else if (runtimeState === 'awaiting_snapshot') {
-            headline = 'Väntar på snapshot'; badge = 'Väntar'; badgeIcon = 'mdi:cloud-sync-outline';
-            chipBg = 'rgba(33,150,243,.12)'; chipBorder = 'rgba(33,150,243,.24)';
-          } else if (runtimeState === 'idle') {
-            headline = 'Vilar'; badge = 'Vilar'; badgeIcon = 'mdi:sleep';
-            chipBg = 'rgba(127,127,127,.12)'; chipBorder = 'rgba(127,127,127,.20)';
-          }
+      const sourceLabel = lockedRapt
+        ? 'RAPT PROFILE · OBSERVERAD'
+        : source === 'RAPT BrewZilla Profile'
+          ? 'RAPT PROFILE'
+          : source === 'Brewfather Brew Tracker'
+            ? 'BREWTRACKER'
+            : source === 'Manual Brewday'
+              ? 'MANUAL'
+              : 'INGEN KÄLLA';
+      const sourceIcon = sourceIsRapt
+        ? 'mdi:playlist-play'
+        : source === 'Brewfather Brew Tracker'
+          ? 'mdi:timer-play-outline'
+          : source === 'Manual Brewday'
+            ? 'mdi:hand-back-right-outline'
+            : 'mdi:minus-circle-outline';
+      const baLabel = state === 'aborted' ? 'BREWASSISTANT LÅST' : 'BREWASSISTANT';
+      const chip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.5px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
 
-          const progressMain = Number.isFinite(liveProgress) ? `${liveProgress.toFixed(0)} %` : '—';
-          const remainingMain = Number.isFinite(remaining) ? `${remaining.toFixed(0)} min` : '—';
-          const progressWidth = Number.isFinite(liveProgress) ? Math.max(0, Math.min(100, liveProgress)) : 0;
-          const progressColor = runtimeState === 'aborted'
-            ? 'rgba(244,67,54,.82)'
-            : runtimeState === 'paused'
-              ? 'rgba(255,193,7,.82)'
-              : progressWidth >= 80
-                ? 'rgba(76,175,80,.82)'
-                : 'rgba(33,150,243,.82)';
-          const progressDetail = Number.isFinite(liveProgress)
-            ? `${progressMain} av aktuellt steg${Number.isFinite(remaining) ? ` · ${remainingMain} kvar` : ''} · ${short(step, 54)}`
-            : `Förlopp saknas för aktuellt steg · ${short(step, 54)}`;
-          const metric = (title, main, sub, icon, kind = 'neutral') => {
-            const bg = kind === 'blue' ? 'rgba(33,150,243,.09)' : kind === 'cyan' ? 'rgba(0,188,212,.10)' : kind === 'green' ? 'rgba(76,175,80,.11)' : kind === 'yellow' ? 'rgba(255,193,7,.13)' : kind === 'red' ? 'rgba(244,67,54,.11)' : 'rgba(127,127,127,.08)';
-            const border = kind === 'blue' ? 'rgba(33,150,243,.20)' : kind === 'cyan' ? 'rgba(0,188,212,.22)' : kind === 'green' ? 'rgba(76,175,80,.24)' : kind === 'yellow' ? 'rgba(255,193,7,.26)' : kind === 'red' ? 'rgba(244,67,54,.24)' : 'rgba(127,127,127,.14)';
-            return `<div style="min-width:0;min-height:58px;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12px;font-weight:950;line-height:1.12;white-space:normal;overflow-wrap:anywhere;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.12;margin-top:2px;white-space:normal;overflow-wrap:anywhere;">${sub}</div></div></div>`;
-          };
+      let headline = 'Bryggdag aktiv';
+      let badge = 'Kör';
+      let badgeBg = 'rgba(76,175,80,.12)';
+      let badgeBorder = 'rgba(76,175,80,.26)';
+      if (state === 'aborted') {
+        headline = 'BRYGGDAG ABORTERAD'; badge = 'ABORT'; badgeBg = 'rgba(244,67,54,.18)'; badgeBorder = 'rgba(244,67,54,.46)';
+      } else if (state === 'paused') {
+        headline = 'Bryggdag pausad'; badge = 'Pausad'; badgeBg = 'rgba(255,193,7,.14)'; badgeBorder = 'rgba(255,193,7,.30)';
+      } else if (state === 'completed' || state === 'finished') {
+        headline = 'Bryggdag klar'; badge = 'Klar';
+      } else if (state === 'awaiting_snapshot') {
+        headline = 'Väntar på snapshot'; badge = 'Väntar'; badgeBg = 'rgba(33,150,243,.12)'; badgeBorder = 'rgba(33,150,243,.26)';
+      } else if (state === 'source_unavailable') {
+        headline = 'Processkälla saknas'; badge = 'KÄLLA SAKNAS'; badgeBg = 'rgba(244,67,54,.15)'; badgeBorder = 'rgba(244,67,54,.36)';
+      } else if (state === 'inactive') {
+        headline = 'Processkälla stoppad'; badge = 'Stoppad'; badgeBg = 'rgba(127,127,127,.12)'; badgeBorder = 'rgba(127,127,127,.22)';
+      } else if (state === 'idle') {
+        headline = 'Vilar'; badge = 'Vilar'; badgeBg = 'rgba(127,127,127,.12)'; badgeBorder = 'rgba(127,127,127,.22)';
+      }
 
-          const statusBg = runtimeState === 'aborted' ? 'rgba(244,67,54,.12)' : 'rgba(76,175,80,.10)';
-          const statusBorder = runtimeState === 'aborted' ? 'rgba(244,67,54,.32)' : 'rgba(76,175,80,.24)';
-          const statusIcon = runtimeState === 'aborted' ? 'mdi:alert-octagon-outline' : 'mdi:check-circle-outline';
-          const statusText = runtimeState === 'aborted' ? summary : statusLine;
+      const pct = Number.isFinite(progress) ? `${progress.toFixed(0)} %` : '—';
+      const rem = Number.isFinite(remaining) ? `${remaining.toFixed(0)} min` : '—';
+      const sourceNote = lockedRapt ? '<br>RAPT-profil observerad · BA:s styrspärr är fortfarande aktiv' : '';
+      const metric = (title, main, sub) => `<div style="min-width:0;border-radius:12px;padding:7px 5px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><div style="font-size:8.5px;font-weight:950;opacity:.55;text-transform:uppercase;">${title}</div><div style="font-size:11.5px;font-weight:950;line-height:1.12;white-space:normal;overflow-wrap:anywhere;">${main}</div><div style="font-size:9px;font-weight:780;opacity:.58;margin-top:2px;">${sub}</div></div>`;
 
-          return `<div style="line-height:1.25;min-width:0;">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Operatörscockpit · runtime · fas · processöversikt</div><div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div></div><div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon><span>${badge}</span></div></div>
-            <div style="margin-top:8px;text-align:center;"><div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div><div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">${stateLabel(runtimeState)} · ${stage} · ${short(step, 48)}</div></div>
-            <div style="margin-top:11px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:9px;font-weight:950;letter-spacing:.06em;opacity:.58;text-transform:uppercase;"><span>Förlopp · aktuellt steg</span><span>${progressMain}</span></div>
-              <div style="margin-top:5px;height:8px;border-radius:999px;background:rgba(127,127,127,.16);overflow:hidden;"><div style="width:${progressWidth}%;height:8px;border-radius:999px;background:${progressColor};transition:width .35s ease, background .35s ease;"></div></div>
-              <div style="margin-top:5px;font-size:10.8px;font-weight:800;opacity:.68;text-align:center;">${progressDetail}</div>
-            </div>
-            <div style="margin-top:11px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;">
-              ${metric('Fas', stage, stageEngine, 'mdi:map-marker-path', 'blue')}
-              ${metric('Steg', step, 'nuvarande', 'mdi:format-list-checks', 'cyan')}
-              ${metric('Nästa', next, 'nästa', 'mdi:skip-next-circle-outline', 'neutral')}
-            </div>
-            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;">
-              ${metric('Åtgärd', suggestedAction, 'föreslagen', 'mdi:gesture-tap-button', suggestedAction !== '—' ? 'yellow' : 'neutral')}
-              ${metric('Styrning', controlHint, 'råd', 'mdi:shield-check-outline', 'neutral')}
-            </div>
-            <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${statusBg};border:1px solid ${statusBorder};"><ha-icon icon="${statusIcon}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${short(statusText, 120)}</div></div>
-          </div>`;
-        ]]]
-      styles:
-        card:
-          - border-radius: 22px
-          - padding: 14px
-          - overflow: hidden
-          - background: >-
-              linear-gradient(135deg, rgba(33,150,243,.10),
-              rgba(127,127,127,.035))
-          - border: 1px solid rgba(33,150,243,.20)
-          - box-shadow: 0 2px 10px rgba(0,0,0,.08)
-        grid:
-          - grid-template-areas: '"i n" "i l"'
-          - grid-template-columns: 42px minmax(0,1fr)
-          - grid-template-rows: min-content min-content
-          - column-gap: 12px
-        icon:
-          - width: 27px
-          - height: 27px
-        img_cell:
-          - width: 42px
-          - height: 42px
-          - border-radius: 50%
-          - background: rgba(33,150,243,.15)
-          - color: rgb(33,150,243)
-        name:
-          - justify-self: start
-          - align-self: end
-          - font-size: 15px
-          - font-weight: 950
-        label:
-          - justify-self: stretch
-          - text-align: left
-          - white-space: normal
-          - margin-top: 4px
-    - type: vertical-stack
-      cards:
-        - type: custom:button-card
-          entity: button.brewassistant_mash_in_started
-          name: STRIKE REDO · STARTA INMÄSKNING
-          icon: mdi:barley
-          show_state: false
-          show_label: true
-          triggers_update:
-            - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-            - sensor.brewassistant_brewzilla_control_reason
-            - sensor.brewfather_brew_tracker_status
-            - switch.brewzilla_pump
-            - number.brewzilla_pump_utilization
-          tap_action:
-            action: perform-action
-            perform_action: button.press
-            target:
-              entity_id: button.brewassistant_mash_in_started
-            confirmation:
-              text: >-
-                Börjar du mäska in nu? BrewAssistant stoppar pumpen och går till
-                mash_in_started medan malten tillsätts.
-          hold_action:
-            action: more-info
-          label: |
-            [[[
-              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-              const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-              const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || 'idle');
-              if (state !== 'ready_for_mash_in') return '';
-              const rawTarget = oz.mash_in_gate_current_target ?? oz.mash_in_gate_last_target ?? gate?.attributes?.last_target ?? gate?.attributes?.mash_in_gate_current_target;
-              const rawTemp = oz.mash_in_gate_current_temperature ?? gate?.attributes?.current_temperature ?? gate?.attributes?.mash_in_gate_current_temperature;
-              const target = Number(rawTarget);
-              const temp = Number(rawTemp);
-              const pump = String(states['switch.brewzilla_pump']?.state ?? '—');
-              const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-              const ftemp = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
-              const utilText = Number.isFinite(util) ? `${util.toFixed(0)} %` : '—';
-              return `<b>Strike redo · dags för inmäskning</b> · mål ${ftemp(target)} · process ${ftemp(temp)}<br>Cirkulation ${pump.toUpperCase()} · ${utilText}<br><b>Tryck kortet när du börjar tillsätta malten.</b>`;
-            ]]]
-          styles:
-            card:
-              - display: |
-                  [[[
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || 'idle');
-                    return state === 'ready_for_mash_in' ? 'block' : 'none';
-                  ]]]
-              - min-height: 78px
-              - padding: 10px 12px
-              - border-radius: 16px
-              - background: rgba(255,193,7,.14)
-              - border: 1px solid rgba(255,193,7,.48)
-              - box-shadow: 0 1px 6px rgba(255,193,7,.08)
-            grid:
-              - grid-template-areas: '"i n" "i l"'
-              - grid-template-columns: 32px minmax(0,1fr)
-              - column-gap: 9px
-            icon:
-              - width: 22px
-              - color: rgb(255,183,0)
-            name:
-              - justify-self: start
-              - font-size: 12.5px
-              - font-weight: 950
-            label:
-              - justify-self: start
-              - text-align: left
-              - white-space: normal
-              - font-size: 10.5px
-              - font-weight: 790
-              - line-height: 1.22
-              - opacity: 0.86
-        - type: custom:button-card
-          entity: sensor.brewfather_brew_tracker_status
-          name: |
-            [[[
-              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-              const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-              const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || 'idle');
-              if (state !== 'mash_in_started') return '';
-              const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
-              const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-              const pumpBad = pumpOn || (Number.isFinite(util) && util > 0.1);
-              return pumpBad
-                ? 'INMÄSKNING PÅGÅR · ⚠ PUMPEN ÄR INTE AV'
-                : 'INMÄSKNING PÅGÅR · VÄNTAR PÅ BF GO';
-            ]]]
-          icon: mdi:barley
-          show_state: false
-          show_label: true
-          triggers_update:
-            - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-            - sensor.brewassistant_brewzilla_control_reason
-            - sensor.brewfather_brew_tracker_status
-            - switch.brewzilla_pump
-            - number.brewzilla_pump_utilization
-          tap_action:
-            action: more-info
-          hold_action:
-            action: more-info
-          label: |
-            [[[
-              const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-              const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-              const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || 'idle');
-              if (state !== 'mash_in_started') return '';
-              const bf = String(states['sensor.brewfather_brew_tracker_status']?.state ?? '—');
-              const pump = String(states['switch.brewzilla_pump']?.state ?? '—');
-              const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-              const utilText = Number.isFinite(util) ? `${util.toFixed(0)} %` : '—';
-              const pumpBad = pump === 'on' || (Number.isFinite(util) && util > 0.1);
-              const instruction = bf.toLowerCase() === 'paused'
-                ? 'Rör in malten. När du är klar: tryck FORTSÄTT i Brewfather.'
-                : 'Brewfather har lämnat Paused · väntar på att BA slutför handoff.';
-              return `Brewfather ${bf} · Pump ${pump.toUpperCase()} · ${utilText}<br>${instruction}${pumpBad ? '<br><b>⚠ Pumpen ska vara OFF / 0 % under inmäskningen.</b>' : ''}`;
-            ]]]
-          styles:
-            card:
-              - display: |
-                  [[[
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || 'idle');
-                    return state === 'mash_in_started' ? 'block' : 'none';
-                  ]]]
-              - min-height: 78px
-              - padding: 10px 12px
-              - border-radius: 16px
-              - background: |
-                  [[[
-                    const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
-                    const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-                    return pumpOn || (Number.isFinite(util) && util > 0.1)
-                      ? 'rgba(244,67,54,.16)'
-                      : 'rgba(255,152,0,.16)';
-                  ]]]
-              - border: |
-                  [[[
-                    const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
-                    const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-                    return pumpOn || (Number.isFinite(util) && util > 0.1)
-                      ? '2px solid rgba(244,67,54,.58)'
-                      : '1px solid rgba(255,152,0,.52)';
-                  ]]]
-              - animation: ba-mashin-wait-pulse 1.45s ease-in-out infinite
-            grid:
-              - grid-template-areas: '"i n" "i l"'
-              - grid-template-columns: 32px minmax(0,1fr)
-              - column-gap: 9px
-            icon:
-              - width: 22px
-              - color: |
-                  [[[
-                    const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
-                    const util = Number.parseFloat(states['number.brewzilla_pump_utilization']?.state ?? '');
-                    return pumpOn || (Number.isFinite(util) && util > 0.1)
-                      ? 'rgb(244,67,54)'
-                      : 'rgb(255,152,0)';
-                  ]]]
-            name:
-              - justify-self: start
-              - font-size: 12.5px
-              - font-weight: 950
-            label:
-              - justify-self: start
-              - text-align: left
-              - white-space: normal
-              - font-size: 10.5px
-              - font-weight: 790
-              - line-height: 1.22
-              - opacity: 0.88
-          extra_styles: |
-            @keyframes ba-mashin-wait-pulse {
-              0%, 100% { transform: scale(1); filter: brightness(1); }
-              50% { transform: scale(1.008); filter: brightness(1.07); }
-            }
-            @media (prefers-reduced-motion: reduce) {
-              #card { animation: none !important; transform: none !important; }
-            }
-        - type: custom:button-card
-          entity: button.brewassistant_start_mash_circulation
-          name: Starta mäskcirkulation
-          icon: mdi:pump
-          show_state: false
-          show_label: true
-          tap_action:
-            action: perform-action
-            perform_action: button.press
-            target:
-              entity_id: button.brewassistant_start_mash_circulation
-          hold_action:
-            action: more-info
-          label: |
-            [[[
-              const pump = states['switch.brewzilla_pump']?.state ?? '—';
-              const util = states['number.brewzilla_pump_utilization']?.state ?? '—';
-              const button = states['button.brewassistant_start_mash_circulation'];
-              const buttonState = button ? 'knapp redo' : 'knapp saknas';
-              return `Pump ${pump} · utnyttjande ${util} %<br>Reservväg efter avslutad inmäskning när pumpen fortfarande är OFF/0 · ${buttonState}`;
-            ]]]
-          styles:
-            card:
-              - display: |
-                  [[[
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const pending = gate?.state === 'on';
-                    const gateState = gate?.attributes?.state || '';
-                    const completed = gate?.attributes?.completed_once === true || gateState === 'mash_in_complete' || !!gate?.attributes?.confirmed_at;
-                    const runtimeState = String(states['sensor.brewassistant_brewday_runtime_state']?.state ?? '').toLowerCase();
-                    const runtimeStage = String(states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '').toLowerCase();
-                    const activeMash = ['running','live','paused','awaiting_confirm','awaiting_snapshot'].includes(runtimeState)
-                      && runtimeStage.includes('mash');
-                    const pumpOn = states['switch.brewzilla_pump']?.state === 'on';
-                    const utilRaw = states['number.brewzilla_pump_utilization']?.state;
-                    const util = Number.parseFloat(utilRaw);
-                    const pumpStopped = !pumpOn && !Number.isNaN(util) && util <= 0.1;
-                    return (!pending && completed && activeMash && pumpStopped) ? 'block' : 'none';
-                  ]]]
-              - min-height: 66px
-              - padding: 9px 11px
-              - border-radius: 16px
-              - background: rgba(33,150,243,.10)
-              - border: 1px solid rgba(33,150,243,.28)
-            grid:
-              - grid-template-areas: '"i n" "i l"'
-              - grid-template-columns: 32px minmax(0,1fr)
-              - column-gap: 9px
-            icon:
-              - width: 21px
-              - color: rgb(33,150,243)
-            name:
-              - justify-self: start
-              - font-size: 12px
-              - font-weight: 950
-            label:
-              - justify-self: start
-              - text-align: left
-              - white-space: normal
-              - font-size: 10.3px
-              - font-weight: 760
-              - line-height: 1.2
-              - opacity: 0.78
-    - type: conditional
-      conditions:
-        - condition: or
-          conditions:
-            - condition: state
-              entity: sensor.brewassistant_brewfather_batch_phase
-              state: planning
-            - condition: state
-              entity: sensor.brewassistant_brewfather_batch_phase
-              state: brewing
-      card:
-        type: vertical-stack
-        cards:
-          - type: custom:button-card
-            entity: sensor.brewassistant_brewday_runtime_summary
-            name: BrewTracker-runtime
-            icon: mdi:timer-play-outline
-            show_state: false
-            show_label: true
-            triggers_update:
-              - sensor.brewassistant_brewfather_batch_phase
-              - sensor.brewassistant_brewday_runtime_summary
-              - sensor.brewassistant_brewday_runtime_state
-              - sensor.brewassistant_brewday_runtime_status
-              - sensor.brewassistant_brewday_runtime_stage
-              - sensor.brewassistant_brewday_runtime_step
-              - sensor.brewassistant_brewday_runtime_next_step
-              - sensor.brewassistant_brewday_live_progress
-              - sensor.brewassistant_brewday_live_time_remaining_minutes
-              - sensor.brewassistant_brewday_snapshot_age_minutes
-              - sensor.brewassistant_brewday_target_temperature
-              - sensor.brewfather_brew_tracker_status
-              - sensor.brewassistant_brewzilla_control_reason
-            tap_action:
-              action: more-info
-            hold_action:
-              action: call-service
-              service: brewassistant.force_brewfather_refresh
-            label: |
-              [[[
-                const clean = (v) => {
-                  if (v === undefined || v === null) return null;
-                  const s = String(v);
-                  return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-                };
-                const num = (id) => {
-                  const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
-                  return Number.isFinite(n) ? n : null;
-                };
-                const attrNum = (attrs, key) => {
-                  const n = Number(String(attrs?.[key] ?? '').replace(',', '.'));
-                  return Number.isFinite(n) ? n : null;
-                };
-                const boolish = (v) => {
-                  const s = String(v ?? '').toLowerCase();
-                  return v === true || ['on','true','yes','1'].includes(s);
-                };
-                const fmt = (n, u = '', d = 1) => Number.isFinite(n) ? `${n.toFixed(d)}${u ? ' ' + u : ''}` : '—';
-                const short = (v, m = 56) => String(v ?? '—').length > m ? String(v ?? '—').slice(0, m - 1) + '…' : String(v ?? '—');
-
-                const phase = clean(states['sensor.brewassistant_brewfather_batch_phase']?.state) || 'inactive';
-                const bfEntity = states['sensor.brewfather_brew_tracker_status'];
-                const bfStatus = clean(bfEntity?.state) || 'inactive';
-                const runtime = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
-                const status = clean(states['sensor.brewassistant_brewday_runtime_status']?.state) || runtime;
-                const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
-                const step = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
-                const next = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
-                const progress = num('sensor.brewassistant_brewday_live_progress');
-                const remaining = num('sensor.brewassistant_brewday_live_time_remaining_minutes');
-                const age = num('sensor.brewassistant_brewday_snapshot_age_minutes');
-                const target = num('sensor.brewassistant_brewday_target_temperature');
-                const progressWidth = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
-
-                const planning = phase === 'planning';
-                const prestart = phase === 'brewing' && runtime === 'idle' && String(bfStatus).toLowerCase() === 'paused';
-
-                const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                const cleanHeat = boolish(oz.clean_heat_strike_active);
-                const heatLatch = boolish(oz.heat_strike_latch_active);
-                const physicalPhase = clean(oz.advice_physical_phase) || '';
-                const mashGateState = clean(oz.mash_in_gate_state) || 'idle';
-                const preMashHeatstrike = !planning && !prestart && (cleanHeat || (heatLatch && String(physicalPhase).startsWith('pre_mash_in')));
-                const strikeTarget = attrNum(oz, 'heat_strike_target') ?? attrNum(oz, 'heat_strike_clean_control_target') ?? target;
-                const gateTemp = attrNum(oz, 'clean_heat_strike_gate_temperature');
-                const gateDelta = attrNum(oz, 'clean_heat_strike_gate_delta_to_target');
-                const safetyTemp = attrNum(oz, 'clean_heat_strike_safety_temperature');
-                const heat = attrNum(oz, 'desired_heat_utilization');
-                const pump = attrNum(oz, 'desired_pump_utilization');
-
-                let statusText;
-                let activeTitle;
-                let activeSub;
-                let nextBox;
-
-                if (planning) {
-                  statusText = 'PLANNING · Brewfather ansluten · BrewTracker ännu inte startad';
-                  activeTitle = 'BrewTracker redo';
-                  activeSub = 'Recept/batch är förberedd · ingen hot-side ownership';
-                  nextBox = 'Nästa: sätt batchen till Brewing. BrewAssistant tar fortfarande inte över förrän BrewTracker faktiskt startas med Play.';
-                } else if (prestart) {
-                  statusText = 'BREWING · PAUSAD PÅ START · väntar på Play';
-                  activeTitle = 'Väntar på BrewTracker Play';
-                  activeSub = 'Batchfasen är Brewing, men BrewAssistant äger inte hot-side ännu.';
-                  nextBox = 'Nästa: tryck Play / Starta mäsktimer i Brewfather. Först då får BrewTracker hot-side ownership.';
-                } else if (preMashHeatstrike) {
-                  statusText = `BF ${bfStatus} · BA styr fysisk heatstrike`;
-                  activeTitle = `BA Heatstrike ${fmt(strikeTarget, '°C')}`;
-                  activeSub = `Mash/BLE-gate ${fmt(gateTemp, '°C')} · Δ ${fmt(gateDelta, '°C')} · vörtsäkerhet ${fmt(safetyTemp, '°C')}`;
-                  nextBox = `Fysiskt nästa: nå strike → inmäskning → BF FORTSÄTT efter inmäskning`;
-                } else {
-                  const paused = String(bfStatus).toLowerCase() === 'paused' || String(status).toLowerCase() === 'paused';
-                  statusText = paused ? 'PAUSAD · väntar på operatör/BF FORTSÄTT' : `BF ${bfStatus} · ${runtime} / ${status} · ${stage}`;
-                  activeTitle = short(step, 64);
-                  activeSub = `Nuvarande steg · ${fmt(progress, '%', 0)} · ${fmt(remaining, 'min', 0)} kvar`;
-                  nextBox = `Nästa: ${short(next, 72)}`;
-                }
-
-                const phaseLabel = planning ? 'planning' : prestart ? 'pre-start' : phase;
-                const chipBg = planning
-                  ? 'rgba(255,193,7,.13)'
-                  : prestart
-                    ? 'rgba(76,175,80,.22)'
-                    : phase === 'brewing'
-                      ? 'rgba(244,67,54,.22)'
-                      : 'rgba(33,150,243,.11)';
-                const chipBorder = planning
-                  ? 'rgba(255,193,7,.28)'
-                  : prestart
-                    ? 'rgba(76,175,80,.50)'
-                    : phase === 'brewing'
-                      ? 'rgba(244,67,54,.50)'
-                      : 'rgba(33,150,243,.24)';
-                const fourthMain = preMashHeatstrike ? fmt(pump, '%', 0) : fmt(age, 'min');
-                const fourthLabel = preMashHeatstrike ? 'pumpblandning' : 'snapshot';
-
-                return `<div style="line-height:1.25;min-width:0;">
-                  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-                    <div style="min-width:0;"><div style="font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.62;text-transform:uppercase;">BrewTracker · bryggdag</div><div style="margin-top:3px;font-size:11px;font-weight:850;opacity:.72;">${statusText}</div></div>
-                    <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${planning || prestart ? 'mdi:timer-sand' : 'mdi:timer-play-outline'}" style="width:14px;height:14px;"></ha-icon><span>${phaseLabel}</span></div>
-                  </div>
-                  <div style="margin-top:10px;font-size:10px;font-weight:950;letter-spacing:.08em;opacity:.70;text-align:center;text-transform:uppercase;">AKTIVT NU</div>
-                  <div style="margin-top:3px;font-size:24px;font-weight:950;letter-spacing:-.04em;text-align:center;">${activeTitle}</div>
-                  <div style="margin:10px auto 0;max-width:320px;height:7px;border-radius:999px;background:rgba(127,127,127,.18);overflow:hidden;"><div style="width:${planning || prestart ? 0 : progressWidth}%;height:7px;border-radius:999px;background:rgba(33,150,243,.78);"></div></div>
-                  <div style="margin-top:7px;font-size:12px;font-weight:800;opacity:.72;text-align:center;">${activeSub}</div>
-                  <div style="margin-top:8px;border-radius:14px;padding:8px;background:${planning || prestart || preMashHeatstrike ? 'rgba(255,193,7,.10)' : 'rgba(127,127,127,.07)'};border:1px solid ${planning || prestart || preMashHeatstrike ? 'rgba(255,193,7,.26)' : 'rgba(127,127,127,.13)'};font-size:12px;font-weight:800;opacity:.82;text-align:center;">${nextBox}</div>
-                  <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
-                    <div style="border-radius:13px;padding:7px;background:rgba(33,150,243,.09);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmt(progress, '%', 0)}</b><br><span style="font-size:10px;opacity:.65;">förlopp</span></div>
-                    <div style="border-radius:13px;padding:7px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.22);text-align:center;"><b>${fmt(remaining, 'min', 0)}</b><br><span style="font-size:10px;opacity:.65;">återstår</span></div>
-                    <div style="border-radius:13px;padding:7px;background:rgba(76,175,80,.10);border:1px solid rgba(76,175,80,.22);text-align:center;"><b>${fmt(strikeTarget ?? target, '°C')}</b><br><span style="font-size:10px;opacity:.65;">${preMashHeatstrike ? 'strike-mål' : 'mål'}</span></div>
-                    <div style="border-radius:13px;padding:7px;background:rgba(127,127,127,.08);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${fourthMain}</b><br><span style="font-size:10px;opacity:.65;">${fourthLabel}</span></div>
-                  </div>
-                  ${preMashHeatstrike ? `<div style="margin-top:7px;font-size:10.8px;font-weight:800;opacity:.66;text-align:center;">Värme ${fmt(heat, '%', 0)} · pump ${fmt(pump, '%', 0)} · gate ${mashGateState}</div>` : ''}
-                </div>`;
-              ]]]
-            styles:
-              card:
-                - border-radius: 22px
-                - padding: 14px
-                - background: >-
-                    linear-gradient(135deg, rgba(33,150,243,.10),
-                    rgba(127,127,127,.035))
-                - border: 1px solid rgba(33,150,243,.20)
-                - box-shadow: 0 2px 10px rgba(0,0,0,.08)
-              grid:
-                - grid-template-areas: '"i n" "i l"'
-                - grid-template-columns: 42px minmax(0,1fr)
-                - column-gap: 12px
-              label:
-                - justify-self: stretch
-                - text-align: left
-                - white-space: normal
-          - type: custom:button-card
-            name: Uppdatera BF
-            icon: mdi:refresh
-            show_label: true
-            label: Tvinga ny BrewTracker-snapshot från Brewfather
-            tap_action:
-              action: call-service
-              service: brewassistant.force_brewfather_refresh
-            styles:
-              card:
-                - border-radius: 15px
-                - padding: 9px
-                - min-height: 54px
-                - background: rgba(33,150,243,.09)
-                - border: 1px solid rgba(33,150,243,.22)
-              grid:
-                - grid-template-areas: '"i n" "i l"'
-                - grid-template-columns: 34px minmax(0,1fr)
-                - column-gap: 8px
-              icon:
-                - width: 22px
-                - height: 22px
-                - color: rgb(33,150,243)
-              name:
-                - justify-self: start
-                - font-size: 11px
-                - font-weight: 950
-              label:
-                - justify-self: start
-                - text-align: left
-                - white-space: normal
-                - font-size: 9.5px
-                - font-weight: 750
-                - opacity: 0.68
-    - type: conditional
-      conditions:
-        - entity: switch.brewassistant_show_brewday
-          state: 'on'
-        - entity: sensor.brewassistant_brewday_runtime_state
-          state_not: idle
-      card:
-        type: custom:expander-card
-        title-card:
-          type: custom:button-card
-          entity: sensor.brewassistant_brewday_physical_timing_summary
-          name: Fysisk stegtid
-          icon: mdi:timer-outline
-          show_state: false
-          show_label: true
-          triggers_update:
-            - sensor.brewassistant_brewday_physical_timing_summary
-            - sensor.brewassistant_brewday_physical_timing_mode
-            - sensor.brewassistant_brewday_physical_elapsed_seconds
-            - sensor.brewassistant_brewday_physical_remaining_seconds
-            - sensor.brewassistant_brewday_physical_progress
-            - sensor.brewassistant_brewday_physical_ramp_rate
-            - sensor.brewassistant_brewday_physical_target_temperature
-          label: |
-            [[[
-              const a = entity?.attributes || {};
-              const mode = String(states['sensor.brewassistant_brewday_physical_timing_mode']?.state ?? a.mode ?? 'idle');
-              const step = a.step_name || 'Ingen aktiv mäsk-/ramptimer';
-              const target = Number(a.target_temperature);
-              const elapsed = Number(states['sensor.brewassistant_brewday_physical_elapsed_seconds']?.state ?? a.elapsed_seconds);
-              const remaining = Number(states['sensor.brewassistant_brewday_physical_remaining_seconds']?.state ?? a.remaining_seconds);
-              const mismatch = a.source_schedule_mismatch === true;
-              const fmt = (s) => {
-                if (!Number.isFinite(s)) return '—';
-                s = Math.max(0, Math.round(s));
-                const h = Math.floor(s / 3600);
-                const m = Math.floor((s % 3600) / 60);
-                const sec = s % 60;
-                return h > 0
-                  ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-                  : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-              };
-              let clock = fmt(elapsed);
-              if (mode.startsWith('hold')) clock = `${fmt(remaining)} kvar`;
-              if (mode.startsWith('waiting_for_target')) clock = `väntar på ${Number.isFinite(target) ? target.toFixed(1) + ' °C' : 'target'}`;
-              const warn = mismatch ? ' · ⚠ BF före fysisk process' : '';
-              return `${step} · ${clock}${warn}`;
-            ]]]
-          styles:
-            card:
-              - border-radius: 18px
-              - padding: 12px
-              - background: rgba(0,188,212,.075)
-              - border: 1px solid rgba(0,188,212,.20)
-            grid:
-              - grid-template-areas: '"i n" "i l"'
-              - grid-template-columns: 34px minmax(0,1fr)
-              - column-gap: 10px
-            icon:
-              - width: 22px
-              - height: 22px
-              - color: rgb(0,188,212)
-            name:
-              - justify-self: start
-              - font-size: 14px
-              - font-weight: 950
-            label:
-              - justify-self: start
-              - text-align: left
-              - white-space: normal
-              - font-size: 11.5px
-              - font-weight: 800
-              - opacity: 0.76
-        cards:
-          - type: custom:button-card
-            entity: sensor.brewassistant_brewday_physical_timing_summary
-            show_name: false
-            show_icon: false
-            show_state: false
-            show_label: true
-            triggers_update:
-              - sensor.brewassistant_brewday_physical_timing_summary
-              - sensor.brewassistant_brewday_physical_timing_mode
-              - sensor.brewassistant_brewday_physical_elapsed_seconds
-              - sensor.brewassistant_brewday_physical_remaining_seconds
-              - sensor.brewassistant_brewday_physical_progress
-              - sensor.brewassistant_brewday_physical_ramp_rate
-              - sensor.brewassistant_brewday_physical_target_temperature
-            label: |
-              [[[
-                const a = entity?.attributes || {};
-                const mode = String(a.mode ?? 'idle');
-                const kind = String(a.step_kind ?? '—');
-                const step = a.step_name || '—';
-                const current = Number(a.current_temperature);
-                const target = Number(a.target_temperature);
-                const elapsed = Number(a.elapsed_seconds);
-                const wall = Number(a.wall_elapsed_seconds);
-                const remaining = Number(a.remaining_seconds);
-                const total = Number(a.total_seconds);
-                const progress = Number(a.progress_percent);
-                const rate = Number(a.average_c_per_min);
-                const mismatch = a.source_schedule_mismatch === true;
-                const context = a.context || 'Unknown';
-                const source = a.temperature_entity || '—';
-                const history = Array.isArray(a.history) ? a.history : [];
-                const fmt = (s) => {
-                  if (!Number.isFinite(s)) return '—';
-                  s = Math.max(0, Math.round(s));
-                  const h = Math.floor(s / 3600);
-                  const m = Math.floor((s % 3600) / 60);
-                  const sec = s % 60;
-                  return h > 0
-                    ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-                    : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-                };
-                const ftemp = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
-                const pct = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
-                const currentClock = kind === 'hold' && a.timer_started_at
-                  ? `${fmt(remaining)} kvar · ${fmt(elapsed)} / ${fmt(total)}`
-                  : kind === 'hold'
-                    ? `Väntar på target · ${ftemp(current)} → ${ftemp(target)}`
-                    : kind === 'ramp'
-                      ? `${fmt(elapsed)} · ${ftemp(current)} → ${ftemp(target)}${Number.isFinite(rate) ? ` · ${rate.toFixed(2)} °C/min` : ''}`
-                      : 'Ingen aktiv fysisk timer';
-                const rows = history.slice(-10).reverse().map((r) => {
-                  const rk = String(r.kind || '');
-                  const dur = fmt(Number(r.duration_seconds));
-                  const wallDur = fmt(Number(r.wall_duration_seconds));
-                  const rr = Number(r.average_c_per_min);
-                  const from = Number(r.from_temperature);
-                  const to = Number(r.target_temperature);
-                  const detail = rk === 'ramp'
-                    ? `${ftemp(from)} → ${ftemp(to)} · ${dur}${Number.isFinite(rr) ? ` · ${rr.toFixed(2)} °C/min` : ''}${wallDur !== dur ? ` · väggtid ${wallDur}` : ''}`
-                    : `${ftemp(to)} · hold ${dur}`;
-                  return `<div style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.10);"><div style="font-size:10px;font-weight:950;text-transform:uppercase;opacity:.62;">${rk || 'steg'}</div><div style="font-size:11px;font-weight:800;">${r.name || '—'}<br><span style="opacity:.65;">${detail}</span></div></div>`;
-                }).join('');
-                return `<div style="line-height:1.3;min-width:0;">
-                  <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">${kind} · ${context}</div><div style="font-size:20px;font-weight:950;margin-top:2px;">${step}</div></div><div style="font-size:11px;font-weight:950;padding:5px 8px;border-radius:999px;background:${mismatch ? 'rgba(255,193,7,.15)' : 'rgba(76,175,80,.11)'};border:1px solid ${mismatch ? 'rgba(255,193,7,.30)' : 'rgba(76,175,80,.22)'};white-space:nowrap;">${mismatch ? 'BF ≠ fysisk' : mode}</div></div>
-                  <div style="margin-top:10px;font-size:25px;font-weight:950;text-align:center;letter-spacing:-.03em;">${currentClock}</div>
-                  ${kind === 'hold' && a.timer_started_at ? `<div style="margin:9px auto 0;height:7px;border-radius:999px;background:rgba(127,127,127,.16);overflow:hidden;"><div style="width:${pct}%;height:7px;background:rgba(0,188,212,.75);"></div></div>` : ''}
-                  <div style="margin-top:8px;font-size:10.5px;font-weight:750;opacity:.62;text-align:center;">Processgivare: ${source} · target nådd ${a.target_reached_at || 'nej'} · paus ${fmt(Number(a.paused_seconds))}</div>
-                  ${mismatch ? `<div style="margin-top:9px;padding:8px;border-radius:12px;background:rgba(255,193,7,.11);border:1px solid rgba(255,193,7,.28);font-size:11px;font-weight:850;">⚠ Brewfather-källan har gått vidare före den fysiska timern. Telemetrin fortsätter observera det fysiska steget och påverkar inte styrningen.</div>` : ''}
-                  <div style="margin-top:12px;font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">Steg- och ramphistorik · denna bryggning</div>
-                  <div style="margin-top:4px;">${rows || '<div style="padding:8px 0;font-size:11px;font-weight:750;opacity:.60;">Ingen avslutad fysisk ramp/hold ännu.</div>'}</div>
-                </div>`;
-              ]]]
-            styles:
-              card:
-                - border-radius: 16px
-                - padding: 12px
-                - background: rgba(127,127,127,.035)
-                - border: 1px solid rgba(127,127,127,.12)
-              label:
-                - justify-self: stretch
-                - text-align: left
-                - white-space: normal
-    - type: conditional
-      conditions:
-        - entity: sensor.brewassistant_brewday_runtime_state
-          state: idle
-        - entity: sensor.brewfather_brew_tracker_status
-          state_not: active
-      card:
-        type: custom:button-card
-        name: FÖRBERED MANUELL BRYGGDAG
-        icon: mdi:clipboard-check-outline
-        show_state: false
-        show_label: true
-        label: Aktiverar Manual Brewday utan att starta bryggningen
-        tap_action:
-          action: call-service
-          service: brewassistant.manual_brewday_prepare
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 12px
-            - min-height: 64px
-            - background: rgba(255,152,0,.10)
-            - border: 1px solid rgba(255,152,0,.24)
-          icon:
-            - width: 24px
-            - height: 24px
-            - color: rgb(255,152,0)
-          name:
-            - font-size: 12px
-            - font-weight: 950
-          label:
-            - font-size: 10.5px
-            - font-weight: 750
-            - opacity: 0.72
-            - white-space: normal
-    - type: conditional
-      conditions:
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: unknown
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: unavailable
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: none
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: idle
-      card:
-        type: horizontal-stack
-        cards:
-          - type: custom:button-card
-            entity: button.brewassistant_confirm_supervised_apply
-            triggers_update:
-              - sensor.brewassistant_brewzilla_pending_action
-            name: |
-              [[[
-                const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
-                return pending ? 'BEKRÄFTA ÅTGÄRD' : 'BEKRÄFTA';
-              ]]]
-            icon: mdi:check-decagram
-            show_label: true
-            label: |
-              [[[
-                const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                const pending = !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw);
-                return pending ? 'KVITTENS VÄNTAR' : 'Ingen väntande åtgärd';
-              ]]]
-            tap_action:
-              action: call-service
-              service: button.press
-              target:
-                entity_id: button.brewassistant_confirm_supervised_apply
-              confirmation:
-                text: Bekräfta väntande övervakad BrewAssistant-åtgärd?
-            styles:
-              card:
-                - border-radius: 16px
-                - padding: 10px
-                - min-height: 58px
-                - background: |
-                    [[[
-                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                        ? 'rgba(76,175,80,.22)' : 'rgba(76,175,80,.10)';
-                    ]]]
-                - border: |
-                    [[[
-                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                        ? '2px solid rgba(76,175,80,.72)' : '1px solid rgba(76,175,80,.24)';
-                    ]]]
-                - box-shadow: |
-                    [[[
-                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                        ? '0 0 0 2px rgba(76,175,80,.12)' : 'none';
-                    ]]]
-                - animation: |
-                    [[[
-                      const raw = String(states['sensor.brewassistant_brewzilla_pending_action']?.state ?? '').toLowerCase();
-                      return !['', 'unknown', 'unavailable', 'none', 'idle'].includes(raw)
-                        ? 'ba-confirm-pulse 1.4s ease-in-out infinite' : 'none';
-                    ]]]
-              icon:
-                - color: rgb(76,175,80)
-              name:
-                - font-size: 12px
-                - font-weight: 950
-              label:
-                - font-size: 9.5px
-                - font-weight: 900
-                - opacity: 0.72
-            extra_styles: |
-              @keyframes ba-confirm-pulse {
-                0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(76,175,80,.10); }
-                50% { transform: scale(1.018); box-shadow: 0 0 0 6px rgba(76,175,80,.18); }
-              }
-              @media (prefers-reduced-motion: reduce) {
-                #card { animation: none !important; transform: none !important; }
-              }
-          - type: custom:button-card
-            entity: button.brewassistant_cancel_supervised_apply
-            name: AVVISA ÅTGÄRD
-            icon: mdi:cancel
-            tap_action:
-              action: call-service
-              service: button.press
-              target:
-                entity_id: button.brewassistant_cancel_supervised_apply
-              confirmation:
-                text: Avvisa väntande övervakad BrewAssistant-åtgärd?
-            styles:
-              card:
-                - border-radius: 16px
-                - padding: 10px
-                - background: rgba(255,152,0,.09)
-                - border: 1px solid rgba(255,152,0,.24)
-              name:
-                - font-size: 12px
-                - font-weight: 950
-    - type: conditional
-      conditions:
-        - entity: sensor.brewassistant_brewday_runtime_state
-          state_not: idle
-      card:
-        type: horizontal-stack
-        cards:
-          - type: custom:button-card
-            entity: button.brewassistant_abort_brewday
-            name: ABORT BRYGGDAG
-            icon: mdi:alert-octagon-outline
-            show_label: true
-            label: Safe-down + spärrar BA-styrning
-            tap_action:
-              action: call-service
-              service: button.press
-              target:
-                entity_id: button.brewassistant_abort_brewday
-              confirmation:
-                text: >-
-                  ABORT bryggdagen? Värmare och pump stoppas, utilization
-                  nollställs och BrewAssistant-styrning spärras tills du
-                  återaktiverar den.
-            styles:
-              card:
-                - border-radius: 16px
-                - padding: 10px
-                - min-height: 62px
-                - background: rgba(244,67,54,.16)
-                - border: 2px solid rgba(244,67,54,.50)
-              icon:
-                - color: rgb(244,67,54)
-              name:
-                - font-size: 12px
-                - font-weight: 950
-              label:
-                - font-size: 9.5px
-                - font-weight: 850
-                - opacity: 0.78
-          - type: conditional
-            conditions:
-              - entity: sensor.brewassistant_brewday_operator_control_state
-                state: aborted
-            card:
-              type: custom:button-card
-              entity: button.brewassistant_rearm_brewday_control
-              name: ÅTERAKTIVERA STYRNING
-              icon: mdi:shield-check-outline
-              show_label: true
-              label: Släpper BA:s operator-ABORT
-              tap_action:
-                action: call-service
-                service: button.press
-                target:
-                  entity_id: button.brewassistant_rearm_brewday_control
-                confirmation:
-                  text: >-
-                    Återaktivera BrewAssistant-styrning? BrewZillas separata
-                    ABORT-lockout gäller fortfarande tills den löper ut.
-              styles:
-                card:
-                  - border-radius: 16px
-                  - padding: 10px
-                  - min-height: 62px
-                  - background: rgba(255,193,7,.14)
-                  - border: 1px solid rgba(255,193,7,.34)
-                icon:
-                  - color: rgb(255,193,7)
-                name:
-                  - font-size: 11px
-                  - font-weight: 950
-                label:
-                  - font-size: 9.5px
-                  - font-weight: 850
-                  - opacity: 0.78
-    - type: custom:expander-card
-      title-card:
-        type: custom:button-card
-        entity: sensor.brewassistant_brewday_runtime_summary
-        name: Bryggdag – detaljer
-        icon: mdi:tune-variant
-        show_state: false
-        show_label: true
-        label: |
-          [[[
-            const state = states['sensor.brewassistant_brewday_runtime_state']?.state ?? '—';
-            const stage = states['sensor.brewassistant_brewday_runtime_stage']?.state ?? '—';
-            const step = states['sensor.brewassistant_brewday_runtime_step']?.state ?? '—';
-            const events = states['sensor.brewassistant_brewday_event_log_event_count']?.state ?? '0';
-            return `${state} · ${stage} · ${step} · händelser ${events}`;
-          ]]]
-        styles:
-          card:
-            - border-radius: 18px
-            - padding: 12px
-            - background: rgba(127,127,127,.055)
-            - border: 1px solid rgba(127,127,127,.14)
-          grid:
-            - grid-template-areas: '"i n" "i l"'
-            - grid-template-columns: 34px minmax(0,1fr)
-            - column-gap: 10px
-          icon:
-            - width: 22px
-            - height: 22px
-          name:
-            - justify-self: start
-            - font-size: 14px
-            - font-weight: 950
-          label:
-            - justify-self: start
-            - text-align: left
-            - white-space: normal
-            - font-size: 11.5px
-            - font-weight: 750
-            - opacity: 0.72
-      cards:
-        - type: entities
-          show_header_toggle: false
-          entities:
-            - entity: sensor.brewassistant_brewday_runtime_summary
-              name: Runtimesammanfattning
-            - entity: sensor.brewassistant_brewday_runtime_state
-              name: Runtimestatus
-            - entity: sensor.brewassistant_brewday_operator_control_state
-              name: Operatörsstyrning
-            - entity: sensor.brewassistant_brewday_runtime_stage
-              name: Runtimefas
-            - entity: sensor.brewassistant_brewday_runtime_step
-              name: Runtimesteg
-            - entity: sensor.brewassistant_brewday_runtime_next_step
-              name: Nästa steg
-            - entity: sensor.brewassistant_brewday_live_time_remaining_minutes
-              name: Återstående minuter
-            - entity: sensor.brewassistant_brewday_live_progress
-              name: Förlopp live
-            - entity: sensor.brewassistant_brewday_stage_status_line
-              name: Statusrad för fas
-            - entity: sensor.brewassistant_brewday_stage_suggested_action
-              name: Föreslagen åtgärd
-            - entity: sensor.brewassistant_brewday_stage_control_hint
-              name: Styrningsråd
-            - entity: binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-              name: Mash-In gate pending
-            - entity: button.brewassistant_mash_in_started
-              name: Inmäskning påbörjad
-            - entity: button.brewassistant_mash_in_complete
-              name: Inmäskning klar (reserv)
-            - entity: button.brewassistant_start_mash_circulation
-              name: Starta mäskcirkulation (reserv)
-            - entity: sensor.brewassistant_brewday_event_log_summary
-              name: Händelselogg – sammanfattning
-            - entity: sensor.brewassistant_brewday_event_log_event_count
-              name: Antal händelser
+      return `<div style="line-height:1.25;min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="font-size:11px;font-weight:850;opacity:.64;">Översikt · processkälla · runtime</div><div style="padding:5px 8px;border-radius:999px;background:${badgeBg};border:1px solid ${badgeBorder};font-size:10px;font-weight:950;white-space:nowrap;">${badge}</div></div>
+        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">${chip(sourceLabel,sourceIcon,sourceIsRapt ? 'rgba(156,39,176,.10)' : 'rgba(33,150,243,.09)',sourceIsRapt ? 'rgba(156,39,176,.25)' : 'rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip(baLabel,'mdi:brain',state === 'aborted' ? 'rgba(244,67,54,.10)' : 'rgba(33,150,243,.09)',state === 'aborted' ? 'rgba(244,67,54,.25)' : 'rgba(33,150,243,.21)')}<span style="opacity:.45;">→</span>${chip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.08)','rgba(0,188,212,.20)')}<span style="opacity:.45;">→</span>${chip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.08)','rgba(76,175,80,.20)')}</div>
+        <div style="margin-top:9px;text-align:center;"><div style="font-size:22px;font-weight:950;letter-spacing:-.035em;">${headline}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.72;">${stage} · ${short(step)}<br>nästa: ${short(next, 64)}${sourceNote}</div></div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">${metric('Fas',stage,'nu')}${metric('Förlopp',pct,rem + ' kvar')}${metric('Åtgärd',short(action,24),'föreslagen')}${metric('Styrning',short(control,24),'råd')}</div>
+      </div>`;
+    ]]]
+  styles:
+    card:
+      - border-radius: 22px
+      - padding: 14px
+      - overflow: hidden
+      - background: linear-gradient(135deg, rgba(33,150,243,.10), rgba(127,127,127,.035))
+      - border: 1px solid rgba(33,150,243,.20)
+      - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+    grid:
+      - grid-template-areas: '"i n" "i l"'
+      - grid-template-columns: 42px minmax(0,1fr)
+      - column-gap: 12px
+    icon:
+      - width: 27px
+      - height: 27px
+    img_cell:
+      - width: 42px
+      - height: 42px
+      - border-radius: 50%
+      - background: rgba(33,150,243,.15)
+      - color: rgb(33,150,243)
+    name:
+      - justify-self: start
+      - font-size: 15px
+      - font-weight: 950
+    label:
+      - justify-self: stretch
+      - text-align: left
+      - white-space: normal
+      - margin-top: 4px
