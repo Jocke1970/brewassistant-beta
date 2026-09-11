@@ -1,11 +1,11 @@
 # Fermentation Control Provider Contract
 
-Status: architecture contract / current chamber provider + planned provider model  
+Status: architecture contract / current chamber provider + parked Grainfather scaffold  
 Last synced: 2026-09-11
 
 This document defines the common BrewAssistant control boundary for fermentation temperature control.
 
-It is intentionally hardware-neutral. The current fermentation chamber and a future Grainfather fermenter such as GF30 should follow the same ownership model even though their physical interfaces are different.
+It is intentionally hardware-neutral. The current fermentation chamber and the parked Grainfather fermenter scaffold follow the same ownership model even though their physical interfaces are different.
 
 ## Core principle
 
@@ -24,9 +24,9 @@ fermentation_tracking
         +-------+------------------+
         |                          |
         v                          v
-fermentation_chamber      future grainfather_fermenter
-translate beer target     translate beer target
-into chamber-air target   into Grainfather target
+fermentation_chamber      grainfather_fermenter
+translate beer target     read-only scaffold today
+into chamber-air target   future Grainfather target
         |                          |
         v                          v
 HA climate controller      Grainfather/GF controller
@@ -61,6 +61,8 @@ A provider may therefore need device-specific translation. For example:
 
 The provider may propose/write a **setpoint**, but it should not recreate local thermostat logic when the downstream controller already owns that responsibility.
 
+A provider may also exist in a discovery-only/read-only phase before it has write authority. `grainfather_fermenter` currently operates in that phase.
+
 ### Local regulator
 
 The downstream local controller owns actuator-level regulation:
@@ -71,7 +73,7 @@ The downstream local controller owns actuator-level regulation:
 - local safety behavior;
 - hardware-specific timing and switching.
 
-For the current chamber this is the Home Assistant `climate` controller. For a future GF30 path this should be the Grainfather controller itself if live validation confirms the expected behavior.
+For the current chamber this is the Home Assistant `climate` controller. For a future GF30 write path this should be the Grainfather controller itself if live validation confirms the expected behavior.
 
 ## Single-provider authority
 
@@ -88,6 +90,8 @@ grainfather_fermenter
 
 Provider selection is an architecture requirement before a second writable provider is enabled. It is **not yet implemented as a generic selector**.
 
+The current Grainfather scaffold therefore has no write authority and cannot compete with the chamber provider.
+
 This prevents scenarios such as:
 
 ```text
@@ -97,9 +101,9 @@ GF30 provider        -> writes another target
 
 for the same fermentation session.
 
-## Current implementation: fermentation chamber
+## Current writable implementation: fermentation chamber
 
-`custom_components/brewassistant/fermentation_chamber/` is the currently implemented physical provider.
+`custom_components/brewassistant/fermentation_chamber/` is the currently implemented writable physical provider.
 
 Its path is:
 
@@ -123,9 +127,23 @@ The chamber backend therefore owns **setpoint translation**, not raw heater/comp
 
 Its effective chamber-air calculation remains device/environment specific and belongs inside the chamber provider.
 
-## Planned provider: Grainfather fermenter / GF30
+## Parked read-only provider scaffold: Grainfather fermenter / GF30
 
-A future Grainfather fermentation provider should follow the same contract:
+`custom_components/brewassistant/grainfather_fermenter/` now exists as a Phase 1 scaffold so the integration research and fail-passive discovery rules are preserved before physical GF30 hardware is available.
+
+Today it:
+
+- discovers Grainfather fermentation-device states through `grainfather_entity_type`;
+- groups telemetry by upstream `device_id`;
+- observes controller/session linkage and `last_heard`;
+- matches the selected device to a brew-session anchor;
+- detects whether `grainfather.adjust_current_step_temperature` is available;
+- reports future Supervised Apply prerequisites;
+- makes **no Grainfather service calls**.
+
+It deliberately does not claim that a discovered device is a GF30 because the current upstream HA attributes do not prove model identity. It also does not register provider write authority.
+
+The intended future path remains:
 
 ```text
 fermentation_tracking recommended liquid target
@@ -143,7 +161,7 @@ Grainfather controller target/profile step
 Grainfather controller decides heat/cool
 ```
 
-Earlier integration research identified `grainfather.adjust_current_step_temperature` as a promising cloud-service bridge. That remains a **planned candidate**, not a validated production contract.
+Integration research identified `grainfather.adjust_current_step_temperature` as a promising cloud-service bridge. It remains a **candidate awaiting live hardware validation**, not a validated production control contract.
 
 Before enabling writes with real hardware, verify:
 
@@ -159,7 +177,7 @@ No direct Cooling Pump Kit, heater, compressor or valve control should be invent
 
 ## Supervised Apply rule
 
-A newly added physical provider starts behind BrewAssistant's generic Supervised Apply boundary.
+A newly added physical provider starts fail-passive/read-only. Once live validation proves the downstream target interface, writes begin behind BrewAssistant's generic Supervised Apply boundary.
 
 The intended flow is:
 
@@ -189,6 +207,8 @@ last confirmed write/readback
 
 If downstream heat/cool demand is observable without taking control, it is useful diagnostic telemetry but does not change ownership.
 
+The current Grainfather Phase 1 snapshot already exposes discovery/readiness diagnostics, but it is not yet registered as a public writable provider surface.
+
 ## Failure behavior
 
 Providers must fail passive when required context is unavailable or ambiguous.
@@ -204,26 +224,31 @@ Examples:
 
 The correct outcome is monitor-only / not-ready, not an invented fallback target or raw actuator takeover.
 
+The Grainfather scaffold follows this rule by refusing to select when multiple controller-linked devices are visible and by treating a single unverified device as telemetry-only.
+
 ## Relationship to `fermentation/`
 
 `custom_components/brewassistant/fermentation/` is a legacy compatibility package only.
 
 The word "fermentation" may be used conceptually for the overall strategy/control flow, but new ownership must not be placed in that compatibility package.
 
-Current canonical ownership remains:
+Current canonical ownership is:
 
 ```text
 fermentation_tracking/
   observations, calculations, readiness, recommended beer target
 
 fermentation_chamber/
-  implemented chamber provider / target translation
+  implemented writable chamber provider / target translation
+
+grainfather_fermenter/
+  parked read-only Grainfather provider scaffold
 
 fermentation/
   compatibility aliases only
 ```
 
-A future Grainfather fermenter backend should be a separate provider package rather than being added to `fermentation/`.
+The existing `grainfather` module-registry entry is separate again: it is reserved for future Grainfather **hot-side** brewing hardware and must not be reused for GF30 fermentation control.
 
 ## Roadmap
 
@@ -232,20 +257,24 @@ A future Grainfather fermenter backend should be a separate provider package rat
 - fermentation tracking is hardware-independent;
 - chamber target translation exists;
 - chamber target writes are behind Supervised Apply;
-- the HA climate controller owns actual heat/cool regulation.
+- the HA climate controller owns actual chamber heat/cool regulation;
+- Grainfather fermenter discovery/normalization exists as a dormant read-only scaffold;
+- Grainfather writes remain disabled.
 
 ### Before a second writable provider
 
+- validate real GF30/integration behavior;
 - formalize provider selection/authority in executable code;
 - expose enough provider diagnostics to make ownership obvious;
-- ensure only the selected provider can create a pending target action.
+- ensure only the selected provider can create a pending target action;
+- add a registered Supervised Apply executor only after reliable target readback has been proven.
 
 ### When GF30 hardware becomes available
 
-- validate the live Grainfather integration surface;
-- implement a read-only Grainfather provider first;
+- inspect the live Grainfather integration surface;
+- verify controller identification/session linkage;
 - verify target service/readback behavior;
-- add a registered Supervised Apply executor only after live validation;
+- verify local heating and Cooling Pump Kit ownership;
 - field-test normal fermentation, temperature rise and cold crash.
 
 ### Later, only if justified
@@ -259,4 +288,5 @@ Consider automatic target transitions after sufficient field evidence. Do not by
 3. `fermentation_tracking` stays hardware-agnostic.
 4. `fermentation/` stays compatibility-only.
 5. New providers start fail-passive/read-only and move through Supervised Apply after live validation.
-6. Do not add raw heater/cooler/pump control unless hardware evidence and architecture explicitly require it.
+6. `grainfather_fermenter` must remain separate from the reserved Grainfather hot-side adapter.
+7. Do not add raw heater/cooler/pump control unless hardware evidence and architecture explicitly require it.
