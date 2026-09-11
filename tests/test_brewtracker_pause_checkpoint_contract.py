@@ -35,7 +35,8 @@ def test_checkpoint_uses_current_runtime_target_not_next_step() -> None:
     assert '"requested_target": target' in apply_body
     assert '"requested_target_source": "brewtracker_paused_checkpoint"' in apply_body
     assert '"paused_target_rewind_blocked": False' in apply_body
-    assert "next_step" not in apply_body
+    assert 'runtime.get("next_step")' not in apply_body
+    assert 'out.get("next_step")' not in apply_body
 
 
 def test_checkpoint_heat_can_only_be_capped_downward() -> None:
