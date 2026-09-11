@@ -49,10 +49,15 @@ def test_execution_schedule_humanizes_raw_brewtracker_events() -> None:
         assert "value_num > 0" in source
         assert "show_anchor" in source
         assert "stage_marker" in source
+        assert "temp_display" in source
+        assert "desc.split('</br>', 1)[1]" in source
+        assert "⏸" not in source
 
     assert "Mäsktillsatser" in sv
     assert "Kryddor" in sv
-    assert "kvittens" in sv
+    assert "· pausad" in sv
+    assert "· kvittens" in sv
     assert "Mash additions" in en
     assert "Spices" in en
-    assert "confirm" in en
+    assert "· paused" in en
+    assert "· confirm" in en
