@@ -18,6 +18,8 @@ Dashboard YAML      = presentation + explicit operator actions
 ```text
 BrewZilla supervised hot-side baseline
 ↓
+Paused-target BrewTracker regression + 0-minute checkpoint validation
+↓
 Continuous water regression on the #193 + #194 + #157 baseline
 ↓
 First supervised real-mash BrewZilla validation
@@ -29,6 +31,8 @@ Boil / hop validation + external-temperature ownership release
 Cooling/CFC Chill / Transfer ownership handoff validation
 ↓
 RAPT Cloud Link profile-orchestration investigation
+↓
+BrewAssistant-owned imported-recipe runtime design/implementation
 ↓
 Climate Supervisor full-cycle validation
 ↓
@@ -55,9 +59,21 @@ The 2026-08-31 supervised water test then exposed two near-strike edge cases:
    -> operator may accept a physically plausible strike condition up to ±2.0 °C
 ```
 
-PR #157 remains the read-only physical ramp/hold timing layer. The immediate goal is one continuous supervised water regression of the merged #193/#194 behavior plus the physical timing and Mash-In pump-off checkpoint before the first real-mash validation.
+The 2026-09-11 water test added a new Brewfather/BrewTracker finding:
 
-See [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md) for the current physical evidence and contracts.
+```text
+0-minute mash-profile PAUS step
+  -> Brew Tracker enters paused
+  -> raw step is PAUS
+  -> remaining time is 0
+  -> tracker progress/stage timing freezes until Resume
+```
+
+This is a useful semi-automatic checkpoint because Brewfather does not have to run the following rest timer while BrewAssistant/BrewZilla is still approaching the physical target. The same test exposed a BrewAssistant orchestration bug: while BrewTracker was paused, BA could pre-actuate the following target. Fixing paused-target hold is now the immediate BrewTracker regression.
+
+PR #157 remains the read-only physical ramp/hold timing layer and is also the foundation for the future BA-owned imported-recipe runtime: schedule progression must not be confused with physical target reach.
+
+See [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md) for the earlier near-strike evidence and [`brewday-execution-modes.md`](brewday-execution-modes.md) for the 2026-09-11 execution-ownership decision.
 
 ### Branch policy
 
@@ -91,6 +107,7 @@ Completed:
 [x] Brewing pre-start is visible/ready but not owner
 [x] Brewfather ownership begins only after positive tracker-start evidence
 [x] Started Brewfather tracker retains ownership through later legitimate pause
+[x] 0-minute Brewfather PAUS checkpoint physically observed and captured in Flight Recorder (2026-09-11)
 [x] Effective target and physical BrewZilla device target are separate diagnostics
 [x] Manual Brewday prepared state is physically safe
 [x] Positive automatic BrewZilla actions use explicit Supervised Apply
@@ -109,6 +126,46 @@ Completed:
 [x] Physical timer freezes on PAUSE and stops on ABORT
 [x] Current-brew ramp/hold history includes context/source/utilization diagnostics
 [x] Mash-In and physical timing presented as one Brewday Runtime process flow (#188)
+```
+
+### Brewday execution ownership decision — 2026-09-11
+
+Recipe source, runtime/timer owner and hardware-control policy are separate concepts.
+
+Two Brewfather-derived execution models are now explicit:
+
+```text
+A. Brewfather/BrewTracker supervised
+   Brewfather recipe + Brew Tracker own stage/step/timer progression
+   BA follows the current tracker target and controls BrewZilla physically
+   0-minute PAUS steps may be used as hard checkpoints
+   BA notifies when physical target is ready
+   operator resumes Brewfather
+
+B. BrewAssistant-owned recipe execution
+   Brewfather supplies recipe/profile data only
+   BA imports/builds the Python Brewday plan
+   BA owns stage/step/timers/progression
+   timed holds begin only after actual target reach
+   Brew Tracker is not required for progression
+```
+
+RAPT profile execution remains a third runtime-owner path: RAPT owns profile step/timer progression while BrewAssistant owns target/heat/pump policy.
+
+Full automatic step progression and direct hardware apply are also separate decisions. A BA-owned recipe runtime may initially run under Supervised Apply before any unattended/direct apply policy is enabled.
+
+Do not overload the current source-selector term `Auto`: automatic source arbitration and a future BA-owned imported-recipe runtime are different concepts. UI naming remains to be decided.
+
+See [`brewday-execution-modes.md`](brewday-execution-modes.md).
+
+Current paused-target rule to implement:
+
+```text
+BrewTracker paused
+  -> latch current tracker target
+  -> continue/hold only that physical target
+  -> never use next_step as a hardware target
+  -> Resume/new running-step evidence is required before accepting the following target
 ```
 
 Current operator-control rule:
@@ -202,9 +259,21 @@ Physical findings from 2026-08-31 now covered by merged fixes:
 [x] PR #194 adds bounded operator strike acceptance without changing hardware state
 ```
 
+BrewTracker checkpoint finding from 2026-09-11:
+
+```text
+[x] 0-minute PAUS produces tracker status paused
+[x] raw step is PAUS and remaining time is 0
+[x] stage/progress remains frozen until Resume
+[x] Resume returns tracker to running and progression continues
+[ ] BA holds current target for entire pause without pre-actuating next target
+[ ] BA emits target-ready / Resume Brewfather operator notification
+```
+
 Continuous regression still required:
 
 ```text
+[ ] Paused BrewTracker current-target latch blocks next-step target actuation
 [ ] Heatstrike closes the final few degrees without the pre-#193 dead zone
 [ ] BrewZilla local regulation remains active through final approach / READY
 [ ] Automatic Mash-In READY occurs only from fresh canonical process telemetry within ±1.0 °C
@@ -217,10 +286,14 @@ Continuous regression still required:
 Near-term physical checks:
 
 ```text
+[ ] Repeat 0-minute PAUS with current target below actual temperature and with current target still being approached
+[ ] Confirm BrewZilla device target never changes to next_step target while BrewTracker remains paused
+[ ] Confirm Resume/new running-step evidence is required before following target is accepted
 [ ] Continuous water regression of Heatstrike / Mash-In on #193/#194
 [ ] Physical #157 timer starts 66°C hold only on actual target reach
 [ ] Physical #157 timer records 66 -> 72°C ramp separately and starts 72°C hold only on actual target reach
-[ ] Physical #157 PAUSE freezes timer
+[x] BrewTracker 0-minute PAUSE freezes source progression in the observed 2026-09-11 test
+[ ] Physical #157 PAUSE freezes/resumes its process timer correctly around the new checkpoint contract
 [ ] Read-only Brewsteps follows BrewTracker-owned physical process phases correctly
 [ ] First real-mash heat-strike / mash-in temperature-drop validation
 [ ] Real-mash 66°C hold and 66 -> 72°C ramp validation
@@ -277,6 +350,7 @@ Completed:
 [x] Brewday operator ABORT / rearm events
 [x] Persisted operator ABORT remains visible after HA restart
 [x] Water-only runs captured the Heatstrike and Mash-In telemetry edge cases clearly enough to isolate deterministic fixes
+[x] 2026-09-11 run captured BrewTracker PAUS state and the paused next-target pre-actuation bug clearly
 ```
 
 Physical continuity baseline from 2026-08-29:
@@ -294,6 +368,7 @@ Known diagnostics gap:
 ```text
 [ ] Bryggråd APPLY needs clearer explicit audit/UI observability even though execution worked
 [ ] Mash-In Started must be captured unambiguously in the next physical checkpoint
+[ ] Add explicit paused-target-latch / next-target-block reason to action diagnostics when the new guard is implemented
 ```
 
 ---
@@ -315,13 +390,15 @@ Implemented in #157 / PR #174 as a read-only layer:
 [x] Separate EN/SV timing views integrated with Brewday Runtime flow
 ```
 
+The 2026-09-11 BrewTracker test confirms why this separation matters: Brewfather can intentionally stop at a 0-minute checkpoint while the physical process still needs to reach/hold the target. The physical layer must therefore continue to represent real temperature progress independently of the frozen source clock.
+
 Current limitation:
 
 ```text
 - timing ledger is volatile across Home Assistant restart during first field-validation implementation
 ```
 
-Persistence should be considered after the physical behavior is verified.
+Persistence should be considered after the physical behavior is verified. The same timer/state primitives should be evaluated for reuse by the future BA-owned imported-recipe runtime.
 
 ---
 
@@ -380,6 +457,39 @@ Learning remains advisory until a candidate has been explicitly approved:
 - approved overrides may influence a later matching brew through the normal controller/profile path
 - source/RCL quality affects confidence
 ```
+
+---
+
+## BrewAssistant-owned imported-recipe runtime
+
+Future hot-side work now has an explicit fully automated progression target.
+
+```text
+Brewfather recipe/profile
+  -> recipe adapter
+  -> Python Brewday plan/runtime
+  -> BA ramp to target
+  -> actual target-reach gate
+  -> BA hold timer
+  -> automatic BA step advance
+```
+
+Planned work:
+
+```text
+[ ] Define Brewfather recipe/profile fields required for hot-side plan import
+[ ] Map mash rests, ramp targets, mash-out, boil and hop timing into normalized Python steps
+[ ] Reuse/generalize Manual Brewday runtime/session primitives where practical
+[ ] Persist imported-plan identity + active step/timer state across Home Assistant restart
+[ ] Start each timed hold only from validated physical target reach, never schedule time alone
+[ ] Keep BrewTracker optional/diagnostic and non-authoritative in this mode
+[ ] Preserve Brewday operator ABORT, hardware ABORT and external-sensor phase ownership unchanged
+[ ] Keep runtime auto-progression separate from Supervised Apply/direct hardware policy
+[ ] Define clear source/execution-owner diagnostics in Flight Recorder/UI
+[ ] Choose UI naming that does not collide with automatic source-selection `Auto`
+```
+
+This mode is not a replacement for the Brewfather/BrewTracker checkpoint path; both are useful operating models.
 
 ---
 
@@ -445,6 +555,7 @@ Known UI cleanup:
 
 ```text
 [ ] `Starta mäskcirkulation` compatibility action must only be visible in the narrow post-Mash-In / pump-off window
+[ ] Add/choose target-ready notification wording for a BrewTracker 0-minute PAUS checkpoint
 [ ] Decide whether validated physical timing presentation should be folded even tighter into the main Brewday cockpit after field test
 [ ] Inventory remaining hard-coded sensor names
 [ ] Inventory remaining binary-sensor names
@@ -479,17 +590,23 @@ These remain secondary to completing deterministic supervised hot-side and cooli
 ## Immediate next sequence
 
 ```text
-1. Run one continuous supervised Water only Brewfather/BrewTracker regression on the merged #193 + #194 + #157 baseline.
-2. Verify Heatstrike closes the final few degrees without the previous final-approach dead zone.
-3. Verify BrewZilla local regulation remains active through final approach / READY.
-4. Verify automatic Mash-In READY occurs only from fresh canonical process telemetry within ±1.0 °C.
-5. If RAPT process telemetry becomes stale, verify the stale value stays diagnostic-only and test bounded operator strike acceptance only if physically appropriate.
-6. Stop explicitly at Mash-In Started and verify pump OFF / pump utilization 0 before Brewfather Continue.
-7. Validate physical 66°C hold countdown, PAUSE freeze and separate 66 -> 72°C ramp telemetry.
-8. Verify Brewsteps follows BrewTracker ownership and physical phase.
-9. If the water-only regression is clean, perform the first supervised real-mash run and validate real grain thermal behavior.
-10. Continue through Mash out / Sparge / Pre-boil and validate full boil ramp + boil.
-11. At Boil start, verify Brewday releases the external process-temperature sensor.
-12. Validate Cooling/CFC acquisition for Chill and continued wort-out use during Transfer; separately validate traditional coil/manual-temperature behavior.
-13. Use Flight Recorder + validated physical timing evidence to drive the next Equipment Learning/profile-advisor patch.
+1. Patch the BrewTracker paused-target contract: while paused, BA must latch the current tracker target and block all next_step target pre-actuation.
+2. Add regression coverage for a 0-minute PAUS between two different target temperatures.
+3. Re-run the water profile and verify the BrewZilla device target remains at the paused checkpoint target until Brewfather Resume/new running-step evidence.
+4. Verify a longer pause keeps Brewfather stage/progress/timing frozen while BA can continue/hold the physical current target.
+5. Add a clear target-ready notification telling the operator when Brewfather may be resumed.
+6. Continue the continuous supervised Water only Brewfather/BrewTracker regression on the merged #193 + #194 + #157 baseline.
+7. Verify Heatstrike closes the final few degrees without the previous final-approach dead zone.
+8. Verify BrewZilla local regulation remains active through final approach / READY.
+9. Verify automatic Mash-In READY occurs only from fresh canonical process telemetry within ±1.0 °C.
+10. If RAPT process telemetry becomes stale, verify the stale value stays diagnostic-only and test bounded operator strike acceptance only if physically appropriate.
+11. Stop explicitly at Mash-In Started and verify pump OFF / pump utilization 0 before Brewfather Continue.
+12. Validate physical hold countdown, PAUSE freeze/resume and separate inter-rest ramp telemetry.
+13. Verify Brewsteps follows BrewTracker ownership and physical phase.
+14. If the water-only regression is clean, perform the first supervised real-mash run and validate real grain thermal behavior.
+15. Continue through Mash out / Sparge / Pre-boil and validate full boil ramp + boil.
+16. At Boil start, verify Brewday releases the external process-temperature sensor.
+17. Validate Cooling/CFC acquisition for Chill and continued wort-out use during Transfer; separately validate traditional coil/manual-temperature behavior.
+18. Use Flight Recorder + validated physical timing evidence to drive the next Equipment Learning/profile-advisor patch.
+19. After the supervised external-runtime paths are stable, design the Brewfather recipe -> Python Brewday plan adapter for BA-owned imported-recipe execution.
 ```
