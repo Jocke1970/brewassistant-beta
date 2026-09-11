@@ -1,11 +1,11 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-09-05
+Last synced: 2026-09-11
 
 The canonical short-form documentation now lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
 
-This `docs/backends/` directory remains useful for deeper architecture notes, historical roadmaps and field-test evidence.
+This `docs/backends/` directory remains useful for deeper architecture notes, provider contracts, historical roadmaps and field-test evidence.
 
 ## Canonical current backend READMEs
 
@@ -16,13 +16,19 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | BrewZilla hot side | [`../../custom_components/brewassistant/brewzilla/README.md`](../../custom_components/brewassistant/brewzilla/README.md) |
 | Cooling | [`../../custom_components/brewassistant/cooling/README.md`](../../custom_components/brewassistant/cooling/README.md) |
 | Fermentation Tracking | [`../../custom_components/brewassistant/fermentation_tracking/README.md`](../../custom_components/brewassistant/fermentation_tracking/README.md) |
-| Fermentation Chamber | [`../../custom_components/brewassistant/fermentation_chamber/README.md`](../../custom_components/brewassistant/fermentation_chamber/README.md) |
+| Fermentation Chamber provider | [`../../custom_components/brewassistant/fermentation_chamber/README.md`](../../custom_components/brewassistant/fermentation_chamber/README.md) |
 | Fermentation compatibility layer | [`../../custom_components/brewassistant/fermentation/README.md`](../../custom_components/brewassistant/fermentation/README.md) |
 | Carbonation | [`../../custom_components/brewassistant/carbonation_backend/README.md`](../../custom_components/brewassistant/carbonation_backend/README.md) |
 | Kegerator Climate Supervisor | [`../../custom_components/brewassistant/climate_backend/README.md`](../../custom_components/brewassistant/climate_backend/README.md) |
 | Kegerator / fan / legacy guard | [`../../custom_components/brewassistant/kegerator/README.md`](../../custom_components/brewassistant/kegerator/README.md) |
 | Module/capability registry | [`../../custom_components/brewassistant/modules/README.md`](../../custom_components/brewassistant/modules/README.md) |
 | Shared utilities | [`../../custom_components/brewassistant/shared/README.md`](../../custom_components/brewassistant/shared/README.md) |
+
+## Cross-backend architecture contracts
+
+| Document | Role |
+| --- | --- |
+| [`fermentation-control.md`](./fermentation-control.md) | Common fermentation strategy -> selected physical provider -> local regulator contract. Defines chamber as the current provider and the rules future providers such as Grainfather fermenters must follow. |
 
 ## Longer reference documents
 
@@ -32,7 +38,7 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md) | BrewZilla heat/pump tuning details and control-profile history. |
 | [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
-| [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
+| [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. Read together with the generic fermentation control provider contract for physical-control ownership. |
 
 ## Documentation pattern
 
@@ -49,6 +55,16 @@ Which public entities/services expose it?
 Which files are authoritative?
 Which compatibility layers or known gaps exist?
 What must not be changed casually?
+```
+
+For a physical fermentation provider, also answer:
+
+```text
+Which process target does it consume?
+How does it translate that target for the downstream controller?
+Which downstream controller owns heat/cool cycling?
+How is single-provider authority enforced?
+How is target write/readback validated?
 ```
 
 ## Source-of-truth order
