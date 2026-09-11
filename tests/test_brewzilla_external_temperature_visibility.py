@@ -18,6 +18,10 @@ GAUGE_CARDS = (
     ROOT / "dashboard/cards/brewzilla_dual_temperature_gauge.yaml",
     ROOT / "dashboard/cards/brewzilla_dual_temperature_gauge_sv.yaml",
 )
+STACK_CARDS = (
+    ROOT / "dashboard/cards/brewzilla.yaml",
+    ROOT / "dashboard/cards/brewzilla_sv.yaml",
+)
 EXTERNAL_AVAILABLE = "binary_sensor.brewassistant_brewzilla_external_temperature_available"
 
 
@@ -58,6 +62,16 @@ def test_dual_temperature_gauge_uses_neutral_background_and_opposed_needles() ->
         source = path.read_text(encoding="utf-8")
         assert "thermal_state" not in source
         assert "type: custom:button-card" not in source
+        assert "entity: sensor.brewassistant_brewzilla_mash_temperature" in source
+        assert "entity2: sensor.brewassistant_brewzilla_wort_temperature" in source
+        assert "mode: needle" in source
+        assert 'main_needle: "M -49 -2 L -40 0 L -49 2 Z"' in source
+        assert 'inner_needle: "M -27.5 -1.5 L -32 0 L -27.5 1.5 Z"' in source
+
+
+def test_brewzilla_stack_uses_same_dual_temperature_gauge_geometry() -> None:
+    for path in STACK_CARDS:
+        source = path.read_text(encoding="utf-8")
         assert "entity: sensor.brewassistant_brewzilla_mash_temperature" in source
         assert "entity2: sensor.brewassistant_brewzilla_wort_temperature" in source
         assert "mode: needle" in source
