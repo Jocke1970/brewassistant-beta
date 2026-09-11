@@ -1,7 +1,7 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-09-05
+Last synced: 2026-09-10
 
 The canonical short-form documentation now lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
 
@@ -17,6 +17,7 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | Cooling | [`../../custom_components/brewassistant/cooling/README.md`](../../custom_components/brewassistant/cooling/README.md) |
 | Fermentation Tracking | [`../../custom_components/brewassistant/fermentation_tracking/README.md`](../../custom_components/brewassistant/fermentation_tracking/README.md) |
 | Fermentation Chamber | [`../../custom_components/brewassistant/fermentation_chamber/README.md`](../../custom_components/brewassistant/fermentation_chamber/README.md) |
+| Grainfather Fermenter / GF30 preparation | [`../../custom_components/brewassistant/grainfather_fermenter/README.md`](../../custom_components/brewassistant/grainfather_fermenter/README.md) |
 | Fermentation compatibility layer | [`../../custom_components/brewassistant/fermentation/README.md`](../../custom_components/brewassistant/fermentation/README.md) |
 | Carbonation | [`../../custom_components/brewassistant/carbonation_backend/README.md`](../../custom_components/brewassistant/carbonation_backend/README.md) |
 | Kegerator Climate Supervisor | [`../../custom_components/brewassistant/climate_backend/README.md`](../../custom_components/brewassistant/climate_backend/README.md) |
@@ -33,6 +34,23 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
+| [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 preparation roadmap, ownership boundary, live-hardware validation gate and future Supervised Apply plan. |
+
+## Grainfather naming boundary
+
+Two Grainfather concepts are intentionally kept separate:
+
+```text
+reserved module: grainfather
+  future Grainfather hot-side adapter
+  examples: G30/G40-class brewing systems
+
+grainfather_fermenter/
+  Grainfather fermentation-hardware adapter
+  initial hardware target: GF30 Conical Fermenter
+```
+
+Do not reuse the existing `grainfather` hot-side reservation for GF30 work.
 
 ## Documentation pattern
 
