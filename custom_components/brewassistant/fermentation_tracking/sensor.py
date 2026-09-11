@@ -3,20 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Mapping
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
-from ..const import CONF_GRAVITY_ENTITY, CONF_LIQUID_TEMP_ENTITY, CONF_RECIPE_TARGET_ENTITY, DOMAIN
+from ..const import CONF_GRAVITY_ENTITY, CONF_LIQUID_TEMP_ENTITY, DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
+from .recipe_schedule import build_recipe_temperature_schedule
 from .snapshot import build_fermentation_snapshot
 
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
-BREWFATHER_TARGET_CANDIDATES = (
-    "sensor.brewfather_target_temperature",
-    "sensor.brewfather_brewfather_target_temperature",
+BREWFATHER_RECIPE_CANDIDATES = (
+    "sensor.brewfather_brew_tracker_raw",
+    "sensor.brewfather_brewtracker_raw",
+)
+BREWFATHER_FERMENTATION_START_CANDIDATES = (
+    "sensor.brewfather_fermentation_start",
+    "sensor.brewfather_fermentation_start_date",
+    "sensor.brewfather_brewfather_fermentation_start",
 )
 
 
@@ -48,48 +55,65 @@ def _external_numeric(
     return value, state.last_updated, entity_id
 
 
-def _scheduled_target_from_state(state: Any) -> float | None:
-    """Read Brewfather's precise read-only schedule target metadata."""
-    if state is None:
-        return None
-    scheduled = state.attributes.get("schedule_target_temperature")
-    if scheduled is None or str(scheduled).lower() in INVALID_STATES:
+def _timestamp_from_state(state: Any) -> datetime | None:
+    if state is None or str(state.state).lower() in INVALID_STATES:
         return None
     try:
-        return float(str(scheduled).replace(",", "."))
+        value = datetime.fromisoformat(str(state.state).replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
-def _external_target(
+def _brewfather_recipe_schedule(
     coordinator: BrewAssistantCoordinator,
-) -> tuple[float | None, str | None, str | None]:
-    """Return an explicit Brewfather schedule target when one is exposed."""
-    configured_entity = coordinator.configured_entities.get(CONF_RECIPE_TARGET_ENTITY)
-    configured_state = coordinator.hass.states.get(configured_entity) if configured_entity else None
+) -> tuple[float | None, str | None, str | None, dict[str, Any] | None]:
+    """Interpret Brewfather's read-only recipe inside BrewAssistant.
 
-    scheduled = _scheduled_target_from_state(configured_state)
-    if scheduled is not None:
-        return scheduled, configured_entity, "brewfather_schedule"
-
-    # The generic recipe-target helper may not preserve source attributes. Check
-    # Brewfather's native target sensor as a read-only schedule source as well.
-    for entity_id in BREWFATHER_TARGET_CANDIDATES:
-        if entity_id == configured_entity:
-            continue
+    The Brewfather fork is intentionally only a data adapter: it exposes the full
+    recipe on the BrewTracker raw sensor.  Temperature-step and ramp semantics are
+    owned here by the BrewAssistant fermentation tracking backend.
+    """
+    recipe_state = None
+    recipe_entity = None
+    recipe: Mapping[str, Any] | None = None
+    for entity_id in BREWFATHER_RECIPE_CANDIDATES:
         state = coordinator.hass.states.get(entity_id)
-        scheduled = _scheduled_target_from_state(state)
-        if scheduled is not None:
-            return scheduled, entity_id, "brewfather_schedule"
+        candidate = state.attributes.get("recipe") if state is not None else None
+        if isinstance(candidate, Mapping):
+            recipe_state = state
+            recipe_entity = entity_id
+            recipe = candidate
+            break
 
-    # Do not let an ordinary recipe-target state silently replace the existing
-    # manual/SG-based fermentation tracking rules. Only explicit schedule metadata
-    # is allowed to take ownership of recommended_temperature_c.
-    return None, configured_entity, None
+    if recipe_state is None or recipe is None:
+        return None, None, None, None
+
+    fermentation_started_at = None
+    for entity_id in BREWFATHER_FERMENTATION_START_CANDIDATES:
+        state = coordinator.hass.states.get(entity_id)
+        fermentation_started_at = _timestamp_from_state(state)
+        if fermentation_started_at is not None:
+            break
+
+    schedule = build_recipe_temperature_schedule(
+        recipe,
+        fermentation_started_at=fermentation_started_at,
+        now=datetime.now(timezone.utc),
+    )
+    if schedule is None:
+        return None, recipe_entity, None, None
+
+    target = schedule.get("target_temperature_c")
+    if target is None:
+        return None, recipe_entity, None, schedule
+    return float(target), recipe_entity, "brewfather_recipe_schedule", schedule
 
 
 def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
-    """Build tracking with independently resolved SG, temperature, and schedule target."""
+    """Build tracking with independently resolved SG, temperature, and recipe target."""
     external_sg, gravity_updated_at, gravity_entity = _external_numeric(
         coordinator,
         CONF_GRAVITY_ENTITY,
@@ -98,7 +122,9 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
         coordinator,
         CONF_LIQUID_TEMP_ENTITY,
     )
-    external_target, target_entity, target_source = _external_target(coordinator)
+    external_target, target_entity, target_source, target_schedule = _brewfather_recipe_schedule(
+        coordinator
+    )
     return build_fermentation_snapshot(
         coordinator.hass,
         external_sg=external_sg,
@@ -110,6 +136,7 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
         external_target_temperature_c=external_target,
         external_target_temperature_entity=target_entity,
         external_target_source=target_source,
+        external_target_metadata=target_schedule,
     )
 
 
