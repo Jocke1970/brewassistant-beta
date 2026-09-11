@@ -6,9 +6,7 @@ cards:
       {% set stage_entity = 'sensor.brewfather_brew_tracker_stage' %}
       {% set status_entity = 'sensor.brewfather_brew_tracker_status' %}
       {% set raw_entity = 'sensor.brewfather_brew_tracker_raw' %}
-      {% set runtime_entity = 'sensor.brewassistant_brewday_runtime_summary' %}
       {% set recipe_data = state_attr(raw_entity, 'recipe') %}
-      {% set tracker_data = state_attr(raw_entity, 'data') %}
       {% set recipe = (recipe_data.get('name') if recipe_data is mapping else none) or state_attr(status_entity, 'brew_tracker_recipe_name') or state_attr(stage_entity, 'brew_tracker_recipe_name') or state_attr(raw_entity, 'recipe_name') or state_attr(raw_entity, 'brew_tracker_recipe_name') or '—' %}
       {% set batch = state_attr(status_entity, 'brew_tracker_batch_name') or state_attr(stage_entity, 'brew_tracker_batch_name') or state_attr(raw_entity, 'batch_name') or state_attr(raw_entity, 'brew_tracker_batch_name') or '—' %}
       {% set batch_id = state_attr(status_entity, 'brew_tracker_batch_id') or state_attr(stage_entity, 'brew_tracker_batch_id') or state_attr(raw_entity, 'batch_id') or '—' %}
@@ -88,23 +86,66 @@ cards:
           {% endif %}
           {% for stage in timeline if stage is mapping %}
             {% set stage_index = loop.index0 %}
+            {% set stage_name = stage.get('name') or ('Stage ' ~ loop.index) %}
+            {% set stage_name_l = stage_name | lower %}
             {% set raw_step_index = stage.get('step') %}
             {% set stage_active = stage.get('active') or (current_stage_index is not none and current_stage_index | int == stage_index) %}
-          ### {{ '▶' if stage_active else '✓' if stage.get('completed') else '○' }} {{ stage.get('name') or ('Stage ' ~ loop.index) }}
+            {% set stage_paused = stage.get('paused') %}
+            {% set stage_passed = current_stage_index is not none and stage_index < current_stage_index | int %}
+            {% set stage_marker = '⏸' if stage_active and stage_paused else '▶' if stage_active else '✓' if stage.get('completed') or stage_passed else '○' %}
+          ### {{ stage_marker }} {{ stage_name }}
           {% set stage_duration = stage.get('duration') | float(0) %}
           {% if stage_duration > 0 %}_{{ (stage_duration / 60) | round(0) | int }} min total_{% endif %}
 
             {% for step in stage.get('steps', []) if step is mapping %}
               {% set step_index = loop.index0 %}
-              {% set name = step.get('raw_name') or step.get('name') or ('Step ' ~ loop.index) %}
+              {% set raw_name = step.get('raw_name') or step.get('name') or '' %}
+              {% set name_l = raw_name | lower %}
               {% set desc = step.get('description') or '' %}
+              {% set desc_l = desc | lower %}
+              {% set tooltip = step.get('tooltip') or '' %}
+              {% set tooltip_l = tooltip | lower %}
+              {% set kind = (step.get('type') or '') | lower %}
               {% set duration_seconds = step.get('duration') | float(0) %}
               {% set at_seconds = step.get('time') | float(0) %}
               {% set value = step.get('value') %}
+              {% set value_num = value | float(0) if value is not none else 0 %}
               {% set raw_active = stage_active and raw_step_index is not none and raw_step_index | int == step_index %}
-              {% set marker = '▶' if step.get('active') or raw_active else '✓' if step.get('completed') else '○' %}
-              {% set pause = ' ⏸' if step.get('pause_before') or step.get('pauseBefore') or (name | lower).startswith('paus') else '' %}
-          - {{ marker }} **{{ name }}**{{ pause }}{% if value is not none %} · {{ value }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif at_seconds > 0 %} · at {{ (at_seconds / 60) | round(0) | int }} min remaining{% endif %}{% if desc and desc != name %}  
+              {% set passed = stage_passed or (stage_active and raw_step_index is not none and step_index < raw_step_index | int) %}
+              {% set marker = '⏸' if raw_active and stage_paused else '▶' if step.get('active') or raw_active else '✓' if step.get('completed') or passed else '○' %}
+              {% set checkpoint = step.get('pause_before') or step.get('pauseBefore') or name_l.startswith('paus') %}
+
+              {% if kind == 'mash' and name_l == 'start' %}
+                {% set label = desc or 'Start mash timer' %}
+              {% elif kind == 'boil' and name_l == 'start' %}
+                {% set label = desc or 'Start boil timer' %}
+              {% elif 'mash additions' in desc_l or 'mäsktillsatser' in desc_l %}
+                {% set label = 'Mash additions' %}
+              {% elif 'mash complete' in desc_l or 'mäskning slutförd' in desc_l %}
+                {% set label = 'Mash complete' %}
+              {% elif 'sparge complete' in desc_l or 'lakning slutförd' in desc_l %}
+                {% set label = 'Sparge complete' %}
+              {% elif name_l == 'sparge' or 'laka med' in desc_l %}
+                {% set label = 'Sparge' %}
+              {% elif 'boil complete' in desc_l or 'kokslut' in desc_l %}
+                {% set label = 'Boil complete' %}
+              {% elif stage_name_l == 'boil' and ('cinnamon' in desc_l or 'spice' in desc_l or 'kanel' in desc_l or 'krydd' in desc_l or 'cardamom' in desc_l or 'kardemumma' in desc_l or 'orange peel' in desc_l or 'pomerans' in desc_l) %}
+                {% set label = 'Spices' %}
+              {% elif stage_name_l == 'boil' and ('boil addition' in desc_l or 'boil addition' in tooltip_l or 'kokgiva' in desc_l or 'kokgiva' in tooltip_l) %}
+                {% set label = 'Boil addition' %}
+              {% elif kind in ['ramp', 'event'] and value_num > 0 %}
+                {% set label = tooltip or desc or ('Heat to ' ~ value_num ~ ' °C') %}
+              {% elif raw_name %}
+                {% set label = raw_name %}
+              {% elif desc %}
+                {% set label = desc %}
+              {% else %}
+                {% set label = 'Step ' ~ loop.index %}
+              {% endif %}
+
+              {% set show_temp = value is not none and value_num > 0 and not (kind in ['ramp', 'event'] and (tooltip or desc)) %}
+              {% set show_anchor = at_seconds > 0 and duration_seconds <= 0 and not (name_l == 'start' and kind in ['mash', 'boil']) %}
+          - {{ marker }} **{{ label }}**{% if checkpoint %} · ⏸ confirm{% endif %}{% if show_temp %} · {{ value_num | round(1) }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif show_anchor %} · at {{ (at_seconds / 60) | round(0) | int }} min remaining{% endif %}{% if desc and desc != label %}  
             _{{ desc }}_{% endif %}
             {% endfor %}
           {% endfor %}
