@@ -51,3 +51,15 @@ def test_temperature_gauge_remains_available_without_external_sensor() -> None:
         assert EXTERNAL_AVAILABLE not in source, f"temperature gauge must not depend on external sensor in {path.name}"
         assert "sensor.brewassistant_brewzilla_wort_temperature" in source
         assert "sensor.brewassistant_brewzilla_mash_temperature" in source
+
+
+def test_dual_temperature_gauge_uses_neutral_background_and_opposed_needles() -> None:
+    for path in GAUGE_CARDS:
+        source = path.read_text(encoding="utf-8")
+        assert "thermal_state" not in source
+        assert "type: custom:button-card" not in source
+        assert "entity: sensor.brewassistant_brewzilla_mash_temperature" in source
+        assert "entity2: sensor.brewassistant_brewzilla_wort_temperature" in source
+        assert "mode: needle" in source
+        assert 'main_needle: "M -49 -2 L -40 0 L -49 2 Z"' in source
+        assert 'inner_needle: "M -27.5 -1.5 L -32 0 L -27.5 1.5 Z"' in source
