@@ -1,7 +1,7 @@
 # Backend Domain Layout
 
 Status: active development  
-Last synced: 2026-09-05
+Last synced: 2026-09-11
 
 BrewAssistant backend/domain logic is grouped by responsibility under `custom_components/brewassistant/`. Home Assistant platform entry files remain at the integration root.
 
@@ -60,8 +60,8 @@ custom_components/brewassistant/
 | `carbonation_backend/` | Persisted carbonation session, pressure/volume guidance and progress estimates |
 | `climate_backend/` | Kegerator Climate Supervisor; dynamic climate-target selection/application |
 | `cooling/` | Cooling Runtime v2 for CFC/immersion/manual cooling, sanitation context and cooling advice |
-| `fermentation_tracking/` | Independent fermentation observations, source resolution, SG/Brix correction, progress/stability/readiness |
-| `fermentation_chamber/` | Fermentation/cold-crash chamber-air recommendation plus Supervised Apply bridge |
+| `fermentation_tracking/` | Hardware-neutral fermentation observations, source resolution, SG/Brix correction, progress/stability/readiness and process-level beer target recommendation |
+| `fermentation_chamber/` | Current physical fermentation provider: chamber-air target translation plus Supervised Apply bridge |
 | `fermentation/` | Legacy compatibility bridges only; no new business logic |
 | `kegerator/` | Kegerator fan control/model, serving presets and legacy/policy guard/watchdog |
 | `modules/` | Module/capability metadata registry |
@@ -95,16 +95,48 @@ climate platform/module + climate_backend/
 
 ### Fermentation
 
+The generic fermentation architecture is:
+
 ```text
 fermentation_tracking
-  process observations/calculations/readiness
-
-fermentation_chamber
-  chamber-air recommendation/control bridge
-
-fermentation
-  compatibility only
+  process observations / calculations / readiness
+  desired beer/liquid temperature target
+        |
+        v
+selected physical fermentation provider
+  translate process target into controller-native target
+        |
+        v
+local controller
+  own actual heat/cool regulation
 ```
+
+Current implementation:
+
+```text
+fermentation_tracking
+        |
+        v
+fermentation_chamber
+  chamber-air target translation
+        |
+        v
+Supervised Apply
+        |
+        v
+climate.fermentation_chamber
+  local heat/cool controller
+```
+
+`fermentation_chamber` is therefore the first physical provider implementation, not the owner of fermentation strategy. The downstream Home Assistant climate controller owns raw heater/cooler switching after the setpoint is accepted.
+
+Future physical providers, such as a Grainfather fermenter integration, should implement the same boundary: BrewAssistant supplies fermentation intent/setpoint, the provider translates it if needed, and the downstream controller owns actuator cycling.
+
+Only one physical provider may have write authority for a fermentation session. A generic provider selector/authority layer is an architectural prerequisite before enabling a second writable provider; it is not yet implemented.
+
+The legacy `fermentation/` package remains compatibility-only and must not become a catch-all owner for strategy, provider selection or hardware control.
+
+See [`backends/fermentation-control.md`](./backends/fermentation-control.md) for the full provider contract.
 
 ### Kegerator
 
@@ -134,6 +166,22 @@ BOIL start
 Chill -> Transfer
   Cooling ownership as CFC outlet/process temperature when applicable
 ```
+
+## Future fermentation-provider rule
+
+Do not add a new fermentation hardware backend by copying chamber thermostat behavior into it.
+
+A new provider should instead answer:
+
+```text
+What process target does BrewAssistant want?
+How is that target represented by this controller?
+How do we write it safely?
+How do we verify readback?
+Which local controller owns actual heat/cool switching?
+```
+
+New providers begin fail-passive/read-only. Target writes should move through Supervised Apply after live validation. Direct actuator control is only justified if the downstream hardware does not already provide the required local regulation and the architecture explicitly assigns that ownership to BrewAssistant.
 
 ## Documentation maintenance
 
