@@ -16,6 +16,7 @@ The code-local `README.md` files are the first place to check when changing back
 | [`cooling/`](./cooling/) | Cooling Runtime v2, CFC/immersion/manual cooling and cooling advice | Read/advice today; BrewZilla wort pump is operator-owned |
 | [`fermentation_tracking/`](./fermentation_tracking/) | Independent SG/temperature observations, calculations, readiness and process-level beer target recommendation | Read/track/strategy only; hardware-agnostic |
 | [`fermentation_chamber/`](./fermentation_chamber/) | Current fermentation physical provider: chamber-air target translation and supervised climate target bridge | Recommendation + Supervised Apply target write |
+| [`grainfather_fermenter/`](./grainfather_fermenter/) | Parked Grainfather fermentation-provider scaffold for GF30-class hardware discovery | Read-only discovery; no service calls or provider authority |
 | [`fermentation/`](./fermentation/) | Compatibility imports for the separated fermentation backends | Compatibility only |
 | [`carbonation_backend/`](./carbonation_backend/) | Persistent carbonation session and pressure/volume guidance | Read/guidance only |
 | [`climate_backend/`](./climate_backend/) | Kegerator Climate Supervisor | Direct climate-target adjustment when enabled/in scope |
@@ -24,6 +25,8 @@ The code-local `README.md` files are the first place to check when changing back
 | [`shared/`](./shared/) | Cross-domain helpers, currently rolling temperature statistics | Read-only support |
 | `brand/` | Home Assistant integration artwork | Assets only |
 | `translations/` | Home Assistant strings (`en`, `sv`) | Presentation only |
+
+The reserved `grainfather` entry in the module registry remains a separate future **hot-side** adapter for Grainfather brewing systems. It is not the GF30 fermentation provider.
 
 ## Root files
 
@@ -88,11 +91,11 @@ local controller
   owns actual heat/cool regulation
 ```
 
-Today `fermentation_chamber` is the implemented physical provider. It translates the desired beer/liquid temperature into a chamber-air target and places target changes behind Supervised Apply. After that target is accepted, the downstream Home Assistant climate controller owns actual heater/cooler regulation.
+Today `fermentation_chamber` is the implemented writable physical provider. It translates the desired beer/liquid temperature into a chamber-air target and places target changes behind Supervised Apply. After that target is accepted, the downstream Home Assistant climate controller owns actual heater/cooler regulation.
 
-Future fermentation hardware providers, such as a Grainfather fermenter provider, should follow the same contract rather than adding another thermostat loop inside BrewAssistant. Only one physical provider may have write authority for a fermentation session.
+`grainfather_fermenter` now exists as a parked Phase 1 read-only provider scaffold. It can discover/normalize the public Home Assistant state surface from `fidley/grainfather_integration`, but it is not registered as a writable provider and performs no Grainfather service calls. When real GF30 hardware becomes available, live validation must happen before provider authority or Supervised Apply execution is added.
 
-The legacy `fermentation/` package only preserves old imports/registrations and must not become the owner of new strategy, provider selection or hardware logic.
+Only one physical provider may have write authority for a fermentation session. The legacy `fermentation/` package only preserves old imports/registrations and must not become the owner of new strategy, provider selection or hardware logic.
 
 See [`../../docs/backends/fermentation-control.md`](../../docs/backends/fermentation-control.md) for the generic provider contract and future-provider rules.
 
