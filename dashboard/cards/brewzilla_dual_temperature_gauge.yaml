@@ -66,7 +66,7 @@ card:
     card:
       - border-radius: 16px
       - padding: 0
-      - overflow: hidden
+      - overflow: visible
       - transition: background .4s ease, border-color .4s ease, box-shadow .4s ease
       - background: |
           [[[

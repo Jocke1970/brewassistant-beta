@@ -2,9 +2,9 @@ name: Hassfest
 
 on:
   push:
-    branches: [main]
+    branches: [dev, beta, main]
   pull_request:
-    branches: [main]
+    branches: [dev, beta, main]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:

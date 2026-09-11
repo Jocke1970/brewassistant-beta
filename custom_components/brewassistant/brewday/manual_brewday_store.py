@@ -1,4 +1,4 @@
-"""Manual Brewday session helper with Brewfather ownership guard."""
+"""Manual Brewday session helper with external-runtime ownership guards."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ from homeassistant.helpers.event import async_track_state_change_event
 from ..const import DOMAIN
 from .brewday_runtime_core import BF_STATUS, brewfather_session_active, entity_candidates
 from .manual_brewday_runtime import ManualRuntimeSession, ManualRuntimeState
+from .rapt_profile_runtime import (
+    clear_rapt_profile_stop_guard,
+    rapt_profile_runtime_claims_source,
+)
 
 KEY = "manual_brewday_session"
 HANDOFF_LISTENER_KEY = "manual_brewfather_handoff_listener"
@@ -34,8 +38,29 @@ def _ownership_error() -> HomeAssistantError:
     )
 
 
+def _rapt_ownership_error() -> HomeAssistantError:
+    return HomeAssistantError(
+        "Manual Brewday is blocked while a RAPT BrewZilla profile owns or retains "
+        "the hot-side runtime handoff. Stop the profile and wait for a confirmed "
+        "RAPT STOP before taking manual control."
+    )
+
+
+def _release_stopped_rapt_for_manual(hass: HomeAssistant) -> bool:
+    """Release only a confirmed RAPT STOP guard for explicit Manual takeover."""
+    return clear_rapt_profile_stop_guard(hass, reason="manual_operator_takeover")
+
+
+def _rapt_blocks_manual(hass: HomeAssistant, *, allow_stopped_takeover: bool) -> bool:
+    if not rapt_profile_runtime_claims_source(hass):
+        return False
+    if allow_stopped_takeover and _release_stopped_rapt_for_manual(hass):
+        return rapt_profile_runtime_claims_source(hass)
+    return True
+
+
 class GuardedManualRuntimeSession(ManualRuntimeSession):
-    """Manual session that refuses positive control while Brewfather is active."""
+    """Manual session that refuses positive control while an external source owns it."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         object.__setattr__(self, "_hass", hass)
@@ -48,12 +73,25 @@ class GuardedManualRuntimeSession(ManualRuntimeSession):
         object.__setattr__(self, "_hass", hass)
 
     def _assert_brewfather_inactive(self) -> None:
+        """Preserve legacy method name while guarding every external runtime owner."""
+        if _rapt_blocks_manual(self._hass, allow_stopped_takeover=True):
+            raise _rapt_ownership_error()
         if brewfather_brew_tracker_active(self._hass):
             raise _ownership_error()
 
     def __setattr__(self, name: str, value) -> None:
         """Catch direct stage jumps that bypass the normal session methods."""
         guard_enabled = bool(getattr(self, "_guard_enabled", False))
+        positive_mutation = bool(
+            (name == "state" and value in _ACTIVE_MANUAL_STATES)
+            or name in {"active_stage_index", "active_step_index"}
+            or (name == "step_started_at" and value is not None)
+        )
+
+        if guard_enabled and positive_mutation:
+            if _rapt_blocks_manual(self._hass, allow_stopped_takeover=True):
+                raise _rapt_ownership_error()
+
         if guard_enabled and brewfather_brew_tracker_active(self._hass):
             if name == "state" and value in _ACTIVE_MANUAL_STATES:
                 raise _ownership_error()
