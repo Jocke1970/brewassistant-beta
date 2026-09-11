@@ -52,6 +52,8 @@ def test_execution_schedule_humanizes_raw_brewtracker_events() -> None:
         assert "temp_display" in source
         assert "desc.split('</br>', 1)[1]" in source
         assert "⏸" not in source
+        assert "_{{ detail }}_" not in source
+        assert "{{ detail }}{% endif %}" in source
 
     assert "Mäsktillsatser" in sv
     assert "Kryddor" in sv
