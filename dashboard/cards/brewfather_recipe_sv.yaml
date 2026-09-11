@@ -7,25 +7,79 @@ card:
   cards:
     - type: markdown
       title: Brewfather-recept
-      content: >
-        {% set stage = 'sensor.brewfather_brew_tracker_stage' %} {% set raw =
-        'sensor.brewfather_brew_tracker_raw' %} {% set recipe =
-        state_attr(stage, 'brew_tracker_recipe_name') or state_attr(raw,
-        'recipe_name') or state_attr(raw, 'brew_tracker_recipe_name') or '—' %}
-        {% set batch = state_attr(stage, 'brew_tracker_batch_name') or
-        state_attr(raw, 'batch_name') or state_attr(raw,
-        'brew_tracker_batch_name') or '—' %} {% set batch_id = state_attr(stage,
-        'brew_tracker_batch_id') or state_attr(raw, 'batch_id') or '—' %} {% set
-        current = state_attr(stage, 'current_step') %} {% set nxt =
-        state_attr(stage, 'next_step') %} **{{ recipe }}**   Batch: **{{ batch
-        }}**   Batch-ID: `{{ batch_id }}`
+      content: |
+        {% set stage_entity = 'sensor.brewfather_brew_tracker_stage' %}
+        {% set status_entity = 'sensor.brewfather_brew_tracker_status' %}
+        {% set raw_entity = 'sensor.brewfather_brew_tracker_raw' %}
+        {% set runtime_entity = 'sensor.brewassistant_brewday_runtime_summary' %}
+        {% set recipe = state_attr(status_entity, 'brew_tracker_recipe_name') or state_attr(stage_entity, 'brew_tracker_recipe_name') or state_attr(raw_entity, 'recipe_name') or state_attr(raw_entity, 'brew_tracker_recipe_name') or '—' %}
+        {% set batch = state_attr(status_entity, 'brew_tracker_batch_name') or state_attr(stage_entity, 'brew_tracker_batch_name') or state_attr(raw_entity, 'batch_name') or state_attr(raw_entity, 'brew_tracker_batch_name') or '—' %}
+        {% set batch_id = state_attr(status_entity, 'brew_tracker_batch_id') or state_attr(stage_entity, 'brew_tracker_batch_id') or state_attr(raw_entity, 'batch_id') or '—' %}
+        {% set current = state_attr(stage_entity, 'current_step') %}
+        {% set nxt = state_attr(stage_entity, 'next_step') %}
+        {% set timeline = state_attr(runtime_entity, 'timeline') or [] %}
 
-        {% if current is mapping %} **Aktuell instruktion:** {{
-        current.get('description') or current.get('tooltip') or
-        current.get('name') or '—' }} {% endif %}
+        ## {{ recipe }}
+        **Batch:** {{ batch }}  
+        **Batch-ID:** `{{ batch_id }}`
 
-        {% if nxt is mapping %} **Nästa instruktion:** {{ nxt.get('description')
-        or nxt.get('tooltip') or nxt.get('name') or '—' }} {% endif %}
+        {% if current is mapping %}
+        **Nu:** {{ current.get('description') or current.get('tooltip') or current.get('name') or '—' }}
+        {% endif %}
+        {% if nxt is mapping %}
+        **Nästa:** {{ nxt.get('description') or nxt.get('tooltip') or nxt.get('name') or '—' }}
+        {% endif %}
+
+        ### 🌿 Humlegivor
+        {% set ns = namespace(found=false) %}
+        {% for stage in timeline if stage is mapping %}
+          {% set stage_name = stage.get('name', '') | string %}
+          {% for step in stage.get('steps', []) if step is mapping %}
+            {% set name = step.get('raw_name') or step.get('name') or '' %}
+            {% set desc = step.get('description') or '' %}
+            {% set text = (name ~ ' ' ~ desc ~ ' ' ~ stage_name) | lower %}
+            {% if 'hop' in text or 'humle' in text %}
+              {% set ns.found = true %}
+              {% set at_seconds = step.get('time') | float(0) %}
+              {% set duration_seconds = step.get('duration') | float(0) %}
+              {% set at_minutes = (at_seconds / 60) | round(0) | int %}
+              {% set duration_minutes = (duration_seconds / 60) | round(0) | int %}
+              {% set marker = '▶' if step.get('active') else '✓' if step.get('completed') else '○' %}
+        - {{ marker }} **{{ name }}**{% if desc and desc != name %} — {{ desc }}{% endif %}{% if at_seconds > 0 %} · **{{ at_minutes }} min kvar**{% elif duration_seconds > 0 %} · **{{ duration_minutes }} min**{% else %} · vid stegets start/slut{% endif %}
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+        {% if not ns.found %}
+        _Inga humlegivor finns i den BrewTracker-tidslinje som Brewfather exponerar just nu._
+        {% endif %}
+
+    - type: custom:expander-card
+      title: Bryggschema
+      cards:
+        - type: markdown
+          content: |
+            {% set timeline = state_attr('sensor.brewassistant_brewday_runtime_summary', 'timeline') or [] %}
+            {% if timeline | length == 0 %}
+            _BrewTracker har ännu inte exponerat något bryggschema._
+            {% endif %}
+            {% for stage in timeline if stage is mapping %}
+            ### {{ '▶' if stage.get('active') else '✓' if stage.get('completed') else '○' }} {{ stage.get('name') or ('Fas ' ~ loop.index) }}
+            {% set stage_duration = stage.get('duration') | float(0) %}
+            {% if stage_duration > 0 %}_{{ (stage_duration / 60) | round(0) | int }} min totalt_{% endif %}
+
+              {% for step in stage.get('steps', []) if step is mapping %}
+                {% set name = step.get('raw_name') or step.get('name') or ('Steg ' ~ loop.index) %}
+                {% set desc = step.get('description') or '' %}
+                {% set duration_seconds = step.get('duration') | float(0) %}
+                {% set at_seconds = step.get('time') | float(0) %}
+                {% set value = step.get('value') %}
+                {% set marker = '▶' if step.get('active') else '✓' if step.get('completed') else '○' %}
+                {% set pause = ' ⏸' if step.get('pause_before') or (name | lower).startswith('paus') else '' %}
+            - {{ marker }} **{{ name }}**{{ pause }}{% if value is not none %} · {{ value }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif at_seconds > 0 %} · vid {{ (at_seconds / 60) | round(0) | int }} min kvar{% endif %}{% if desc and desc != name %}  
+              _{{ desc }}_{% endif %}
+              {% endfor %}
+            {% endfor %}
+
     - type: custom:expander-card
       title: Brewfather-recept / källa
       cards:
@@ -44,6 +98,10 @@ card:
               entity: sensor.brewfather_brew_tracker_stage
               attribute: brew_tracker_batch_name
               name: Batch
+            - type: attribute
+              entity: sensor.brewassistant_brewday_runtime_summary
+              attribute: timeline
+              name: Normaliserat bryggschema
             - type: attribute
               entity: sensor.brewfather_brew_tracker_stage
               attribute: current_step
