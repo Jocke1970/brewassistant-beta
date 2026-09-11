@@ -1,11 +1,13 @@
 # Fermentation tracking backend
 
 Status: active MVP  
-Code snapshot documented: 2026-09-05
+Code/documentation snapshot: 2026-09-11
 
 `fermentation_tracking` is BrewAssistant's independent fermentation observation and calculation backend. It normalizes gravity and beer-temperature observations, supports manual and automatic sources independently, persists manual observations/runtime state, and derives progress/stability/readiness information.
 
-It does **not** control a fermentation chamber, heater, cooler or fan. Chamber recommendations/control belong in [`../fermentation_chamber/`](../fermentation_chamber/).
+It may also expose the recommended **beer/liquid temperature target** implied by fermentation process state, but it does **not** control a fermentation chamber, heater, cooler, fan or pump. Physical target translation/control belongs to the selected fermentation control provider, currently [`../fermentation_chamber/`](../fermentation_chamber/).
+
+The generic provider ownership model is documented in [`../../../docs/backends/fermentation-control.md`](../../../docs/backends/fermentation-control.md).
 
 ## Responsibilities
 
@@ -17,7 +19,40 @@ It does **not** control a fermentation chamber, heater, cooler or fan. Chamber r
 - retain raw observation metadata alongside normalized values;
 - calculate fermentation progress and estimated ABV;
 - calculate gravity stability and readiness for temperature rise/cold crash;
+- expose process-level recommended beer/liquid temperature when enough trusted context exists;
 - persist runtime configuration and recorded manual observations.
+
+## Hardware-neutral strategy boundary
+
+`fermentation_tracking` describes the fermentation process, not the hardware used to control it.
+
+Conceptually:
+
+```text
+fermentation_tracking
+  observations / readiness / recommended beer target
+        |
+        v
+selected physical provider
+  translates target for its controller
+        |
+        v
+local controller
+  owns actual heat/cool regulation
+```
+
+Tracking must not need to know whether the beer is controlled by:
+
+```text
+fermentation_chamber
+future Grainfather fermenter provider
+manual / monitor-only process
+future hardware provider
+```
+
+This keeps recipe/process strategy reusable across different fermentation hardware.
+
+The tracking target is a **process target**. A provider may need to translate it. For example, the chamber provider can derive a chamber-air setpoint from the desired beer temperature rather than writing the beer target directly to the room/chamber controller.
 
 ## Persistence
 
@@ -181,6 +216,7 @@ Additional last-observation/recommended-temperature/summary sensors are register
 1. Gravity and temperature source policies are independent by design.
 2. Refractometer displayed SG is not hydrometer SG during fermentation.
 3. Raw observation data should remain auditable after normalization.
-4. Tracking recommends readiness/temperature changes but does not actuate chamber hardware.
+4. Tracking may recommend process-level temperature changes but must not actuate or translate hardware-specific setpoints.
 5. Storage changes require migration/backward-compatibility consideration.
 6. Do not infer stable FG from a live automatic value without sufficient history evidence.
+7. Keep tracking independent of the selected physical fermentation provider.
