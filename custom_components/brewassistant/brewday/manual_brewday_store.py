@@ -9,10 +9,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 from ..const import DOMAIN
 from .brewday_runtime_core import BF_STATUS, brewfather_session_active, entity_candidates
 from .manual_brewday_runtime import ManualRuntimeSession, ManualRuntimeState
-from .rapt_profile_runtime import (
-    clear_rapt_profile_stop_guard,
-    rapt_profile_runtime_claims_source,
-)
 
 KEY = "manual_brewday_session"
 HANDOFF_LISTENER_KEY = "manual_brewfather_handoff_listener"
@@ -48,10 +44,19 @@ def _rapt_ownership_error() -> HomeAssistantError:
 
 def _release_stopped_rapt_for_manual(hass: HomeAssistant) -> bool:
     """Release only a confirmed RAPT STOP guard for explicit Manual takeover."""
+    # Import lazily so Brewday can finish initializing before importing the
+    # BrewZilla package through rapt_profile_runtime.
+    from .rapt_profile_runtime import clear_rapt_profile_stop_guard
+
     return clear_rapt_profile_stop_guard(hass, reason="manual_operator_takeover")
 
 
 def _rapt_blocks_manual(hass: HomeAssistant, *, allow_stopped_takeover: bool) -> bool:
+    # Keep this import out of module initialization. rapt_profile_runtime uses
+    # BrewZilla owned-control helpers, whose package imports orchestration and
+    # audit helpers back from Brewday.
+    from .rapt_profile_runtime import rapt_profile_runtime_claims_source
+
     if not rapt_profile_runtime_claims_source(hass):
         return False
     if allow_stopped_takeover and _release_stopped_rapt_for_manual(hass):
