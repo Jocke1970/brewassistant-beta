@@ -1,7 +1,7 @@
 # BrewAssistant Python backend layout
 
 Status: active development  
-Code snapshot documented: 2026-09-05
+Code/documentation snapshot: 2026-09-11
 
 This directory contains the Home Assistant integration entry points plus the Python-owned BrewAssistant backend domains.
 
@@ -14,9 +14,9 @@ The code-local `README.md` files are the first place to check when changing back
 | [`brewday/`](./brewday/) | Normalized Brewday Runtime, Manual Brewday, stage interpretation, physical timing and flight recorder | Runtime/state ownership; no generic hardware control |
 | [`brewzilla/`](./brewzilla/) | BrewZilla/RAPT hot-side adapter and physical control/safety chain | Hardware control with phase authority, guards and ABORT |
 | [`cooling/`](./cooling/) | Cooling Runtime v2, CFC/immersion/manual cooling and cooling advice | Read/advice today; BrewZilla wort pump is operator-owned |
-| [`fermentation_tracking/`](./fermentation_tracking/) | Independent SG/temperature observations, calculations and readiness | Read/track only |
-| [`fermentation_chamber/`](./fermentation_chamber/) | Chamber-air recommendation and supervised climate target bridge | Recommendation + Supervised Apply |
-| [`fermentation/`](./fermentation/) | Compatibility imports for the two separated fermentation backends | Compatibility only |
+| [`fermentation_tracking/`](./fermentation_tracking/) | Independent SG/temperature observations, calculations, readiness and process-level beer target recommendation | Read/track/strategy only; hardware-agnostic |
+| [`fermentation_chamber/`](./fermentation_chamber/) | Current fermentation physical provider: chamber-air target translation and supervised climate target bridge | Recommendation + Supervised Apply target write |
+| [`fermentation/`](./fermentation/) | Compatibility imports for the separated fermentation backends | Compatibility only |
 | [`carbonation_backend/`](./carbonation_backend/) | Persistent carbonation session and pressure/volume guidance | Read/guidance only |
 | [`climate_backend/`](./climate_backend/) | Kegerator Climate Supervisor | Direct climate-target adjustment when enabled/in scope |
 | [`kegerator/`](./kegerator/) | Serving-fridge guard, fan control/model and serving presets | Policy-mediated fan/legacy guard actions |
@@ -71,9 +71,30 @@ Chill -> Transfer
 
 The BrewZilla internal temperature remains the kettle/safety temperature and must not silently replace an owned CFC outlet sensor.
 
-### Fermentation split
+### Fermentation strategy -> physical provider -> local regulator
 
-`fermentation_tracking` owns observations and fermentation state calculations. `fermentation_chamber` consumes normalized tracking output to recommend chamber air targets. The legacy `fermentation/` package only preserves old imports/registrations.
+The fermentation architecture is deliberately split into three levels:
+
+```text
+fermentation_tracking
+  observations / readiness / desired beer target
+        |
+        v
+selected physical provider
+  translate desired beer target for downstream controller
+        |
+        v
+local controller
+  owns actual heat/cool regulation
+```
+
+Today `fermentation_chamber` is the implemented physical provider. It translates the desired beer/liquid temperature into a chamber-air target and places target changes behind Supervised Apply. After that target is accepted, the downstream Home Assistant climate controller owns actual heater/cooler regulation.
+
+Future fermentation hardware providers, such as a Grainfather fermenter provider, should follow the same contract rather than adding another thermostat loop inside BrewAssistant. Only one physical provider may have write authority for a fermentation session.
+
+The legacy `fermentation/` package only preserves old imports/registrations and must not become the owner of new strategy, provider selection or hardware logic.
+
+See [`../../docs/backends/fermentation-control.md`](../../docs/backends/fermentation-control.md) for the generic provider contract and future-provider rules.
 
 ### Kegerator split
 
