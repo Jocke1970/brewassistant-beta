@@ -29,11 +29,6 @@ from .manual_brewday_store import (
     get_manual_brewday_session,
     pause_manual_brewday_for_brewfather,
 )
-from .rapt_profile_runtime import (
-    RAPT_PROFILE_SOURCE,
-    build_rapt_profile_runtime_snapshot,
-    rapt_profile_runtime_claims_source,
-)
 
 
 MANUAL_RUNTIME_ACTIVE_STATES = {
@@ -105,6 +100,10 @@ def _operator_aborted_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 def source(hass: HomeAssistant) -> str:
     """Return the currently selected Brewday runtime source."""
+    # Import lazily so brewday_audit can finish module initialization before
+    # rapt_profile_runtime imports the BrewZilla package and orchestration hooks.
+    from .rapt_profile_runtime import RAPT_PROFILE_SOURCE, rapt_profile_runtime_claims_source
+
     if rapt_profile_runtime_claims_source(hass):
         return RAPT_PROFILE_SOURCE
     return core_source(hass)
@@ -128,6 +127,10 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """
     if brewday_operator_abort_active(hass):
         return _operator_aborted_snapshot(hass)
+
+    # Lazy import prevents the startup cycle brewday_audit -> brewday_runtime ->
+    # rapt_profile_runtime -> brewzilla.__init__ -> orchestration -> brewday_audit.
+    from .rapt_profile_runtime import build_rapt_profile_runtime_snapshot
 
     rapt_snapshot = build_rapt_profile_runtime_snapshot(hass)
     if rapt_snapshot is not None:
