@@ -25,6 +25,7 @@ def build_fermentation_snapshot(
     external_target_temperature_c: float | None = None,
     external_target_temperature_entity: str | None = None,
     external_target_source: str | None = None,
+    external_target_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return normalized SG, beer temperature, and current fermentation target."""
     runtime = get_runtime(hass)
@@ -87,6 +88,7 @@ def build_fermentation_snapshot(
     recommended_temperature = None
     recommended_temperature_source = None
     recommended_temperature_entity = None
+    schedule_metadata = external_target_metadata or {}
     if runtime.active:
         if external_target_temperature_c is not None:
             recommended_temperature = round(float(external_target_temperature_c), 2)
@@ -97,6 +99,7 @@ def build_fermentation_snapshot(
                 runtime.temp_rise_temperature_c if ready_rise else runtime.primary_temperature_c
             )
             recommended_temperature_source = "tracking_rule"
+            schedule_metadata = {}
 
     summary_parts = [status]
     if current_sg is not None:
@@ -166,6 +169,19 @@ def build_fermentation_snapshot(
         "recommended_temperature_c": recommended_temperature,
         "recommended_temperature_source": recommended_temperature_source,
         "recommended_temperature_entity": recommended_temperature_entity,
+        "temperature_schedule_ramp_active": schedule_metadata.get("ramp_active"),
+        "temperature_schedule_ramp_start_temperature_c": schedule_metadata.get(
+            "ramp_start_temperature_c"
+        ),
+        "temperature_schedule_ramp_target_temperature_c": schedule_metadata.get(
+            "ramp_target_temperature_c"
+        ),
+        "temperature_schedule_ramp_days": schedule_metadata.get("ramp_days"),
+        "temperature_schedule_ramp_started_at": schedule_metadata.get("ramp_started_at"),
+        "temperature_schedule_ramp_ends_at": schedule_metadata.get("ramp_ends_at"),
+        "temperature_schedule_ramp_progress_percent": schedule_metadata.get(
+            "ramp_progress_percent"
+        ),
         "wort_correction_factor": runtime.wort_correction_factor,
         "observation_count": len(runtime.observations),
         "sample_count": gravity_count,
@@ -174,7 +190,7 @@ def build_fermentation_snapshot(
         "recent_samples": [item for item in recent if item.get("metric") == METRIC_GRAVITY],
         "started_at": runtime.started_at.isoformat() if runtime.started_at else None,
         "updated_at": runtime.updated_at.isoformat() if runtime.updated_at else None,
-        "source_priority": "per-metric policy; external schedule target overrides tracking temperature rules when available",
+        "source_priority": "per-metric policy; BrewAssistant recipe schedule overrides tracking temperature rules when available",
         "stability_source": "persisted gravity observations",
         "storage_key": STORAGE_KEY,
         "backend": "fermentation_tracking",
