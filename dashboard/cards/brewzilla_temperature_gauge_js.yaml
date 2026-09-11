@@ -1,0 +1,19 @@
+# Draft wrapper for dashboard/js/brewassistant-temperature-gauge.js
+# Keep the existing gauge-card-pro card in place until this draft has been
+# physically/UI validated in Home Assistant.
+
+type: conditional
+conditions:
+  - condition: state
+    entity: sensor.brewassistant_brewday_stage_group
+    state_not: boil
+  - condition: numeric_state
+    entity: sensor.brewassistant_brewzilla_wort_temperature
+    above: 0
+card:
+  type: custom:brewassistant-temperature-gauge
+  min: 20
+  max: 80
+  precision_tolerance: 0.3
+  quality_tolerance: 1.0
+  background_tolerance: 1.5

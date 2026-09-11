@@ -1,0 +1,31 @@
+name: Branch promotion guard
+
+on:
+  pull_request:
+    branches: [beta, main]
+
+permissions:
+  contents: read
+
+jobs:
+  promotion-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate promotion source branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "Promotion: ${HEAD_REF} -> ${BASE_REF}"
+
+          if [[ "${BASE_REF}" == "beta" && "${HEAD_REF}" != "dev" ]]; then
+            echo "ERROR: beta may only receive promotion PRs from dev."
+            exit 1
+          fi
+
+          if [[ "${BASE_REF}" == "main" && "${HEAD_REF}" != "beta" ]]; then
+            echo "ERROR: main may only receive promotion PRs from beta."
+            exit 1
+          fi
+
+          echo "Promotion source is valid."

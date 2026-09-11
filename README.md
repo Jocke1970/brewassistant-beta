@@ -1,6 +1,6 @@
-# BrewAssistant v0.2.0-beta.8
+# BrewAssistant v0.2.0-beta.9 candidate
 
-**BrewAssistant v0.2.0-beta.8** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, cooling, carbonation, climate/serving supervision, fermentation tracking, dashboard cards and notifications.
+**BrewAssistant** is a modular Home Assistant brewing assistant for supervised Brewday runtime intelligence, BrewZilla/RAPT hardware control and visualization, cooling, carbonation, climate/serving supervision, fermentation tracking, dashboard cards and notifications.
 
 > [!WARNING]
 > BrewAssistant Beta is under active development. It is intended for supervised hobby brewing and testing, not unattended automation. Always verify hot-side actions, electrical safety, pump/heater state, pressure equipment, sanitation and fermentation decisions manually.
@@ -10,8 +10,43 @@ The project has moved away from YAML-heavy Home Assistant packages toward a Pyth
 ```text
 Python custom integration = runtime + ownership + logic + safety + hardware decisions
 Dashboard YAML             = presentation + explicit operator actions
-Legacy local packages      = compatibility/cleanup only
 ```
+
+---
+
+## Development / release flow
+
+BrewAssistant now uses only three long-lived branches:
+
+```text
+dev  ->  beta  ->  main  ->  GitHub Release
+```
+
+- `dev` = ongoing development
+- `beta` = integrated practical-test candidate
+- `main` = installable/runnable version
+- GitHub releases are created only from `main`
+
+Promotion PRs use **Create a merge commit** so the permanent branches keep an explicit ancestry chain. Do not squash `dev -> beta` or `beta -> main`.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## Repository watchdogs
+
+The repository runs:
+
+```text
+CI / Python compile / fatal Ruff checks
+pytest on Python 3.11 / 3.12 / 3.13
+HACS Action
+Hassfest
+Dependabot
+promotion-branch guard
+```
+
+CI, HACS and Hassfest run across `dev`, `beta` and `main`. Dependabot targets `dev`.
 
 ---
 
@@ -21,189 +56,186 @@ Legacy local packages      = compatibility/cleanup only
 | --- | --- |
 | Current roadmap | [`docs/roadmap.md`](docs/roadmap.md) |
 | Brewday ↔ BrewZilla operator/control flow | [`docs/brewday-brewzilla.md`](docs/brewday-brewzilla.md) |
-| Physical Brewday validation 2026-08-31 | [`docs/physical-validation-2026-08-31.md`](docs/physical-validation-2026-08-31.md) |
+| Latest physical validation | [`docs/physical-validation-2026-09-05.md`](docs/physical-validation-2026-09-05.md) |
+| Previous physical validation | [`docs/physical-validation-2026-08-31.md`](docs/physical-validation-2026-08-31.md) |
+| Beta.9 candidate release notes | [`docs/beta9-release-notes.md`](docs/beta9-release-notes.md) |
 | Flight Recorder / Event Log | [`docs/brewday-audit.md`](docs/brewday-audit.md) |
-| BrewZilla backend responsibilities | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
+| BrewZilla backend summary | [`docs/backends/brewzilla-backend.md`](docs/backends/brewzilla-backend.md) |
+| BrewZilla code-local architecture | [`custom_components/brewassistant/brewzilla/README.md`](custom_components/brewassistant/brewzilla/README.md) |
 | Cooling backend responsibilities | [`docs/backends/cooling-backend.md`](docs/backends/cooling-backend.md) |
-| BrewZilla Advice control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
+| BrewZilla control profile | [`docs/brewzilla-control-profile.md`](docs/brewzilla-control-profile.md) |
 | Equipment Learning | [`docs/brewzilla-equipment-learning.md`](docs/brewzilla-equipment-learning.md) |
 | Dashboard baseline | [`docs/dashboard-baselines.md`](docs/dashboard-baselines.md) |
 | Localization | [`docs/localization.md`](docs/localization.md) |
-| Beta 8 release notes | [`docs/beta8-release-notes.md`](docs/beta8-release-notes.md) |
+| Development / release policy | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
-Backend docs should explain intent, safety boundaries, ownership, event-log proof markers and operator controls rather than merely restating code structure.
-
----
-
-## AI-assisted development
-
-BrewAssistant is a hobby/beta project developed collaboratively by Joachim Eriksson and ChatGPT. Large parts of the Python integration, dashboard YAML, documentation, refactoring and troubleshooting have been generated or iterated with ChatGPT from real Home Assistant/BrewZilla tests and operator feedback.
-
-The generated code should be treated as experimental and reviewed carefully before use anywhere it can affect heat, pumps, cooling, pressure equipment or other physical brewing hardware.
+Historical physical-validation documents are evidence snapshots and should not be rewritten to make later fixes look retroactively correct.
 
 ---
 
 ## Current hot-side architecture
 
-BrewAssistant is an **operator-supervised** hot-side controller.
+BrewAssistant is an operator-supervised hot-side controller.
 
 ```text
 Brewfather Brew Tracker or Manual Brewday
         ↓
 normalized Brewday Runtime
         ↓
-BrewZilla orchestration + safety guards
+BrewZilla orchestration + phase/safety guards
         ↓
-Supervised Apply for positive AUTO actions
+BrewZilla/RAPT physical target / heat / pump
         ↓
-BrewZilla/RAPT hardware
-        ↓
-Flight Recorder + passive learning evidence
+Flight Recorder + diagnostics + passive learning evidence
 ```
 
 Safety priority:
 
 ```text
-ABORT / safe-down
-  > runtime/source ownership
-  > explicit positive confirmation
-  > normal orchestration / advice / learning
+ABORT / hard safety
+  > source ownership
+  > dedicated phase authority
+  > generic supervised positive control
+  > local-regulation preservation
+  > advice / learning / UI
 ```
-
-Runtime progression does not itself authorize physical positive actions.
 
 ---
 
 ## Brewfather ownership baseline
 
-Brewfather batch phase and Brew Tracker execution are not the same thing.
+Brewfather batch phase and Brew Tracker execution are separate concepts.
 
 ```text
 Planning
   -> visible/ready
   -> no hot-side ownership
 
-Brewing but paused on initial Start step
+Brewing but still on initial Start step
   -> visible/ready
   -> no hot-side ownership
 
-Brewing after positive tracker-start evidence
+positive tracker-start evidence
   -> Brewfather becomes hot-side runtime owner
 
-Started tracker paused later
+started tracker paused later
   -> ownership remains latched to that tracker/batch
 ```
 
 `active: true` alone is not start evidence.
 
-This behavior was physically validated on 2026-08-29: moving the batch to Brewing without Play left BrewAssistant non-owning and BrewZilla outputs safe; Play then produced the expected Brewfather takeover.
+This behavior was physically validated during the 2026-08-29 supervised run.
 
 ---
 
-## Supervised Apply baseline
+## Dedicated Heatstrike / Mash-In controller
 
-Automatic positive actions require explicit confirmation, including:
+`Brewfather Play` authorizes the dedicated pre-mash physical controller. Inside this phase BrewAssistant may make bounded target/heat/pump adjustments without opening a new generic confirmation for every small modulation.
 
-```text
-target increase
-heat-utilization increase
-pump-utilization increase
-heater ON
-pump ON
-```
+Outside dedicated phase authority, positive automatic control continues through Supervised Apply where applicable.
 
-The general Brewday cockpit deliberately separates three operator intents:
+Temperature roles:
 
 ```text
-CONFIRM ACTION / BEKRÄFTA ÅTGÄRD
-  -> execute a still-valid pending positive plan
-
-REJECT ACTION / AVVISA ÅTGÄRD
-  -> reject one pending plan only
-
-ABORT BREWDAY / ABORT BRYGGDAG
-  -> physical BrewZilla safe-down + persistent BA ownership lock
+external MASH/process probe = readiness + process authority
+BrewZilla internal/WORT     = kettle context + limiter/safety view
 ```
 
-After Brewday ABORT, control is released only by:
-
-```text
-REARM CONTROL / ÅTERAKTIVERA STYRNING
-```
-
-Rearm does not bypass BrewZilla's independent hardware ABORT lockout.
+The external process probe remains hot-side-owned from Heat strike through Pre-boil, then is released at Boil for later Cooling/CFC ownership when applicable.
 
 ---
 
-## Physically validated hot-side chain
+## Heatstrike gradient relief — PR #197
 
-The supervised Brewfather/BrewZilla baseline has verified:
+The 2026-09-05 field test reproduced a physical deadlock where the external MASH/BLE probe was still below strike while BrewZilla internal temperature had already crossed the target.
 
-```text
-✅ Planning can start/keep Flight Recorder without owning hot side
-✅ Brewing pre-start does not own hot side even with active:true
-✅ Play / paused->running creates Brewfather ownership
-✅ Planning -> pre-start -> Play remains one Flight Recorder session
-✅ pending confirmation causes no positive physical write
-✅ explicit confirmation applies heat utilization
-✅ explicit confirmation applies pump utilization
-✅ explicit confirmation turns heater ON
-✅ explicit confirmation turns pump ON
-✅ supervised_executed is recorded after complete plan execution
-✅ hardware ABORT turns heater OFF
-✅ hardware ABORT turns pump OFF
-✅ hardware ABORT zeros both utilizations
-✅ hardware ABORT lockout blocks recreated positive actions
-✅ Brewday ABORT performs physical safe-down and latches BA ownership off
-✅ Brewfather cannot reclaim BA ownership while Brewday control is aborted
-✅ HA restart preserves the Brewday operator ABORT latch
-✅ explicit rearm restores eligibility without bypassing hardware lockout
-```
-
-The 2026-08-31 water validation then exposed and drove fixes for two near-strike edge cases:
+Current narrow exception:
 
 ```text
-✅ Heatstrike final-approach dead zone identified and fixed in PR #193
-✅ BrewZilla local regulation now remains active through final approach / READY
-✅ Mash-In readiness stale-RAPT behavior bounded in PR #194
-✅ automatic Mash-In READY requires fresh canonical process telemetry within ±1.0 °C
-✅ stale process values are diagnostic-only and cannot create automatic READY
-✅ bounded operator strike acceptance is available up to ±2.0 °C without changing hardware state
+MASH/BLE still below strike
+AND hottest-view overshoot > +0.5 °C
+AND hottest-view overshoot <= +1.5 °C
+
+=> heat authority capped at 15%
+=> BrewZilla local thermostat remains available
+=> pump 100% for equalization
 ```
 
-See [`docs/physical-validation-2026-08-31.md`](docs/physical-validation-2026-08-31.md) for the detailed evidence and current contract.
+Hard boundary:
+
+```text
+hottest-view overshoot > +1.5 °C
+  -> explicit hard stop
+```
+
+This is not a general relaxation of overshoot safety; it only prevents the observed pre-mash gradient deadlock.
 
 ---
 
-## RAPT Cloud Link safeguards
+## Mash-In handoff — PR #202
 
-RCL can replay stale configuration after a successful write. BrewAssistant keeps effective runtime target separate from physical device target and uses a narrow confirmed-plan readback grace so an old target/heat/pump number value does not immediately reopen confirmation for the same already-approved intention.
+Current physical state machine:
 
-The grace does not silently re-energize heater or pump and ABORT invalidates it immediately.
+```text
+ready_for_mash_in
+  -> Mash-In Started
+  -> target releases toward mash target
+  -> pump OFF / utilization 0%
+  -> grain addition / stirring
+  -> wait for real Brewfather progression
+  -> Mash-In Complete
+  -> normal circulation resumes
+```
 
-Telemetry recovery is separate from physical control: stale RCL may trigger refresh/reload diagnostics, but recovery itself must not rewrite target/heat/pump when BrewZilla already has a valid local regulation target.
+Automatic completion requires real progression evidence:
 
-For Mash-In readiness, stale external process temperature is retained for diagnostics only. Automatic READY requires fresh canonical process telemetry; the bounded operator acceptance path does not itself change target, heat, pump or utilization.
+```text
+paused -> running
+OR
+active Brewfather mash target moves away from captured strike target
+```
+
+A plain Brewfather `running` state alone is not sufficient.
+
+The Mash-In status UI now prefers live gate/orchestration state and should disappear after completion.
+
+---
+
+## ABORT / safe-down
+
+The authoritative BrewZilla ABORT path performs:
+
+```text
+heater OFF
+pump OFF
+heat utilization 0
+pump utilization 0
+positive-action lockout
+```
+
+Brewday operator ABORT adds a persistent BrewAssistant ownership latch around that physical safe-down. Brewfather cannot silently reclaim hot-side ownership while the latch remains aborted.
+
+The latch survives Home Assistant restart and is released only by explicit rearm.
 
 ---
 
 ## External process-temperature sensor ownership
 
-The optional external process-temperature sensor, e.g. a RAPT BLE Thermometer, has fixed phase-scoped ownership:
+Fixed architecture:
 
 ```text
 Heat strike -> Mash -> Mash out -> Sparge -> Pre-boil
-  owner = Brewday/BrewZilla hot-side runtime
+  owner = Brewday / BrewZilla hot-side
 
 Boil starts
-  Brewday releases external sensor ownership
+  hot-side releases external sensor
 
 Chill -> Transfer
-  owner = Cooling/CFC backend
+  owner = Cooling/CFC when method requires it
   role = CFC outlet / wort-out temperature
 ```
 
-BrewZilla internal temperature remains Brewday Runtime's primary kettle temperature throughout the hot-side process.
+BrewZilla internal temperature remains the primary kettle temperature throughout the hot-side path.
 
 ---
 
@@ -218,24 +250,24 @@ BrewZilla internal temperature remains Brewday Runtime's primary kettle temperat
 ✅ deterministic one-log-per-brewday boundary
 ✅ Brewfather actual-start ownership gate
 ✅ BrewZilla target/heat/pump orchestration
-✅ explicit/non-bypassable Supervised Apply
-✅ cancelled-plan suppression
-✅ confirmed RCL number-readback grace
+✅ dedicated Heatstrike/Mash-In phase authority
+✅ Heatstrike gradient relief
+✅ Mash-In progression/pump-hold contract
+✅ generic Supervised Apply outside dedicated phase authority
+✅ confirmed RCL readback grace
 ✅ BrewZilla hardware ABORT + lockout
 ✅ Brewday persistent operator ABORT + explicit rearm
-✅ clean heat-strike + final-approach local-regulation model
-✅ Mash-In state machine + bounded readiness override
 ✅ read-only physical ramp/hold timing telemetry
-✅ RCL recovery/local-regulation preservation
+✅ RCL recovery / fail-passive local-regulation preservation
 ✅ Manual channel-scoped target/heat/pump ownership
 ✅ passive BrewZilla Equipment Learning foundation
 ✅ Cooling Runtime v2 / CFC + coil/manual-water method model
-✅ Counterflow Wort Cooling backend/cockpit
 ✅ Carbonation Runtime/cockpit
 ✅ Climate Supervisor
 ✅ Kegerator fan/guard logic
-✅ Fermentation cockpit foundation
+✅ Fermentation tracking/cockpit foundation
 ✅ English canonical + Swedish dashboard mirror policy
+✅ HACS/Hassfest/CI watchdog baseline
 ```
 
 ---
@@ -243,16 +275,25 @@ BrewZilla internal temperature remains Brewday Runtime's primary kettle temperat
 ## Immediate validation focus
 
 ```text
-🧪 continuous water regression of the PR #193 Heatstrike final-approach contract
-🧪 automatic Mash-In READY only from fresh process telemetry within ±1.0 °C
-🧪 bounded operator strike acceptance when RAPT Cloud process telemetry is stale
-🧪 Mash-In Started checkpoint: pump OFF + pump utilization 0 before grain addition
-🧪 physical 66°C hold and separate 66 -> 72°C ramp timing
-🧪 first supervised real-mash heat-strike/mash-in validation
-🧪 boil ramp / boil validation
+🧪 verify Heatstrike gradient relief converges MASH/BLE safely
+🧪 verify > +1.5 °C hottest-view overshoot still hard-stops heat
+🧪 verify Mash-In Started holds pump OFF / 0% until BF progression
+🧪 verify Mash-In waiting UI clears immediately after completion
+🧪 validate physical 66 °C hold and separate 66 -> 72 °C ramp timing
+🧪 first supervised real-mash Heatstrike/Mash-In validation
+🧪 Mash out / Sparge / Pre-boil
+🧪 boil ramp / boil
 🧪 external process-sensor release at Boil
 🧪 Cooling/CFC acquisition during Chill/Transfer
 🧪 Equipment Learning planned-vs-actual timing evidence
 ```
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the detailed sequence.
+
+---
+
+## AI-assisted development
+
+BrewAssistant is a hobby/beta project developed collaboratively by Joachim Eriksson and ChatGPT. Python integration code, dashboard YAML, documentation, refactoring and troubleshooting are iterated from real Home Assistant/BrewZilla tests and operator feedback.
+
+Generated or AI-assisted code should be treated as experimental and reviewed carefully before use anywhere it can affect heat, pumps, cooling, pressure equipment or other physical brewing hardware.

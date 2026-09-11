@@ -43,18 +43,36 @@ from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
-def _fresh_entity_age_seconds(entity_state: State | None) -> int | None:
+def _reported_entity_age_seconds(entity_state: State | None) -> int | None:
+    """Return age since HA last received/reported this entity.
+
+    CoordinatorEntity may report the same value repeatedly. Control freshness
+    must follow that report traffic rather than treating an unchanged physical
+    value as a dead cloud connection.
+    """
     if entity_state is None:
         return None
-    # Use last_updated rather than last_reported. RCL may report/refresh an old
-    # value without changing the actual temperature, target or utilization. For
-    # BrewZilla control freshness we need value freshness, not only report traffic.
+    timestamp: Any = getattr(entity_state, "last_reported", None) or entity_state.last_updated
+    return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
+
+
+def _value_entity_age_seconds(entity_state: State | None) -> int | None:
+    """Return age since the state/attributes actually changed.
+
+    This remains useful for learning/value-stagnation diagnostics, but it must
+    not be used as RCL poll/report freshness for hot-side control.
+    """
+    if entity_state is None:
+        return None
     timestamp: Any = entity_state.last_updated
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
 
 
-_orchestration._entity_age_seconds = _fresh_entity_age_seconds
-_learning._age_seconds = _fresh_entity_age_seconds
+# RCL/control freshness and physical process freshness use report age. A stable
+# temperature or target is a valid value and must not become "stale" merely
+# because it has not changed. Learning keeps value-change age separately.
+_orchestration._entity_age_seconds = _reported_entity_age_seconds
+_learning._age_seconds = _value_entity_age_seconds
 
 # sensor.brewzilla_power is not a verified BrewZilla entity in this installation
 # and must never participate in control freshness/RCL recovery. The canonical BA
@@ -109,7 +127,7 @@ _local_regulation_heat_guard.install_local_regulation_heat_guard()
 
 # Keep the narrow Brewfather paused->running auto-complete bridge. Its older
 # target-safe-down helpers are harmless once Mash-In Started has already made
-# the authoritative 71.8 -> mash-target downshift.
+# the authoritative strike -> mash-target downshift.
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
 
 # Consolidated boundary installed after the lower safety/apply chain: canonical
