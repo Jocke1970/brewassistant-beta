@@ -157,7 +157,7 @@ cards:
               {% set show_temp = value is not none and value_num > 0 and not (kind in ['ramp', 'event'] and (tooltip or desc)) %}
               {% set show_anchor = at_seconds > 0 and duration_seconds <= 0 and not (name_l == 'start' and kind in ['mash', 'boil']) and not (kind in ['ramp', 'event'] and value_num > 0) %}
           - {{ marker }} **{{ label }}**{{ active_state }}{% if checkpoint %} · confirm{% endif %}{% if show_temp %} · {{ temp_display }} °C{% endif %}{% if duration_seconds > 0 %} · {{ (duration_seconds / 60) | round(0) | int }} min{% elif show_anchor %} · at {{ (at_seconds / 60) | round(0) | int }} min remaining{% endif %}{% if detail and detail != label %}  
-            _{{ detail }}_{% endif %}
+            {{ detail }}{% endif %}
             {% endfor %}
           {% endfor %}
 
