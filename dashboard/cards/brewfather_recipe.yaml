@@ -1,73 +1,119 @@
 type: vertical-stack
 cards:
-  - type: markdown
-    title: Brewfather Recipe
-    content: |
-      {% set stage_entity = 'sensor.brewfather_brew_tracker_stage' %}
-      {% set status_entity = 'sensor.brewfather_brew_tracker_status' %}
-      {% set raw_entity = 'sensor.brewfather_brew_tracker_raw' %}
-      {% set recipe_data = state_attr(raw_entity, 'recipe') %}
-      {% set recipe = (recipe_data.get('name') if recipe_data is mapping else none) or state_attr(status_entity, 'brew_tracker_recipe_name') or state_attr(stage_entity, 'brew_tracker_recipe_name') or state_attr(raw_entity, 'recipe_name') or state_attr(raw_entity, 'brew_tracker_recipe_name') or '—' %}
-      {% set batch = state_attr(status_entity, 'brew_tracker_batch_name') or state_attr(stage_entity, 'brew_tracker_batch_name') or state_attr(raw_entity, 'batch_name') or state_attr(raw_entity, 'brew_tracker_batch_name') or '—' %}
-      {% set batch_id = state_attr(status_entity, 'brew_tracker_batch_id') or state_attr(stage_entity, 'brew_tracker_batch_id') or state_attr(raw_entity, 'batch_id') or '—' %}
-      {% set batch_status = state_attr(status_entity, 'brew_tracker_batch_status') or state_attr(raw_entity, 'brew_tracker_batch_status') or '—' %}
-      {% set current = state_attr(stage_entity, 'current_step') %}
-      {% set nxt = state_attr(stage_entity, 'next_step') %}
+  - type: custom:expander-card
+    title-card:
+      type: custom:button-card
+      entity: sensor.brewfather_brew_tracker_raw
+      icon: mdi:notebook-outline
+      show_state: false
+      show_label: true
+      name: |
+        [[[
+          const raw = states['sensor.brewfather_brew_tracker_raw']?.attributes || {};
+          const status = states['sensor.brewfather_brew_tracker_status']?.attributes || {};
+          const stage = states['sensor.brewfather_brew_tracker_stage']?.attributes || {};
+          return raw.recipe?.name || status.brew_tracker_recipe_name || stage.brew_tracker_recipe_name || raw.recipe_name || raw.brew_tracker_recipe_name || 'Brewfather recipe';
+        ]]]
+      label: |
+        [[[
+          const raw = states['sensor.brewfather_brew_tracker_raw']?.attributes || {};
+          const status = states['sensor.brewfather_brew_tracker_status']?.attributes || {};
+          const stage = states['sensor.brewfather_brew_tracker_stage']?.attributes || {};
+          const batch = status.brew_tracker_batch_name || stage.brew_tracker_batch_name || raw.batch_name || raw.brew_tracker_batch_name || '—';
+          const batchStatus = status.brew_tracker_batch_status || raw.brew_tracker_batch_status || '—';
+          return `Brewfather recipe · ${batch} · ${batchStatus}`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 16px
+          - padding: 10px 12px
+          - background: rgba(127,127,127,.035)
+          - border: 1px solid rgba(127,127,127,.12)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 32px minmax(0,1fr)
+          - column-gap: 9px
+        icon:
+          - width: 22px
+          - height: 22px
+        name:
+          - justify-self: start
+          - font-size: 15px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 10px
+          - font-weight: 750
+          - opacity: 0.64
+    cards:
+      - type: markdown
+        content: |
+          {% set stage_entity = 'sensor.brewfather_brew_tracker_stage' %}
+          {% set status_entity = 'sensor.brewfather_brew_tracker_status' %}
+          {% set raw_entity = 'sensor.brewfather_brew_tracker_raw' %}
+          {% set recipe_data = state_attr(raw_entity, 'recipe') %}
+          {% set recipe = (recipe_data.get('name') if recipe_data is mapping else none) or state_attr(status_entity, 'brew_tracker_recipe_name') or state_attr(stage_entity, 'brew_tracker_recipe_name') or state_attr(raw_entity, 'recipe_name') or state_attr(raw_entity, 'brew_tracker_recipe_name') or '—' %}
+          {% set batch = state_attr(status_entity, 'brew_tracker_batch_name') or state_attr(stage_entity, 'brew_tracker_batch_name') or state_attr(raw_entity, 'batch_name') or state_attr(raw_entity, 'brew_tracker_batch_name') or '—' %}
+          {% set batch_id = state_attr(status_entity, 'brew_tracker_batch_id') or state_attr(stage_entity, 'brew_tracker_batch_id') or state_attr(raw_entity, 'batch_id') or '—' %}
+          {% set batch_status = state_attr(status_entity, 'brew_tracker_batch_status') or state_attr(raw_entity, 'brew_tracker_batch_status') or '—' %}
+          {% set current = state_attr(stage_entity, 'current_step') %}
+          {% set nxt = state_attr(stage_entity, 'next_step') %}
 
-      ## {{ recipe }}
-      **Batch:** {{ batch }} · **Status:** {{ batch_status }}  
-      **Batch ID:** `{{ batch_id }}`
+          **Batch:** {{ batch }} · **Status:** {{ batch_status }}  
+          **Batch ID:** `{{ batch_id }}`
 
-      {% if current is mapping %}
-      **Now:** {{ current.get('description') or current.get('tooltip') or current.get('name') or '—' }}
-      {% endif %}
-      {% if nxt is mapping %}
-      **Next:** {{ nxt.get('description') or nxt.get('tooltip') or nxt.get('name') or '—' }}
-      {% endif %}
+          {% if current is mapping %}
+          **Now:** {{ current.get('description') or current.get('tooltip') or current.get('name') or '—' }}
+          {% endif %}
+          {% if nxt is mapping %}
+          **Next:** {{ nxt.get('description') or nxt.get('tooltip') or nxt.get('name') or '—' }}
+          {% endif %}
 
-      {% if recipe_data is mapping %}
-      {% set boil_time = recipe_data.get('boilTime') %}
-      {% set batch_size = recipe_data.get('batchSize') %}
-      {% set og = recipe_data.get('og') %}
-      {% set fg = recipe_data.get('fg') %}
-      {% set ibu = recipe_data.get('ibu') %}
-      {% if boil_time is not none or batch_size is not none or og is not none or fg is not none or ibu is not none %}
-      **Recipe overview:**{% if batch_size is not none %} {{ batch_size }} L{% endif %}{% if boil_time is not none %} · boil {{ boil_time }} min{% endif %}{% if og is not none %} · OG {{ '%.3f' | format(og | float) }}{% endif %}{% if fg is not none %} · FG {{ '%.3f' | format(fg | float) }}{% endif %}{% if ibu is not none %} · {{ ibu | round(0) | int }} IBU{% endif %}
-      {% endif %}
-      {% else %}
-      _Full recipe data is waiting for the Brewfather adapter._
-      {% endif %}
+          {% if recipe_data is mapping %}
+          {% set boil_time = recipe_data.get('boilTime') %}
+          {% set batch_size = recipe_data.get('batchSize') %}
+          {% set og = recipe_data.get('og') %}
+          {% set fg = recipe_data.get('fg') %}
+          {% set ibu = recipe_data.get('ibu') %}
+          {% if boil_time is not none or batch_size is not none or og is not none or fg is not none or ibu is not none %}
+          **Recipe overview:**{% if batch_size is not none %} {{ batch_size }} L{% endif %}{% if boil_time is not none %} · boil {{ boil_time }} min{% endif %}{% if og is not none %} · OG {{ '%.3f' | format(og | float) }}{% endif %}{% if fg is not none %} · FG {{ '%.3f' | format(fg | float) }}{% endif %}{% if ibu is not none %} · {{ ibu | round(0) | int }} IBU{% endif %}
+          {% endif %}
+          {% else %}
+          _Full recipe data is waiting for the Brewfather adapter._
+          {% endif %}
 
-      ### 🌾 Mash schedule
-      {% set mash = recipe_data.get('mash') if recipe_data is mapping else none %}
-      {% set mash_steps = mash.get('steps', []) if mash is mapping else [] %}
-      {% if mash_steps | length > 0 %}
-      {% for step in mash_steps if step is mapping %}
-        {% set name = step.get('name') or step.get('type') or ('Step ' ~ loop.index) %}
-        {% set temp = step.get('stepTemp') %}
-        {% set hold = step.get('stepTime') %}
-        {% set ramp = step.get('rampTime') %}
-      - **{{ name }}**{% if temp is not none %} · {{ temp }} °C{% endif %}{% if hold is not none %} · {{ hold }} min{% endif %}{% if ramp is not none and ramp | float(0) > 0 %} · ramp {{ ramp }} min{% endif %}
-      {% endfor %}
-      {% else %}
-      _No mash schedule is available in the full recipe data yet._
-      {% endif %}
+          ### 🌾 Mash schedule
+          {% set mash = recipe_data.get('mash') if recipe_data is mapping else none %}
+          {% set mash_steps = mash.get('steps', []) if mash is mapping else [] %}
+          {% if mash_steps | length > 0 %}
+          {% for step in mash_steps if step is mapping %}
+            {% set name = step.get('name') or step.get('type') or ('Step ' ~ loop.index) %}
+            {% set temp = step.get('stepTemp') %}
+            {% set hold = step.get('stepTime') %}
+            {% set ramp = step.get('rampTime') %}
+          - **{{ name }}**{% if temp is not none %} · {{ temp }} °C{% endif %}{% if hold is not none %} · {{ hold }} min{% endif %}{% if ramp is not none and ramp | float(0) > 0 %} · ramp {{ ramp }} min{% endif %}
+          {% endfor %}
+          {% else %}
+          _No mash schedule is available in the full recipe data yet._
+          {% endif %}
 
-      ### 🌿 Hop additions
-      {% set hops = recipe_data.get('hops', []) if recipe_data is mapping else [] %}
-      {% if hops | length > 0 %}
-      {% for hop in hops if hop is mapping %}
-        {% set name = hop.get('name') or ('Hop ' ~ loop.index) %}
-        {% set amount = hop.get('amount') %}
-        {% set use = hop.get('use') or '—' %}
-        {% set time = hop.get('time') %}
-        {% set time_unit = hop.get('timeUnit') or ('min' if time is not none else '') %}
-        {% set temp = hop.get('temp') or hop.get('temperature') %}
-      - **{{ name }}**{% if amount is not none %} · {{ amount }} g{% endif %} · {{ use }}{% if time is not none %} · {{ time }} {{ time_unit }}{% endif %}{% if temp is not none %} · {{ temp }} °C{% endif %}
-      {% endfor %}
-      {% else %}
-      _No hop additions are available in the full recipe data yet._
-      {% endif %}
+          ### 🌿 Hop additions
+          {% set hops = recipe_data.get('hops', []) if recipe_data is mapping else [] %}
+          {% if hops | length > 0 %}
+          {% for hop in hops if hop is mapping %}
+            {% set name = hop.get('name') or ('Hop ' ~ loop.index) %}
+            {% set amount = hop.get('amount') %}
+            {% set use = hop.get('use') or '—' %}
+            {% set time = hop.get('time') %}
+            {% set time_unit = hop.get('timeUnit') or ('min' if time is not none else '') %}
+            {% set temp = hop.get('temp') or hop.get('temperature') %}
+          - **{{ name }}**{% if amount is not none %} · {{ amount }} g{% endif %} · {{ use }}{% if time is not none %} · {{ time }} {{ time_unit }}{% endif %}{% if temp is not none %} · {{ temp }} °C{% endif %}
+          {% endfor %}
+          {% else %}
+          _No hop additions are available in the full recipe data yet._
+          {% endif %}
 
   - type: custom:expander-card
     title: BrewTracker execution schedule
