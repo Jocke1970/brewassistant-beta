@@ -466,7 +466,8 @@ Current key surfaces include:
 ```text
 brewassistant_brewday          = overview / source chain
 brewtracker_runtime            = BrewTracker runtime
-rapt_profile_runtime           = RAPT runtimerewzilla_mash_in_controls      = physical Mash-In gate
+rapt_profile_runtime           = RAPT runtime
+brewzilla_mash_in_controls     = physical Mash-In gate
 brewday_operator_actions       = operator controls
 brewday_details                = diagnostics/details
 brewfather_recipe              = full recipe + humanized execution schedule
