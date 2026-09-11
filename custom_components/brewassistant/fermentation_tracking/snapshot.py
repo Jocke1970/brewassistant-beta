@@ -22,8 +22,11 @@ def build_fermentation_snapshot(
     external_temperature_c: float | None = None,
     external_temperature_updated_at: datetime | None = None,
     external_temperature_entity: str | None = None,
+    external_target_temperature_c: float | None = None,
+    external_target_temperature_entity: str | None = None,
+    external_target_source: str | None = None,
 ) -> dict[str, Any]:
-    """Return normalized SG and temperature regardless of measurement source."""
+    """Return normalized SG, beer temperature, and current fermentation target."""
     runtime = get_runtime(hass)
     gravity = resolve_candidate(
         runtime.gravity_source_mode,
@@ -82,10 +85,18 @@ def build_fermentation_snapshot(
         next_action = "Continue fermentation and record the next gravity observation"
 
     recommended_temperature = None
+    recommended_temperature_source = None
+    recommended_temperature_entity = None
     if runtime.active:
-        recommended_temperature = (
-            runtime.temp_rise_temperature_c if ready_rise else runtime.primary_temperature_c
-        )
+        if external_target_temperature_c is not None:
+            recommended_temperature = round(float(external_target_temperature_c), 2)
+            recommended_temperature_source = external_target_source or "external_schedule"
+            recommended_temperature_entity = external_target_temperature_entity
+        else:
+            recommended_temperature = (
+                runtime.temp_rise_temperature_c if ready_rise else runtime.primary_temperature_c
+            )
+            recommended_temperature_source = "tracking_rule"
 
     summary_parts = [status]
     if current_sg is not None:
@@ -153,6 +164,8 @@ def build_fermentation_snapshot(
         "primary_temperature_c": runtime.primary_temperature_c,
         "temp_rise_temperature_c": runtime.temp_rise_temperature_c,
         "recommended_temperature_c": recommended_temperature,
+        "recommended_temperature_source": recommended_temperature_source,
+        "recommended_temperature_entity": recommended_temperature_entity,
         "wort_correction_factor": runtime.wort_correction_factor,
         "observation_count": len(runtime.observations),
         "sample_count": gravity_count,
@@ -161,7 +174,7 @@ def build_fermentation_snapshot(
         "recent_samples": [item for item in recent if item.get("metric") == METRIC_GRAVITY],
         "started_at": runtime.started_at.isoformat() if runtime.started_at else None,
         "updated_at": runtime.updated_at.isoformat() if runtime.updated_at else None,
-        "source_priority": "per-metric policy; hybrid uses newest valid and manual wins timestamp ties",
+        "source_priority": "per-metric policy; external schedule target overrides tracking temperature rules when available",
         "stability_source": "persisted gravity observations",
         "storage_key": STORAGE_KEY,
         "backend": "fermentation_tracking",

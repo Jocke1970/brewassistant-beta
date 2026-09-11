@@ -48,6 +48,25 @@ def _needed(s: dict[str, Any]) -> bool:
     )
 
 
+def _checkpoint_control_allowed(s: dict[str, Any]) -> bool:
+    """Return true for an explicit BrewTracker PAUS temperature checkpoint.
+
+    The checkpoint guard has already clamped the requested target to the current
+    paused BrewTracker step and re-evaluated the heat ceiling.  Let the normal
+    apply path execute that already-guarded plan so BA/BZ can finish reaching
+    the checkpoint target while Brewfather's own timer remains paused.
+    """
+    return bool(
+        _paused(s)
+        and s.get("brewtracker_pause_checkpoint_active")
+        and s.get("brewtracker_pause_checkpoint_control_allowed")
+        and not s.get("completed_runtime")
+        and not s.get("abort_lockout_active")
+        and not s.get("execution_desync_active")
+        and not s.get("rcl_freshness_guard_blocking")
+    )
+
+
 def _paused_hold_maintenance_allowed(s: dict[str, Any]) -> bool:
     """Allow narrow temperature maintenance during paused Brewfather mash holds.
 
@@ -211,6 +230,8 @@ async def _apply_hold_maintenance(hass, s: dict[str, Any]) -> dict[str, Any]:
 async def async_apply_brewzilla_target_if_allowed(hass) -> dict[str, Any]:
     assert _BASE_APPLY is not None
     snap = base.build_orchestration_snapshot(hass)
+    if _checkpoint_control_allowed(snap):
+        return await _BASE_APPLY(hass)
     if _paused_hold_maintenance_allowed(snap):
         return await _apply_hold_maintenance(hass, snap)
     if _needed(snap):

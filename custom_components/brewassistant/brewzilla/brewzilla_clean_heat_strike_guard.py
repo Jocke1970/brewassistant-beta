@@ -29,8 +29,8 @@ _ORIGINAL_WITH_ADVICE: Callable[[HomeAssistant, dict[str, Any]], dict[str, Any]]
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 _READY_TOLERANCE_C = 0.3
 _SAFETY_OVERSHOOT_STOP_C = 0.5
-_SAFETY_HARD_OVERSHOOT_STOP_C = 1.5
-_GRADIENT_RELIEF_HEAT_CAP = 15.0
+_SAFETY_HARD_OVERSHOOT_STOP_C = 2.0
+_GRADIENT_RELIEF_HEAT_CAP = 5.0
 
 # Nominal demand from the operator-facing mash/BLE strike temperature.  Keep a
 # real positive utilization floor all the way through READY because BrewZilla's
@@ -56,8 +56,8 @@ _GATE_FAR_PHASE = "clean_gate_far_ramp"
 # actually fire.  A >0.5 C hottest-view overshoot normally requests explicit
 # safe-down.  The one exception is a real pre-mash-in temperature gradient:
 # when mash/BLE is still below strike and the internal view is only moderately
-# high, keep low positive authority plus full mixing so the local thermostat can
-# recover instead of deadlocking the readiness probe.  A >1.5 C hottest-view
+# high, keep only 5% positive authority plus full mixing so the local thermostat
+# can recover without adding much thermal inertia.  A >2.0 C hottest-view
 # overshoot remains a hard stop even with a gradient.
 _SAFETY_HEAT_CAPS: tuple[tuple[float, float, bool, str], ...] = (
     (-_SAFETY_OVERSHOOT_STOP_C, 0.0, False, "clean_safety_overshoot_stop"),
@@ -205,7 +205,7 @@ def _gradient_relief_safety_cap(
 
     A moderately hot internal sensor must not permanently disable BrewZilla's
     local thermostat while the operator-facing mash/BLE probe is still below
-    strike.  Limit authority to a small cap and let full recirculation converge
+    strike.  Limit authority to a tiny cap and let full recirculation converge
     the two views.  Large hottest-view overshoot remains an explicit hard stop.
     """
     if gate_delta is None or safety_delta is None or mash_wort_delta is None:
