@@ -21,6 +21,17 @@ def test_recipe_cards_use_full_batch_recipe_payload() -> None:
         assert "recipe_data.get('boilTime')" in source
 
 
+def test_recipe_summary_is_collapsible_and_uses_recipe_name_as_title() -> None:
+    for source in _cards():
+        assert source.startswith("type: vertical-stack")
+        assert "- type: custom:expander-card\n    title-card:" in source
+        assert "raw.recipe?.name" in source
+        assert "entity: sensor.brewfather_brew_tracker_raw" in source
+
+    assert "Brewfather-recept · ${batch} · ${batchStatus}" in SV.read_text(encoding="utf-8")
+    assert "Brewfather recipe · ${batch} · ${batchStatus}" in EN.read_text(encoding="utf-8")
+
+
 def test_recipe_cards_keep_brewtracker_execution_schedule_separate() -> None:
     for source in _cards():
         assert "sensor.brewassistant_brewday_runtime_summary" in source
