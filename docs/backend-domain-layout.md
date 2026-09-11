@@ -42,6 +42,9 @@ custom_components/brewassistant/
 │   └── README.md
 ├── fermentation_tracking/
 │   └── README.md
+├── grainfather_fermenter/
+│   ├── README.md
+│   └── adapter.py
 ├── kegerator/
 │   └── README.md
 ├── modules/
@@ -61,11 +64,14 @@ custom_components/brewassistant/
 | `climate_backend/` | Kegerator Climate Supervisor; dynamic climate-target selection/application |
 | `cooling/` | Cooling Runtime v2 for CFC/immersion/manual cooling, sanitation context and cooling advice |
 | `fermentation_tracking/` | Hardware-neutral fermentation observations, source resolution, SG/Brix correction, progress/stability/readiness and process-level beer target recommendation |
-| `fermentation_chamber/` | Current physical fermentation provider: chamber-air target translation plus Supervised Apply bridge |
+| `fermentation_chamber/` | Current writable physical fermentation provider: chamber-air target translation plus Supervised Apply bridge |
+| `grainfather_fermenter/` | Parked Phase 1 Grainfather fermentation-provider scaffold; read-only device/session discovery and future-control prerequisite diagnostics |
 | `fermentation/` | Legacy compatibility bridges only; no new business logic |
 | `kegerator/` | Kegerator fan control/model, serving presets and legacy/policy guard/watchdog |
 | `modules/` | Module/capability metadata registry |
 | `shared/` | Domain-neutral support helpers such as rolling temperature stats |
+
+The existing `grainfather` module-registry entry is a separate future **hot-side** Grainfather adapter and must not be repurposed for GF30 fermentation control.
 
 ## Platform-root rule
 
@@ -111,7 +117,7 @@ local controller
   own actual heat/cool regulation
 ```
 
-Current implementation:
+Current writable implementation:
 
 ```text
 fermentation_tracking
@@ -128,9 +134,26 @@ climate.fermentation_chamber
   local heat/cool controller
 ```
 
-`fermentation_chamber` is therefore the first physical provider implementation, not the owner of fermentation strategy. The downstream Home Assistant climate controller owns raw heater/cooler switching after the setpoint is accepted.
+Parked future-provider scaffold:
 
-Future physical providers, such as a Grainfather fermenter integration, should implement the same boundary: BrewAssistant supplies fermentation intent/setpoint, the provider translates it if needed, and the downstream controller owns actuator cycling.
+```text
+fermentation_tracking
+        |
+        v
+grainfather_fermenter
+  read-only discovery/normalization today
+        |
+        v
+future Supervised Apply after live validation
+        |
+        v
+Grainfather controller
+  local heat/cool controller
+```
+
+`fermentation_chamber` is therefore the first writable physical provider implementation, not the owner of fermentation strategy. The downstream Home Assistant climate controller owns raw heater/cooler switching after the setpoint is accepted.
+
+`grainfather_fermenter` exists now so the Grainfather integration surface and fail-passive selection rules are not lost before physical GF30 hardware is available. It performs no service calls and has no provider write authority.
 
 Only one physical provider may have write authority for a fermentation session. A generic provider selector/authority layer is an architectural prerequisite before enabling a second writable provider; it is not yet implemented.
 
