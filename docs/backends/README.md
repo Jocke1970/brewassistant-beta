@@ -1,7 +1,7 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-09-05
+Last synced: 2026-09-15
 
 The canonical short-form documentation now lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
 
@@ -30,9 +30,27 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | --- | --- |
 | [`brewzilla-backend.md`](./brewzilla-backend.md) | Detailed BrewZilla design/test baseline. Read together with the current code-local README because the wrapper/authority chain continues to evolve. |
 | [`../brewzilla-control-profile.md`](../brewzilla-control-profile.md) | BrewZilla heat/pump tuning details and control-profile history. |
-| [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history. |
+| [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history for physical timing, thermal behavior and learned control/profile evidence. |
+| [`../brew-analytics-roadmap.md`](../brew-analytics-roadmap.md) | Roadmap for completed-batch yield analytics and equipment/Brewfather profile calibration. |
+| [`../brew-analytics-data-model.md`](../brew-analytics-data-model.md) | Persistent raw/derived batch-result model, provenance, aggregates and recommendation history. |
+| [`../brew-analytics-metrics.md`](../brew-analytics-metrics.md) | Metric boundaries, calculation rules, confidence model and calibration-candidate rules. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
+
+## Learning-domain boundary
+
+BrewAssistant now has two related but intentionally separate equipment-learning concepts in documentation:
+
+```text
+BrewZilla Equipment Learning
+  -> physical heating, stabilization, timing, utilization and process-phase evidence
+
+Brew Analytics / Equipment Calibration
+  -> completed-batch volume, gravity, losses, mash efficiency,
+     brewhouse efficiency and Brewfather equipment-profile recommendations
+```
+
+They may share batch/session context later, but analytics must not silently turn historical yield evidence into live BrewZilla control changes.
 
 ## Documentation pattern
 
