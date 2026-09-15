@@ -1,0 +1,40 @@
+Brewfather equipment profile – fältguide,,,,,
+,,,,,
+Kategori,Brewfather-fält,Finns i matris,Startprincip,Vad påverkar det?,Kalibrering / kommentar
+General,Name,Profilnamn,Prefix + metod + batch,Identifiering,Ha en profil per metod/batchstorlek om du vill slippa manuellt byte.
+General,Boil Time,Boil time min,60 min,Pre-boil volume,Kan ändras per recept.
+General,Description,Beskrivning,Automatisk starttext,Dokumentation,Bra plats för egna kalibreringsnoteringar.
+Volumes,Batch Volume Target,Batch target,Fermenter,OG/volymmodell,Fermenter-target ger batchvolym som volym in i jäskärlet.
+Volumes,Batch Volume,Batch L,5–23 L,Målvolym,"Detta är volym in i fermenter, inte kittelkapacitet."
+Volumes,Calc Boil Volume,Calc boil volume,TRUE,Pre-boil beräknas,Rekommenderat för normal användning.
+Volumes,Pre-Boil Volume,Pre-boil L,Formel,Kokstartvolym,Beräknas från batch + losses + shrinkage + boil-off.
+Volumes,Fermenter Loss,Fermenter loss L,"0,4–1,0 L",Förpackad volym,"Beror på jäskärl och bottensats, inte bara BrewZilla."
+Volumes,Fermenter Top-Up,Fermenter top-up L,0 L,High-gravity dilution,Öka bara om du späder i fermenter.
+Volumes,HLT Deadspace,HLT deadspace L,0 L,Lakvatten,Endast relevant för separat HLT med dödvolym.
+Losses,Trub/Chiller Loss,Trub/CFC loss L,"0,8 L",Batch/pre-boil,Mät volym kvar i kittel + CFC/slangar efter transfer.
+Losses,Mash-Tun Loss,Mash-tun loss L,0 L,Vattenbalans,AIO/single-vessel har normalt ingen separat unrecoverable mash loss.
+Efficiency,Brewhouse Efficiency,Brewhouse eff.,68–74 % start,OG och grain bill,Kalibrera efter faktisk OG och fermentervolym.
+Efficiency,Mash Efficiency,Mash eff.,72–78 % start,Pre-boil gravity,Kalibrera från pre-boil gravity och volym.
+Efficiency,Calc Mash Efficiency,Calc mash eff.,FALSE,Relation mash/BH,Arket använder explicita startvärden; du kan slå på Brewfathers auto-calc istället.
+Advanced,Hop Utilization,Hop utilization,100 %,IBU,Lämnas normalt 100 %.
+Mash/Sparge,Grain Absorption Rate,Grain absorption L/kg,"0,65 BIAB / 0,85 maltpipe",Totalvatten,"Brewfather anger ca 0,6–0,75 L/kg för BIAB och 0,8–0,96 L/kg för one-vessel."
+Mash/Sparge,Water/Grain Ratio,Water/Grain L/kg,"3,2–3,5 L/kg",Mäskvolym/lakvatten,För No Sparge blir fullvolymsberäkningen viktigare än nominellt ratio.
+Mash/Sparge,Mash/Sparge Water Calculation Method,Mash/Sparge calc,Default / No Sparge,Fördelning mash/sparge,Normal/BIAB använder Default; de två No Sparge-profilerna använder No Sparge.
+Mash/Sparge,Include Grain Volume in Mash Limits,Include grain volume,TRUE,Max mäskvolym,Gör maxgränsen till verklig mash volume inkl. våt malt.
+Mash/Sparge,Mash Water Min,Mash water min L,0 / av,Vattenfördelning,Lämnas i praktiken av tills du vill tvinga miniminivå.
+Mash/Sparge,Mash Water Max / Max Mash Volume,Max mash volume L,28 maltpipe / 32 BIAB,Överfyllnad,Konservativa startgränser; fintrimmas efter verklig grain bill och uppställning.
+Mash/Sparge,Sparge Water Min,Sparge min L,0 L,Lakvatten,0 tillåter små lakvolymer.
+Mash/Sparge,Sparge Water Max,Sparge max L,0/av,HLT-begränsning,Lämnas av om du inte har ett begränsat HLT.
+Mash/Sparge,Overflow Target,Overflow target,Top-Up / Mash,Överskottsvatten,"Top-Up för sparge-profiler, Mash för No Sparge-profiler."
+Mash/Sparge,Sparge Water Reminder,Sparge reminder,FALSE,Brew tracker,Aktivera om du vill ha påminnelse under mash.
+Temperature,Calc Strike Water Temperature,Calc strike temp,TRUE,Strike temp,Brewfather lägger till beräknad strike temperature.
+Temperature,Mash-Tun Heat Capacity,Mash-tun heat cap,0 L eq.,Strike temp,0 om kärlet är förvärmt; annars kalibrera.
+Temperature,Sparge Temperature,Sparge temp °C,78 °C,Lakning,Ändra om ditt processmål är annat.
+Temperature,Hop Stand Temperature,Hop stand temp °C,80 °C,Hopstand,Receptberoende.
+Temperature,Grain Temperature,Grain temp °C,20 °C,Strike temp,Sätt faktisk malt-temp vid behov.
+Temperature,Ambient Temperature,Ambient temp °C,20 °C,Värmeförlust,Sätt brygglokalens ungefärliga temp.
+Advanced,Whirlpool / No-Chill Time,Whirlpool/No-chill min,0 min,IBU/tidsmodell,Ange fast extra tid om processen alltid har det.
+Advanced,Altitude Adjustment,Altitude adj.,FALSE,Kokpunkt/IBU,Aktivera endast om du vill använda höjdkompensation.
+Advanced,Altitude,Altitude m,0 m,Kokpunkt,Faktisk höjd används om justering är på.
+Derived,Cooling Shrinkage,Cooling shrinkage,4 %,Hot/cold volume,Brewfather rekommenderar normalt 4 %.
+Derived,Post-Boil Volume (hot),Post-boil hot L,Formel,Volym vid flameout,Visas för kontroll även om fältet normalt är ett beräknat resultat.
