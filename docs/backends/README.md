@@ -34,6 +34,7 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | [`../brew-analytics-roadmap.md`](../brew-analytics-roadmap.md) | Roadmap for completed-batch yield analytics and equipment/Brewfather profile calibration. |
 | [`../brew-analytics-data-model.md`](../brew-analytics-data-model.md) | Persistent raw/derived batch-result model, provenance, aggregates and recommendation history. |
 | [`../brew-analytics-metrics.md`](../brew-analytics-metrics.md) | Metric boundaries, calculation rules, confidence model and calibration-candidate rules. |
+| [`../brew-analytics-batch-method-policy.md`](../brew-analytics-batch-method-policy.md) | Default BrewZilla batch-size/method envelope: 5–9 L BIAB, ~15 L all methods, 17–23 L malt pipe. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
 
