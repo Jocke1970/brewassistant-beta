@@ -1,11 +1,11 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last synced: 2026-09-05
+Last synced: 2026-09-15
 
-The canonical short-form documentation now lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
+The canonical short-form documentation now lives beside each implemented backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the currently implemented ownership/control contract.
 
-This `docs/backends/` directory remains useful for deeper architecture notes, historical roadmaps and field-test evidence.
+This `docs/backends/` directory remains useful for deeper architecture notes, historical roadmaps, field-test evidence and pre-implementation planning.
 
 ## Canonical current backend READMEs
 
@@ -24,6 +24,15 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | Module/capability registry | [`../../custom_components/brewassistant/modules/README.md`](../../custom_components/brewassistant/modules/README.md) |
 | Shared utilities | [`../../custom_components/brewassistant/shared/README.md`](../../custom_components/brewassistant/shared/README.md) |
 
+## Planned backends / coordination layers
+
+These documents describe architecture that is **not yet an implemented backend** and therefore does not yet have a code-local canonical README.
+
+| Area | Planning document |
+| --- | --- |
+| HLT / sparge-water heater | [`hlt-backend.md`](./hlt-backend.md) |
+| Shared electrical capacity coordination | [`../power-budget-arbiter.md`](../power-budget-arbiter.md) |
+
 ## Longer reference documents
 
 | Document | Role |
@@ -33,6 +42,8 @@ This `docs/backends/` directory remains useful for deeper architecture notes, hi
 | [`../brewzilla-equipment-learning.md`](../brewzilla-equipment-learning.md) | Passive equipment-learning design/history. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap. Its original “implementation pending” sections are historical; current implementation status is documented in `cooling/README.md`. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP detail and examples. |
+| [`hlt-backend.md`](./hlt-backend.md) | Planned HLT ownership, state machine, sparge intent, safety and phased implementation. |
+| [`../power-budget-arbiter.md`](../power-budget-arbiter.md) | Planned shared electrical reservation and coordinated BrewZilla/HLT reclaim architecture. |
 
 ## Documentation pattern
 
@@ -62,7 +73,9 @@ current executable code
   -> older roadmap/test/history docs
 ```
 
-Then fix the drift rather than preserving two competing descriptions.
+For a planned backend with no executable code yet, the planning document is design intent only. Once implementation starts, the code-local README becomes the current contract and the planning document must be updated or marked historical as decisions change.
+
+Then fix documentation drift rather than preserving two competing descriptions.
 
 ## Event-log first workflow
 
