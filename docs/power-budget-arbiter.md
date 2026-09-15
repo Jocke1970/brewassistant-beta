@@ -1,75 +1,75 @@
 # Shared Power Budget Arbiter — planning specification
 
-Status: planned / architecture only  
+Status: planned / simulation-first architecture  
 Planning baseline: 2026-09-15
 
-The Power Budget Arbiter is a planned BrewAssistant coordination layer for multiple controllable electrical consumers that share a constrained circuit. Its first concrete use case is BrewZilla + HLT (sparge-water heater).
+The Power Budget Arbiter is BrewAssistant's planned coordination layer for controllable electrical loads that share a constrained circuit. Its first use case is BrewZilla + HLT.
 
-The arbiter is not a brewing state machine and should not own mash, sparge or recipe logic. It only decides which already-requested electrical loads may run at the same time and coordinates safe transfer of capacity between them.
-
-## Problem statement
-
-A naive implementation would let the HLT observe BrewZilla's current wattage/utilization and switch on whenever the measured total appears to fit under the circuit limit.
-
-That is unsafe because measured power is only a snapshot. BrewZilla may request a much higher heat utilization immediately afterward. If both devices can change independently, the combined load can exceed the protected-circuit budget before Home Assistant can react.
-
-The solution is explicit allocation rather than observation-only sharing.
+The first implementation target is **full dry-run simulation**, not a passive monitor-only layer. The arbiter should execute the real grant/deny/revoke/reclaim algorithm against real BrewZilla/Brewday inputs and a virtual HLT, while suppressing any physical BrewZilla cap or HLT heater write.
 
 ## Core principle
 
 ```text
-No consumer receives power merely because another consumer currently looks quiet.
-
-Each consumer publishes demand.
-The arbiter grants a bounded allocation.
-Physical control paths may only apply demand inside that allocation.
+Consumers publish requested electrical demand.
+The arbiter grants bounded capacity.
+A secondary load must release capacity before the primary load reclaims it.
+Measured low wattage alone never creates permission.
 ```
 
-For BrewZilla + HLT, BrewZilla remains the higher-priority process consumer. The HLT opportunistically uses genuinely available capacity and must yield before BrewZilla is allowed to reclaim watts that would otherwise make the combination unsafe.
+BrewZilla is the primary brewing load. HLT is opportunistic and preemptible.
 
 ## Ownership boundary
 
 ```text
 BrewZilla backend
-  decides desired heat utilization for brewing
-  publishes requested electrical demand
-  applies only the utilization permitted by the arbiter
+  computes desired BrewZilla heat utilization / demand
+  owns final physical BZ writes
 
 HLT backend
   decides whether sparge water needs heat
-  publishes HLT heater demand
-  energizes only while a grant exists
+  owns virtual/real HLT state and heater demand
 
 Power Budget Arbiter
-  owns grants, reservations, reclaim ordering and shared-circuit accounting
+  owns reservations, grants, revocations and reclaim ordering
 
 Brewday Runtime
-  provides process-stage context
-  does not perform electrical arbitration
+  provides normalized process context
 ```
 
-The arbiter must not become a backdoor BrewZilla controller. It may constrain or sequence electrical permission, but BrewZilla remains responsible for its process decisions and safety chain.
+The arbiter must not become a second BrewZilla controller.
 
-## Configured circuit model
+## Simulation rule
 
-Proposed shared profile:
+During simulation:
+
+```text
+real BrewZilla demand/state -> arbiter input
+virtual HLT demand          -> arbiter input
+arbiter decisions           -> executed logically
+HLT heater action           -> virtual only
+BZ cap/reclaim result        -> WOULD_* diagnostics only
+physical BrewZilla writes   -> unchanged
+```
+
+This lets the full safety logic be analyzed without HLT hardware and without interfering with a live BrewZilla brew.
+
+## Circuit model
+
+Proposed profile:
 
 ```text
 profile_id
-nominal_voltage_v              optional informational/calculation input
-circuit_limit_w                required effective maximum, or derived from A/V
-safety_margin_w                required conservative reserve
-usable_budget_w                circuit_limit_w - safety_margin_w
-optional circuit power sensor  verification/diagnostics only unless explicitly trusted
+circuit_limit_w
+safety_margin_w
+usable_budget_w = circuit_limit_w - safety_margin_w
+optional observed circuit power
 ```
 
-The implementation should prefer a directly configured conservative `usable_budget_w` over clever assumptions.
+No voltage, breaker size or country-specific assumption should be hard-coded.
 
-No code should silently assume that a Swedish installation is always 230 V / 10 A / 16 A. The protected circuit and wiring are commissioning inputs.
+## Consumer model
 
-## Consumer descriptor
-
-Each participating consumer should expose a normalized descriptor/demand, for example:
+Each consumer exposes:
 
 ```text
 consumer_id
@@ -78,296 +78,183 @@ rated_power_w
 requested_power_w
 minimum_useful_power_w
 priority
-preemptible: bool
-release_confirmation
+preemptible
+release_delay/readback policy
 request_reason
 request_timestamp
 ```
 
-Examples:
+Initial consumers:
 
 ```text
 BrewZilla
   mode = variable
-  requested_power_w = desired_heat_utilization * configured_heater_power_w
-  priority = hot_side_primary
+  priority = primary_hot_side
 
 HLT
   mode = binary
-  requested_power_w = configured_hlt_heater_power_w
-  priority = hot_side_secondary
+  priority = secondary_hot_side
   preemptible = true
 ```
 
-The power mapping for BrewZilla must be calibrated/documented rather than assuming the reported heat-utilization percentage is an exact wattmeter.
+The BrewZilla heat-utilization-to-watts mapping must be calibrated or conservatively configured rather than treated as an exact wattmeter.
 
-## Reservation vs measured power
+## Reservation vs observation
 
-The arbiter should distinguish:
+The arbiter distinguishes:
 
 ```text
 requested/reserved power
-  what a consumer is allowed to draw or is about to draw
+  what a consumer may draw
 
 observed power
-  what a sensor currently reports
+  what sensors currently report
 ```
 
-Safety permission is based primarily on conservative reservation, not a low instantaneous measurement.
+Safety decisions use conservative reservations. Observed watts are useful for calibration, verification and later physical release confirmation.
 
-Measured power is valuable for:
+A low observed BrewZilla wattage is never by itself permission to energize HLT.
 
-- confirming that a binary HLT actually turned off;
-- detecting unexpected draw;
-- learning/calibration;
-- dashboard diagnostics;
-- fault detection.
+## Priority
 
-Measured power alone must not create permission to start another large load.
-
-## Priority model
-
-Proposed initial order:
+Initial order:
 
 ```text
-1. hard safety / ABORT / safe-down actions
-2. BrewZilla high-priority process demand
-3. BrewZilla normal process demand
-4. HLT sparge-water heating
-5. future non-critical opportunistic loads
+1. ABORT / OFF / risk-reducing actions
+2. BrewZilla process demand
+3. HLT heating
+4. future opportunistic loads
 ```
 
-Safety actions are not normal consumers. An OFF/safe-down action must never be blocked because the arbiter says a device has no power grant.
+HLT yields before BrewZilla process demand is sacrificed merely to keep HLT running.
 
 ## Grant model
 
-A grant should contain enough context for diagnostics and stale-lease prevention:
+A logical grant should include:
 
 ```text
 grant_id
 consumer_id
 granted_power_w
-grant_created_at
-grant_expires_at
+created_at
+expires_at
 circuit_profile_id
 reason
 arbiter_generation
 ```
 
-Consumers should renew active grants periodically. A stale grant after restart or coordinator failure must not remain implicit authority.
+Restart invalidates all grants.
 
-Exact TTL values belong to implementation/testing, not this architecture document.
-
-## Starting the HLT
+## Starting virtual HLT
 
 For a binary HLT:
 
 ```text
-1. HLT publishes full rated-power demand.
-2. Arbiter evaluates BrewZilla's current requested/reserved demand and circuit budget.
-3. If full HLT demand fits with safety margin, arbiter grants the HLT lease.
-4. HLT commands ON.
-5. Optional power/readback confirms expected activation.
-6. Grant remains valid only while the combined reservation remains safe.
+1. HLT requests full rated heater watts.
+2. Arbiter evaluates BZ reservation + HLT demand against usable budget.
+3. If it fits, HLT receives full grant.
+4. Virtual heater becomes ON.
+5. Virtual thermal model integrates granted energy.
+6. If it does not fit, HLT receives zero and waits.
 ```
 
-If the full binary heater demand does not fit, the correct answer is `DENIED / WAITING_FOR_POWER`, not a partial grant that a binary switch cannot honor.
+There is no partial grant for a binary heater.
 
 ## BrewZilla reclaim handshake
 
-This is the critical race-prevention mechanism.
-
-Example situation:
+Suppose:
 
 ```text
-usable circuit budget: B
-HLT currently active: H watts
-BrewZilla currently granted/requesting: Z1 watts
-Z1 + H <= B
+usable budget = B
+HLT active     = H
+BZ current     = Z1
+BZ wants       = Z2
 
-BrewZilla now wants Z2 watts
+Z1 + H <= B
 Z2 + H > B
 ```
 
-The arbiter must not simply give BrewZilla `Z2` while HLT is still physically on.
-
-Required sequence:
+The required logical sequence is:
 
 ```text
-STATE: HLT_GRANTED
-
-BrewZilla requests higher demand
-  -> arbiter enters RECLAIMING_FOR_BREWZILLA
+SHARED
+  -> BZ higher request detected
+  -> RECLAIMING_FOR_BZ
   -> revoke HLT grant
-  -> command/notify HLT to stop
-  -> temporarily keep BrewZilla allocation at a safe value
-
-HLT OFF confirmed
-  by trusted switch state, power readback, or conservative release delay
-
-  -> mark HLT reservation released
-  -> grant BrewZilla higher requested allocation
-  -> return to normal allocation state
+  -> HLT -> YIELDING
+  -> virtual heater OFF
+  -> wait configured virtual release delay
+  -> release HLT reservation
+  -> calculate higher BZ grant
+  -> BZ_ONLY
 ```
 
-BrewZilla is still the priority consumer. The short sequencing delay exists only to avoid simultaneous unsafe draw.
+During simulation the new BZ grant is recorded as `would_grant_w` / `would_cap_utilization`; it is **not physically applied**.
 
-## What BrewZilla should consume from the arbiter
-
-The BrewZilla backend should conceptually calculate:
-
-```text
-desired_heat_utilization
-  -> desired_brewzilla_power_w
-  -> arbiter allocation
-  -> allowed_heat_utilization_cap
-  -> existing BrewZilla ownership/safety/physical write chain
-```
-
-The arbiter should not directly call `number.set_value` on BrewZilla heat utilization. Keeping the final physical write in the BrewZilla backend preserves its existing ownership, ABORT, Manual and supervised-control architecture.
-
-A planned integration point can be expressed as:
-
-```text
-allowed_heat_utilization = min(desired_heat_utilization, electrical_cap)
-```
-
-During an HLT reclaim transition, `electrical_cap` remains at the last safe level until the HLT capacity has actually been released.
-
-## What HLT should consume from the arbiter
-
-The HLT backend gets a simpler binary result for an on/off heater:
-
-```text
-need_heat = true
-AND valid power grant
-AND HLT local safety permits
-  -> heater may be ON
-
-otherwise
-  -> heater OFF
-```
-
-A future modulated HLT may consume a watt/percentage allocation directly, but the MVP should not invent variable control for binary hardware.
+This is how we test the race-prevention mechanism safely.
 
 ## Arbiter state model
 
-Proposed states:
-
 ```text
 IDLE
-  no shared high-load grants
-
 BZ_ONLY
-  BrewZilla has allocation; HLT denied/not requesting
-
 SHARED
-  BrewZilla + HLT allocations fit concurrently
-
 RECLAIMING_FOR_BZ
-  HLT grant revoked; waiting for electrical release before raising BZ allocation
-
 VERIFYING_HLT_START
-  optional state while validating HLT activation/readback
-
 DEGRADED
-  accounting/readback inconsistency; no new opportunistic HLT grants
-
 FAULT
-  unsafe/inconsistent state requiring operator attention
 ```
 
-The exact implementation may use data-driven grants rather than an enum, but the externally visible diagnostics should communicate equivalent semantics.
+An implementation may internally be data-driven, but equivalent diagnostics must be visible.
 
-## Conservative degradation rules
+## BrewZilla outputs in simulation
 
-### Unknown BrewZilla requested demand
-
-Do not issue a new HLT grant if the arbiter cannot establish a conservative BrewZilla reservation during an active hot-side phase.
-
-### HLT state/readback uncertain
-
-Treat HLT watts as still reserved until OFF is confirmed or a conservative release policy has elapsed.
-
-### Circuit sensor unavailable
-
-If the core accounting is configuration/reservation-based, loss of an optional circuit wattmeter does not necessarily break existing safe allocations. It should, however, degrade diagnostics and may block new grants if that sensor was explicitly configured as required evidence.
-
-### Arbiter restart
-
-All leases are invalidated. Consumers reacquire permission.
-
-The HLT must default to no positive authority. BrewZilla's separate fail-passive/local-controller behavior remains owned by the BrewZilla backend and must not be casually replaced by the arbiter.
-
-## Interaction with Manual Brew ownership
-
-Manual control creates an important case: an operator may choose BrewZilla utilization directly.
-
-The architecture must still prevent the HLT from assuming watts that Manual Brew can consume without coordination.
-
-Possible implementation rule:
+Proposed values:
 
 ```text
-if BrewZilla heat channel is operator-owned:
-  reserve configured/manual maximum or actual operator-requested utilization
-  HLT only receives the residual conservative budget
+bz_requested_w
+bz_current_assumed_reservation_w
+bz_would_grant_w
+bz_would_cap_utilization_pct
+bz_reclaim_pending
+bz_reclaim_reason
 ```
 
-The exact behavior should be designed alongside the existing Manual Brew ownership contract before direct HLT control is enabled.
+These values must not feed physical BrewZilla writes while simulation mode is active.
 
-The arbiter must never rewrite operator-owned BrewZilla channels merely to keep the HLT running. HLT is the load that yields.
-
-## Interaction with supervised apply
-
-Electrical allocation and permission to perform a positive device write are separate concepts.
+## HLT outputs in simulation
 
 ```text
-power grant
-  means the circuit can safely support the action
-
-authority/confirmation
-  means BrewAssistant is allowed to perform the action
+hlt_requested_w
+hlt_granted_w
+hlt_virtual_heater_on
+hlt_release_pending
+hlt_wait_reason
 ```
 
-Both conditions are required where the consumer's control policy demands confirmation.
+These feed the virtual HLT thermal model only.
 
-The arbiter must not turn a guidance-only or monitor-only module into direct control simply because power is available.
+## Degradation rules
 
-## Proposed diagnostics/entities
+### Unknown BZ demand
 
-Names are provisional.
+During an active hot-side phase, unknown/conservatively unbounded BrewZilla demand blocks a **new** HLT grant.
 
-```text
-sensor.brewassistant_power_budget_state
-sensor.brewassistant_power_budget_usable_w
-sensor.brewassistant_power_budget_reserved_w
-sensor.brewassistant_power_budget_available_w
-sensor.brewassistant_power_budget_margin_w
-sensor.brewassistant_power_budget_brewzilla_request_w
-sensor.brewassistant_power_budget_brewzilla_grant_w
-sensor.brewassistant_power_budget_hlt_request_w
-sensor.brewassistant_power_budget_hlt_grant_w
-sensor.brewassistant_power_budget_reason
-binary_sensor.brewassistant_power_budget_degraded
-binary_sensor.brewassistant_power_budget_fault
-```
+### HLT release uncertainty
 
-Useful attributes:
+Treat HLT watts as reserved until simulated/physical release confirmation completes.
 
-```text
-active grants
-lease ids/ages
-circuit profile
-consumer priorities
-release verification state
-last reclaim reason
-last denied request
-observed vs reserved power
-```
+### Restart
+
+Invalidate grants and generation IDs. Virtual state may be restored only as process context; old leases do not survive.
+
+### Manual Brew
+
+If the BZ heat channel is operator-owned, reserve conservatively from the known/requested operator setting or a configured maximum. HLT receives only safe residual capacity.
+
+The arbiter never rewrites operator-owned BZ settings to preserve HLT operation.
 
 ## Flight Recorder events
-
-Proposed events:
 
 ```text
 power_budget_request
@@ -381,26 +268,28 @@ power_budget_degraded
 power_budget_fault
 ```
 
-Every event should include enough data to answer:
+Simulation events must include:
 
 ```text
-Who asked for watts?
-How many?
-What was the usable circuit budget?
-What other reservation existed?
-Why was it granted/denied/revoked?
-Was the physical release confirmed before reallocation?
+brewday stage
+usable budget
+BZ requested / would-grant watts
+HLT requested / granted watts
+active reservations
+virtual HLT state/temp
+reason
+lease/reclaim identifiers
 ```
 
-## Example sequence: mash heating HLT opportunistically
+## Example
 
 ```text
-BrewZilla desired = 700 W
-HLT demand       = 1800 W
-usable budget    = 3300 W
+usable budget = 3300 W
+BZ request    = 700 W
+HLT demand    = 1800 W
 
 700 + 1800 <= 3300
-  -> BZ grant 700 W
+  -> BZ would_grant 700 W
   -> HLT grant 1800 W
   -> SHARED
 ```
@@ -408,106 +297,98 @@ usable budget    = 3300 W
 Later:
 
 ```text
-BrewZilla desired rises to 2200 W
-HLT remains 1800 W
-usable budget 3300 W
+BZ request rises to 2200 W
+HLT still reserves 1800 W
 
 2200 + 1800 > 3300
   -> revoke HLT
-  -> wait HLT OFF / release confirmation
-  -> grant BrewZilla 2200 W
+  -> virtual HLT OFF
+  -> wait release delay
+  -> release 1800 W
+  -> BZ would_grant 2200 W
 ```
 
-The numbers above are examples only and must not become defaults.
+Numbers are examples only.
 
-## Example sequence: HLT cannot fit
+## Simulation development order
+
+### SIM-0 — inputs
+
+- usable circuit budget;
+- safety margin;
+- BrewZilla maximum/rated heater power;
+- BZ utilization-to-watts mapping;
+- virtual HLT rated watts;
+- virtual release delay.
+
+### SIM-1 — full arbiter logic
+
+- request/grant/deny;
+- lease lifetime;
+- full binary HLT reservation;
+- SHARED state;
+- revoke/yield/release/reclaim;
+- `would_cap` BZ calculations;
+- no physical writes.
+
+### SIM-2 — automated scenarios
+
+Test at minimum:
 
 ```text
-BrewZilla desired = 1700 W
-HLT binary demand = 1800 W
-usable budget     = 3300 W
-
-1700 + 1800 > 3300
-  -> HLT denied
-  -> BrewZilla unaffected
-  -> HLT state WAITING_FOR_POWER
+HLT fits during mash
+HLT does not fit
+BZ sudden ramp while HLT active
+multiple BZ demand changes during HLT release delay
+unknown/stale BZ demand
+lease expiry
+restart generation change
+Manual Brew heat ownership
+no-sparge
 ```
 
-This is preferable to repeatedly toggling BrewZilla down just to satisfy HLT. BrewZilla process demand has priority.
+Invariant checks should run on every step:
 
-## Optional future scheduling intelligence
+```text
+sum(granted reservations) <= usable_budget_w
+binary HLT grant in {0, rated_power_w}
+BZ reclaim cannot consume HLT-reserved watts before release
+simulation cannot call physical HLT/BZ write services
+```
 
-Once safe arbitration is proven, HLT heating can become smarter without changing the electrical contract.
+### SIM-3 — live/replay brew analysis
 
-Examples:
+Run against real BrewZilla traces to answer:
 
-- estimate energy required from water volume and delta-T;
-- learn effective HLT heating rate;
-- calculate latest safe start time before sparge;
-- exploit longer low-power mash intervals first;
-- minimize unnecessary target holding losses.
+- how long are useful power windows during mash?;
+- how often would HLT be preempted?;
+- how much energy can HLT accumulate before sparge?;
+- what safety margin causes unnecessary missed opportunities?;
+- does predictive latest-start scheduling improve behavior?
 
-This intelligence belongs in the HLT backend. The arbiter should continue to answer only whether requested power may be used now.
+### HW-1 — future physical binding
 
-## MVP implementation order
+Only after the simulation invariants and brew-trace behavior are convincing should real HLT writes and real BrewZilla electrical caps be connected.
 
-### PBA-0 — commissioning data
+## Acceptance criteria before physical arbitration
 
-- shared protected circuit confirmed;
-- usable watt budget configured;
-- BrewZilla rated/maximum heater power documented;
-- HLT rated power documented;
-- safety margin selected;
-- optional power sensors identified.
-
-### PBA-1 — observe only
-
-- calculate requests/reservations/grants as diagnostics;
-- no physical constraints or HLT control;
-- Flight Recorder comparison against real BrewZilla power behavior.
-
-### PBA-2 — HLT grant simulation
-
-- show when a binary HLT would have been allowed;
-- simulate reclaim transitions;
-- verify no calculated overlap exceeds budget.
-
-### PBA-3 — supervised HLT grant
-
-- HLT requires actual grant to turn on;
-- reclaim handshake enforced;
-- BrewZilla allocation integration added at the existing orchestration boundary;
-- field-test under controlled conditions.
-
-### PBA-4 — direct operation
-
-- enable direct HLT control only after observed/simulated accounting and supervised reclaim are proven.
-
-## Acceptance criteria
-
-1. The sum of active granted/reserved controllable loads never exceeds configured usable budget.
-2. A binary load is granted either its full reserved watts or zero.
-3. Low instantaneous measured wattage alone never authorizes a new large load.
-4. BrewZilla can reclaim capacity from HLT without a transient simultaneous over-allocation.
-5. Reallocation waits for HLT electrical release evidence or a conservative release policy.
-6. BrewZilla process/Manual/safety logic remains owned by the BrewZilla backend.
-7. HLT always yields before the arbiter sacrifices BrewZilla process demand merely to keep HLT active.
-8. ABORT/OFF/safe-down actions are never blocked by grant accounting.
-9. All leases are invalid after arbiter restart and must be reacquired.
-10. Flight Recorder can reconstruct every important allocation/reclaim decision.
+1. Full grant/revoke/reclaim logic executes in simulation.
+2. Simulation never calls physical HLT or BrewZilla control services.
+3. Sum of simulated grants never exceeds usable budget.
+4. Binary HLT receives full rated watts or zero.
+5. Low instantaneous measured BZ wattage alone never authorizes HLT.
+6. BZ reclaim waits for HLT release.
+7. Restart invalidates grants.
+8. Manual ownership is represented conservatively.
+9. Flight Recorder reconstructs every decision.
+10. Virtual HLT thermal results can be correlated with the available BZ power windows.
 
 ## Do not implement as
 
-Avoid these shortcuts:
-
 ```text
-if sensor.brewzilla_power < X: turn_on(hlt)
-
-if number.brewzilla_heat_utilization < 50%: turn_on(hlt)
-
-turn_on(hlt); if total_power_too_high: turn_off(hlt)
+if sensor.brewzilla_power < X: HLT_ON
+if brewzilla_heat_utilization < Y: HLT_ON
+HLT_ON then turn it off if total power becomes too high
 ```
 
-All three react after the fact or depend on a snapshot that another controller can invalidate immediately.
-
-The intended architecture is proactive reservation + coordinated handoff.
+The intended architecture is proactive reservation and coordinated handoff, fully exercisable in simulation before hardware exists.
