@@ -1,0 +1,9 @@
+Källor och underlag,,,
+,,,
+Källa,URL,Användning i arket,Kommentar
+Brewfather – Setting up your equipment profile,https://docs.brewfather.app/getting-started/setting-up-your-equipment-profile,"Fältdefinitioner, 4 % shrinkage, startintervall för efficiency, grain absorption, water/grain, No Sparge.",Primär källa för hur Brewfather tolkar fälten.
+Brewfather – Equipment,https://docs.brewfather.app/profiles/equipment,"Översikt över equipment-fält, losses, water limits, temperature settings och custom formulas.",Primär källa.
+KegLand – BrewZilla Gen4/4.1 35L,https://kegland.com.au/products/brewzilla-35l-gen-4,"35 L maxkapacitet, ca 25 L typisk max batch, single-vessel, pump/false bottom och Gen4.1-noteringar.",Tillverkarens produktsida.
+RAPT BrewZilla User Guide,https://docs.rapt.io/equipment/rapt-brewzilla-or-user-guide.md,Produkt-/processreferens för BrewZilla Gen4.,Tillverkarens dokumentation.
+Community example – BrewZilla 35L Gen4 Brewfather settings,https://www.reddit.com/r/Homebrewing/comments/1dt2voq/,Visar varför boil-off/deadspace/efficiency måste kalibreras och att stockprofilen inte passar alla.,"Communitykälla – används endast som kalibreringsvarning, inte som auktoritativ specifikation."
+Community discussion – Gen4 deadspace,https://www.homebrewtalk.com/threads/brewzilla-gen4-discussion-tips-talk.702436/page-50,Illustrerar att vissa nyare Brewfather-profiler använder 0 L deadspace och att användarprocessen spelar roll.,Communitykälla – därför är deadspace redigerbart i Grundvärden.
