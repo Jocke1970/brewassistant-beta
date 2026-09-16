@@ -1,6 +1,6 @@
-"""Bridge simulated HLT transitions to Brewday Audit and uploadable JSONL.
+"""Write HLT simulator samples to JSONL and transitions to Brewday Audit.
 
-The runtime calls this once after each simulator tick. No physical writes.
+No physical writes. BZ is never granted/capped by the simulator.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ async def async_record_hlt_tick(
     hlt_target_c: float | None = None,
     hlt_volume_l: float | None = None,
 ) -> None:
-    """Keep useful trace points in the file, only transitions in HA Audit."""
+    """Full samples in file; only state changes and meaningful edges in Audit."""
     from ..brewday import brewday_audit as audit
 
     path = await async_record_hlt_trace(
@@ -45,25 +45,26 @@ async def async_record_hlt_tick(
 
     log = audit.get_brewday_audit_log(hass)
     state_data = hass.data.setdefault("brewassistant", {})
+    conflict = "simulation_budget_conflict" in result.events
     state_key = (session_id, result.state, result.reason, result.virtual_heater_on,
                  result.temperature_source, result.power_budget_verified,
-                 inputs.sparge_required)
+                 inputs.sparge_required, getattr(inputs, "brewzilla_cruising", False),
+                 getattr(inputs, "brewzilla_ramp_requested", False), conflict)
     old_key = state_data.get("hlt_audit_state_key")
     if not log.active:
         state_data.pop("hlt_audit_state_key", None)
         return
     state_data["hlt_audit_state_key"] = state_key
     transitions = tuple(result.events)
-    if not transitions and state_key == old_key:
+    # A prolonged overload is one warning transition, not 120 copies in Audit.
+    if state_key == old_key and (not transitions or transitions == ("simulation_budget_conflict",)):
         return
-    event_type = next(
-        (_EVENT_TYPES[name] for name in transitions if name == "simulation_budget_conflict"),
-        None,
-    ) or next((_EVENT_TYPES[name] for name in transitions if name in _EVENT_TYPES), None)
-    if event_type is None:
-        event_type = "hlt_sim_state"
-
-    event = audit._event_base(hass, event_type, note=f"HLT simulation: {result.state}; no hardware writes")
+    event_type = (
+        "hlt_sim_budget_conflict" if conflict else
+        next((_EVENT_TYPES[name] for name in transitions if name in _EVENT_TYPES), "hlt_sim_state")
+    )
+    event = audit._event_base(hass, event_type,
+                              note=f"HLT simulation: {result.state}; BZ priority, no hardware writes")
     event.update({
         "hlt_simulation": True,
         "hlt_state": result.state,
@@ -76,12 +77,14 @@ async def async_record_hlt_tick(
         "hlt_measured_power_w": hlt_power_w,
         "hlt_reserved_w": result.hlt_reservation_w,
         "hlt_brewzilla_power_w": inputs.brewzilla_measured_w,
-        "hlt_brewzilla_would_grant_w": result.brewzilla_would_grant_w,
+        "hlt_brewzilla_priority": "unthrottled",
+        "hlt_brewzilla_cruising": getattr(inputs, "brewzilla_cruising", False),
+        "hlt_brewzilla_ramp_requested": getattr(inputs, "brewzilla_ramp_requested", False),
         "hlt_budget_w": usable_budget_w,
-        "hlt_total_reserved_w": result.total_reserved_w,
-        "hlt_budget_verified": result.power_budget_verified,
+        "hlt_observed_bz_plus_virtual_hlt_w": result.total_reserved_w,
+        "hlt_budget_verified": False,
         "hlt_transition_events": list(transitions),
     })
-    event["severity"] = "warning" if event_type == "hlt_sim_budget_conflict" else "info"
+    event["severity"] = "warning" if conflict else "info"
     audit._append_event(log, event)
     await audit.async_save_brewday_audit_log(hass)
