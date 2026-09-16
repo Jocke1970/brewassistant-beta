@@ -37,18 +37,22 @@ def test_sampled_time_energy_and_brewzilla_priority():
     first = m.update(i, r, **context)
     assert first["total_session_seconds"] == 0
     assert first["power_priority"] == "brewzilla"
+    assert first["power_owner"] == "brewzilla_with_virtual_hlt"
     assert first["actual_energy_recipient"] == "brewzilla_and_hlt"
     assert first["hlt_power_virtual_w"] == 1500
     assert first["virtual_total_scenario_w"] == 1900
     assert first["actual_total_observed_w"] == 1400
     assert first["hlt_temperature_estimated_c"] == 41
     assert first["hlt_temperature_measured_c"] is None
+    assert first["observed_heating_estimate_seconds"] is None  # one sample cannot prove a duration
+    assert first["hlt_energy_estimate_wh"] is None
     assert first["trace_path"].endswith("test.jsonl")
     i, r, context = sample(30, temp=43)
     second = m.update(i, r, **context)
     assert second["total_session_seconds"] == 30
     assert second["virtual_heating_seconds"] == 30
     assert second["observed_heating_estimate_seconds"] == 30
+    assert second["observed_heating_coverage_seconds"] == 30
     assert second["bz_energy_estimate_wh"] == pytest.approx(400 * 30 / 3600, abs=0.01)
     assert second["hlt_energy_estimate_wh"] == pytest.approx(1000 * 30 / 3600, abs=0.01)
 
@@ -64,6 +68,7 @@ def test_reclaim_does_not_forge_actual_heating_or_virtual_reservation():
     assert out["virtual_heating_seconds"] == 30  # previous sampled virtual state
     assert out["observed_heating_estimate_seconds"] == 0  # transition not continuously observed
     assert out["hlt_power_virtual_w"] == 0
+    assert out["power_owner"] == "brewzilla_only"
     assert out["actual_energy_recipient"] == "brewzilla"
     assert out["reclaim_count"] == 1
     assert out["yield_count"] == 1
@@ -87,7 +92,8 @@ def test_missing_real_power_is_unknown_not_zero_and_long_gap_is_excluded():
     out = m.update(i, r, **context)
     assert out["unknown_sample_seconds"] == 180
     assert out["virtual_heating_seconds"] == 0
-    assert out["observed_heating_estimate_seconds"] == 0
+    assert out["observed_heating_estimate_seconds"] is None
+    assert out["hlt_energy_estimate_wh"] is None
     assert out["total_session_seconds"] == 180
 
 
@@ -109,6 +115,16 @@ def test_measured_temp_and_session_reset_and_inactive_snapshot():
     assert ended["hlt_power_observed_w"] is None
     assert ended["actual_energy_recipient"] == "unknown"
     assert ended["total_session_seconds"] == 0
+
+
+def test_total_clock_stops_on_disabled_stage():
+    m = Metrics("brewday-stopped")
+    i, r, context = sample(0)
+    m.update(i, r, **context)
+    i, r, context = sample(30, virtual=False, active=False, state="IDLE")
+    assert m.update(i, r, **context)["total_session_seconds"] == 30
+    i, r, context = sample(60, virtual=False, active=False, state="IDLE")
+    assert m.update(i, r, **context)["total_session_seconds"] == 30
 
 
 def test_monotonic_timestamp_enforced():
