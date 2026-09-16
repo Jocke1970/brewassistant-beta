@@ -101,7 +101,9 @@ class HLTTraceRecorder:
             "hlt_switch_observed": hlt_switch,
             "hlt_power_observed_w": _number(hlt_power_w),
             "hlt_temp_measured_c": _number(inputs.measured_hlt_temperature_c),
-            "hlt_temp_model_c": _number(result.temperature_c),
+            "hlt_temp_resolved_c": _number(result.temperature_c),
+            "hlt_temp_estimated_c": (_number(result.temperature_c)
+                                     if result.temperature_source != "measured" else None),
             "hlt_temp_source": result.temperature_source,
             "hlt_temp_uncertainty": result.temperature_uncertainty,
             "hlt_target_c": _number(hlt_target_c),
