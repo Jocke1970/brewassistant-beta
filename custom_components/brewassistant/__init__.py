@@ -40,6 +40,7 @@ from .carbonation_backend.carbonation_runtime import (
 )
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
+from .hlt.runtime import async_setup_hlt_simulation
 from .kegerator.guard import async_setup_kegerator_guard
 from .brewday.manual_brewday_runtime import ManualRuntimeState
 from .brewday.manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
@@ -88,6 +89,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     entry.async_on_unload(async_setup_brewday_audit_autostart(hass))
+    # Separate simulation-only timer; never participates in physical BZ writes.
+    entry.async_on_unload(async_setup_hlt_simulation(hass, entry))
     _register_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
