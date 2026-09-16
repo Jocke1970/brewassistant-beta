@@ -12,8 +12,9 @@ Config, Inputs, Simulator = MODULE.SimulationConfig, MODULE.Inputs, MODULE.HLTSi
 
 
 def sample(t, bz=20, watts=450, **kwargs):
+    kwargs.setdefault("brewzilla_cruising", True)
     return Inputs(timestamp_s=t, brewzilla_requested_utilization=bz,
-                  brewzilla_measured_w=watts, brewzilla_cruising=True, **kwargs)
+                  brewzilla_measured_w=watts, **kwargs)
 
 
 def test_cruise_grant_then_ramp_reclaims_hlt_without_capping_bz():
@@ -29,7 +30,7 @@ def test_cruise_grant_then_ramp_reclaims_hlt_without_capping_bz():
     assert reclaim.reason == "brewzilla_ramp_priority"
     assert not reclaim.virtual_heater_on
     assert reclaim.hlt_reservation_w == 1500
-    assert reclaim.total_reserved_w == 3700  # DO NOT conceal observed overlap by clipping BZ
+    assert reclaim.total_reserved_w == 3700  # never conceal observed overlap by clipping BZ
     assert "simulation_budget_conflict" in reclaim.events
     assert sim.tick(sample(12, bz=100, watts=2200,
                            brewzilla_cruising=False, brewzilla_ramp_requested=True)).state == "YIELDING"
@@ -62,7 +63,7 @@ def test_temperature_increases_from_integrated_energy():
                            efficiency=1, loss_w_per_k=0))
     sim.tick(sample(0, bz=0, watts=0))
     result = sim.tick(sample(41.86, bz=0, watts=0))
-    assert abs(result.temperature_c - 19) < 0.001  # 41.86 kJ raises 10 L by 1 K
+    assert abs(result.temperature_c - 19) < 0.001
 
 
 def test_unknown_brewzilla_demand_denies_new_opportunity():
