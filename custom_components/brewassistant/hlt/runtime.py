@@ -1,12 +1,13 @@
-"""Brewday-scoped, simulation-only HLT runtime.
+"""Brewday-scoped HLT simulation. BZ always takes power priority.
 
-No service writes or physical grants. A separate setup hook must call
-async_setup_hlt_simulation() during integration setup. Every tick uses the
-current normalized Brewday and conservative, freshness-checked HA inputs.
+Only reads Home Assistant; never calls a hardware service or caps BrewZilla.
+The 30-second sampling interval cannot protect a real shared electrical circuit
+against autonomous heater cycles. An independent interlock is required for that.
 """
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import logging
 from math import isfinite
@@ -44,7 +45,8 @@ def _option(entry: Any, key: str, default: Any) -> Any:
 
 
 def _config(entry: Any, water_l: float) -> SimulationConfig:
-    """Read scenario assumptions; electrical values are NOT commissioned ratings."""
+    """Scenario watts are NOT commissioned electrical ratings."""
+    cutoff = _option(entry, "hlt_sim_thermostat_cutoff_c", None)
     return SimulationConfig(
         usable_budget_w=float(_option(entry, "hlt_sim_usable_budget_w", 2500)),
         hlt_heater_w=float(_option(entry, "hlt_sim_heater_w", 1800)),
@@ -53,10 +55,7 @@ def _config(entry: Any, water_l: float) -> SimulationConfig:
         hlt_volume_l=water_l,
         hlt_start_c=float(_option(entry, "hlt_sim_start_c", 18)),
         hlt_target_c=float(_option(entry, "hlt_sim_target_c", 78)),
-        thermostat_cutoff_c=(
-            float(_option(entry, "hlt_sim_thermostat_cutoff_c", 78))
-            if _option(entry, "hlt_sim_thermostat_cutoff_c", None) is not None else None
-        ),
+        thermostat_cutoff_c=float(cutoff) if cutoff is not None else None,
     )
 
 
@@ -84,8 +83,26 @@ def _allowed_stage(stage: Any) -> bool:
     return bool(text) and not any(word in text for word in _TERMINAL_STAGE_WORDS)
 
 
+def _bz_cruise_observation(hass: Any, brewday: dict[str, Any], now: datetime,
+                           age_s: float, tolerance_c: float = 0.5) -> tuple[bool, bool]:
+    """Observational scenario only; a reached target cannot predict heater cycling.
+
+    Require fresh internal temperature and device target, matching normalized
+    runtime target. Any missing signal or target change revokes the opportunity.
+    """
+    actual_c = _numeric(_observed(hass, "sensor.brewzilla_temperature", now, age_s))
+    device_c = _numeric(_observed(hass, "number.brewzilla_target_temperature", now, age_s))
+    requested_c = _numeric(brewday.get("target_temperature"))
+    if any(value is None for value in (actual_c, device_c, requested_c)):
+        return False, True
+    # A newly requested target is a ramp until device and normalized target agree.
+    ramp = abs(device_c - requested_c) > tolerance_c or actual_c < requested_c - tolerance_c
+    cruising = not ramp and abs(actual_c - requested_c) <= tolerance_c
+    return cruising, ramp
+
+
 async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | None = None) -> dict[str, Any]:
-    """Advance one virtual tick and append replayable JSONL, never actuating IO."""
+    """Advance virtual HLT and append JSONL; no physical writes, ever."""
     from ..brewday.brewday_audit import get_brewday_audit_log
     from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
     from ..brewzilla.brewzilla_learning import build_brewzilla_learning_snapshot
@@ -95,7 +112,7 @@ async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | No
     audit = get_brewday_audit_log(hass)
     if not audit.active or audit.started_at is None:
         runtime["status"] = "waiting_for_brewday_recorder"
-        runtime.pop("simulator", None)  # No virtual power lease survives session end.
+        runtime.pop("simulator", None)
         runtime.pop("session_id", None)
         return runtime
 
@@ -117,7 +134,7 @@ async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | No
     session_id = audit.started_at.isoformat()
     key = (session_id, water_l)
     config = _config(entry, water_l if water_l > 0 else 0.001)
-    if runtime.get("session_key") != key or runtime.get("scenario_config") != config:
+    if runtime.get("session_key") != key or runtime.get("scenario_config") != config or "simulator" not in runtime:
         runtime["simulator"] = HLTSimulator(config)
         runtime["session_key"] = key
         runtime["scenario_config"] = config
@@ -126,17 +143,17 @@ async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | No
 
     now = now or datetime.now(timezone.utc)
     entities = _entities(entry)
+    cruising, ramp_requested = _bz_cruise_observation(hass, brewday, now, entities.max_age_s)
     sparge_required = water_l > 0
-    # This is a counterfactual scenario: a BZ cap is *assumed* for arbitration,
-    # never enforced on hardware. Trace marks all allocations as simulated.
     readings = collect_inputs(
         hass, entities, sparge_required=sparge_required,
         enabled=sparge_required and _allowed_stage(stage),
-        brewzilla_unconstrained=False, now=now,
+        brewzilla_unconstrained=True, now=now,
     )
+    readings = replace(readings, brewzilla_cruising=cruising,
+                       brewzilla_ramp_requested=ramp_requested)
     result = runtime["simulator"].tick(readings)
-    raw_power = _observed(hass, entities.hlt_power, now, entities.max_age_s)
-    power_w = _numeric(raw_power)
+    power_w = _numeric(_observed(hass, entities.hlt_power, now, entities.max_age_s))
     await async_record_hlt_tick(
         hass, session_id=session_id, inputs=readings, result=result,
         hlt_power_w=power_w,
@@ -149,16 +166,14 @@ async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | No
     runtime["last_result"] = result
     runtime["last_updated"] = now.isoformat()
     runtime["sparge_water_l"] = water_l
+    runtime["bz_cruising_observed"] = cruising
+    runtime["bz_ramp_requested"] = ramp_requested
     runtime["scenario_only"] = True
     return runtime
 
 
 def async_setup_hlt_simulation(hass: Any, entry: Any):
-    """Subscribe to HA timer; caller registers returned unsubscribe on entry.
-
-    Tick failures are diagnostic only. The callback never invokes HA hardware
-    services, and a failed tick cannot interrupt BrewZilla orchestration.
-    """
+    """Register unloadable timer; never participates in physical BZ IO."""
     lock = asyncio.Lock()
 
     async def _run(now: datetime) -> None:
