@@ -1,7 +1,7 @@
 """Uploadable JSONL trace for the virtual HLT, independent of HA state attributes.
 
-Only called by an HLT runtime; this module never switches physical hardware.
-One file per brewday session, in the Home Assistant configuration directory.
+Only called by simulation runtime; never switches physical hardware. One file
+per Brewday session, in the Home Assistant configuration directory.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SAMPLE_INTERVAL_S = 30.0
 _DATA_KEY = "hlt_trace_recorder"
 
@@ -29,7 +29,6 @@ def _number(value: Any) -> float | None:
 
 
 def _session_path(config_root: str | Path, session_id: str) -> Path:
-    """Hash the caller's session ID: stable across restarts; no path traversal."""
     if not session_id:
         raise ValueError("A nonempty brewday session ID is required")
     digest = sha256(session_id.encode("utf-8")).hexdigest()[:16]
@@ -43,11 +42,7 @@ def _append_line(path: Path, line: str) -> None:
 
 
 class HLTTraceRecorder:
-    """Keep a bounded-rate measurement stream and immediate transition records.
-
-    Caller must supply a real brewday session ID and only invoke this from a
-    simulation runtime. Logging cannot infer safe electrical authorization.
-    """
+    """Rate-limited samples, immediate transitions; BZ grants do not exist."""
 
     def __init__(self, config_root: str | Path, session_id: str,
                  *, sample_interval_s: float = SAMPLE_INTERVAL_S) -> None:
@@ -68,14 +63,15 @@ class HLTTraceRecorder:
                     usable_budget_w: float | None = None,
                     hlt_target_c: float | None = None,
                     hlt_volume_l: float | None = None) -> dict[str, Any] | None:
-        """Build a JSON-safe sample. Never mislabel model values as measured."""
         now_s = _number(inputs.timestamp_s)
         if now_s is None or now_s < 0:
             raise ValueError("Invalid HLT sample timestamp")
         transitions = list(result.events)
+        cruising = bool(getattr(inputs, "brewzilla_cruising", False))
+        ramp = bool(getattr(inputs, "brewzilla_ramp_requested", False))
         fingerprint = (result.state, result.reason, result.virtual_heater_on,
                        result.temperature_source, result.power_budget_verified,
-                       inputs.sparge_required, inputs.enable_hlt)
+                       inputs.sparge_required, inputs.enable_hlt, cruising, ramp)
         state_changed = fingerprint != self._last_fingerprint
         due = (self._last_sample_s is None or now_s < self._last_sample_s
                or now_s - self._last_sample_s >= self.sample_interval_s)
@@ -90,6 +86,7 @@ class HLTTraceRecorder:
             "session_key": self.session_key,
             "simulation": True,
             "physical_writes": False,
+            "brewzilla_priority": "absolute_unthrottled",
             "stage": stage,
             "step": step,
             "events": transitions,
@@ -101,9 +98,7 @@ class HLTTraceRecorder:
             "hlt_switch_observed": hlt_switch,
             "hlt_power_observed_w": _number(hlt_power_w),
             "hlt_temp_measured_c": _number(inputs.measured_hlt_temperature_c),
-            "hlt_temp_resolved_c": _number(result.temperature_c),
-            "hlt_temp_estimated_c": (_number(result.temperature_c)
-                                     if result.temperature_source != "measured" else None),
+            "hlt_temp_model_c": _number(result.temperature_c),
             "hlt_temp_source": result.temperature_source,
             "hlt_temp_uncertainty": result.temperature_uncertainty,
             "hlt_target_c": _number(hlt_target_c),
@@ -112,19 +107,19 @@ class HLTTraceRecorder:
             "hlt_thermostat_calibrated": result.thermostat_calibrated,
             "bz_power_observed_w": _number(inputs.brewzilla_measured_w),
             "bz_utilization_observed_pct": _number(inputs.brewzilla_requested_utilization),
-            "bz_unconstrained": inputs.brewzilla_unconstrained,
+            "bz_cruising_observed": cruising,
+            "bz_ramp_requested": ramp,
             "bz_request_calculated_w": _number(result.brewzilla_request_w),
-            "bz_would_grant_w": _number(result.brewzilla_would_grant_w),
-            "bz_would_cap_pct": _number(result.brewzilla_would_cap_utilization),
+            "bz_power_cap_w": None,
+            "bz_power_cap_pct": None,
             "hlt_reserved_w": _number(result.hlt_reservation_w),
-            "total_reserved_w": _number(result.total_reserved_w),
-            "available_w": _number(result.available_w),
+            "total_observed_bz_plus_virtual_hlt_w": _number(result.total_reserved_w),
+            "available_observed_w": _number(result.available_w),
             "usable_budget_w": _number(usable_budget_w),
-            "power_budget_verified": result.power_budget_verified,
+            "power_budget_verified": False,
         }
 
     async def async_record(self, hass: Any, inputs: Any, result: Any, **context: Any) -> Path | None:
-        """Serialize concurrent calls; offload file I/O from HA's event loop."""
         async with self._lock:
             record = self.make_record(inputs, result, **context)
             if record is None:
