@@ -85,17 +85,16 @@ def _allowed_stage(stage: Any) -> bool:
 
 def _bz_cruise_observation(hass: Any, brewday: dict[str, Any], now: datetime,
                            age_s: float, tolerance_c: float = 0.5) -> tuple[bool, bool]:
-    """Observational scenario only; a reached target cannot predict heater cycling.
+    """Observed cruise only; unavailable evidence is UNKNOWN, not a ramp.
 
     Require fresh internal temperature and device target, matching normalized
-    runtime target. Any missing signal or target change revokes the opportunity.
+    runtime target. No sample can predict the next autonomous BZ heater cycle.
     """
     actual_c = _numeric(_observed(hass, "sensor.brewzilla_temperature", now, age_s))
     device_c = _numeric(_observed(hass, "number.brewzilla_target_temperature", now, age_s))
     requested_c = _numeric(brewday.get("target_temperature"))
     if any(value is None for value in (actual_c, device_c, requested_c)):
-        return False, True
-    # A newly requested target is a ramp until device and normalized target agree.
+        return False, False
     ramp = abs(device_c - requested_c) > tolerance_c or actual_c < requested_c - tolerance_c
     cruising = not ramp and abs(actual_c - requested_c) <= tolerance_c
     return cruising, ramp
