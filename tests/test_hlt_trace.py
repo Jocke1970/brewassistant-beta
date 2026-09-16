@@ -19,13 +19,14 @@ def sample(t, state="HEATING", events=()):
     inp = Obj(timestamp_s=t, sparge_required=True, enable_hlt=True,
               measured_hlt_temperature_c=None, thermostat_heating=None,
               brewzilla_measured_w=800, brewzilla_requested_utilization=35,
+              brewzilla_cruising=True, brewzilla_ramp_requested=False,
               brewzilla_unconstrained=True)
     result = Obj(events=events, state=state, reason="simulated", virtual_heater_on=True,
                  temperature_source="estimated", temperature_c=42.0,
                  temperature_uncertainty="model only", power_budget_verified=False,
                  thermostat_calibrated=False, brewzilla_request_w=770,
-                 brewzilla_would_grant_w=1200, brewzilla_would_cap_utilization=54.5,
-                 hlt_reservation_w=1500, total_reserved_w=2700, available_w=50)
+                 brewzilla_would_grant_w=None, brewzilla_would_cap_utilization=None,
+                 hlt_reservation_w=1500, total_reserved_w=2300, available_w=450)
     return inp, result
 
 
@@ -53,12 +54,17 @@ def test_sample_rate_and_immediate_reclaim(tmp_path):
             )
             path = written or path
         rows = [json.loads(line) for line in path.read_text().splitlines()]
-        assert len(rows) == 4  # first, off request, off confirm, 30s sample
+        assert len(rows) == 4
         assert rows[1]["events"] == ["virtual_hlt_off_requested"]
         assert rows[2]["events"] == ["virtual_hlt_off_confirmed"]
         assert rows[0]["hlt_temp_measured_c"] is None
         assert rows[0]["hlt_temp_source"] == "estimated"
         assert rows[0]["bz_power_observed_w"] == 800
+        assert rows[0]["bz_cruising_observed"] is True
+        assert rows[0]["bz_ramp_requested"] is False
+        assert rows[0]["brewzilla_priority"] == "absolute_unthrottled"
+        assert rows[0]["bz_power_cap_w"] is None
+        assert rows[0]["bz_power_cap_pct"] is None
         assert rows[0]["usable_budget_w"] == 2750
         assert rows[0]["physical_writes"] is False
     asyncio.run(run())
