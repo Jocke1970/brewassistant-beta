@@ -1,8 +1,9 @@
-"""Pure HLT / BrewZilla power-sharing simulator. NEVER writes Home Assistant entities.
+"""Simulation-only HLT load shedding with UNRESTRICTED BrewZilla priority.
 
-All values are explicit inputs so a recorded Brewday can be replayed deterministically.
-A real controller must additionally enforce grants in BrewZilla's physical write chain;
-this simulator only reports what it *would* do.
+Never writes Home Assistant or caps the BrewZilla heater. Current draw is useful
+for replay, but not advance assurance: a thermostat can energize BZ between HA
+polls. An actual shared-circuit installation needs independent load-shed/interlock
+and verified HLT OFF feedback before physical HLT control is enabled.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ WATER_J_PER_L_K = 4186.0
 
 @dataclass(frozen=True)
 class SimulationConfig:
-    usable_budget_w: float = 2500.0
+    usable_budget_w: float = 2500.0  # scenario only; never a certified circuit limit
     hlt_heater_w: float = 1800.0
     brewzilla_heater_w: float = 2200.0
     brewzilla_idle_w: float = 0.0
@@ -49,7 +50,7 @@ class SimulationConfig:
 
 @dataclass(frozen=True)
 class Inputs:
-    """A single sample; None signifies missing/stale data, not zero demand."""
+    """Fresh sample; missing measurements are None, never assumed to be zero."""
     timestamp_s: float
     brewzilla_requested_utilization: float | None
     brewzilla_measured_w: float | None
@@ -57,8 +58,10 @@ class Inputs:
     enable_hlt: bool = True
     measured_hlt_temperature_c: float | None = None
     thermostat_heating: bool | None = None
-    # True means the actual BZ heat channel may be changed externally without an
-    # arbiter-enforced cap. Simulation cannot promise physical budget enforcement.
+    # Explicit higher-level runtime observation, NOT inferred from one low W sample.
+    brewzilla_cruising: bool = False
+    brewzilla_ramp_requested: bool = False
+    # Legacy compatibility only; never authorizes a BZ cap or physical power grant.
     brewzilla_unconstrained: bool = True
 
 
@@ -72,22 +75,17 @@ class Result:
     virtual_heater_on: bool
     hlt_reservation_w: float
     brewzilla_request_w: float | None
-    brewzilla_would_grant_w: float | None
-    brewzilla_would_cap_utilization: float | None
-    total_reserved_w: float
+    brewzilla_would_grant_w: float | None  # always None: BZ is never allocated/capped
+    brewzilla_would_cap_utilization: float | None  # always None
+    total_reserved_w: float  # observed BZ + virtual HLT; not a safe power reservation
     available_w: float
     thermostat_calibrated: bool
-    power_budget_verified: bool
+    power_budget_verified: bool  # always False until independent protection exists
     events: tuple[str, ...]
 
 
 class HLTSimulator:
-    """Stateful, replayable simulation of a BZ-priority, binary-heater HLT.
-
-    Release uses a virtual off-confirmation interval. A future hardware adapter
-    must replace this with trusted readback and never treat the simulation timer
-    as proof that a real heater is off.
-    """
+    """Replay HLT opportunistic heating. BZ ALWAYS keeps its full physical power."""
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
@@ -108,8 +106,6 @@ class HLTSimulator:
         if elapsed > 86400:
             raise ValueError("Unexpected sample gap; restart simulation rather than replay stale grants")
         events: list[str] = []
-        # Model energy consumed during the *previous* interval, not the newly
-        # requested heater state; integrate with bounded steps for cooling losses.
         remaining = elapsed
         while remaining > 0:
             dt = min(c.max_step_s, remaining)
@@ -123,12 +119,10 @@ class HLTSimulator:
                 raise ValueError("Invalid HLT temperature")
             self.temperature_c = sample.measured_hlt_temperature_c
             temp_source = "measured"
-            uncertainty = "sensor accuracy / freshness must be checked by adapter"
+            uncertainty = "sensor accuracy / freshness checked by adapter"
         else:
             temp_source = "estimated"
-            uncertainty = "model-dependent; starting temperature must be configured"
-        # Thermostat edge is useful only if cutoff temperature is independently
-        # configured AND an actual heating->off transition has been observed.
+            uncertainty = "model-dependent; assumed starting temperature and losses"
         if (sample.measured_hlt_temperature_c is None and
                 self.last_thermostat_heating is True and sample.thermostat_heating is False and
                 c.thermostat_cutoff_c is not None):
@@ -140,36 +134,31 @@ class HLTSimulator:
         self.last_thermostat_heating = sample.thermostat_heating
 
         utilization = sample.brewzilla_requested_utilization
-        measured_w = sample.brewzilla_measured_w
+        measured = sample.brewzilla_measured_w
         valid_request = utilization is not None and isfinite(utilization) and 0 <= utilization <= 100
-        valid_measurement = measured_w is not None and isfinite(measured_w) and measured_w >= 0
+        valid_measurement = measured is not None and isfinite(measured) and measured >= 0
         requested_w = c.brewzilla_idle_w + c.brewzilla_heater_w * utilization / 100 if valid_request else None
-        # Never use low instantaneous consumption as permission to start HLT.
-        # High measurement, however, raises reservation to avoid optimistic grants.
-        conservative_w = max(requested_w, measured_w) if valid_request and valid_measurement else None
-        budget_verified = not sample.brewzilla_unconstrained
-        if sample.brewzilla_unconstrained and valid_request and valid_measurement:
-            # A non-arbitrated BZ can jump to full rated power: reserve full load.
-            conservative_w = max(conservative_w, c.brewzilla_idle_w + c.brewzilla_heater_w)
-        if not valid_request or not valid_measurement:
-            conservative_w = None
+        wants_heat = sample.sparge_required and sample.enable_hlt and self.temperature_c < c.hlt_target_c
+        # Snapshot-based OPPORTUNITY only. Neither this calculation nor cruise
+        # detection prevents BZ autonomously energizing before the next sample.
+        opportunity = (valid_request and valid_measurement and sample.brewzilla_cruising
+                       and not sample.brewzilla_ramp_requested
+                       and measured + c.hlt_heater_w <= c.usable_budget_w)
 
         pending_release = self.release_until_s is not None and t < self.release_until_s
         if self.release_until_s is not None and t >= self.release_until_s:
             self.release_until_s = None
             events.append("virtual_hlt_off_confirmed")
             pending_release = False
-        wants_heat = sample.sparge_required and sample.enable_hlt and self.temperature_c < c.hlt_target_c
-        can_grant = (conservative_w is not None and
-                     conservative_w + c.hlt_heater_w <= c.usable_budget_w)
         if pending_release:
             self.virtual_heater_on = False
             self.state, reason = "YIELDING", "awaiting_virtual_off_confirmation"
-        elif self.virtual_heater_on and (not wants_heat or not can_grant):
+        elif self.virtual_heater_on and (not wants_heat or not opportunity):
             self.virtual_heater_on = False
             self.release_until_s = t + c.off_confirmation_s
             self.state = "YIELDING" if c.off_confirmation_s > 0 else "WAITING_FOR_POWER"
-            reason = "brewzilla_reclaim" if wants_heat else "heater_stop"
+            reason = ("brewzilla_ramp_priority" if sample.brewzilla_ramp_requested or not sample.brewzilla_cruising
+                      else "brewzilla_power_priority" if wants_heat else "heater_stop")
             events.append("virtual_hlt_off_requested")
             if not c.off_confirmation_s:
                 self.release_until_s = None
@@ -179,30 +168,25 @@ class HLTSimulator:
         elif not valid_request or not valid_measurement:
             self.state, reason = "WAITING_FOR_POWER", "brewzilla_power_or_request_unknown"
         elif not wants_heat:
-            self.state, reason = "READY", "target_reached_estimated" if temp_source != "measured" else "target_reached_measured"
-        elif can_grant:
+            self.state, reason = "READY", "target_reached_measured" if temp_source == "measured" else "target_reached_estimated"
+        elif sample.brewzilla_ramp_requested or not sample.brewzilla_cruising:
+            self.state, reason = "WAITING_FOR_POWER", "brewzilla_ramp_or_not_cruising"
+        elif opportunity:
             if not self.virtual_heater_on:
                 events.append("virtual_hlt_on")
             self.virtual_heater_on = True
-            self.state, reason = "HEATING", "shared_budget_granted"
+            self.state, reason = "HEATING", "cruise_power_opportunity_simulated"
         else:
-            self.state, reason = "WAITING_FOR_POWER", "not_enough_reserved_capacity"
-        hlt_reservation = c.hlt_heater_w if self.virtual_heater_on or self.release_until_s is not None else 0.0
-        if conservative_w is None:
-            bz_grant = None
-            bz_cap = None
-            bz_reservation = c.usable_budget_w  # unknown BZ demand blocks all new HLT grants
-        else:
-            bz_grant = min(conservative_w, max(0.0, c.usable_budget_w - hlt_reservation))
-            bz_cap = min(100.0, max(0.0, (bz_grant - c.brewzilla_idle_w) / c.brewzilla_heater_w * 100))
-            bz_reservation = bz_grant
-        total = bz_reservation + hlt_reservation
+            self.state, reason = "WAITING_FOR_POWER", "not_enough_observed_capacity"
+
+        hlt_reserved = c.hlt_heater_w if self.virtual_heater_on or self.release_until_s is not None else 0.0
+        # IMPORTANT: never clamp BZ load to budget-minus-HLT. Detect the real
+        # observed overlap as a conflict instead. Unknown BZ load is not safe.
+        bz_observed = measured if valid_measurement else c.usable_budget_w
+        total = bz_observed + hlt_reserved
         if total > c.usable_budget_w + 1e-6:
-            # Unknown demand while a previous HLT reservation is releasing:
-            # preserve the reservation and flag unavailable rather than lying.
             events.append("simulation_budget_conflict")
-            budget_verified = False
         return Result(self.state, reason, self.temperature_c, temp_source, uncertainty,
-                      self.virtual_heater_on, hlt_reservation, requested_w, bz_grant,
-                      bz_cap, total, max(0.0, c.usable_budget_w - total), self.calibrated,
-                      budget_verified, tuple(events))
+                      self.virtual_heater_on, hlt_reserved, requested_w, None, None,
+                      total, max(0.0, c.usable_budget_w - total), self.calibrated,
+                      False, tuple(events))
