@@ -6,7 +6,7 @@ Status: **simulation connected to BA startup through an independent 30-second ti
 
 - **Never throttle or cap BrewZilla for HLT.** BZ may always use the power required for the brew.
 - HLT is secondary. The virtual HLT may heat while BZ is *observed* cruising at its current target, physical/normalized targets agree, readings are fresh, and observed BZ W + full HLT heater W fit within the configured scenario budget.
-- A next target/ramp, departure from target, unavailable BZ data, or insufficient observed capacity revokes the virtual HLT opportunity immediately at the next simulation tick. Its reservation is held through a **virtual** OFF delay and then released. BZ is never capped during this delay; an observed overlap is reported as `simulation_budget_conflict`, not hidden by clipping BZ consumption.
+- A next target/ramp, departure from target, unavailable BZ data, or insufficient observed capacity revokes the virtual HLT opportunity at the next simulation tick. Its reservation is held through a **virtual** OFF delay and then released. BZ is never capped during this delay; an observed overlap is reported as `simulation_budget_conflict`, not hidden by clipping BZ consumption. Missing target or temperature means *unknown*, not an invented ramp.
 - HLT remains off for No Sparge and once its own target is reached.
 - A low instantaneous BZ wattage reading alone is NOT proof that its heater cannot turn on again. This model has no physical grant authority and `power_budget_verified` is **always false**. The old `brewzilla_would_grant_w`/`brewzilla_would_cap_utilization` compatibility result properties return `None` and must never be used for actuation. The legacy `brewzilla_unconstrained` input is not a control permission.
 
