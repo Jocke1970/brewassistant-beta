@@ -49,9 +49,10 @@ async def async_record_hlt_tick(
                  result.temperature_source, result.power_budget_verified,
                  inputs.sparge_required)
     old_key = state_data.get("hlt_audit_state_key")
-    state_data["hlt_audit_state_key"] = state_key
     if not log.active:
+        state_data.pop("hlt_audit_state_key", None)
         return
+    state_data["hlt_audit_state_key"] = state_key
     transitions = tuple(result.events)
     if not transitions and state_key == old_key:
         return
