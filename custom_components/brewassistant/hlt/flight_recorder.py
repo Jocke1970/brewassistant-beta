@@ -1,4 +1,4 @@
-"""Write HLT simulator samples to JSONL and transitions to Brewday Audit.
+"""Write HLT simulator samples to JSONL, expose metrics and Audit transitions.
 
 No physical writes. BZ is never granted/capped by the simulator.
 """
@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .metrics import update_hlt_dashboard
 from .trace import async_record_hlt_trace
 
 _EVENT_TYPES = {
@@ -31,7 +32,7 @@ async def async_record_hlt_tick(
     hlt_target_c: float | None = None,
     hlt_volume_l: float | None = None,
 ) -> None:
-    """Full samples in file; only state changes and meaningful edges in Audit."""
+    """Full samples in JSONL; power/timing UI updates, high-signal Audit only."""
     from ..brewday import brewday_audit as audit
 
     path = await async_record_hlt_trace(
@@ -40,11 +41,21 @@ async def async_record_hlt_tick(
         stage=stage, step=step, usable_budget_w=usable_budget_w,
         hlt_target_c=hlt_target_c, hlt_volume_l=hlt_volume_l,
     )
+    state_data = hass.data.setdefault("brewassistant", {})
     if path is not None:
-        hass.data.setdefault("brewassistant", {})["hlt_trace_path"] = str(path)
+        state_data["hlt_trace_path"] = str(path)
+    # On an unchanged tick the trace writer skips a row; its existing file is
+    # still the correct upload path, not a missing/changed session.
+    recorder = state_data.get("hlt_trace_recorder")
+    trace_path = str(recorder.path) if recorder is not None else None
+    dashboard = update_hlt_dashboard(
+        hass, session_id, inputs, result,
+        hlt_power_w=hlt_power_w, hlt_switch=hlt_switch,
+        usable_budget_w=usable_budget_w, hlt_target_c=hlt_target_c,
+        hlt_volume_l=hlt_volume_l, trace_path=trace_path,
+    )
 
     log = audit.get_brewday_audit_log(hass)
-    state_data = hass.data.setdefault("brewassistant", {})
     conflict = "simulation_budget_conflict" in result.events
     state_key = (session_id, result.state, result.reason, result.virtual_heater_on,
                  result.temperature_source, result.power_budget_verified,
@@ -83,6 +94,10 @@ async def async_record_hlt_tick(
         "hlt_budget_w": usable_budget_w,
         "hlt_observed_bz_plus_virtual_hlt_w": result.total_reserved_w,
         "hlt_budget_verified": False,
+        "hlt_total_session_seconds": dashboard["total_session_seconds"],
+        "hlt_virtual_heating_seconds": dashboard["virtual_heating_seconds"],
+        "hlt_observed_heating_estimate_seconds": dashboard["observed_heating_estimate_seconds"],
+        "hlt_yield_count": dashboard["yield_count"],
         "hlt_transition_events": list(transitions),
     })
     event["severity"] = "warning" if conflict else "info"
