@@ -1,4 +1,4 @@
-"""Exercise the HLT runner, simulator and JSONL bridge without installed HA."""
+"""Exercise HLT runner, simulation and JSONL bridge without installed HA."""
 from __future__ import annotations
 
 import asyncio
@@ -68,7 +68,6 @@ def rig(monkeypatch, tmp_path):
             build_brewday_runtime_snapshot=lambda hass: brewday)
     _module(monkeypatch, BASE + ".brewzilla.brewzilla_learning",
             build_brewzilla_learning_snapshot=lambda hass: batch)
-
     _load(monkeypatch, "simulation")
     _load(monkeypatch, "trace")
     _load(monkeypatch, "ha_adapter")
@@ -107,7 +106,7 @@ def rig(monkeypatch, tmp_path):
                            callbacks=callbacks)
 
 
-def test_runner_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
+def test_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     at = rig.started + timedelta(minutes=1)
     rig.sample(at)
     first = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
@@ -117,13 +116,13 @@ def test_runner_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     assert rig.audit.events[-1]["event_type"] == "hlt_sim_heater_on"
     files = list((rig.root / "brewassistant/logs").glob("hlt-sim-*.jsonl"))
     assert len(files) == 1
-    first_record = json.loads(files[0].read_text().splitlines()[0])
-    assert first_record["physical_writes"] is False
-    assert first_record["bz_power_observed_w"] == 440
-    assert first_record["hlt_virtual_heater_on"] is True
+    record = json.loads(files[0].read_text().splitlines()[0])
+    assert record["physical_writes"] is False
+    assert record["bz_power_observed_w"] == 440
+    assert record["hlt_virtual_heater_on"] is True
 
     at += timedelta(seconds=30)
-    rig.brewday["target_temperature"] = 72  # requested next step BEFORE device catches up
+    rig.brewday["target_temperature"] = 72
     rig.sample(at, bz_power=2200, bz_util=100, current=65, device_target=65)
     reclaim = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
     assert reclaim["last_result"].state == "YIELDING"
@@ -141,14 +140,14 @@ def test_runner_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     assert len(files[0].read_text().splitlines()) >= 3
 
 
-def test_missing_temperature_never_claims_cruise(rig):
+def test_missing_temperature_is_unknown_not_fabricated_ramp(rig):
     at = rig.started + timedelta(minutes=1)
     rig.sample(at)
     rig.hass.values.pop("sensor.brewzilla_temperature")
     out = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
     assert not out["last_result"].virtual_heater_on
     assert out["bz_cruising_observed"] is False
-    assert out["bz_ramp_requested"] is True
+    assert out["bz_ramp_requested"] is False
 
 
 def test_missing_volume_or_inactive_session_writes_nothing(rig):
@@ -163,7 +162,7 @@ def test_missing_volume_or_inactive_session_writes_nothing(rig):
     assert stopped["status"] == "waiting_for_brewday_recorder"
 
 
-def test_no_sparge_remains_idle_and_logs_explicit_zero_volume(rig):
+def test_no_sparge_remains_idle_and_logs_zero_volume(rig):
     rig.batch["sparge_water_l"] = 0
     at = rig.started + timedelta(minutes=1)
     rig.sample(at)
