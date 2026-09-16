@@ -71,6 +71,7 @@ def rig(monkeypatch, tmp_path):
     _load(monkeypatch, "simulation")
     _load(monkeypatch, "trace")
     _load(monkeypatch, "ha_adapter")
+    _load(monkeypatch, "metrics")
     _load(monkeypatch, "flight_recorder")
     runtime = _load(monkeypatch, "runtime")
 
@@ -120,6 +121,13 @@ def test_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     assert record["physical_writes"] is False
     assert record["bz_power_observed_w"] == 440
     assert record["hlt_virtual_heater_on"] is True
+    dashboard = rig.hass.data["brewassistant"]["hlt_dashboard_snapshot"]
+    assert dashboard["simulation_only"] is True
+    assert dashboard["trace_path"] == str(files[0])
+    assert dashboard["hlt_power_virtual_w"] == 1500
+    assert dashboard["hlt_power_observed_w"] is None
+    assert dashboard["actual_total_observed_w"] is None
+    assert dashboard["actual_energy_recipient"] == "unknown"
 
     at += timedelta(seconds=30)
     rig.brewday["target_temperature"] = 72
@@ -131,6 +139,10 @@ def test_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     assert reclaim["last_result"].total_reserved_w == 3700
     assert rig.audit.events[-1]["event_type"] == "hlt_sim_budget_conflict"
     assert "virtual_hlt_off_requested" in rig.audit.events[-1]["hlt_transition_events"]
+    dashboard = rig.hass.data["brewassistant"]["hlt_dashboard_snapshot"]
+    assert dashboard["hlt_power_virtual_w"] == 0
+    assert dashboard["virtual_heating_seconds"] == 30
+    assert dashboard["reclaim_count"] == 1
     at += timedelta(seconds=4)
     rig.sample(at, bz_power=2200, bz_util=100, current=65, device_target=72)
     released = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
