@@ -1,14 +1,37 @@
-# SG-driven fermentation: contract and implementation status
+# Fermentation mode selection and SG-driven fermentation: contract and implementation status
 
-Status: **pure rule engine and tests only** on `dev`; **not integrated or deployable as a control mode yet**. Keep the installed fermentation test on the existing recipe schedule. Do not promote to `beta` or `main` until explicitly approved after runtime validation.
+Status: **pure SG decision engine and tests only** on `dev`; the two-mode selector, editable controls, persistence, active arbitration, and cold-crash confirmation UI are **not implemented yet**. Keep the installed fermentation test on its existing recipe schedule; do not promote to `beta` or `main` without explicit approval and runtime validation.
 
-## Ownership and mode selection
+## Two explicit, per-batch modes
 
-- Brewfather provides the original scheduled fermentation steps as read-only planning data.
-- `fermentation_tracking` owns interpretation and an optional, explicitly enabled **per-batch SG control mode**. Default remains `recipe_schedule` for backward compatibility.
-- `fermentation_chamber` consumes the effective recommended beer temperature through its existing supervised-apply boundary. No new direct heater, compressor or climate services.
-- The SG mode must identify the configured RAPT Pill gravity entity; a manual SG value or an arbitrary SG sensor must not silently advance the stage.
-- If Pill evidence goes stale, hold the *persisted last confirmed stage* and expose a clear diagnostic. Do not resume a date-based recipe ramp and do not infer progression from an absent value.
+- `recipe_schedule` (UI: **Dagar / Brewfather-schema**) is the backward-compatible default. Brewfather provides read-only recipe fermentation steps, temperatures, `actualTime`, and ramps. BrewAssistant interprets them; the fork never owns BA-specific control.
+- `sg_control` (UI: **SG-styrd**) is opt-in for each batch and uses only validated new Pill observations for stage progression. The Brewfather schedule remains visible as a *plan*, but must not alter the active SG target or trigger a date-based cold crash.
+- Expose the **active mode**, active target source, selected batch identity, latest valid SG/timestamp and reason for holding a stage in the dashboard. Switching modes requires an explicit operator action and must never silently enable the chamber supervisor.
+- On loss of Pill readings, **hold the last confirmed SG target** and notify/show stale data. Never silently fall back to recipe dates, jump stages or start a cold crash. The operator may explicitly switch to day mode or continue manually after checking the fermentation.
+- Persist selected mode and its parameters **per batch**, not as global inputs that overwrite another batch. On first load, make a proposed SG profile editable before activation; do not auto-enable SG mode just because a recipe has fermentation steps.
+
+## UI: editable configuration before SG mode can be enabled
+
+Expose one coherent configuration panel on the fermentation/batch view (not hardcoded Julöl parameters). Use decimal SG values, not gravity points or Brix. Pre-fill known recipe temperatures/FG where available, clearly label them as imported defaults; Brewfather does not provide SG trigger thresholds or a stable-FG verification period. BA owns user edits and must not overwrite them on subsequent recipe refreshes.
+
+| UI field | Example/default for Julöl 2026 V2 | Notes |
+| --- | --- | --- |
+| Styrningsläge | Dagar / Brewfather-schema | Explicit switch to SG-styrd; day mode retained |
+| Initial temperatur | 18.0 °C | First SG stage |
+| SG-gräns steg 2 | 1.035 | Only validated fresh Pill readings count |
+| Temperatur steg 2 | 19.0 °C | Target when threshold confirmed |
+| Temperaturändring steg 2 | 4 hours, editable | Optional gradual rise; zero only when explicitly requested; never use old recipe ramp during SG mode |
+| SG-gräns steg 3 | 1.020 | Must be below the preceding threshold |
+| Temperatur steg 3 | 20.5 °C | Final fermentation target |
+| Temperaturändring steg 3 | 6 hours, editable | Optional gradual rise; configurable per batch |
+| Förväntat FG | 1.014 | User-editable; imported recipe FG may be a suggested starting value |
+| Stabil SG i minst | 72 hours | Explicitly configurable 48–72 hours |
+| Stabilitetstolerans | 0.001 SG | User-editable within validated safe bounds |
+| Cold-crash-mål | 2.0 °C | Proposal only until independent operator confirmation |
+
+Hours must have distinct labels: **ramp duration per temperature step** versus **hours of stable FG**. Day mode uses Brewfather schedule durations; SG mode does not require the user to reproduce Brewfather's date plan. Show the calculated ramp/hold status and the last confirmed stage.
+
+Validate all entered settings as one profile before applying (SG thresholds must descend, known OG/FG must be consistent where available, temperatures and durations plausible, and stable-hours between 48 and 72). Apply configuration changes atomically; warn/require explicit confirmation before changing an already running profile. A profile edit must not reset the stage latch or retroactively skip stages. Manual SG measurement entry can remain available as a tracking observation, but must not impersonate a Pill reading or silently advance the automated SG stage.
 
 ## Initial target profile for Julöl 2026 V2
 
@@ -18,24 +41,26 @@ Status: **pure rule engine and tests only** on `dev`; **not integrated or deploy
 | 1: rise | two credible Pill readings at SG <= 1.035 | 19.0 °C |
 | 2: finish | two credible Pill readings at SG <= 1.020 | 20.5 °C |
 
-For each threshold, require two distinct fresh measurements at least five minutes apart. Sensor re-polls of the same observation do not count; the confirmation window expires after two hours. An accepted stage must never regress or skip a stage when SG rises or fluctuates. Stage, pending confirmation, sample timestamp and batch identity must survive Home Assistant restarts. No default-on migration of an active session.
+For each threshold, require two distinct fresh measurements at least five minutes apart. Re-polls of the same observation do not count; confirmation expires after two hours. A stage must never regress or skip from SG noise. Persist confirmed stage, pending confirmation, source timestamp and batch identity across Home Assistant restarts. No default-on migration of an active session.
 
-## Validity
+## Validity and source boundaries
 
-The pure engine in `sg_control_rules.py` rejects readings older than 20 minutes, more than one minute in the future, outside SG 0.980–1.150, or over the known OG by more than 0.005. The integration still needs to prove that readings originate from the configured Pill. Stale or invalid readings must result in HOLD of the last confirmed fermentation target, with an exposed reason.
+The existing pure engine in `sg_control_rules.py` currently has **hardcoded example thresholds and targets**, which must be parameterized from the validated per-batch UI profile before it can be connected to runtime. It rejects readings older than 20 minutes, more than one minute in the future, outside SG 0.980–1.150, or above a known OG by more than 0.005. Integration still needs to prove that accepted readings come from the configured Pill and persist actual Pill observation history. An invalid/stale source holds the last confirmed target and explains why.
+
+`fermentation_tracking` owns observations, profile, mode arbitration, and target recommendation. `fermentation_chamber` consumes the selected recommended beer target behind the existing supervised-apply boundary. No new direct heater, compressor, or climate calls. Neither mode nor profile editing switches climate supervisor ON.
 
 ## FG and cold crash
 
-Expected FG approximately 1.014. The optional SG mode must persist *actual automatic Pill observation history* rather than mistake a current sensor value for a stability history. Default stability verification is 72 hours (48–72 configurable explicitly), SG range <= 0.001, at least six observations, no gap > 12 hours, fresh latest value, and latest SG <= configured FG + tolerance (default 0.002). Missing FG or insufficient history means NOT READY.
+Default stable FG verification: 72 hours (48–72 explicitly configurable), SG range <= 0.001, at least six observations, no gap > 12 hours, fresh newest observation, and newest SG <= expected FG plus configurable tolerance (default 0.002). Insufficient history or absent FG is NOT READY; current SG alone never proves stability. Persist actual automatic Pill history.
 
-Readiness is **advisory**. On the transition to ready, notify once and ask for explicit user confirmation. No automatic cold crash, `input_boolean` switch-on, or climate action is permitted from readiness alone. A separate explicit confirmation must attest that protection against suck-back is installed (e.g. suitable CO2/positive-pressure protection); an ordinary airlock cannot be inferred safe from SG or time. The actual start must remain under the existing cold-crash/supervised control boundary.
+Readiness is **advisory only**. Notify once when stable and ask for explicit user confirmation. Before starting cooling, separately require operator acknowledgement that protection against air/oxygen suck-back has been arranged; an ordinary airlock is not sufficient evidence. The actual cold-crash start must remain behind existing supervised control. Neither days nor SG can start cold crash automatically.
 
 ## Integration work still required
 
-1. Persist SG mode, batch-scoped stage, threshold confirmation state and Pill history through Home Assistant Storage; reset only for an explicitly new batch.
-2. Evaluate only new readings from the validated configured Pill in the coordinator/event flow, never as a side effect of a sensor property.
-3. Arbitrate recipe/time vs SG targets in the tracking snapshot with `sg` winning only when explicitly enabled. Expose selected mode, stage, threshold, observation age, hold reason and readiness diagnostics.
-4. Add a clear operator flow for readiness notification, suck-back-protection attestation and explicit cold-crash confirmation. Verify it cannot actuate while climate supervisor is OFF.
-5. Add persistence, coordinator, restart and supervised-apply regression tests; validate on a real batch before any promotion.
+1. Parameterize pure SG rules from validated, per-batch UI fields; add tests for profile validation, stage latch and editable times/thresholds.
+2. Persist selected mode, batch-scoped settings, confirmed stage, pending confirmation, and Pill history in Home Assistant Storage; reset only on explicitly starting a new batch.
+3. Build select/number controls and a complete fermentation dashboard configuration panel; import sensible recipe defaults but never overwrite explicit user edits.
+4. Process only new authenticated/configured Pill readings in a coordinator/event flow, not as a side effect of a sensor property. Add an explicit mode arbitration to the tracking snapshot; keep `recipe_schedule` the default.
+5. Add readiness notification and separate suck-back-protection/starting confirmation. Add persistence, restart, source-staleness, mode-switch and supervised-apply tests; test on a real batch before promotion.
 
-Current code (`sg_control_rules.py`) implements only the *pure decisions* for monotonic stage changes and evidence-based readiness. Tests: `tests/test_fermentation_sg_control_rules.py`. It is intentionally not imported into the active runtime yet.
+Current SG code remains an isolated pure decision engine and tests only. The installed fermentation control stays on the existing recipe schedule until a new implementation is deployed and explicitly opted in.
