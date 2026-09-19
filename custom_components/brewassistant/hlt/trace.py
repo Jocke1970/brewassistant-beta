@@ -41,6 +41,45 @@ def _append_line(path: Path, line: str) -> None:
         stream.write(line + "\n")
 
 
+def _ha_diagnostics(hass: Any, sample_s: float) -> dict[str, Any]:
+    """Read published HA states for diagnosis only, NEVER for power permission.
+
+    Values are labelled HA-published because coordinator sensors can lag the
+    simulator's direct runtime snapshot. An old or unavailable measurement is
+    preserved as evidence with its age, not treated as zero or as fresh.
+    """
+    states = getattr(hass, "states", None)
+
+    def read(entity_id: str) -> tuple[str | None, float | None]:
+        state = states.get(entity_id) if states is not None else None
+        if state is None:
+            return None, None
+        value = str(state.state)
+        updated = getattr(state, "last_updated", None)
+        age_s = None
+        if isinstance(updated, datetime):
+            if updated.tzinfo is not None:
+                age_s = _number(sample_s - updated.timestamp())
+            if age_s is not None and age_s < 0:
+                age_s = None
+        return value, age_s
+
+    temperature, temperature_age = read("sensor.brewzilla_temperature")
+    device_target, device_target_age = read("number.brewzilla_target_temperature")
+    brewday_target, brewday_target_age = read("sensor.brewassistant_brewday_target_temperature")
+    virtual_recipient, virtual_recipient_age = read("sensor.brewassistant_hlt_virtual_energy_recipient")
+    return {
+        "bz_temperature_ha_c": _number(temperature),
+        "bz_temperature_ha_age_s": temperature_age,
+        "bz_device_target_ha_c": _number(device_target),
+        "bz_device_target_ha_age_s": device_target_age,
+        "bz_brewday_target_ha_c": _number(brewday_target),
+        "bz_brewday_target_ha_age_s": brewday_target_age,
+        "hlt_virtual_recipient_ha_state": virtual_recipient,
+        "hlt_virtual_recipient_ha_age_s": virtual_recipient_age,
+    }
+
+
 class HLTTraceRecorder:
     """Rate-limited samples, immediate transitions; BZ grants do not exist."""
 
@@ -124,6 +163,7 @@ class HLTTraceRecorder:
             record = self.make_record(inputs, result, **context)
             if record is None:
                 return None
+            record.update(_ha_diagnostics(hass, inputs.timestamp_s))
             line = json.dumps(record, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
             await hass.async_add_executor_job(_append_line, self.path, line)
             return self.path
