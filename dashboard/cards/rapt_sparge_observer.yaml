@@ -26,13 +26,14 @@ label: |
       const raw = states[id]?.state;
       return raw === undefined || raw === null || ['unknown', 'unavailable', 'none', ''].includes(String(raw).toLowerCase()) ? 'unknown' : String(raw);
     };
+    const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const manual = String(attrs.step_end_type || '').toLowerCase() === 'manual';
     const heater = value('switch.brewzilla_heater');
     const pump = value('switch.brewzilla_pump');
     const heat = value('number.brewzilla_heat_utilization');
     const pumpUtil = value('number.brewzilla_pump_utilization');
     const target = value('number.brewzilla_target_temperature');
-    const next = String(attrs.next_step_name || 'unknown');
+    const next = escapeHtml(attrs.next_step_name || 'unknown');
     const stepStatus = manual ? 'RAPT awaits manual advancement.' : 'WARNING: the manual end condition has not been verified.';
     return `<div style="line-height:1.35;white-space:normal;text-align:left;">
       <div style="font-size:11px;font-weight:950;opacity:.7;">OBSERVATION ONLY · NO BA ACTUATOR COMMANDS FROM THIS CARD</div>
