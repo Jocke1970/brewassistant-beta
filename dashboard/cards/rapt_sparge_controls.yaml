@@ -7,8 +7,14 @@ conditions:
     state: "on"
   - entity: sensor.brewassistant_brewday_runtime_source
     state: "RAPT BrewZilla Profile"
-  - entity: sensor.brewassistant_brewday_runtime_step
-    state: "Sparge"
+  - condition: or
+    conditions:
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Sparge"
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Lakning"
 card:
   type: vertical-stack
   cards:
@@ -24,6 +30,8 @@ card:
         - button.brewassistant_confirm_sparge_lift
         - binary_sensor.brewzilla_profile_active
         - sensor.brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewzilla_orchestration_mode
+        - sensor.brewassistant_brewzilla_control_reason
         - switch.brewzilla_heater
         - switch.brewzilla_pump
         - number.brewzilla_heat_utilization
@@ -35,10 +43,15 @@ card:
           const off = a.outputs_confirmed_off === true;
           const heater = String(a.heater_readback ?? 'unknown').toUpperCase();
           const pump = String(a.pump_readback ?? 'unknown').toUpperCase();
+          const mode = String(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '');
+          const controlReason = String(states['sensor.brewassistant_brewzilla_control_reason']?.state || '');
           if (phase === 'awaiting_lift') {
             return `AWAITING LIFT · heater ${heater} · pump ${pump} · output readback ${off ? 'OFF/0 confirmed in HA' : 'NOT confirmed'}. Verify locally before handling the malt pipe.`;
           }
           if (phase === 'heat_to_boil') {
+            if (mode === 'sparge-local-target-conflict-blocked' || controlReason.includes('positive BA heating blocked')) {
+              return `LIFT ACKNOWLEDGED · PREBOIL HEAT BLOCKED. RAPT's local target differs from BA's 95 °C or cannot be verified. Check the RAPT profile; do not start heating from BA.`;
+            }
             return `LIFT ACKNOWLEDGED · pump stays OFF · BA preboil ceiling ${a.preboil_target_c ?? 95} °C. Heating still requires separate supervised CONFIRM.`;
           }
           return 'Source/step not verified. No lift authorization; check RAPT and BA.';
