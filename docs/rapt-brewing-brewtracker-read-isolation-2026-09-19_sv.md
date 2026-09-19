@@ -10,7 +10,7 @@ När RAPT äger Brewing ska BA:s bryggningsflöde inte läsa BrewTracker-sensore
 
 `brewzilla_rapt_brewing_read_isolation.py` installerar avgränsat lässkydd för Brewday-core, Learning och audit. Även BT-event filtreras innan audit-callbacken. `tests/test_rapt_brewing_read_isolation.py` använder en fake `hass.states.get` som kastar vid BT-läsning; de rena kontraktstesterna passerade CI, Hassfest och HACS. Dessa tester är **inte** end-to-end Home Assistant.
 
-`dashboard/cards/brewfather_feed.yaml` och `_sv.yaml` har nu ersatt direkta BrewTracker-råvärden med `sensor.brewfather_recipe_name` och `climate.fermentation_chamber`. Nytt regressionstest `tests/test_rapt_fermentation_feed_isolation.py` förbjuder direkta BT-läsningar i båda korten. **Begränsning:** kortens synlighet beror fortfarande på `sensor.brewassistant_brewfather_batch_phase`, som den gamla batchfaslogiken döljer under RAPT-ägarskap. Samtidig RAPT-bryggning + BF-jäsning är alltså ännu INTE säkrad i UI.
+`dashboard/cards/brewfather_feed.yaml` och `_sv.yaml` har nu ersatt direkta BrewTracker-råvärden med `sensor.brewfather_recipe_name` och `climate.fermentation_chamber`. Nytt regressionstest `tests/test_rapt_fermentation_feed_isolation.py` förbjuder direkta BT-läsningar i båda korten. CI och Hassfest passerade för testcommit `a7b48ec`. **Begränsning:** kortens synlighet beror fortfarande på `sensor.brewassistant_brewfather_batch_phase`, som den gamla batchfaslogiken döljer under RAPT-ägarskap. Samtidig RAPT-bryggning + BF-jäsning är alltså ännu INTE säkrad i UI.
 
 ## Återstående releaseblockerare
 
