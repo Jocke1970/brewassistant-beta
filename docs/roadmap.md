@@ -1,14 +1,14 @@
 # Roadmap
 
-This document tracks the current BrewAssistant beta roadmap. Runtime state, process interpretation, safety guards and hardware decisions belong in the Python integration under `custom_components/brewassistant/`; the dashboard presents state and explicit operator actions. The dashboard remains primarily YAML, with optional dedicated JS/SVG instruments where justified.
+This document tracks BrewAssistant's current beta roadmap. Runtime state, process interpretation, safety guards and hardware decisions belong in Python under `custom_components/brewassistant/`; dashboards present state and explicit operator actions.
 
-**Status checkpoint: 2026-09-19.** HLT SIM-1 is now integrated into shared `dev` via [PR #212](https://github.com/Jocke1970/brewassistant-beta/pull/212); it remains **simulation-only**. The prior `dev` SG-driven fermentation changes remain present. CI, HACS validation and Hassfest passed for the merged `dev` commit `746633cfd5c22483fc25e821a966cccb25f84784`. These checks do not validate physical HLT power allocation. See [HLT field evidence and Brewday handoff](hlt-sim1-field-validation-2026-09-19.md).
+**Status checkpoint: 2026-09-19.** HLT SIM-1 was merged to shared `dev` via [PR #212](https://github.com/Jocke1970/brewassistant-beta/pull/212) alongside SG-driven fermentation work. It remains **simulation only**. The subsequent water-only test found that Brewfather could advance from 66 °C to 72 °C before the physical 66 °C hold finished and that Mash-In Complete restarted the pump; the new physical mash interlock is implemented and regression-tested on `dev`, but its installed HA/hardware behavior is **not yet validated**. `v0.2.0-beta.10` was incorrectly tagged from old code and must not be used for the next test. The corrective beta.11 candidate proceeds through [PR #213](https://github.com/Jocke1970/brewassistant-beta/pull/213). See [test protocol](physical-mash-test-plan-2026-09-19_sv.md), [control findings](physical-mash-control-contract-2026-09-19.md) and [HLT evidence](hlt-sim1-field-validation-2026-09-19.md).
 
 ---
 
 ## Current project phase
 
-Integrated `dev` milestones:
+Integrated development milestones:
 
 ```text
 2026-08-29 ownership / ABORT validation
@@ -22,61 +22,50 @@ Integrated `dev` milestones:
 2026-09-11 parked Grainfather GF30 read-only backend scaffold
 2026-09-17 SG-driven fermentation development integrated on dev
 2026-09-19 HLT SIM-1 read-only backend, sensors, trace and EN/SV cards merged to dev
+2026-09-19 physical mash interlock, settling and two pump confirmations coded on dev
 ```
 
-The 2026-09-11 reconciliation moved accidentally main-based feature work back onto the intended `dev` line. PR checks passed before merge, but integration is not automatically physically known-good. The 2026-09-19 HLT merge similarly incorporates an independently developed feature into an already-advanced `dev`; it does **not** replace or install the local Home Assistant integration automatically.
+On September 11, accidentally main-based development was reconciled onto `dev`; on September 19, HLT work was likewise merged into the combined development line. Neither merge updates HA automatically, and green GitHub checks alone prove no physical safety.
 
 Current sequence:
 
 ```text
-stabilize and synchronize the combined dev integration baseline
-↓
-Brewday/BrewZilla: BrewTracker PAUS -> target hold -> manual Resume
-↓
-RAPT profile -> BA -> RCL -> BZ and complete Heatstrike/Mash-In/ABORT validation
-↓
-first supervised real-mash hold / target ramp / mash-out / sparge / pre-boil
-↓
-HLT SIM-1 HA retest against the current combined dev (ramp, cruise, yield, logs)
-↓
-Boil + external process-sensor release; Cooling/CFC Chill/Transfer handoff
-↓
-Equipment Learning and HLT simulation ETA/evidence review
-↓
-Climate Supervisor / Carbonation / Fermentation full-cycle validation
-↓
-consider dev -> beta -> main only after relevant field evidence
+[ ] Review combined beta.11 code and release documentation on dev
+[ ] PR dev -> beta; Create a merge commit; verify all checks on beta merge SHA
+[ ] Tag v0.2.0-beta.11 from verified beta SHA; GitHub Pre-release from beta
+[ ] Back up HA; install exact tagged prerelease; verify installed interlock/ABORT first
+[ ] Supervised water-only physical Mash-In, settling, pump and 66 -> 72 C gating tests
+[ ] Re-test HLT SIM-1 ramp/cruise/yield/readback without physical HLT
+[ ] Brewday/BZ BrewTracker PAUS -> hold -> manual Resume and RAPT source handoff
+[ ] Real mash only after water-only acceptance and additional safety review
+[ ] Mash-out, sparge, pre-boil; Boil probe handoff; Cooling/CFC Chill/Transfer
+[ ] Equipment Learning and HLT simulation estimates; climate/fermentation full cycle
+[ ] Consider beta -> main and stable release only after appropriate field evidence
 ```
 
-Physical evidence snapshots remain separate and should not be rewritten retroactively:
-
-- [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md)
-- [`physical-validation-2026-09-05.md`](physical-validation-2026-09-05.md)
-- [`physical-validation-2026-09-06.md`](physical-validation-2026-09-06.md)
-- [`parking-checkpoint-2026-09-06.md`](parking-checkpoint-2026-09-06.md)
-- [`hlt-sim1-field-validation-2026-09-19.md`](hlt-sim1-field-validation-2026-09-19.md) — simulator-only BZ/HLT observation and outstanding verification
+Preserve dated observations as snapshots: [`physical-validation-2026-08-31.md`](physical-validation-2026-08-31.md), [`physical-validation-2026-09-05.md`](physical-validation-2026-09-05.md), [`physical-validation-2026-09-06.md`](physical-validation-2026-09-06.md), [`parking-checkpoint-2026-09-06.md`](parking-checkpoint-2026-09-06.md), [`hlt-sim1-field-validation-2026-09-19.md`](hlt-sim1-field-validation-2026-09-19.md). Never rewrite history to imply later fixes were tested earlier.
 
 ---
 
 ## Repository / release workflow
 
-Only three **long-lived** branches are intended:
+Only three permanent branches:
 
 ```text
 dev  = coordinated development
-beta = integrated field-test candidate
-main = installable/released version
+beta = integrated test candidate + GitHub prerelease source
+main = validated/stable distribution
 ```
 
-Normal work goes on `dev`. Temporary feature/fix branches must target `dev` and should be cleaned up after merge, subject to checking they contain no independent work; never delete a branch blindly. Promotion `dev -> beta` and `beta -> main` uses PRs with **Create a merge commit**, not squash/rebase; permanent ancestry matters. GitHub automatic head-branch deletion remains disabled so `dev`/`beta` cannot disappear. Dependabot targets `dev`; CI, HACS and Hassfest run on `dev`, `beta` and `main`; releases come only from `main` and beta versions are prereleases.
+Development is committed to `dev`. Promote `dev -> beta` via PR and **Create a merge commit** (never squash/rebase for permanent branch promotion); preserve `dev`. Require CI, HACS and Hassfest on the resulting beta merge SHA, then tag `vX.Y.Z-beta.N` from **exactly that SHA** and publish GitHub **Pre-release** with **Target: beta** and the full Markdown. Check the tag SHA and its actual manifest/critical files after publication. Install the exact tag through HACS for supervised physical beta tests. If validation fails, fix on `dev`, promote again and use a **new** beta version—never move published tags. Promote `beta -> main` separately only after sufficient physical evidence, and tag a stable version from the verified main merge SHA. `main` must not become the distribution route for unvalidated test candidates. Consult [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the authoritative checklist.
+
+CI, HACS and Hassfest run on `dev`, `beta` and `main`; Dependabot targets `dev`, and the promotion guard permits PRs to `beta` from `dev` and PRs to `main` from `beta`. Keep automatic branch deletion disabled. Don't invent branches, rely on old archives, or confuse a release title with the code inside its tag.
 
 ### Branch checkpoints
 
-On 2026-09-11, three development branches accidentally based on `main` were reconciled to `dev` and merged via PRs #205, #204 and #206: `feature/rapt-brewzilla-profile-runtime`, `feature/fermentation-ramp-target` and `feature/grainfather-gf30-backend`. Their work remains in Git history.
+On 2026-09-11, three accidentally `main`-based feature lines were reconciled onto `dev` via PRs #205, #204 and #206 (RAPT profile, fermentation ramp targets, Grainfather GF30 scaffold). PR #212 added the HLT simulator and was squash-merged to `dev`. These are historical changes, not permission to create replacement branches or delete other people's refs. An earlier pinned test archive at `977136c5` was not the merged combined baseline. Preserve local backups and install only a verified versioned release.
 
-HLT used PR #212 (`feature/hlt-simulation-core` -> `dev`) and was squash-merged 2026-09-19. Number-suffixed HLT branch refs from the parallel work were observed; do not create replacements or delete them without checking owners/references. Development and installation must always be based on the **current combined `dev`**, not a stale feature archive. A previous pinned test archive at commit `977136c5` was installed locally; that installation is not the same as merged `dev` commit `746633c` and lacks the final stage/ramp fixes. Preserve backups/logs; compare the installed files with intended version before any whole-integration update.
-
-**Do not promote `dev` to `beta` just because GitHub checks are green.** Required physical validation is a separate gate. See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+**The prior requirement to complete physical testing BEFORE every beta prerelease was circular when HACS required a prerelease to install the test code.** The corrected gate is: regression/CI → promote to `beta` → tag and publish an explicitly experimental prerelease → supervised HA/water-only field test → only then consider stable promotion. CI alone never approves malt or unattended use.
 
 ---
 
@@ -98,99 +87,102 @@ Integrated on `dev`:
 [x] RAPT profile runtime as process/target directive source
 [x] BrewTracker zero-minute PAUS checkpoint guard
 [x] Planning/full-recipe presentation and humanized schedule
-[x] HLT SIM-1 consumes normalized Brewday/Audit + sparge volume without becoming a physical controller
+[x] HLT SIM-1 consumes normalized Brewday/Audit + sparge volume, not a hardware controller
 ```
 
-Recipe source, runtime/timer owner and physical controller are separate. Brewfather/BrewTracker mode: recipe and timer belong to Brewfather/BrewTracker; BA interprets target/checkpoint and controls BZ via RCL. A step transition is not proof that the kettle reached target. In particular:
+Recipe source, runtime/timer owner and physical controller are separate. In Brewfather/BrewTracker mode, Brewfather owns the recipe and timeline; BA interprets checkpoints and controls BZ via RCL. A source step transition is not proof that the kettle reached its target.
 
 ```text
 BF PAUS / 0 min -> tracker paused -> timer/progress frozen
-BA must hold current target; never pre-actuate next target
+BA must hold physical current target; never pre-actuate next target
 physical target satisfied -> operator BF Resume
-next BF/BT step becomes eligible only after that handoff
+next BF/BT step eligible only after safety/physical gating
 ```
 
-Brewfather PAUS behavior has been physically observed; the combined BA/BZ target-hold still requires validation. Future BA-owned imported recipe mode instead uses Brewfather as recipe source, BA as runtime/timer owner, and starts timed rests only after physical target attainment. See [`brewday-execution-modes.md`](brewday-execution-modes.md).
+Brewfather PAUS behavior has been observed; combined target-hold and the new physical handoff require installed verification. A future BA-owned imported-recipe mode would use BF as recipe source but BA as physical timer owner. See [`brewday-execution-modes.md`](brewday-execution-modes.md).
 
 ### RAPT profile runtime
 
-The RAPT/BrewZilla profile on `dev` supplies directives, **not** competing heat/pump authority:
+RAPT supplies directives, not separate heat/pump authority:
 
 ```text
-RAPT profile intent -> BA runtime/safety/physical policy -> RAPT Cloud Link -> BrewZilla
+RAPT profile -> BA runtime + guards -> RAPT Cloud Link -> BrewZilla
 ```
 
-Reference stages: Heatstrike -> Mash In -> Mash Rest -> Mash Out -> Boil -> ChillOut. A manual RAPT Mash-In does not bypass BA's Mash-In gate; source loss is fail-passive; `ChillOut 0 °C` is a process marker, never hot-side target; ABORT outranks RAPT. See [`rapt-brewzilla-profile-runtime.md`](rapt-brewzilla-profile-runtime.md).
+Reference stages: Heatstrike -> Mash In -> Mash Rest -> Mash Out -> Boil -> ChillOut. Manual RAPT Mash-In must not bypass BA's gate; source loss is fail-passive; `ChillOut 0 °C` is a marker, not a hot-side target; ABORT outranks RAPT. See [`rapt-brewzilla-profile-runtime.md`](rapt-brewzilla-profile-runtime.md).
 
 ---
 
 ## BrewZilla hot side
 
-Integrated on `dev`:
+Integrated on `dev` (code status, not physical sign-off):
 
 ```text
-[x] Normalized BZ runtime, separate runtime/effective/device targets
-[x] Heat/pump utilization and switch control surface
-[x] Dedicated Heatstrike/Mash-In phase authority and real strike-target latch
-[x] External MASH/process probe for readiness; BZ internal/WORT for limiter/safety
-[x] Final-approach local-regulation preservation, fresh-only READY, bounded strike acceptance
-[x] Gradient-relief mode and strict Mash-In Started pump OFF/0 % window
-[x] Strict post-start BF PAUSED -> RUNNING Mash-In completion
-[x] Fail-passive telemetry loss; report freshness distinct from numeric-change age
-[x] Active RCL coordinator refresh every 30 s
-[x] Hardware ABORT, operator ABORT, positive-action lockout
-[x] Manual channel ownership; generic Supervised Apply outside dedicated phase authority
-[x] Confirmed readback grace; BrewTracker PAUS current-target hold; RAPT bridge
+[x] Separate runtime/effective/device targets and heat/pump control surface
+[x] Heatstrike/Mash-In authority and strike-target latch
+[x] External MASH probe for process readiness, BZ internal/WORT for kettle/safety
+[x] Local-regulation preservation, fresh READY and bounded strike acceptance
+[x] Gradient relief and Mash-In Started pump OFF/0 %
+[x] Strict post-start BF PAUSED -> RUNNING Mash-In Complete
+[x] New 10 min settling / confirmed 25 % then confirmed 50 % recirculation
+[x] Physical hold-target interlock when Brewfather proceeds early
+[x] Fail-passive telemetry loss and separate report/value freshness
+[x] Active RCL refresh every 30 s
+[x] Hardware/operator ABORT and positive-action lockout
+[x] Manual ownership, supervised apply and confirmed readback grace
+[x] BrewTracker PAUS target hold and RAPT runtime bridge
 ```
 
-Current Heatstrike exception: external MASH/BLE remains below strike, mash/wort gradient >=1.5 °C, hottest-view overshoot >+0.5 °C and <=+2.0 °C -> heater authority cap 5 %, master available to local thermostat, pump 100 % for equalization. Above +2.0 °C, explicit hard stop. **This narrowly scoped Heatstrike safety limit is distinct from HLT's unconditional rule: never cap BZ for HLT.**
+Heatstrike gradient relief: external MASH remains below strike, gradient >=1.5 °C, hottest-view overshoot >+0.5 °C and <=+2.0 °C -> heat cap 5 % and pump 100 % for equalization while local regulation remains available. Above +2.0 °C, explicit heat stop. **Never cap BZ as an HLT power-saving strategy.**
 
-Mash-In: `ready_for_mash_in -> Mash-In Started -> target releases to mash target -> pump OFF/0 % -> operator adds grain -> real post-start BF PAUSED then RUNNING -> Mash-In Complete -> normal circulation`. Plain BF `running`, target movement or live normalized runtime alone is insufficient.
+Corrected Mash-In contract: `ready -> Started -> mash target/pump OFF -> BF PAUSED then RUNNING -> Complete -> pump OFF + 10 min settling -> separate operator 25 % -> confirmed low-flow 5 min -> separate operator 50 %`. The physical hold owns the target until both the hold and normal circulation are complete. No timer may start pump. Unverified source progression is never equivalent to operator confirmation.
 
-RCL freshness: control/report age uses `last_reported` with `last_updated` fallback; numeric stagnation is diagnostic only. One BZ CoordinatorEntity is refreshed every 30 s; hard `reload_config_entry` for extreme loss only, throttled >=15 min. This is separately regression-tested, not a replacement for HLT's physical watt/temperature freshness or electrical protection.
+RCL freshness: control/report age uses `last_reported` with `last_updated` fallback; stale numeric values alone do not prove a disconnected device. The active coordinator refreshes every 30 s; extreme reloads are throttled >=15 min. This is distinct from HLT's real physical watt/temperature freshness and electrical protection.
 
 ### Immediate supervised validation
 
 ```text
-[ ] BF PAUS holds physical current target until explicit Resume
-[ ] RAPT profile target propagates BA -> RCL -> BZ
-[ ] RAPT source loss remains fail-passive; Mash-In authority and ChillOut marker safe
-[ ] ABORT overrides both process sources
-[ ] Active RCL report freshness bounded despite stable unchanged settings
-[ ] Heatstrike gradient relief converges; >+2.0 °C overshoot hard stop
-[ ] READY uses process probe / bounded acknowledgement
-[ ] Mash-In Started keeps pump OFF/0 % during grain addition
-[ ] Post-start progression releases correct mash target and circulation
-[ ] Timed holds and ramps use actual physical reach, not source step start
+[ ] Verify tagged beta.11 integration and physical_mash_interlock_active attribute
+[ ] BF PAUS holds physical target until approved resume
+[ ] RAPT source, ownership and source-loss fail-passive
+[ ] Hardware/operator ABORT takes precedence
+[ ] RCL report freshness with stable values
+[ ] Heatstrike/READY and >+2.0 C overshoot stop
+[ ] Started turns pump OFF/0 % and sets mash target
+[ ] Complete starts 10 min settling, pump still OFF/0 %
+[ ] Settling timeout never switches pump ON
+[ ] First 25 % and second 50 % each need operator confirmation + readback
+[ ] Physical hold blocks BF 66 -> 72 C until fully complete
+[ ] Old confirmations never resurrect after HA restart
+[ ] Ramp/mash-out/sparge follow real process temperature
 ```
 
-Do not present CI-green or this roadmap as physical validation. See [`brewday-brewzilla.md`](brewday-brewzilla.md).
+See [`physical-mash-test-plan-2026-09-19_sv.md`](physical-mash-test-plan-2026-09-19_sv.md) and [`brewday-brewzilla.md`](brewday-brewzilla.md). No physical safety approval yet.
 
 ---
 
 ## HLT SIM-1 / BrewZilla power priority — 2026-09-19
 
-**Integrated:** read-only simulation backend on independent 30-second timer; 31 telemetry keys; virtual HLT thermal model and time/energy estimates; JSONL per Audit session; EN/SV standalone high-contrast cards; regression tests. BZ retains absolute priority, including if a later autonomous heater cycle raises observed consumption. No HLT hardware service calls and no BZ cap/grant writes. `power_budget_verified=false`; the default 2,500 W budget is a scenario, not an electrical rating.
+**Integrated:** read-only simulation with independent 30-second timer, 31 telemetry keys, virtual HLT water temperature/energy/ETA, per-session JSONL and English/Swedish dashboard. BZ has absolute priority. No HLT hardware calls or BZ cap/grant writes; `power_budget_verified=false` and default 2,500 W are hypothetical.
 
-**Observed in physical-water test:** BZ sensor followed its real 2,323–2,356 W heating; 17 L mash/test and 11.38 L sparge propagated correctly; HLT waited with 0 virtual W. Stable BZ target/utilization settings were falsely treated as stale; corrected after the run. Uploaded JSONL contained a virtual HLT opportunity during explicit `Ramp to 72°C`, then virtual yield and simulated overlap about 3.43 kW. It does **not** show a safe physical arbitration. An explicit preparation-stage allowlist and ramp-step veto were added before merge and passed CI, but the final logic is not yet revalidated in installed HA.
+**Observed in the water-only test:** real BZ draw about 2,323–2,356 W, 17 L test water and 11.38 L sparge context; HLT waited with 0 virtual W. Stable settings were wrongly classified stale and explicit `Ramp to 72°C` briefly created a virtual HLT opportunity and simulated overlap near 3.43 kW. Fixes for held settings, eligible-stage allowlist and ramp-step veto were merged/regression-tested, but have not been verified in installed HA. This does **not** establish safe physical HLT arbitration.
 
 ```text
-[x] Merge SIM-1 telemetry, trace, card and regression work to common dev (#212)
-[x] Preserve parallel SG fermentation files on dev and pass combined CI/HACS/Hassfest
-[x] Confirm BZ wattmeter tracks physical heater and sparge context reaches HLT
-[x] Fix held numeric setpoint/utilization freshness and erroneous virtual none UI label
-[x] Add explicit eligible-stage allowlist and ramp-step veto with tests
-[ ] Field-retest latest combined dev: ramp, cruise, new ramp, virtual yielding and off
-[ ] Confirm real BF / Manual / RAPT stage and step labels are covered, unknown fails closed
-[ ] Verify stale physical power/temp fail closed and normal held number settings stay valid
-[ ] Review full JSONL, session/reset/timer gaps, temperature/ETA vs real mash window
-[ ] Implement separately reviewed learning proposals; no autonomous safety-policy rewriting
-[ ] Identify actual HLT meter, switch and probe with verified OFF readback
-[ ] Engineer independent fast fail-OFF HLT shedding/interlock, circuit and dry-fire safety
-[ ] Complete supervised hardware commissioning before physical HLT output
+[x] Integrate SIM-1 telemetry, traces, cards and tests into common dev (#212)
+[x] Preserve SG fermentation and pass combined CI/HACS/Hassfest
+[x] Confirm BZ wattmeter and sparge context reach HLT model
+[x] Correct stable-setpoint freshness and virtual none UI
+[x] Add eligible-stage allowlist and ramp-step veto with tests
+[ ] Field-retest ramp, cruise, new ramp, yield, idle with current tagged integration
+[ ] Confirm BF/Manual/RAPT stage labels, unknown must fail closed
+[ ] Verify real power/temp freshness, JSONL/session/ETA fidelity
+[ ] Review learning suggestions separately; never adapt safety policy autonomously
+[ ] Identify verified real HLT meter/switch/probe and OFF readback
+[ ] Engineer independent fast fail-OFF shedding, dry-fire and circuit protection
+[ ] Commission hardware separately before ANY physical HLT output
 ```
 
-The 30-second HA loop **cannot** provide overcurrent protection. An independent physical interlock is essential before energizing HLT on a shared budget; BZ must not wait to receive power or be throttled. Next HLT work is deliberately parked until Brewday can coordinate a current combined-`dev` field test. See [dated handoff](hlt-sim1-field-validation-2026-09-19.md), [HLT backend](hlt-dashboard-backend.md), [dashboard guide](hlt-dashboard-card.md), and [code-local README](../custom_components/brewassistant/hlt/README.md).
+The 30-second HA loop **cannot** protect against overcurrent. Physical HLT work is parked pending an independently reviewed electrical interlock. See [HLT test evidence](hlt-sim1-field-validation-2026-09-19.md), [backend](hlt-dashboard-backend.md), [dashboard](hlt-dashboard-card.md) and [code README](../custom_components/brewassistant/hlt/README.md).
 
 ---
 
@@ -198,41 +190,39 @@ The 30-second HA loop **cannot** provide overcurrent protection. An independent 
 
 ```text
 Heat strike -> Mash -> Mash out -> Sparge -> Pre-boil
-  owner = Brewday / BZ hot side; role = external process/mash sensor
-Boil starts -> hot side releases external sensor
-Chill -> Transfer -> Cooling/CFC acquires as outlet/wort-out if method requires it
+  owner = Brewday / BZ; external MASH/process probe
+Boil start -> hot side releases probe
+Chill -> Transfer -> Cooling/CFC acquires outlet/wort-out if needed
 ```
 
-BZ internal remains the kettle-temperature context. Validate release exactly at Boil, absence of competing interpretation, CFC acquisition during Chill/Transfer and coil/manual path not depending unnecessarily on external probe.
+BZ internal probe remains kettle temperature. Validate Boil release, absence of competing source ownership, CFC acquisition and coil/manual methods without unnecessary external-probe dependency.
 
 ---
 
 ## Fermentation targets and GF30
 
-Brewfather fermentation-schedule metadata may supply `recommended_temperature_c` when explicit `schedule_target_temperature` is available. An ordinary numeric recipe target without schedule metadata may **not** silently override SG/manual tracking. Climate Supervisor remains separately subject to full-cycle testing. On `dev`, parallel SG-driven fermentation work is present; HLT merge must not remove it.
-
-Grainfather GF30 phase 1 is a parked **read-only** scaffold: domain split, discovery/readback normalization and regression guards exist. Still to do: characterize physical GF30 entities, heating/cooling capabilities, setpoint/readback semantics, supervised executor and provider selection. Never guess GF30 IDs or enable automatic writes before hardware evidence. See [`backends/grainfather-fermenter.md`](backends/grainfather-fermenter.md).
+Explicit Brewfather fermentation-schedule metadata may supply `recommended_temperature_c`; an ordinary numeric recipe target must not override SG/manual tracking. Climate Supervisor needs full-cycle testing. SG-driven fermentation work shares the same development baseline and must be preserved. GF30 phase 1 is a parked read-only discovery/normalization scaffold; hardware entity/feature evidence and supervised write architecture are still required. See [`backends/grainfather-fermenter.md`](backends/grainfather-fermenter.md).
 
 ---
 
 ## Physical timing / Equipment Learning
 
-Timing remains read-only: ramp/hold/wall/pause duration, delta-T, mean °C/min, selected sensor, water-only vs real mash and heat/pump evidence. Later work: strike/mash-ramp/mash-out/boil timing suggestions, confidence per observation quality/count/context, operator-reviewed profile candidates, persistent approved overrides, reversible reset. Learning is advisory until explicitly approved. HLT's current thermal model and JSONL do **not** constitute a self-adapting controller.
+Read-only ramp/hold/wall/pause duration, delta-T, average °C/min, process source and water-only versus malt context. Later: approved calibration proposals, confidence/evidence, persistence and reversible reset. Learning remains advisory until explicitly accepted; HLT's model is not an adaptive controller. The requested **total Brewday elapsed-time clock** is not included in beta.11.
 
 ---
 
 ## Cooling / Chill / Transfer
 
-Cooling Runtime v2 models CFC and traditional immersion-coil/manual-water methods. Physical checks still due: Boil->Chill ownership, CFC outlet probe, CFC and coil sanitation, coil with internal/manual temperature, manually or pump-driven cooling water, pitch readiness and Transfer completion.
+Cooling Runtime v2 supports CFC and immersion-coil/manual-water modeling. Physical checks remain: Boil→Chill ownership, outlet probe, sanitization, coil/internal/manual readings, manually or pump-driven cooling water, pitch readiness and Transfer completion.
 
 ---
 
 ## Dashboard direction
 
-Dashboard design is modular, with one responsibility per reusable card. Key surfaces: `brewassistant_brewday` overview; `brewtracker_runtime`; `rapt_profile_runtime`; `brewzilla_mash_in_controls`; `brewday_operator_actions`; `brewday_details`; `brewfather_recipe` (available in Planning with recipe data). The HLT cards `hlt_power_dashboard.yaml` / `_sv.yaml` are **read-only standalone** examples, not automatically inserted into Brewday or actuator controls. They separate physical BZ W from virtual HLT W, temperature measurement from model and actual energy recipient from simulated permission.
+Modular cards have one responsibility each. Main blocks: `brewassistant_brewday` overview, `brewtracker_runtime`, `rapt_profile_runtime`, `brewzilla_mash_in_controls`, `brewday_operator_actions`, `brewday_details` and `brewfather_recipe`. HLT dashboard cards are read-only standalone and never actuator controls. The runtime-flow layout is currently large and will be compacted separately; dashboard YAML pasted into HA is not updated by HACS integration installation.
 
 ---
 
-## Beta.9 release path
+## Beta.11 prerelease path
 
-Current candidate notes: [`beta9-release-notes.md`](beta9-release-notes.md). Required sequence: keep `dev` green; validate BrewTracker/RAPT/RCL/Heatstrike/Mash-In and real-mash hold/ramp; add separate HLT field evidence before considering its promotion; update dated validation; promote `dev -> beta` via merge commit; run beta HA tests; fix regressions on `dev` and re-promote if necessary; promote validated `beta -> main` via merge commit; create prerelease from main. **HLT SIM-1 integration on `dev` does not by itself authorize physical HLT or a beta/main promotion.**
+Follow [`CONTRIBUTING.md`](../CONTRIBUTING.md) and the [complete Swedish beta.11 release notes](beta11-prerelease-notes_sv.md): `dev` verified → PR #213 `dev -> beta` **merge commit** → verify beta merge SHA + CI/HACS/Hassfest + manifest/interlock → create tag `v0.2.0-beta.11` **from that beta commit**, publish GitHub Pre-release with full Markdown → check actual tag SHA and tagged code → install via HACS for supervised water-only validation → if unsuccessful fix on `dev` and publish NEW beta version. Only consider `beta -> main` and stable release after relevant physical evidence. The incorrectly packaged beta.10 tag remains unchanged and must not be used. HLT SIM-1 is never a physical electrical safety system.
