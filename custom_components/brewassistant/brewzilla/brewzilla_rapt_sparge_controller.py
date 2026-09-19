@@ -1,14 +1,12 @@
-"""RAPT Sparge physical phase controller owned by BrewAssistant.
+"""RAPT Sparge operator-gated hot-side control for BrewAssistant.
 
-RAPT owns step progression; BA owns heat/pump. No automatic lift inference,
-no inherited confirmation, no commands under stale/uncertain source evidence.
-The kettle is limited to 95 C while RAPT remains in the manual Sparge step;
-only the subsequent RAPT Boil step may command the actual boil.
+RAPT supplies the manual process step; BA controls physical outputs. An
+operator must confirm the lifted malt pipe and wort coverage before preheating.
+The 95 C preboil target is a conservative ceiling, never a Boil transition.
+Hardware control remains unapproved until supervised water-only validation.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from homeassistant.util import dt as dt_util
 
@@ -40,7 +38,7 @@ def _store(hass):
 
 def _readback(hass, entity_id):
     item = hass.states.get(entity_id)
-    if item is None or str(item.state).lower() in {"unknown", "unavailable", "none", ""}:
+    if item is None or str(item.state).strip().lower() in {"unknown", "unavailable", "none", ""}:
         return None, False
     reported = getattr(item, "last_reported", None) or getattr(item, "last_updated", None)
     if reported is None:
@@ -61,7 +59,7 @@ def _observe(hass):
     profile = rapt_profile_runtime._profile_state(hass)
     previous = _store(hass).get(STORE_KEY)
     if not isinstance(previous, state_machine.SpargeState):
-        previous = state_machine.SpargeState()  # HA restart never restores lift authorization.
+        previous = state_machine.SpargeState()  # No authorization after restart.
     reported = (getattr(profile, "last_reported", None) or getattr(profile, "last_updated", None)) if profile is not None else None
     age = (dt_util.utcnow() - dt_util.as_utc(reported)).total_seconds() if reported is not None else None
     valid = bool(profile is not None and rapt_profile_runtime._active_contract(profile)
@@ -84,7 +82,7 @@ def _observe(hass):
 
 
 def build_sparge_snapshot(hass):
-    """Read-only UI context; no output is assumed OFF from a missing entity."""
+    """Status is observation, never proof of physical safety without readback."""
     state = _observe(hass)
     heater, heater_fresh = _readback(hass, base.BREWZILLA_HEATER_SWITCH)
     pump, pump_fresh = _readback(hass, base.BREWZILLA_PUMP_SWITCH)
@@ -108,6 +106,21 @@ def build_sparge_snapshot(hass):
     }
 
 
+def _pump_safe_for_preboil(hass):
+    """Unknown/stale pump switch OR utilization is unsafe for positive heat."""
+    pump, pump_fresh = _readback(hass, base.BREWZILLA_PUMP_SWITCH)
+    utilization, util_fresh = _readback(hass, base.BREWZILLA_PUMP_UTILIZATION)
+    parsed = _num(utilization)
+    return bool(pump_fresh and util_fresh and pump == "off"
+                and parsed is not None and 0 <= parsed <= 0.1)
+
+
+def _preboil_temperature(hass):
+    """Use current, fresh BrewZilla kettle temperature for preboil decisions."""
+    raw, fresh = _readback(hass, base.BREWZILLA_TEMP_SENSOR)
+    return _num(raw) if fresh else None
+
+
 def _decorate(hass, snapshot):
     state = _observe(hass)
     if state.phase == "inactive":
@@ -126,13 +139,15 @@ def _decorate(hass, snapshot):
                ba_owned_reassert_action_needed=False)
     if out.get("abort_lockout_active") or out.get("fail_passive_active") or not out.get("connected"):
         out.update(target_sync_needed=False, heating_needed=False,
-                   heater_action_needed=False, pump_action_needed=False,
+                   heater_action_needed=False, heater_stop_needed=False,
+                   pump_action_needed=False, pump_stop_needed=False,
+                   heat_utilization_action_needed=False, pump_utilization_action_needed=False,
                    can_apply_target=False,
                    control_reason="Sparge interlock: ABORT, disconnection or fail-passive; verify outputs locally.")
         return out
 
-    # Unknown readback requests an OFF/zero command when an entity exists, but
-    # NEVER counts as proof that the device actually stopped.
+    # Readback missing/unknown is NOT proof of OFF; request a safe-down if its
+    # entity exists but never permit positive preboil until fresh OFF/zero.
     heater, _ = _readback(hass, base.BREWZILLA_HEATER_SWITCH)
     pump, _ = _readback(hass, base.BREWZILLA_PUMP_SWITCH)
     heat, _ = _readback(hass, base.BREWZILLA_HEAT_UTILIZATION)
@@ -153,35 +168,46 @@ def _decorate(hass, snapshot):
                    heat_utilization_action_needed=heat_zero,
                    can_apply_target=pending, orchestration_mode="sparge-awaiting-lift",
                    control_reason="Sparge: stop heat/pump; verify OFF and zero utilization, then lift and explicitly confirm wort coverage.")
-    else:
-        current_temp = _num(out.get("current_temperature"))
-        heat_needed = current_temp is not None and current_temp < PREBOIL_TARGET_C - 0.5
-        heater_start = heat_needed and heater == "off"
-        heater_stop = not heat_needed and heater != "off" and hass.states.get(base.BREWZILLA_HEATER_SWITCH) is not None
-        desired_heat = 100.0 if heat_needed else 0.0
-        heat_pct = _num(heat)
-        heat_adjust = heat_pct is None or abs(heat_pct - desired_heat) > base.UTILIZATION_TOLERANCE
-        applied = _num(out.get("applied_target"))
-        target_adjust = applied is None or abs(applied - PREBOIL_TARGET_C) > base.TARGET_SYNC_TOLERANCE
-        if current_temp is None:
-            # No known temperature -> do not heat, even after lift confirmation.
-            heat_needed = False
-            heater_start = False
-            desired_heat = 0.0
-            heat_adjust = heat_pct is None or heat_pct > 0.1
-            target_adjust = False
-        pending = bool(heater_start or heater_stop or heat_adjust or target_adjust or pump_stop or pump_zero)
-        out.update(requested_target=PREBOIL_TARGET_C,
-                   requested_target_source="rapt_sparge_operator_confirmed_preboil",
-                   target_delta=None if applied is None else round(PREBOIL_TARGET_C - applied, 2),
-                   target_sync_needed=target_adjust,
-                   heating_needed=heat_needed, desired_heater_on=heat_needed,
-                   desired_heat_utilization=desired_heat,
-                   heater_action_needed=heater_start, heater_stop_needed=heater_stop,
-                   heat_utilization_action_needed=heat_adjust,
-                   can_apply_target=pending,
-                   orchestration_mode="sparge-preboil-supervised" if pending else "sparge-preboil-hold",
-                   control_reason="Operator-confirmed lift; BA preheats to max 95 C, pump OFF. RAPT remains responsible for manual Boil transition.")
+        return out
+
+    # Confirmation only authorizes a subsequent supervised plan. Recheck the
+    # pump, heater and kettle temperature on EVERY snapshot and confirmation.
+    pump_safe = _pump_safe_for_preboil(hass)
+    current_temp = _preboil_temperature(hass)
+    heater_readback, heater_fresh = _readback(hass, base.BREWZILLA_HEATER_SWITCH)
+    heat_pct = _num(heat)
+    applied = _num(out.get("applied_target"))
+    if not pump_safe or current_temp is None or not heater_fresh:
+        heater_stop = heater != "off" and hass.states.get(base.BREWZILLA_HEATER_SWITCH) is not None
+        heat_zero = (heat_pct is None or heat_pct > 0.1) and hass.states.get(base.BREWZILLA_HEAT_UTILIZATION) is not None
+        pending = heater_stop or heat_zero or pump_stop or pump_zero
+        out.update(requested_target=None, requested_target_source="sparge_positive_blocked",
+                   target_sync_needed=False, heating_needed=False,
+                   desired_heater_on=False, desired_heat_utilization=0.0,
+                   heater_action_needed=False, heater_stop_needed=heater_stop,
+                   heat_utilization_action_needed=heat_zero,
+                   can_apply_target=pending, orchestration_mode="sparge-preboil-blocked",
+                   control_reason="Sparge preboil blocked: pump OFF/zero, fresh heater and kettle telemetry required; only safe-down allowed.")
+        return out
+
+    heat_needed = current_temp < PREBOIL_TARGET_C - 0.5
+    heater_start = heat_needed and heater_readback == "off"
+    heater_stop = not heat_needed and heater_readback != "off" and hass.states.get(base.BREWZILLA_HEATER_SWITCH) is not None
+    desired_heat = 100.0 if heat_needed else 0.0
+    heat_adjust = heat_pct is None or abs(heat_pct - desired_heat) > base.UTILIZATION_TOLERANCE
+    target_adjust = applied is None or abs(applied - PREBOIL_TARGET_C) > base.TARGET_SYNC_TOLERANCE
+    pending = bool(heater_start or heater_stop or heat_adjust or target_adjust or pump_stop or pump_zero)
+    out.update(requested_target=PREBOIL_TARGET_C,
+               requested_target_source="rapt_sparge_operator_confirmed_preboil",
+               target_delta=None if applied is None else round(PREBOIL_TARGET_C - applied, 2),
+               target_sync_needed=target_adjust,
+               heating_needed=heat_needed, desired_heater_on=heat_needed,
+               desired_heat_utilization=desired_heat,
+               heater_action_needed=heater_start, heater_stop_needed=heater_stop,
+               heat_utilization_action_needed=heat_adjust,
+               can_apply_target=pending,
+               orchestration_mode="sparge-preboil-supervised" if pending else "sparge-preboil-hold",
+               control_reason="Operator-confirmed lift; BA preheats to max 95 C, pump OFF. RAPT remains responsible for manual Boil transition.")
     return out
 
 
@@ -212,17 +238,20 @@ def _phase_authority(hass, snapshot):
 
 def _plan_policy(hass, snapshot, actions):
     assert _PREVIOUS_PLAN_POLICY is not None
+    policy = _PREVIOUS_PLAN_POLICY(hass, snapshot, actions)
     if snapshot.get("rapt_sparge_active") and snapshot.get("rapt_sparge_phase") == "heat_to_boil":
-        return "confirm"  # Never silently use Direct policy to initiate pre-boil.
-    return _PREVIOUS_PLAN_POLICY(hass, snapshot, actions)
+        return "read_only" if policy == "read_only" else "confirm"
+    return policy
 
 
 async def async_confirm_sparge_lift(hass):
-    """Button: brewer attests pipe is lifted and elements are covered by wort."""
+    """Operator attests that malt pipe is lifted and elements remain covered."""
     current = _observe(hass)
     status = build_sparge_snapshot(hass)
     if current.phase != "awaiting_lift" or not status["operator_confirmation_available"]:
         return {**status, "confirmed": False, "apply_result": "sparge_not_ready_for_lift_confirmation"}
+    if current.session_id != status["session_id"] or current.step_id != status["step_id"]:
+        return {**status, "confirmed": False, "apply_result": "sparge_session_changed_during_confirmation"}
     updated = state_machine.confirm_lift(
         current, heater_off=status["heater_readback"] == "off",
         pump_off=status["pump_readback"] == "off",
