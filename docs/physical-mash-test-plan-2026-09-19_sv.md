@@ -1,6 +1,9 @@
 # Brewday / BrewZilla: testschema för fysisk mäskning och maltbäddsvila – 2026-09-19
 
-**Status: endast kod och CI verifierade. Fälttest i Home Assistant/RAPT/BrewZilla återstår.** Detta är ett övervakat utvecklingstest, inte obemannad bryggautomatik. Gäller sammanslagen kod på `dev`, inte `main`. HLT är fortfarande **enbart simulering** och ingår inte i testet.
+**Status: endast kod och CI verifierade. Fälttest i Home Assistant/RAPT/BrewZilla återstår.** Detta är ett övervakat utvecklingstest, inte obemannad bryggautomatik. Gäller verifierad kod på befintliga `dev`, inte `main`. HLT är fortfarande **enbart simulering** och ingår inte i testet.
+
+> [!WARNING]
+> Den publicerade `v0.2.0-beta.10` pekar på fel commit och saknar den nya mash-interlocken. **Använd inte beta.10 för nästa styrtest.** Skapa/publicera i stället `v0.2.0-beta.11` från exakt verifierad slutcommit på `dev`, där manifestet anger `0.2.0-beta.11` och `brewzilla/__init__.py` installerar `brewzilla_physical_mash_interlock`. Kontrollera båda filerna via **taggen**, inte enbart via `dev`, före HA-installation. Flytta inte den gamla taggen och skapa ingen ny branch. Se [`beta11-prerelease-notes_sv.md`](beta11-prerelease-notes_sv.md).
 
 ## Syfte och förväntat beteende
 
@@ -14,11 +17,12 @@ Vid Complete ska pumpen ställas till **0 % och OFF** och en **10-minuters maltb
 
 - [ ] Avsluta föregående bryggkörning. Bekräfta att BrewZilla är inaktiv och att värmare och pump är **OFF**.
 - [ ] Säkerhetskopiera installerad `custom_components/brewassistant` och dashboard-YAML. Anteckna installerad version och Git-revision.
-- [ ] När `v0.2.0-beta.10` faktiskt har publicerats från godkänd `dev`-commit: installera rätt testversion via HACS, **eller** installera hela integrationen från den exakt verifierade `dev`-revisionen manuellt. Installera inte en äldre arkivkopia som skriver över parallella ändringar. En Git-commit uppdaterar inte HA automatiskt.
+- [ ] Kontrollera att CI (Python 3.11–3.13), HACS och Hassfest är gröna för exakt commit som ska taggas. Skapa `v0.2.0-beta.11` med **`dev` som target**, och verifiera att taggens commit är identisk med denna slutcommit. Kontrollera taggens manifestversion och installerad interlock-kod.
+- [ ] Installera **endast den verifierade `v0.2.0-beta.11`** via HACS med prereleases aktiverade. Beta.10 är felpaketerad. Om release/taggkontrollen misslyckas ska **inget fysiskt test påbörjas**. En Git-commit uppdaterar inte HA automatiskt.
 - [ ] Starta om hela Home Assistant.
-- [ ] Uppdatera det dashboardkort du faktiskt använder: `dashboard/cards/brewassistant_brewday_runtime_flow_sv.yaml` och/eller `dashboard/cards/brewzilla_mash_in_controls_sv.yaml`. YAML som tidigare klistrats in i HA ersätts inte av en integrationsuppdatering. Uppdatera webbläsarens cache.
-- [ ] Under **Utvecklarverktyg → Tillstånd**, kontrollera att `sensor.brewassistant_brewzilla_control_reason` visar attributen `physical_mash_interlock_active`, `mash_recirculation_phase` och `mash_physical_hold_target` samt relevanta nedräknings-/återkopplingsfält under rätt faser.
-- [ ] Kontrollera att `button.brewassistant_start_mash_circulation` finns. Om knapp eller nödvändiga attribut saknas: **stoppa innan fysisk testning**.
+- [ ] Uppdatera det dashboardkort du faktiskt använder från **samma verifierade tagg**: `dashboard/cards/brewassistant_brewday_runtime_flow_sv.yaml` och/eller `dashboard/cards/brewzilla_mash_in_controls_sv.yaml`. YAML som tidigare klistrats in i HA ersätts inte av en integrationsuppdatering. Uppdatera webbläsarens cache.
+- [ ] Under **Utvecklarverktyg → Tillstånd**, kontrollera att `sensor.brewassistant_brewzilla_control_reason` har attributet `physical_mash_interlock_active` (det ska finnas även i viloläge när värdet är `false`). Under relevanta faser ska `mash_recirculation_phase`, `mash_physical_hold_target`, nedräkning och återkopplingsfält visas.
+- [ ] Kontrollera att `button.brewassistant_start_mash_circulation` finns. En knapp med state `unknown` bevisar inte att den kan verkställa; kontrollera installation och fas innan den används. Om interlock-attribut eller nödvändiga entiteter saknas: **stoppa innan fysisk testning**.
 - [ ] Bekräfta färsk processtemperatur, faktiskt BrewZilla-mål, värme- och pump-utilization samt båda brytarnas verkliga status. Säkerställ att ABORT är lätt åtkomligt.
 - [ ] Kontrollera källa, steglista och mål-ägarskap i kallt/observationsläge där det är möjligt.
 - [ ] Planera ett separat **övervakat water-only-test** med lämplig vattennivå enligt BrewZillas instruktioner. Kör inte tomt kärl, torr pump eller obevakad uppvärmning. Vatten kan inte verifiera en maltbädd; ett separat litet malttest får övervägas först när alla styr- och återkopplingskontroller har passerat.
@@ -52,4 +56,4 @@ Anteckna Git-commit och tagg, HA-version, installations-/integrationsversion, ve
 
 Sammanställ `PASS / FAIL / EJ TESTAD` per kontrollpunkt. Först efter godkänt **övervakat** fälttest kan koden bedömas för fortsatt releasehantering. Granska särskilt konservativ värmereglering när pumpen står stilla och verklig återkoppling efter pumpkommandon innan någon obemannad användning övervägs.
 
-**Engelsk källversion:** [`physical-mash-test-plan-2026-09-19.md`](physical-mash-test-plan-2026-09-19.md). Detta är den svenska motsvarigheten med samma säkerhets- och funktionskrav.
+**Engelsk källversion:** [`physical-mash-test-plan-2026-09-19.md`](physical-mash-test-plan-2026-09-19.md). Detta är den svenska motsvarigheten med samma säkerhets- och funktionskrav samt ett tillägg för det felaktigt taggade beta.10-paketet.
