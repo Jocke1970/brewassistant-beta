@@ -26,11 +26,16 @@ def test_modular_mash_in_controls_preserve_pump_off_handoff_contract() -> None:
 
     assert "håller pumpen av" in source
     assert "desired_pump_utilization" in source
-    assert "pump 50%" in source
+    assert "pump AV" in source
+    assert "mash_recirculation_phase" in source
+    assert "starta lågflöde ca 25 %" in source
+    assert "normalflöde ca 50 %" in source
+    assert "button.brewassistant_start_mash_circulation" in source
 
-    # The reusable Mash-In card requests BA actions; it must not expose direct
-    # BrewZilla pump toggles that could compete with the controller.
+    # Both increments are operator actions. The card must not expose direct
+    # BrewZilla pump toggles that could compete with the physical controller.
     assert "switch.brewzilla_pump" not in source
+    assert "service: button.press" in source
 
 
 def test_modular_mash_in_wait_states_remain_visually_distinct() -> None:
