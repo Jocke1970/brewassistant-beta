@@ -84,10 +84,13 @@ def install_rapt_identity_guard():
     from . import brewzilla_sparge_execution_guard
     from . import brewzilla_rapt_brewing_read_isolation
     from . import brewzilla_sparge_local_target_guard
+    from ..brewday import brewday_rapt_audit_context
 
     brewzilla_sparge_execution_guard.install_sparge_execution_guard()
     brewzilla_rapt_brewing_read_isolation.install_rapt_brewing_read_isolation()
     # Additive last boundary: conflicting RAPT local targets cannot heat against
     # BA's proposed preboil target; all existing readers and OFF paths remain.
     brewzilla_sparge_local_target_guard.install_sparge_local_target_guard()
+    # Logging metadata uses the already normalized snapshot; never selects a source.
+    brewday_rapt_audit_context.install_rapt_audit_context()
     _INSTALLED = True
