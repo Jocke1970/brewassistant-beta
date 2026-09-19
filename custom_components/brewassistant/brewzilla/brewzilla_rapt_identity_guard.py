@@ -1,9 +1,9 @@
-"""Final, read-only RAPT process identity check for BA hot-side authority.
+"""Final RAPT process identity and supervised execution checks for BA writes.
 
 A profile-active flag and session ID alone cannot authorize a BrewZilla write:
-the *current* RCL step must agree with the Brewday runtime. The guard wraps the
-existing source-authority decision, so normal snapshot, supervised and direct
-BrewZilla primitive entry points all observe the same fail-closed verdict.
+the *current* RCL step must agree with the Brewday runtime. An independent
+execution guard additionally requires a live supervised-confirmation task for
+positive preboil commands.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def _identity_error(runtime, profile):
     """Return a diagnostic, never authorize missing or contradictory step data."""
     if runtime.get("source") != "RAPT BrewZilla Profile":
         return None
-    if profile is None or not isinstance(getattr(profile, "attributes", None), dict):
+    if profile is None or not hasattr(getattr(profile, "attributes", None), "get"):
         return "rapt_profile_step_unavailable"
     attrs = profile.attributes
     session = str(attrs.get("profile_session_id") or "").strip()
@@ -73,7 +73,7 @@ def _safe_off_allowed(decision, context):
 
 
 def install_rapt_identity_guard():
-    """Install after the source-authority wrapper, never as an independent writer."""
+    """Install after the source-authority wrapper and then close positive bypass."""
     global _INSTALLED, _PREVIOUS_AUTHORITY, _PREVIOUS_SAFE_OFF
     if _INSTALLED:
         return
@@ -81,4 +81,7 @@ def install_rapt_identity_guard():
     _PREVIOUS_SAFE_OFF = authority_runtime._safe_off_allowed
     authority_runtime._live_authority = _live_authority
     authority_runtime._safe_off_allowed = _safe_off_allowed
+    from . import brewzilla_sparge_execution_guard
+
+    brewzilla_sparge_execution_guard.install_sparge_execution_guard()
     _INSTALLED = True
