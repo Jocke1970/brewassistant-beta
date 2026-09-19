@@ -11,7 +11,7 @@ card:
       title-card:
         type: custom:button-card
         entity: sensor.brewassistant_brewday_physical_timing_summary
-        name: Physical step time
+        name: Physical step timer
         icon: mdi:timer-outline
         show_state: false
         show_label: true
@@ -20,55 +20,26 @@ card:
           - sensor.brewassistant_brewday_physical_timing_mode
           - sensor.brewassistant_brewday_physical_elapsed_seconds
           - sensor.brewassistant_brewday_physical_remaining_seconds
-          - sensor.brewassistant_brewday_physical_progress
-          - sensor.brewassistant_brewday_physical_ramp_rate
-          - sensor.brewassistant_brewday_physical_target_temperature
         label: |
           [[[
             const a = entity?.attributes || {};
             const mode = String(states['sensor.brewassistant_brewday_physical_timing_mode']?.state ?? a.mode ?? 'idle');
             const step = a.step_name || 'No active physical timer';
-            const target = Number(a.target_temperature);
             const elapsed = Number(states['sensor.brewassistant_brewday_physical_elapsed_seconds']?.state ?? a.elapsed_seconds);
             const remaining = Number(states['sensor.brewassistant_brewday_physical_remaining_seconds']?.state ?? a.remaining_seconds);
-            const mismatch = a.source_schedule_mismatch === true;
-            const fmt = (s) => {
-              if (!Number.isFinite(s)) return '—';
-              s = Math.max(0, Math.round(s));
-              const m = Math.floor(s / 60);
-              const sec = s % 60;
-              return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-            };
-            let clock = fmt(elapsed);
-            if (mode.startsWith('hold')) clock = `${fmt(remaining)} left`;
-            if (mode.startsWith('waiting_for_target')) clock = `waiting for ${Number.isFinite(target) ? target.toFixed(1) + ' °C' : 'target'}`;
-            return `${step} · ${clock}${mismatch ? ' · ⚠ BF ahead of physical process' : ''}`;
+            const clock = s => Number.isFinite(s) ? `${String(Math.floor(Math.max(0,s)/60)).padStart(2,'0')}:${String(Math.floor(Math.max(0,s)%60)).padStart(2,'0')}` : '—';
+            const value = mode.startsWith('hold') ? `${clock(remaining)} left` : clock(elapsed);
+            return `${step} · ${mode} · ${value}${a.source_schedule_mismatch === true ? ' · ⚠ Brewfather ahead of physical process' : ''}`;
           ]]]
         styles:
           card:
             - border-radius: 18px
             - padding: 12px
             - background: rgba(0,188,212,.075)
-            - border: 1px solid rgba(0,188,212,.20)
-          grid:
-            - grid-template-areas: '"i n" "i l"'
-            - grid-template-columns: 34px minmax(0,1fr)
-            - column-gap: 10px
-          icon:
-            - width: 22px
-            - height: 22px
-            - color: rgb(0,188,212)
-          name:
-            - justify-self: start
-            - font-size: 14px
-            - font-weight: 950
           label:
-            - justify-self: start
-            - text-align: left
             - white-space: normal
-            - font-size: 11.5px
-            - font-weight: 800
-            - opacity: 0.76
+            - text-align: left
+            - font-size: 12px
       cards:
         - type: custom:button-card
           entity: sensor.brewassistant_brewday_physical_timing_summary
@@ -79,196 +50,111 @@ card:
           label: |
             [[[
               const a = entity?.attributes || {};
-              const kind = String(a.step_kind ?? '—');
-              const step = a.step_name || '—';
-              const current = Number(a.current_temperature);
-              const target = Number(a.target_temperature);
-              const elapsed = Number(a.elapsed_seconds);
-              const remaining = Number(a.remaining_seconds);
-              const rate = Number(a.average_c_per_min);
-              const source = a.temperature_entity || '—';
-              const history = Array.isArray(a.history) ? a.history : [];
-              const fmt = (s) => {
-                if (!Number.isFinite(s)) return '—';
-                s = Math.max(0, Math.round(s));
-                const m = Math.floor(s / 60);
-                return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
-              };
-              const ftemp = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
-              const clock = kind === 'hold' && a.timer_started_at
-                ? `${fmt(remaining)} left`
-                : kind === 'hold'
-                  ? `Waiting for target · ${ftemp(current)} → ${ftemp(target)}`
-                  : kind === 'ramp'
-                    ? `${fmt(elapsed)} · ${ftemp(current)} → ${ftemp(target)}${Number.isFinite(rate) ? ` · ${rate.toFixed(2)} °C/min` : ''}`
-                    : 'No active physical timer';
-              const rows = history.slice(-6).reverse().map((r) => {
-                const rk = String(r.kind || 'step');
-                const dur = fmt(Number(r.duration_seconds));
-                const from = Number(r.from_temperature);
-                const to = Number(r.target_temperature);
-                const rr = Number(r.average_c_per_min);
-                const detail = rk === 'ramp'
-                  ? `${ftemp(from)} → ${ftemp(to)} · ${dur}${Number.isFinite(rr) ? ` · ${rr.toFixed(2)} °C/min` : ''}`
-                  : `${ftemp(to)} · hold ${dur}`;
-                return `<div style="display:grid;grid-template-columns:66px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid rgba(127,127,127,.10);"><b style="font-size:10px;text-transform:uppercase;opacity:.62;">${rk}</b><span style="font-size:11px;font-weight:800;">${r.name || '—'}<br><span style="opacity:.65;">${detail}</span></span></div>`;
-              }).join('');
-              return `<div style="line-height:1.3;min-width:0;"><div style="font-size:10px;font-weight:950;opacity:.58;text-transform:uppercase;">${kind} · ${a.context || 'Unknown'}</div><div style="font-size:20px;font-weight:950;margin-top:2px;">${step}</div><div style="margin-top:8px;font-size:24px;font-weight:950;text-align:center;">${clock}</div><div style="margin-top:7px;font-size:10.5px;font-weight:750;opacity:.62;text-align:center;">Process sensor: ${source} · target reached ${a.target_reached_at || 'no'} · paused ${fmt(Number(a.paused_seconds))}</div><div style="margin-top:10px;font-size:10px;font-weight:950;opacity:.58;text-transform:uppercase;">Step and ramp history</div>${rows || '<div style="padding:7px 0;font-size:11px;opacity:.60;">No completed physical ramp/hold yet.</div>'}</div>`;
+              const fmt = v => v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(1);
+              const clock = s => Number.isFinite(Number(s)) ? `${String(Math.floor(Math.max(0,Number(s))/60)).padStart(2,'0')}:${String(Math.floor(Math.max(0,Number(s))%60)).padStart(2,'0')}` : '—';
+              const rows = (Array.isArray(a.history) ? a.history : []).slice(-6).reverse().map(r => `<div style="padding:5px 0;border-bottom:1px solid rgba(127,127,127,.15)"><b>${r.name || 'Step'}</b> · ${r.kind || '—'} · ${fmt(r.target_temperature)}°C · ${clock(r.duration_seconds)}</div>`).join('');
+              return `<b>${a.step_name || 'No step'}</b> · ${a.step_kind || '—'}<br>Process ${fmt(a.current_temperature)}°C / target ${fmt(a.target_temperature)}°C<br>Elapsed ${clock(a.elapsed_seconds)} · remaining ${clock(a.remaining_seconds)} · paused ${clock(a.paused_seconds)}<br>Process probe: ${a.temperature_entity || '—'} · reached: ${a.target_reached_at || 'no'}<br><br><b>Physical step history</b><br>${rows || 'No completed physical steps yet.'}`;
             ]]]
           styles:
             card:
-              - border-radius: 16px
               - padding: 12px
-              - background: rgba(127,127,127,.035)
-              - border: 1px solid rgba(127,127,127,.12)
+              - border-radius: 16px
             label:
-              - justify-self: stretch
-              - text-align: left
               - white-space: normal
-
+              - text-align: left
+              - font-size: 11px
     - type: custom:button-card
       entity: button.brewassistant_mash_in_override
-      name: Strike readiness
+      name: Strike readiness / stale RCL data
       icon: mdi:cloud-alert
       show_state: false
       show_label: true
       triggers_update:
         - button.brewassistant_mash_in_override
-        - button.brewassistant_mash_in_started
         - sensor.brewassistant_brewzilla_control_reason
       label: |
         [[[
           const a = entity?.attributes || {};
+          const age = Number(a.mash_in_override_process_temperature_age_seconds);
           const fresh = a.mash_in_override_process_temperature_fresh === true;
           const available = a.mash_in_override_available === true;
-          const warning = a.mash_in_override_warning_required === true;
-          const process = Number(a.mash_in_override_process_temperature);
-          const age = Number(a.mash_in_override_process_temperature_age_seconds);
-          const wort = Number(a.mash_in_override_wort_temperature);
-          const target = Number(a.mash_in_override_local_target);
-          const autoTol = Number(a.mash_in_auto_ready_tolerance_c);
-          const manualTol = Number(a.mash_in_override_tolerance_c);
-          const source = a.mash_in_override_process_source || 'MASH/process';
-          const ftemp = (v) => Number.isFinite(v) ? `${v.toFixed(1)} °C` : '—';
-          const ageText = Number.isFinite(age) ? `${Math.floor(age / 60)}m ${Math.round(age % 60)}s` : 'unknown age';
-          if (!fresh) {
-            const status = warning
-              ? '<b>☁️ MASH data is stale — manual strike acceptance is available.</b>'
-              : '<b>☁️ MASH data is stale — BrewZilla is regulating locally.</b>';
-            return `${status}<br>${source}: ${ftemp(process)} · ${ageText} old · WORT ${ftemp(wort)} · local target ${ftemp(target)}.<br>Verify temperature physically on BrewZilla/thermometer. Auto ±${Number.isFinite(autoTol) ? autoTol.toFixed(1) : '1.0'} °C · manual max ±${Number.isFinite(manualTol) ? manualTol.toFixed(1) : '2.0'} °C.`;
-          }
-          if (available) {
-            return `<b>Strike is close, but outside the automatic band.</b><br>MASH ${ftemp(process)} · WORT ${ftemp(wort)} · local target ${ftemp(target)}.<br>Auto ±${Number.isFinite(autoTol) ? autoTol.toFixed(1) : '1.0'} °C · manual max ±${Number.isFinite(manualTol) ? manualTol.toFixed(1) : '2.0'} °C.`;
-          }
-          return '';
+          const fmt = v => v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(1);
+          const ageText = Number.isFinite(age) ? `${Math.floor(age/60)}m ${Math.floor(age%60)}s` : 'unknown';
+          return `${fresh ? 'MASH data is fresh.' : `⚠ MASH data is stale (${ageText}); BrewZilla regulates locally.`}<br>MASH ${fmt(a.mash_in_override_process_temperature)}°C · WORT ${fmt(a.mash_in_override_wort_temperature)}°C · local target ${fmt(a.mash_in_override_local_target)}°C.<br>Auto ±${fmt(a.mash_in_auto_ready_tolerance_c)}°C · manual maximum ±${fmt(a.mash_in_override_tolerance_c)}°C.${available ? '<br>Manual READY acknowledgement available after physical verification.' : ''}`;
         ]]]
       styles:
         card:
           - display: |
               [[[
                 const a = entity?.attributes || {};
-                const inScope = a.mash_in_override_in_scope === true;
-                const available = a.mash_in_override_available === true;
-                const fresh = a.mash_in_override_process_temperature_fresh === true;
-                return inScope && (available || !fresh) ? 'block' : 'none';
+                return a.mash_in_override_in_scope === true && (a.mash_in_override_available === true || a.mash_in_override_process_temperature_fresh !== true) ? 'block' : 'none';
               ]]]
+          - padding: 12px
           - border-radius: 18px
-          - padding: 11px
           - background: rgba(255,152,0,.10)
-          - border: 1px solid rgba(255,152,0,.30)
-        icon:
-          - color: rgb(255,152,0)
         label:
-          - justify-self: start
-          - text-align: left
           - white-space: normal
-          - font-size: 11px
-          - font-weight: 800
-
+          - text-align: left
     - type: custom:button-card
       entity: button.brewassistant_mash_in_override
       name: MANUALLY ACCEPT STRIKE
       icon: mdi:hand-okay
       show_state: false
       show_label: true
-      label: Operator fallback · acknowledges only the READY gate
+      label: READY only · verify physically · maximum ±2.0°C
       tap_action:
         action: call-service
         service: button.press
         target:
           entity_id: button.brewassistant_mash_in_override
         confirmation:
-          text: >-
-            Verify strike temperature physically on BrewZilla/thermometer before
-            continuing. This button only acknowledges Mash-In READY; it does not
-            change heat, pump or target. Continue with MASH-IN STARTED afterward.
+          text: Verify the strike temperature physically. This acknowledges READY only; it does not change pump, heater or target.
       styles:
         card:
           - display: |
-              [[[
-                return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none';
-              ]]]
+              [[[ return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none'; ]]]
           - border-radius: 16px
-          - padding: 10px
           - background: rgba(255,152,0,.16)
-          - border: 1px solid rgba(255,152,0,.42)
-        name:
-          - font-size: 11px
-          - font-weight: 950
-        label:
-          - white-space: normal
-          - font-size: 10.5px
-          - font-weight: 760
-          - opacity: 0.76
-
     - type: custom:button-card
-      entity: button.brewassistant_mash_in_started
-      show_name: false
-      show_icon: true
+      entity: sensor.brewassistant_brewzilla_control_reason
+      name: Mash-in and recirculation interlock
       icon: mdi:barley
       show_state: false
       show_label: true
       triggers_update:
+        - sensor.brewassistant_brewzilla_control_reason
         - button.brewassistant_mash_in_started
         - button.brewassistant_mash_in_complete
         - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-        - sensor.brewassistant_brewzilla_control_reason
+        - sensor.brewassistant_brewday_runtime_source
       label: |
         [[[
-          const start = states['button.brewassistant_mash_in_started'];
-          const complete = states['button.brewassistant_mash_in_complete'];
-          const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-          const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-          const a = start?.attributes || complete?.attributes || {};
-          const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
-          const effective = oz.mash_in_effective_target ?? gate?.attributes?.effective_target ?? a.mash_in_effective_target ?? a.effective_target ?? '—';
-          if (state === 'ready_for_mash_in') return `<b>Strike ready · time for mash-in</b><br>Press MASH-IN STARTED when grain addition begins.`;
-          if (state === 'mash_in_started') return `<b>Mash-in started · wait for BF CONTINUE</b><br>Primary path: press CONTINUE in Brewfather. BA completes mash-in and starts pump/circulation automatically.<br>Effective mash target ${effective} °C · manual fallback below.`;
-          return '';
+          const a = entity?.attributes || {};
+          const gate = a.mash_in_gate_state || states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending']?.attributes?.mash_in_gate_state || states['button.brewassistant_mash_in_started']?.attributes?.state || 'idle';
+          const phase = a.mash_recirculation_phase;
+          const time = s => `${Math.floor(Math.max(0,Number(s)||0)/60)}:${String(Math.floor(Math.max(0,Number(s)||0)%60)).padStart(2,'0')}`;
+          const bf = states['sensor.brewassistant_brewday_runtime_source']?.state === 'Brewfather Brew Tracker';
+          let msg = 'Waiting for READY. Press MASH-IN STARTED when grain addition begins.';
+          if (gate === 'mash_in_started') msg = bf ? 'Grain addition in progress. After mixing, press CONTINUE in Brewfather. BA marks Mash-In Complete but does NOT start circulation.' : 'After mixing, press MASH-IN COMPLETE. Pump stays OFF.';
+          if (phase === 'settling') msg = `Grain-bed settling: ${time(a.mash_settle_remaining_seconds)} left · pump OFF. This runs alongside the mash hold.`;
+          if (phase === 'recirculation_ready') msg = 'Settling complete. Inspect grain bed and drainage, then explicitly confirm LOW FLOW (~25%) below.';
+          if (phase === 'low_flow_pending') msg = 'LOW FLOW commanded; waiting for confirmed device readback.';
+          if (phase === 'low_flow') msg = `LOW FLOW active · proposal for normal flow in ${time(a.mash_recirculation_ramp_remaining_seconds)}. Watch liquid level.`;
+          if (phase === 'normal_ready') msg = 'Inspect drainage again. Confirm normal flow (~50%) below only if the bed is draining well.';
+          if (phase === 'normal_pending') msg = 'Normal flow commanded; waiting for device readback.';
+          if (phase === 'normal') msg = 'Normal circulation confirmed. Physical mash hold still owns the target until complete.';
+          if (phase === 'blocked' || phase === 'recovery_required') msg = `⚠ Control blocked: ${a.mash_interlock_reason || phase}. No automatic restart; operator recovery required.`;
+          return `${msg}<br>Gate ${gate} · phase ${phase || '—'} · physical target ${a.mash_physical_hold_target ?? '—'}°C · hold ${a.mash_physical_hold_complete ? 'complete' : 'pending'}`;
         ]]]
       styles:
         card:
-          - display: |
-              [[[
-                const start = states['button.brewassistant_mash_in_started'];
-                const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || start?.attributes?.mash_in_gate_state || start?.attributes?.state || 'idle');
-                return ['ready_for_mash_in','mash_in_started'].includes(state) ? 'block' : 'none';
-              ]]]
           - border-radius: 18px
-          - padding: 11px
-          - background: rgba(255,193,7,.10)
-          - border: 1px solid rgba(255,193,7,.30)
-        icon:
-          - color: rgb(255,193,7)
+          - padding: 12px
+          - background: rgba(127,127,127,.08)
         label:
-          - justify-self: start
-          - text-align: left
           - white-space: normal
-          - font-size: 11px
-          - font-weight: 800
-
+          - text-align: left
+          - font-size: 12px
     - type: horizontal-stack
       cards:
         - type: custom:button-card
@@ -281,49 +167,64 @@ card:
             target:
               entity_id: button.brewassistant_mash_in_started
             confirmation:
-              text: Start mash-in now? BA stops the pump and releases strike target to the mash target.
+              text: Begin grain addition? BrewAssistant releases the strike target and keeps the pump OFF.
           styles:
             card:
               - display: |
                   [[[
-                    const a = entity?.attributes || {};
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
-                    return state === 'ready_for_mash_in' ? 'block' : 'none';
+                    const a = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    const g = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+                    return a.mash_in_gate_state === 'ready_for_mash_in' || g?.state === 'on' ? 'block' : 'none';
                   ]]]
               - border-radius: 16px
-              - padding: 10px
               - background: rgba(255,193,7,.14)
-              - border: 1px solid rgba(255,193,7,.32)
-            name:
-              - font-size: 11px
-              - font-weight: 950
         - type: custom:button-card
           entity: button.brewassistant_mash_in_complete
           name: MASH-IN COMPLETE · FALLBACK
-          icon: mdi:pump
+          icon: mdi:barley-off
           tap_action:
             action: call-service
             service: button.press
             target:
               entity_id: button.brewassistant_mash_in_complete
             confirmation:
-              text: Manual fallback. Normally use CONTINUE in Brewfather after mash-in.
+              text: Grain mixed in? This STARTS 10-minute settling with pump OFF. Brewfather CONTINUE is the primary completion acknowledgement.
           styles:
             card:
               - display: |
                   [[[
-                    const a = entity?.attributes || {};
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-                    const state = String(oz.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || a.mash_in_gate_state || a.state || 'idle');
-                    return state === 'mash_in_started' ? 'block' : 'none';
+                    const a = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    return a.mash_in_gate_state === 'mash_in_started' ? 'block' : 'none';
                   ]]]
               - border-radius: 16px
-              - padding: 10px
               - background: rgba(76,175,80,.12)
-              - border: 1px solid rgba(76,175,80,.28)
-            name:
-              - font-size: 11px
-              - font-weight: 950
+    - type: custom:button-card
+      entity: button.brewassistant_start_mash_circulation
+      name: CONFIRM RECIRCULATION STEP
+      icon: mdi:pump
+      show_state: false
+      show_label: true
+      label: |
+        [[[
+          const p = states['sensor.brewassistant_brewzilla_control_reason']?.attributes?.mash_recirculation_phase;
+          return p === 'recirculation_ready' ? 'Step 1: LOW FLOW ~25%, inspect bed and drainage.' : 'Step 2: NORMAL FLOW ~50% after five minutes, only if draining well.';
+        ]]]
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_start_mash_circulation
+        confirmation:
+          text: Check the actual grain bed, liquid level and drainage. This sends a real pump command. Confirm this step only if conditions are safe; BA has no flow/level sensor.
+      styles:
+        card:
+          - display: |
+              [[[
+                const p = states['sensor.brewassistant_brewzilla_control_reason']?.attributes?.mash_recirculation_phase;
+                return ['recirculation_ready','normal_ready'].includes(p) ? 'block' : 'none';
+              ]]]
+          - border-radius: 16px
+          - background: rgba(33,150,243,.13)
+        label:
+          - white-space: normal
+          - text-align: left
