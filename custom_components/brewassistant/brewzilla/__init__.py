@@ -41,6 +41,7 @@ from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_sa
 from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from . import brewzilla_physical_mash_interlock as _physical_mash_interlock
+from . import brewzilla_source_authority_runtime as _source_authority_runtime
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -100,7 +101,7 @@ _install_temp()
 _heat_strike_profile.install_heat_strike_profile()
 _heat_strike_transition_guard.install_heat_strike_transition_guard()
 _rcl_value_recovery_guard.install_rcl_value_recovery_guard()
-_pre_mash_in_strike_sensor.install_pre_mash_in_strike_sensor_guard()
+_pre_mash_in_strike_sensor_guard.install_pre_mash_in_strike_sensor_guard()
 _equipment_learning_patch.install_equipment_learning_patch()
 _advice_control.install_advice_control()
 _mash_wort_delta_pump_guard.install_mash_wort_delta_pump_guard()
@@ -169,3 +170,8 @@ _fail_passive_guard.install_fail_passive_guard()
 # normal and Brewfather-resume paths. Install outside all prior control wrappers
 # so the live Supervised Apply plan sees the same physical limits.
 _physical_mash_interlock.install_physical_mash_interlock()
+
+# Outermost source authority: BF brewing is observer-only; only verified RAPT
+# brewing intent may authorize new automatic BrewZilla writes. This layer
+# also guards shared primitive setters and the policy-router execution path.
+_source_authority_runtime.install_source_authority_runtime()
