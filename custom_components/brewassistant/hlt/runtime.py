@@ -70,12 +70,21 @@ def _entities(entry: Any) -> EntityConfig:
     )
 
 
-def _observed(hass: Any, entity_id: str, now: datetime, max_age_s: float) -> str | None:
+def _observed(hass: Any, entity_id: str, now: datetime, max_age_s: float,
+              *, allow_unchanged: bool = False) -> str | None:
+    """Demand fresh samples, but allow stable target numbers to remain unchanged.
+
+    A held setpoint is not a heartbeat. This exception is never for physical
+    temperature/power readings or real HLT OFF confirmations.
+    """
     state = hass.states.get(entity_id)
-    if state is None or state.state.lower() in {"unknown", "unavailable", "none", ""}:
+    if state is None or str(state.state).lower() in {"unknown", "unavailable", "none", ""}:
         return None
-    age = (now - state.last_updated).total_seconds()
-    return str(state.state) if 0 <= age <= max_age_s else None
+    if not allow_unchanged:
+        age = (now - state.last_updated).total_seconds()
+        if not 0 <= age <= max_age_s:
+            return None
+    return str(state.state)
 
 
 def _allowed_stage(stage: Any) -> bool:
@@ -87,11 +96,14 @@ def _bz_cruise_observation(hass: Any, brewday: dict[str, Any], now: datetime,
                            age_s: float, tolerance_c: float = 0.5) -> tuple[bool, bool]:
     """Observed cruise only; unavailable evidence is UNKNOWN, not a ramp.
 
-    Require fresh internal temperature and device target, matching normalized
-    runtime target. No sample can predict the next autonomous BZ heater cycle.
+    Require a fresh internal temperature and valid held device/runtime target.
+    A target is a setting, not a periodically updating probe. The simulator
+    separately requires fresh measured BZ watts before any virtual opportunity.
+    No HA sample can predict an autonomous BZ heater cycle.
     """
     actual_c = _numeric(_observed(hass, "sensor.brewzilla_temperature", now, age_s))
-    device_c = _numeric(_observed(hass, "number.brewzilla_target_temperature", now, age_s))
+    device_c = _numeric(_observed(hass, "number.brewzilla_target_temperature", now,
+                                  age_s, allow_unchanged=True))
     requested_c = _numeric(brewday.get("target_temperature"))
     if any(value is None for value in (actual_c, device_c, requested_c)):
         return False, False
