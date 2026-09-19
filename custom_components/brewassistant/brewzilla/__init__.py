@@ -43,6 +43,7 @@ from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from . import brewzilla_physical_mash_interlock as _physical_mash_interlock
 from . import brewzilla_rapt_sparge_controller as _rapt_sparge_controller
 from . import brewzilla_source_authority_runtime as _source_authority_runtime
+from . import brewzilla_rapt_identity_guard as _rapt_identity_guard
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -71,16 +72,11 @@ def _value_entity_age_seconds(entity_state: State | None) -> int | None:
     return max(0, int((dt_util.utcnow() - dt_util.as_utc(timestamp)).total_seconds()))
 
 
-# RCL/control freshness and physical process freshness use report age. A stable
-# temperature or target is a valid value and must not become "stale" merely
-# because it has not changed. Learning keeps value-change age separately.
+# Stable temperatures are valid: use entity report age for controller freshness.
 _orchestration._entity_age_seconds = _reported_entity_age_seconds
 _learning._age_seconds = _value_entity_age_seconds
 
-# sensor.brewzilla_power is not a verified BrewZilla entity in this installation
-# and must never participate in control freshness/RCL recovery. The canonical BA
-# power entity now intentionally resolves unavailable until a real BrewZilla
-# power source is configured.
+# Never reuse unverified sensor.brewzilla_power for BrewZilla control freshness.
 _orchestration.BREWZILLA_POWER_SENSOR = "sensor.brewassistant_brewzilla_power"
 _orchestration.LOCAL_LIVE_ENTITY_IDS = ()
 _orchestration.RAPT_BREWZILLA_DYNAMIC_ENTITY_IDS = (
@@ -95,10 +91,7 @@ _temp_roles.install_temperature_roles_patch()
 _mash_ramp.install_mash_ramp_strategy()
 _install_temp()
 
-# Legacy Heatstrike profile is retained only for phase/strike-target latching
-# and RCL transition context. Physical target/heat/pump regulation is owned by
-# Clean Heatstrike below. The older target-clamp, ready-hold, pump-mix and
-# near-target-safety wrappers are intentionally no longer installed.
+# Keep legacy Heatstrike only for phase/strike target latching, not regulation.
 _heat_strike_profile.install_heat_strike_profile()
 _heat_strike_transition_guard.install_heat_strike_transition_guard()
 _rcl_value_recovery_guard.install_rcl_value_recovery_guard()
@@ -110,15 +103,9 @@ _mash_priority_thermal_mix_guard.install_mash_priority_thermal_mix_guard()
 _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
 _mash_in_gate.install_mash_in_gate()
-# Automatic Mash-In READY uses only fresh canonical process data inside ±1 °C.
-# A bounded ±2 °C operator override is exposed separately for physically verified
-# strike readiness, including RAPT Cloud stale-data fallback.
 _mash_in_readiness_contract.install_mash_in_readiness_contract()
 
-# The older freshness/stale-safe pair deliberately is not installed. Those
-# layers translated ordinary stale cloud data into heater/pump OFF. BrewZilla
-# already regulates locally against its last applied target, so normal data loss
-# must be fail-passive instead of an automatic safe-down.
+# Source loss is fail-passive: do not infer that old physical outputs are OFF.
 _paused_guard.install_paused_guard()
 _paused_heatstrike_guard.install_paused_heatstrike_guard()
 _gate.install_execution_guard()
@@ -127,54 +114,24 @@ _local_control_lease.install_local_control_lease()
 _stale_heat_guard.install_stale_heat_guard()
 _no_positive_gate.install_no_positive_gate()
 _local_regulation_heat_guard.install_local_regulation_heat_guard()
-
-# Keep the narrow Brewfather paused->running auto-complete bridge. Its older
-# target-safe-down helpers are harmless once Mash-In Started has already made
-# the authoritative strike -> mash-target downshift.
 _mash_in_complete_safe_down_guard.install_mash_in_complete_safe_down_guard()
-
-# Consolidated boundary installed after the lower safety/apply chain: canonical
-# process/safety roles, pure READY gate, atomic Mash-In Started transition and
-# one-way STARTED -> COMPLETE semantics.
 _hot_side_contract.install_hot_side_contract()
-
 _active_rcl_recovery_guard.install_active_rcl_recovery_guard()
 _abort_lockout_final_guard.install_abort_lockout_final_guard()
 _manual_brew_control.install_manual_brew_control_guard()
-# Generic Supervised Apply remains authoritative for new positive control
-# authority outside the dedicated pre-mash-in physical controller.
 _supervised_runtime_guard.install_supervised_runtime_guard()
-# Stale confirmed readback grace belongs to generic supervised plans.
 _supervised_readback_grace.install_supervised_readback_grace()
-# Brewfather Play authorizes the physical Heatstrike/Mash-In phase, so that
-# controller may modulate heat/pump without per-write confirmations while all
-# lower ABORT/safety guards remain intact.
 _phase_authority.install_phase_authority()
-
-# Explicit zero-minute PAUS/PAUSE recipe checkpoints keep Brewfather's own
-# timeline frozen while BA/BZ finishes only the checkpoint's current target.
-# Install after the generic/supervised chain so next-step/strike latches cannot
-# pre-actuate a later target; independent safety/fail-passive guards still win.
 _brewtracker_pause_checkpoint_guard.install_brewtracker_pause_checkpoint_guard()
 
-# RAPT profile data is another process/target source, not another heat/pump
-# controller. Feed its active step/target into the same BA regulator and
-# supervised policy used for Brew Tracker while keeping source-loss fail-passive.
+# RAPT owns process steps; BA owns physical hot-side regulation through RCL.
 _rapt_profile_control_bridge.install_rapt_profile_control_bridge()
-
-# Ordinary RCL/process telemetry loss stops BA writes and leaves BrewZilla's
-# last local target/output state untouched. ABORT and hard-safety paths remain.
 _fail_passive_guard.install_fail_passive_guard()
-
-# Physical mash holds and operator-confirmed recirculation apply to the
-# existing mash control paths, below the source and Sparge boundaries.
 _physical_mash_interlock.install_physical_mash_interlock()
-
-# RAPT-only Sparge operator interlock. It must see final mash regulation, then
-# be constrained by source authority on all actuator service primitives.
 _rapt_sparge_controller.install_rapt_sparge_controller()
 
-# Outermost source authority: BF brewing is observer-only; verified RAPT
-# brewing intent may authorize new BrewZilla writes. Guard shared setters and
-# the policy-router execution path against obsolete or ambiguous process intent.
+# Source authority must enclose all the existing orchestration/safety wrappers.
 _source_authority_runtime.install_source_authority_runtime()
+# Narrow final identity check: never treat an active RAPT profile with missing
+# or conflicting session/step data as sufficient permission to write.
+_rapt_identity_guard.install_rapt_identity_guard()
