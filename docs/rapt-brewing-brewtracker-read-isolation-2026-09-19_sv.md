@@ -1,23 +1,32 @@
-# RAPT-bryggning: isolering från BrewTracker-läsningar (2026-09-19)
+# RAPT och BT: isolera källa, inte sensorer (2026-09-19)
 
-**Status: backendens identifierade läsvägar och Brewfather Feed EN/SV patchade med avgränsade tester. Fullständig isolering, parallell fermentation och fysisk drift ännu INTE verifierade.** Detta är ett releasevillkor i PR #215 och ändrar inte ordningen `feature → dev → beta → ny GitHub-prerelease → HACS-installation → praktiskt test → main`.
+**Beslut från användaren:** BF = jäsningsrelaterad; BT = bryggningsrelaterad och vår egen utbyggnad av den befintliga Brewfather-integrationen. BT är inte en egen extern datakälla eller en jäsningsmodul. RAPT är ett alternativ till BT som bryggprocesskälla. Sensorerna kan fortsätta uppdateras även när deras värden inte är auktoritativa.
 
-## Beslut
+## Källkontrakt
 
-När RAPT äger Brewing ska BA:s bryggningsflöde inte läsa BrewTracker-sensorer för bryggsteg, temperaturmål, batchkontext, fallback, audit eller frontend. RAPT/RCL levererar steg och processmål, BrewZilla/RCL levererar faktisk hårdvarutelemetri. Vid RAPT source-loss, STOP-handoff eller RAPT-ABORT får gamla BT-data inte återanvändas. Brewfather Fermentation ska fortsätta läsa separata jäsningssensorer och styra jäskammaren oberoende.
+- **RAPT vald för Brewing:** endast RAPT-profilen får bestämma bryggsteg, tids-/stegkontext, processmål och nästa steg. BA styr BrewZilla via RCL med separat hårdvaruåterrapportering. BT kan uppdateras/läsas i fristående informationsvyer, men BT-värden får aldrig blandas in i RAPT:s normaliserade process eller styra BA:s aktuation.
+- **RAPT tappar data, STOP eller RAPT-ABORT:** BT får inte bli automatisk reservkälla. Visa okänd/otillgänglig RAPT-process och spärra nya positiva kommandon. Att kommandon spärras innebär inte att fysisk värme/pump bevisligen är avstängd.
+- **BT vald för Brewing:** BT-sensorerna levererar bryggprocessdata från den BF-baserade utbyggnaden. Nuvarande styrpolicy gör detta läge observer-only gentemot BrewZilla tills annat explicit beslutas.
+- **BF Fermentation:** BF:s ursprungliga jäsningsdata och BA:s jäsningsregulator fortsätter oberoende av RAPT/BT-valet. BT ska inte användas som en ersättande jäsningskälla.
 
-## Genomförd kod på feature-branchen
+Det tidigare releasekravet om **noll BT-sensorläsningar överallt** var fel. Det korrekta acceptanskriteriet är **noll BT-inflytande på RAPT-processens tillstånd, värmemål, pumpbeslut, Learning-kontext och sessionsväxling**. Separat informationsvisning eller BF-jäsning ska inte hindras av en global sensor-spärr.
 
-`brewzilla_rapt_brewing_read_isolation.py` installerar avgränsat lässkydd för Brewday-core, Learning och audit. Även BT-event filtreras innan audit-callbacken. `tests/test_rapt_brewing_read_isolation.py` använder en fake `hass.states.get` som kastar vid BT-läsning; de rena kontraktstesterna passerade CI, Hassfest och HACS. Dessa tester är **inte** end-to-end Home Assistant.
+## Ändring på feature-branchen
 
-`dashboard/cards/brewfather_feed.yaml` och `_sv.yaml` har nu ersatt direkta BrewTracker-råvärden med `sensor.brewfather_recipe_name` och `climate.fermentation_chamber`. Nytt regressionstest `tests/test_rapt_fermentation_feed_isolation.py` förbjuder direkta BT-läsningar i båda korten. CI och Hassfest passerade för testcommit `a7b48ec`. **Begränsning:** kortens synlighet beror fortfarande på `sensor.brewassistant_brewfather_batch_phase`, som den gamla batchfaslogiken döljer under RAPT-ägarskap. Samtidig RAPT-bryggning + BF-jäsning är alltså ännu INTE säkrad i UI.
+`brewzilla_rapt_brewing_read_isolation.py` spärrar nu **källrutterna** `brewday_runtime_core.source` och `brewday_runtime_core.build_core_snapshot` under aktiv/tappad/stoppad/aborterad RAPT. Övriga generella BT-läsare (`core.state`, `attr`, `state_obj`, `resolved_entity_id`) lämnas intakta för självständiga informationsvyer. Den tidigare globala mutation som maskerade `brewfather_batch_phase` är borttagen. Ingen fermentationsmodul patchas.
 
-## Återstående releaseblockerare
+Learning får ingen BT-batchkontext när RAPT är styrkälla; BT får därmed inte fylla saknade RAPT-receptparametrar med gamla värden. Audit får inte använda BT-aktivitet/status eller BT-event för att starta eller rotera en RAPT-bryggsession. Audit-spärren sitter på konsumenten, även där `brewfather_session_active` redan importerats som en funktion. Den äldre batch-control-guardens BT-aktivitet kan inte ge parallellt styransvar.
 
-1. Dashboardkort `brewfather_recipe*.yaml`, `brewtracker_runtime*.yaml`, `brewassistant_source_health*.yaml` och eventuellt andra har direkta BT-referenser. Ta bort eller källspärra dem, inklusive EN/SV, och testa faktisk Lovelace-rendering; Python-wrappern skyddar inte frontend.
-2. Frikoppla fermentationssynlighet och dess styrning från BT-batchfasen, så att samtidigt aktiv RAPT-bryggning och BF-jäsning fungerar utan BT-läsning i BA:s bryggningsflöde.
-3. Kör fullständigt HA-integrationstest med förbjuden BT-läsning vid aktiv/tappad/stoppad/aborterad RAPT, inklusive tidigare importerade funktioner och kontroll av separata fermentationssensorer.
-4. Initialt ofullständigt RAPT-kontrakt får inte leda till tyst BT-fallback. Skilj vald RAPT-källa från giltigt styrkontrakt.
-5. Granska alla BA→BrewZilla-skrivvägar och lös eventuell lokal RAPT-regleringskonflikt i Sparge (78 °C kontra BA:s möjliga 95 °C) innan beta-publicering.
+`tests/test_rapt_brewing_read_isolation.py` injicerar olika BT-status under aktiv RAPT, källa-tapp, STOP och ABORT; käll-/snapshot-/Learning-resultat ska vara oförändrade. Testet verifierar dessutom att separata BT-informationsläsningar och en BF-jäsningssensor fortfarande kan läsas, samt att BT fungerar som källflöde när RAPT inte äger processen. Detta är isolerade funktionstester, inte komplett Home Assistant-simulering.
 
-Ingen merge till `dev`, ingen beta eller main av dessa ändringar har utförts i denna genomgång. Inget praktiskt hårdvarutest före publicerad och installerad beta.
+Brewfather Feed EN/SV använder BF:s receptnamn och jäskammarens tillstånd. De korten ändrades under ett tidigare, för brett läskrav; deras visningsvillkor och BF-jäsningsanknytning behöver kontrolleras i HA. BT:s egna recept-/runtimekort får behålla informationsfunktioner, men ska inte presenteras som en parallell auktoritativ bryggkälla i RAPT-vyn.
+
+## Återstår före beta
+
+1. Simulera HELA BA-integrationen med RAPT och BT samtidigt; mutera BT-status, temperaturdirektiv och steg; kontrollera att RAPT-normaliserade värden och alla styrintents är oförändrade. Kontrollera även ofullständigt första RAPT-kontrakt och återanslutning.
+2. Kör BF-jäsningen oberoende och granska Feed/Recipe/BT Runtime/Source Health EN/SV för korrekt auktoritetsmärkning och Lovelace-rendering. Ingen global BT-läsblockering får läggas tillbaka.
+3. Inventera samtliga HA-servicevägar till BrewZilla och utför simulerade körningar utan fysisk utrustning. BF/BT observer-only får ge noll hot-side-skrivningar, och alla positiva RAPT/Sparge-skrivningar ska lyda kvittens och fysiska readback-krav.
+4. Verifiera verklig RCL-profil/step-payload och lös möjlig konflikt mellan lokalt RAPT-börvärde 78 °C och BA:s 95 °C förkok innan positiv Sparge-värme släpps.
+5. Kontrollera senaste CI, Hassfest, HACS och kodgranskning före promotion.
+
+**Releaseordning:** `feature → dev → beta → ny publicerad prerelease → HACS-installation → övervakat water-only-test → uttryckligt godkännande → main`. Inget praktiskt test före prerelease; inga automatiska mergar eller fysisk-säkerhetsanspråk från gröna CI-tester.
