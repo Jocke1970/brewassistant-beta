@@ -1,0 +1,169 @@
+# HLT simulation-only dashboard. No actions and NO physical HLT actuation.
+# Power data is observational; scenario headroom is not an electrical interlock.
+type: custom:button-card
+entity: sensor.brewassistant_hlt_status
+name: HLT simulation
+show_icon: false
+show_name: false
+show_state: false
+show_label: true
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+triggers_update:
+  - sensor.brewassistant_hlt_status
+  - sensor.brewassistant_hlt_reason
+  - sensor.brewassistant_hlt_power_owner
+  - sensor.brewassistant_hlt_actual_energy_recipient
+  - sensor.brewassistant_hlt_virtual_energy_recipient
+  - sensor.brewassistant_hlt_brewzilla_power_observed
+  - sensor.brewassistant_hlt_power_observed
+  - sensor.brewassistant_hlt_power_virtual
+  - sensor.brewassistant_hlt_total_power_observed
+  - sensor.brewassistant_hlt_total_power_virtual_scenario
+  - sensor.brewassistant_hlt_budget_scenario
+  - sensor.brewassistant_hlt_headroom_observed
+  - sensor.brewassistant_hlt_temperature
+  - sensor.brewassistant_hlt_temperature_measured
+  - sensor.brewassistant_hlt_temperature_estimated
+  - sensor.brewassistant_hlt_temperature_source
+  - sensor.brewassistant_hlt_target_temperature
+  - sensor.brewassistant_hlt_volume
+  - sensor.brewassistant_hlt_total_session_seconds
+  - sensor.brewassistant_hlt_virtual_heating_seconds
+  - sensor.brewassistant_hlt_observed_heating_estimate_seconds
+  - sensor.brewassistant_hlt_waiting_seconds
+  - sensor.brewassistant_hlt_yielding_seconds
+  - sensor.brewassistant_hlt_unknown_sample_seconds
+  - sensor.brewassistant_hlt_brewzilla_energy_estimate_wh
+  - sensor.brewassistant_hlt_energy_estimate_wh
+  - sensor.brewassistant_hlt_yield_count
+  - sensor.brewassistant_hlt_reclaim_count
+  - sensor.brewassistant_hlt_trace_path
+label: |
+  [[[
+    // Unknown/unavailable means missing data, NEVER zero.
+    const raw = (key) => {
+      const value = states[`sensor.brewassistant_hlt_${key}`]?.state;
+      return value == null || ['unknown', 'unavailable', 'none', ''].includes(String(value).toLowerCase())
+        ? null : String(value);
+    };
+    const number = (key) => {
+      const value = raw(key);
+      if (value === null) return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+    const watts = (key) => { const n = number(key); return n === null ? '—' : `${n.toFixed(0)} W`; };
+    const temperature = (key) => { const n = number(key); return n === null ? '—' : `${n.toFixed(1)} °C`; };
+    const energy = (key) => { const n = number(key); return n === null ? '—' : `${n.toFixed(1)} Wh`; };
+    const seconds = (key) => {
+      const n = number(key);
+      if (n === null) return '—';
+      const s = Math.max(0, Math.round(n));
+      return `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    };
+    const statusLabels = {
+      IDLE: 'Idle', WAITING_FOR_POWER: 'Waiting for BZ', HEATING: 'Virtual heating',
+      YIELDING: 'Yielding to BZ', READY: 'Target reached (simulation)',
+      waiting_for_data: 'No session data', waiting_for_brewday_recorder: 'Brewday inactive',
+      brewday_inactive_or_aborted: 'Brewday stopped', waiting_for_sparge_volume: 'Missing sparge volume',
+      error: 'Simulation error'
+    };
+    const reasons = {
+      cruise_power_opportunity_simulated: 'BZ cruising · simulated HLT opportunity',
+      brewzilla_ramp_priority: 'BZ ramp · virtual HLT yields',
+      brewzilla_power_priority: 'BZ power demand · virtual HLT yields',
+      brewzilla_ramp_or_not_cruising: 'BZ needs priority',
+      not_enough_observed_capacity: 'No observed scenario headroom',
+      brewzilla_power_or_request_unknown: 'BZ measurement or requested utilization missing',
+      awaiting_virtual_off_confirmation: 'Waiting for VIRTUAL release (not hardware readback)',
+      disabled_or_no_sparge: 'No sparge / simulation disabled',
+      target_reached_measured: 'Measured target reached',
+      target_reached_estimated: 'Estimated target reached',
+      heater_stop: 'Virtual heating stopped'
+    };
+    const recipients = { brewzilla: 'BZ', hlt: 'HLT', brewzilla_and_hlt: 'BZ + HLT', neither: 'Neither', unknown: 'Unknown' };
+    const status = raw('status');
+    const reason = raw('reason');
+    const realRecipient = recipients[raw('actual_energy_recipient')] || 'Unknown';
+    // 'none' is a categorical virtual state, not an unknown power reading.
+    // Read this one sensor directly; keep raw() strict for numeric telemetry.
+    const virtualState = states['sensor.brewassistant_hlt_virtual_energy_recipient']?.state;
+    const virtualRecipient = virtualState === 'hlt' ? 'HLT (virtual)' :
+      virtualState === 'none' ? 'None' : 'Unknown';
+    const owner = raw('power_owner') === 'brewzilla_with_virtual_hlt'
+      ? 'BZ priority · virtual HLT permitted' : 'BZ priority · HLT secondary';
+    const sourceLabels = {
+      measured: 'MEASURED', estimated: 'MODEL ESTIMATE',
+      thermostat_calibrated_estimate: 'THERMOSTAT-CALIBRATED ESTIMATE'
+    };
+    const sourceText = sourceLabels[raw('temperature_source')] || 'NO TEMPERATURE SOURCE';
+    const budget = number('budget_scenario');
+    const bz = number('brewzilla_power_observed');
+    const virtual = number('power_virtual');
+    // Solid backgrounds + explicit foreground colors: readable in any HA theme.
+    const panel = 'background:#192B3E;border:1px solid #39536D;border-radius:12px;';
+    const muted = '#D2DEEB';
+    const bar = (value, color) => {
+      if (value === null || budget === null || budget <= 0) return `<div style="color:${muted};font-size:12px;margin-top:7px;">No bar · missing readings</div>`;
+      const percent = Math.max(0, Math.min(100, value / budget * 100));
+      return `<div style="height:10px;border-radius:8px;background:#35485C;overflow:hidden;margin:9px 0 0;"><div style="height:100%;width:${percent}%;background:${color};border-radius:8px;"></div></div>`;
+    };
+    const box = (title, value, note) => `<div style="${panel}padding:12px;min-width:0;"><div style="font-size:12px;line-height:1.45;color:${muted};font-weight:700;">${title}</div><div style="font-size:23px;line-height:1.3;color:#FFFFFF;font-weight:850;margin-top:5px;overflow-wrap:anywhere;">${value}</div><div style="font-size:12px;color:${muted};margin-top:6px;line-height:1.45;">${note}</div></div>`;
+    const heading = (text) => `<div style="font-size:13px;font-weight:850;letter-spacing:.03em;color:#FFFFFF;margin:19px 0 9px;text-transform:uppercase;">${text}</div>`;
+    const row = (title, value) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #35495E;font-size:13px;line-height:1.4;"><span style="color:${muted};">${title}</span><b style="color:#FFFFFF;text-align:right;overflow-wrap:anywhere;">${value}</b></div>`;
+    const trace = raw('trace_path');
+    const basename = trace && /^[/a-zA-Z0-9_.-]+$/.test(trace) ? trace.split('/').pop() : '—';
+    return `<div style="width:100%;box-sizing:border-box;text-align:left;line-height:1.45;min-width:0;color:#F4F8FE;">
+      <div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+        <div><div style="font-size:21px;font-weight:850;color:#FFFFFF;">⚡ HLT · Power sharing</div><div style="font-size:15px;color:#FFFFFF;margin-top:5px;font-weight:800;">${statusLabels[status] || 'Waiting for telemetry'}</div></div>
+        <span style="font-size:11px;line-height:1.4;font-weight:800;padding:6px 10px;border:1px solid #F7C66A;border-radius:10px;background:#453519;color:#FFE6AA;">SIMULATION ONLY · NO CONTROL</span>
+      </div>
+      <div style="font-size:13px;color:${muted};margin-top:12px;line-height:1.5;">${reasons[reason] || 'No current decision'} · ${owner}</div>
+      ${heading('Who receives energy?')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+        ${box('PHYSICAL · observed recipient',realRecipient,'Requires BOTH wattmeters; unknown ≠ zero.')}
+        ${box('SIMULATION · HLT recipient',virtualRecipient,'Virtual permission is NOT real switching.')}
+      </div>
+      ${heading('Power now · measured vs virtual')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+        <div style="background:#122D43;border:2px solid #50BDFB;border-radius:12px;padding:12px;min-width:0;"><b style="font-size:13px;color:#BFE9FF;">BrewZilla · measured</b><div style="font-size:28px;color:#FFFFFF;font-weight:900;margin-top:5px;">${watts('brewzilla_power_observed')}</div>${bar(bz,'#50BDFB')}</div>
+        <div style="background:#352716;border:2px solid #F5BC5A;border-radius:12px;padding:12px;min-width:0;"><b style="font-size:13px;color:#FFE2A3;">HLT · virtual power</b><div style="font-size:28px;color:#FFFFFF;font-weight:900;margin-top:5px;">${watts('power_virtual')}</div>${bar(virtual,'#F5BC5A')}</div>
+      </div>
+      <div style="margin-top:10px;">${row('HLT physical wattmeter',watts('power_observed'))}${row('Actual total (both meters)',watts('total_power_observed'))}${row('Scenario total (BZ + virtual HLT)',watts('total_power_virtual_scenario'))}${row('Scenario budget · NOT circuit rating',watts('budget_scenario'))}${row('Observed headroom · NOT authorization',watts('headroom_observed'))}</div>
+      ${heading('HLT water temperature')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;">
+        ${box('CURRENT · '+sourceText,temperature('temperature'),'Temperature source must be visible with its value.')}
+        ${box('TARGET · scenario',temperature('target_temperature'),`Water: ${number('volume') === null ? '—' : number('volume').toFixed(1)+' L'}`)}
+      </div>
+      <div style="margin-top:10px;">${row('Measured probe',temperature('temperature_measured'))}${row('Model / calibrated estimate',temperature('temperature_estimated'))}</div>
+      ${heading('HLT session timers')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;">
+        ${box('TOTAL · wall-clock',seconds('total_session_seconds'),'Since first active HLT request.')}
+        ${box('EFFECTIVE · virtual heat',seconds('virtual_heating_seconds'),'Sample-derived simulated ON time.')}
+        ${box('EFFECTIVE · observed estimate',seconds('observed_heating_estimate_seconds'),'Only when power + switch agree at both sample endpoints.')}
+      </div>
+      <div style="margin-top:10px;">${row('Waiting for BZ',seconds('waiting_seconds'))}${row('Yielding to BZ',seconds('yielding_seconds'))}${row('Unobserved gaps',seconds('unknown_sample_seconds'))}${row('Virtual yields / BZ reclaims',`${raw('yield_count') ?? '—'} / ${raw('reclaim_count') ?? '—'}`)}${row('Estimated BZ / physical HLT energy',`${energy('brewzilla_energy_estimate_wh')} / ${energy('energy_estimate_wh')}`)}</div>
+      <div style="margin-top:18px;padding:12px;border-radius:12px;background:#423219;border:1px solid #DDAE51;color:#FFE9B8;font-size:12px;line-height:1.55;">⚠ 30 s samples are not an electrical interlock. BZ always has priority and is never throttled. Meter outlet must be verified in the BZ test. Timers/Wh are estimates and reset on HA restart. No physical HLT controls here.</div>
+      <div style="font-size:12px;color:${muted};margin-top:12px;overflow-wrap:anywhere;">JSONL trace: ${basename} · full path in sensor.brewassistant_hlt_trace_path</div>
+    </div>`;
+  ]]]
+styles:
+  card:
+    - border-radius: 20px
+    - padding: 18px
+    - background: '#0C1725'
+    - color: '#F4F8FE'
+    - border: 1px solid '#39536D'
+  label:
+    - width: 100%
+    - justify-self: stretch
+    - text-align: left
+    - white-space: normal
+    - overflow: visible
+    - color: '#F4F8FE'
+    - font-size: 13px
