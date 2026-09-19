@@ -1,6 +1,6 @@
 # RAPT-bryggning: isolering från BrewTracker-läsningar (2026-09-19)
 
-**Status: backendens identifierade läsvägar och Brewfather Feed EN/SV patchade med avgränsade tester. Fullständig isolering, parallell fermentation och fysisk drift ännu INTE verifierade.** Detta är ett releasevillkor i PR #215 och ändrar inte ordningen `feature → dev → beta/prerelease → HACS → praktiskt test → main`.
+**Status: backendens identifierade läsvägar och Brewfather Feed EN/SV patchade med avgränsade tester. Fullständig isolering, parallell fermentation och fysisk drift ännu INTE verifierade.** Detta är ett releasevillkor i PR #215 och ändrar inte ordningen `feature → dev → beta → ny GitHub-prerelease → HACS-installation → praktiskt test → main`.
 
 ## Beslut
 
