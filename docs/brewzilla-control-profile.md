@@ -1,191 +1,174 @@
 # BrewZilla Advice Control Profile
 
 Status: active development / supervised hot-side testing  
-Last synced: 2026-08-21
+Last synced: 2026-09-06
 
 This document describes the current BrewAssistant BrewZilla control strategy used during supervised Brewfather Brew Tracker and Manual Brewday tests.
 
-The design target is **supervised apply**, not unattended autopilot. BrewAssistant may set targets, heat utilization and pump utilization when the current runtime and safety context allow it, but the brewer remains the operator.
+The design target is **supervised apply with bounded dedicated phase authority**, not unattended autopilot.
 
 ## Core principles
 
 ```text
 BA reads Brewfather/Brewday intent.
-BA sets BrewZilla target/utilization when allowed.
+BA resolves process and safety temperature roles.
+BA sets BrewZilla target/utilization when current ownership allows it.
 BrewZilla regulates locally against the target it has received.
-BA observes, refreshes stale telemetry, and corrects only when a trusted rule says it should.
+BA actively refreshes RCL coordinator data during owned hot-side phases.
+BA distinguishes report freshness from unchanged-value age.
 Manual Brew may assign target, heat and pump ownership independently to the operator.
+ABORT/hard safety always win.
 ```
 
-Important control philosophy:
-
-```text
-If BrewZilla already has a valid active target,
-BA must not kill heat merely because RCL telemetry is stale/degraded.
-
-RCL trouble should trigger refresh/reload diagnostics and warnings,
-not silent heat starvation.
-
-When Manual Brew gives an output channel to the operator,
-normal Advice/lease/reassert logic must not silently take that channel back.
-```
-
-Explicit ABORT, runtime completed, safety/freshness blocking, and manual emergency stop still win and may safe-down heat/pump.
+If BrewZilla already has a valid active target, ordinary telemetry degradation must not silently starve local regulation of heat. Genuine data loss is fail-passive: no new BA writes while preserving the last valid local context.
 
 ## Control layers
 
-The current BrewZilla path is layered:
+Conceptual order:
 
 1. Brewday Runtime resolver
 2. BrewZilla orchestration snapshot
-3. Brewday Advice control profile
-4. Heat-strike / mash-in / thermal-mix guards
-5. Freshness / RCL recovery / execution / target-trust guards
-6. Local BrewZilla regulation preservation
-7. Manual Brew operator ownership final gate
-8. Direct-control apply
-9. Equipment learning evidence layer
+3. temperature-role resolution
+4. Heatstrike / Mash-In dedicated controller
+5. RCL report freshness + active coordinator refresh
+6. target-trust/readback/local-regulation guards
+7. Manual Brew operator ownership
+8. generic Supervised Apply outside dedicated authority
+9. direct-control apply
+10. Equipment Learning evidence layer
+11. outer fail-passive / ABORT boundaries as installed by the package chain
 
-The Manual Brew ownership gate runs last in the normal decision chain, but it does not undo a snapshot that is already blocked by a higher safety/freshness/ABORT decision.
+Exact wrapper order in `custom_components/brewassistant/brewzilla/__init__.py` is functional architecture and must be checked before reordering code.
 
-## Base profile
+## Base advice profile
 
-The built-in profile is currently named:
+The legacy/base advice profile is currently named:
 
 ```text
 brewzilla_35l_small_batch_default
 ```
 
-Current base heat profile:
+Its ramp/mash recommendations remain useful outside the dedicated Clean Heatstrike controller, but they must not be confused with the current Heatstrike phase contract.
+
+Representative base heat profile:
 
 ```text
-Ramp / strike / step ramp:
+Ramp / step ramp:
   >20.0°C below target  -> 100 %
   10.0-20.0°C           -> 75 %
   5.0-10.0°C            -> 60 %
   3.0-5.0°C             -> 45 %
   1.0-3.0°C             -> 25 %
   0.3-1.0°C             -> 10 %
-  <=0.3°C / over target -> 0 % base profile
+  <=0.3°C / over target -> 0 % base recommendation
 
 Mash hold / recovery:
   >2.0°C below target   -> 75 %
   0.7-2.0°C             -> 50 %
   0.2-0.7°C             -> 25 %
-  <=0.2°C / over target -> 0 % base profile
+  <=0.2°C / over target -> 0 % base recommendation
 ```
 
-The 0% rows are profile recommendations, not a license for stale/RCL guards to turn off BrewZilla local regulation after BA has already given BZ a valid target.
+A 0 % recommendation is not permission for a stale-data guard to disable valid BrewZilla local regulation.
 
-Current real-mash pump profile:
+## Heatstrike and Mash-In handoff
+
+Heatstrike is controlled by the dedicated pre-mash physical controller after Brewfather Play grants phase authority.
+
+BrewAssistant writes the real strike target and uses:
 
 ```text
-Ramp:                         50 %
-Mash hold:                    50 %
-Overshoot mix:                45 %
-Thermal mix:                  70 %
-Mash circulation floor:       40 % after mash-in complete
+external MASH/process probe = readiness/process authority
+BrewZilla internal/WORT     = limiter/safety context
 ```
 
-Water-only tests may still use stronger circulation because there is no malt bed:
+### Gradient relief
 
 ```text
-Ramp:                         70 %
-Mash hold:                    50 %
-Overshoot mix:                50 %
-Thermal mix:                  80 %
+MASH/BLE still below strike
+AND mash/wort gradient >= 1.5 °C
+AND hottest-view overshoot > +0.5 °C
+AND hottest-view overshoot <= +2.0 °C
+
+=> heat authority cap 5 %
+=> heater master available
+=> pump 100 %
 ```
 
-The selected learning context controls pump profile selection:
+Above +2.0 °C hottest-view overshoot:
 
 ```text
-select.brewassistant_brewzilla_learning_context = Water only -> water-test pump profile
-select.brewassistant_brewzilla_learning_context = Real mash  -> real-mash pump profile
-Unknown                                                   -> real-mash conservative profile
+heat 0 % / heater OFF hard stop
 ```
 
-## Heat-strike and mash-in handoff
+This is a narrow gradient exception only.
 
-Heat-strike and mash-in are deliberately split from normal mash control.
-
-During pre-mash-in strike heating, BA may hold a strike-water target higher than the upcoming mash target. The goal is to account for grain addition drop.
-
-At the Brewfather Hold/mash-addition transition, BA should avoid holding boosted heat-strike targets too long when wort/internal is already near or above strike. The heat-strike transition guard may refresh RCL and brake the transition profile.
-
-When **Mash-In Started** is pressed:
+### Mash-In Started
 
 ```text
 BA releases the latched strike target.
-BA resolves the active Brewfather mash target directly from Brewday Runtime.
-BZ target should become the real mash target, for example 66.0°C.
-Pump remains OFF while malt is being mixed in.
-Heat is not forcibly killed; BZ keeps regulating locally.
+BA resolves the actual mash target from Brewday Runtime, e.g. 66.0 °C.
+Pump OFF / utilization 0 % while malt is being mixed in.
+The target is not held at strike merely because Brewfather is paused.
 ```
 
-Expected markers:
+Expected markers include:
 
 ```yaml
 mash_in_gate_state: mash_in_started
 mash_in_started_hold_active: true
-mash_in_complete_visible: true
 mash_in_started_set_target: 66.0
 mash_in_started_set_pump_utilization: 0.0
 ```
 
-When **Mash-In Complete** is pressed:
+### Automatic Mash-In Complete
+
+Automatic completion requires an edge after Mash-In Started:
 
 ```text
-BA starts mash circulation.
-BA keeps/safely downs target to the active mash target.
-BA requests fresh RCL readback around the mash-control handoff.
+post-start Brewfather PAUSED observed
+THEN later Brewfather RUNNING / Continue
 ```
 
-Expected markers:
+These do not count by themselves:
 
-```yaml
-apply_result: mash_circulation_started_safe_down_applied
-actions:
-  - mash_in_complete
-  - set_pump_utilization:50.0
-  - pump_on
-  - mash_in_complete_safe_down_set_target:66.0
-mash_in_gate_state: mash_in_complete
+```text
+BF already running when Started is pressed
+active Brewfather target changing
+normalized BA runtime remaining live/running
 ```
+
+After completion, normal mash circulation may resume (typically 50 % requested by the current mash profile).
+
+The manual Mash-In Complete path remains fallback if the external BF transition cannot be observed reliably.
 
 ## Mash circulation floor
 
-After mash-in is complete, BA should keep circulation alive during ramp and mash-hold stages unless a higher safety/gate/abort guard is active.
+After Mash-In Complete, BA should keep circulation alive during ramp/mash-hold stages unless a higher safety/gate/ABORT guard is active.
+
+Conceptually:
 
 ```text
-If mash_in_gate_state == mash_in_complete
+if mash_in_gate_state == mash_in_complete
 and stage_kind is ramp or mash_hold:
   pump_on = true
-  pump_utilization >= 40 %
+  pump_utilization >= conservative floor
 ```
 
-Normal ramp/hold profile still requests 50%. The 40% floor only prevents another modifier from dropping circulation too low.
+Normal profile may request more than the floor.
 
 ## Thermal mix modifier
 
-Thermal mix is the stratification guard. It is active when BA has separate mash and wort/internal temperatures and the values indicate uneven temperature distribution.
+Thermal mix handles stratification while preserving the distinction between mash/process and wort/internal temperatures.
 
-Trigger intent:
-
-```text
-wort/internal temperature is above target while mash still lags, or
-wort/internal is near target while mash is still significantly below target.
-```
-
-Current real-mash behavior is mash-priority with wort/internal as limiter:
+Real-mash intent:
 
 ```text
-Mash/BLE temperature is the primary ramp/hold control signal.
-Wort/internal remains a safety limiter.
+Mash/BLE = primary ramp/hold signal
+Wort/internal = limiter/safety context
 ```
 
-Thermal mix no longer treats large mash lag as a reason to collapse real-mash ramp heat to 5% by default.
-
-Current real-mash cap behavior:
+Representative real-mash behavior:
 
 ```text
 approach thermal mix:       heat cap 15 %, pump 70 %
@@ -201,233 +184,175 @@ wort/internal < target + 5°C:
   heat cap floor 30 %, pump 70 %
 ```
 
-This keeps warm wort/internal readings as a limiter, but lets the actual mash reach target instead of stalling several degrees low.
+These later-mash modifiers are separate from the pre-mash 5 % / 100 % gradient-relief rule.
 
-Expected diagnostics:
+## RCL report freshness and value stagnation
 
-```yaml
-advice_thermal_mix_active: true
-advice_heat_profile_phase: thermal_mix_heat_cap
-advice_thermal_mix_reason: wort_above_target_mash_lagging
-advice_mash_priority_thermal_mix_active: true
-advice_mash_priority_thermal_mix_floor: 45.0
-```
-
-## RCL freshness and stale value recovery
-
-RAPT Cloud Link can sometimes report or refresh an entity without changing the actual temperature value. BA therefore treats value freshness as important, not only report traffic.
-
-During active heat-strike/ramp/mash control, stale RCL values should trigger:
+RAPT Cloud Link may repeatedly report the same physical value. Therefore BrewAssistant now separates:
 
 ```text
-homeassistant.update_entity on relevant RCL/BrewZilla entities
-possible guarded config-entry reload
-clear diagnostic/audit fields
+report freshness
+  -> state.last_reported
+  -> fallback state.last_updated
+  -> trust clock for orchestration/fail-passive
+
+value age / stagnation
+  -> state.last_updated + explicit temperature-change tracking
+  -> diagnostic signal only
 ```
 
-But stale RCL must not automatically mean:
+A stable target or temperature is not stale merely because its value does not change.
+
+### Active hot-side coordinator refresh
+
+While Brewday owns an active hot-side phase:
 
 ```text
-set_heat_utilization:0
-heater_off
+every 30 seconds
+  -> homeassistant.update_entity
+  -> one BrewZilla CoordinatorEntity only
+  -> DataUpdateCoordinator.async_request_refresh()
 ```
 
-when BZ already has a valid active target.
-
-Expected diagnostics may include:
-
-```yaml
-rcl_value_stale_guard_active: true
-rcl_value_stale_guard_refresh_requested: true
-rcl_value_stale_guard_reload_requested: true
-local_regulation_heat_guard_active: true
-```
-
-## Local-control lease
-
-The local-control lease is a short passive observation window after BA changes the BrewZilla target. It exists because BrewZilla regulates locally once target and utilization have been applied.
-
-Current behavior:
-
-```text
-passive observe window: 45 seconds
-lease is created only after set_target
-```
-
-The lease is broken early when Advice sees risk or meaningful profile changes.
-
-Break reasons include:
-
-```text
-thermal_mix_active
-advice_phase:thermal_mix_heat_cap
-advice_phase:fast_rise_near_target
-advice_phase:moderate_rise_final_approach
-near_target_taper_zone
-heat_profile_changed
-pump_profile_changed
-utilization_action_needed
-observe_window_elapsed
-```
-
-The lease is subordinate to Manual Brew operator ownership. Once Manual Brew assigns target, heat or pump to the operator, expiry or breakage of the 45-second lease must not be used to reassert BA values onto that operator-owned channel. Manual ownership remains in force until its corresponding ownership switch is changed, the runtime stops being Manual Brewday, or a higher-priority safety/ABORT decision takes over.
-
-## Manual Brew operator ownership
-
-Manual Brew Control v2 separates target, heat and pump ownership instead of using one global control mode.
-
-```text
-switch.brewassistant_brewzilla_manual_target_override = on
-  -> operator target is effective Manual Brew target
-  -> number.brewzilla_target_temperature is preserved from normal BA reassert
-
-switch.brewassistant_brewzilla_allow_heater_control = on
-  -> BA AUTO owns heater + heat utilization
-switch.brewassistant_brewzilla_allow_heater_control = off
-  -> operator owns heater + heat utilization
-
-switch.brewassistant_brewzilla_allow_pump_control = on
-  -> BA AUTO owns pump + pump utilization
-switch.brewassistant_brewzilla_allow_pump_control = off
-  -> operator owns pump + pump utilization
-```
-
-Mixed ownership is valid. The final guard suppresses normal target/utilization/switch reassert actions only for channels currently owned by the operator.
-
-Relevant implementation:
-
-```text
-custom_components/brewassistant/brewday/manual_brewday_adapter.py
-custom_components/brewassistant/brewzilla/brewzilla_manual_brew_control.py
-```
+One trigger entity avoids several identical refresh requests to a shared coordinator.
 
 Expected diagnostics include:
 
 ```yaml
-manual_brew_control_active: true
-manual_target_override_active: true|false
-manual_heater_auto_allowed: true|false
-manual_pump_auto_allowed: true|false
-manual_heat_override_active: true|false
-manual_pump_override_active: true|false
-manual_control_safety_override_active: true|false
+rcl_active_hot_side_polling_active: true
+rcl_active_hot_side_poll_interval_seconds: 30
+rcl_active_hot_side_poll_requested: true|false
+rcl_active_hot_side_poll_last_requested_at: ...
+rcl_active_hot_side_poll_entity_ids:
+  - sensor.brewzilla_temperature
 ```
 
-Physical validation is still required to confirm that operator-owned target/heat/pump values remain stable across repeated real BrewZilla/RAPT Cloud Link coordinator cycles.
+### Value-stagnation diagnostics
+
+A suspiciously unchanged Heatstrike temperature may still produce:
+
+```yaml
+rcl_value_stale_guard_active: true
+rcl_value_stale_guard_refresh_delegated: true
+```
+
+This does **not** redefine canonical temperature freshness and does not independently fan out refresh requests.
+
+### Hard recovery
+
+`reload_config_entry` remains reserved for hard connection loss/extreme **report** staleness and is throttled to a minimum 15-minute interval.
+
+## Fail-passive behavior
+
+Genuine report loss during active control:
+
+```text
+no new BA writes
+preserve valid local target/output state
+request/indicate recovery
+```
+
+Fail-passive must not be triggered simply because a temperature stays stable for 90 seconds.
+
+ABORT, hard safety and explicit process safe-down remain authoritative.
+
+## Confirmed readback grace
+
+RCL may replay an older target/utilization immediately after a successful write. BrewAssistant keeps bounded confirmed-write grace for the same runtime intent.
+
+Limits:
+
+```text
+bounded time
+same runtime/source/stage/step/target intent
+no silent heater/pump re-energization
+persistent mismatch requires a new decision
+ABORT invalidates grace
+```
+
+## Manual Brew operator ownership
+
+```text
+manual target override ON
+  -> operator owns target
+
+allow heater control ON
+  -> BA owns heater + heat utilization
+allow heater control OFF
+  -> operator owns heater + heat utilization
+
+allow pump control ON
+  -> BA owns pump + pump utilization
+allow pump control OFF
+  -> operator owns pump + pump utilization
+```
+
+Mixed ownership is valid. Normal BA reassert logic must not silently reclaim an operator-owned channel.
 
 ## Brewfather / Manual Brew mutual exclusion
 
-Brewfather Brew Tracker remains authoritative while its normalized status is exactly `active`.
+Brewfather ownership begins only after positive Brew Tracker start evidence, not merely because a batch phase says Brewing.
 
-```text
-BF active -> positive Manual Brew actions are blocked
-BF becomes active mid-Manual -> Manual Brew is paused
-BF later becomes inactive -> Manual Brew remains paused until explicitly restarted
-```
-
-BrewAssistant does not silently terminate the external Brewfather session. This runtime ownership rule prevents Brewfather intent and Manual Brew intent from competing for the same Brewday at the same time.
+A started Brewfather tracker retains ownership through legitimate pause. Manual Brew must not compete for the same hot-side channels while that ownership is active.
 
 ## Positive-control gate
 
-Brewday Advice must not resurrect stale targets when Brewday Runtime is idle, inactive, completed or otherwise outside an active control state.
+Brewday Advice must not resurrect stale targets when normalized Brewday Runtime is idle, inactive, completed or otherwise outside active control.
 
-If positive control is blocked, BA may only issue safe-down actions when there is no valid active BrewZilla target that should be preserved by local regulation.
-
-Expected diagnostics:
-
-```yaml
-advice_positive_control_blocked: true
-advice_positive_control_blocked_reason: brewday_runtime_not_active
-```
+Risk-reducing actions may still occur through the appropriate safety/ABORT path.
 
 ## Equipment learning layer
 
-The BrewZilla equipment learning layer is separate from the live advice/control profile.
+Equipment Learning is separate from live control:
 
 ```text
-Analysis / Advice:
-  What is happening right now?
+Analysis / Advice
+  -> what is happening now?
 
-Equipment Learning:
-  What has this specific BrewZilla repeatedly shown over time?
+Equipment Learning
+  -> what has this BrewZilla repeatedly shown?
 
-Profile Suggestion:
-  What profile adjustment should be proposed for operator review later?
+Profile Suggestion
+  -> what adjustment should be proposed for operator review?
 ```
 
-The learning model records evidence and creates candidate suggestions. It does not auto-apply learned changes.
+Learning records evidence and may create candidate suggestions. It does not auto-apply learned changes.
 
-Current v1 suggestion target:
+## Recommended next physical test
+
+Use a realistic Brewfather sequence rather than an artificially rapid target schedule.
+
+Checkpoint:
 
 ```text
-Real mash + thermal mix active
-mash >=2°C below target
-profile heat cap <=10 %
-wort/internal only moderately above target
-
-Candidate profile suggestion:
-  thermal_mix.ramp_mash_priority_floor -> 45 %
-  thermal_mix.mash_hold_mash_priority_floor -> 30 %
+Heatstrike
+-> verify 30 s RCL report refresh
+-> READY
+-> Mash-In Started
+-> target becomes actual mash target (e.g. 66 °C)
+-> pump OFF / 0 %
+-> BF PAUSED observed after Started
+-> BF Continue / RUNNING
+-> Mash-In Complete
+-> normal mash circulation
+-> continue through 66 °C hold / 66 -> 72 °C ramp when practical
 ```
 
-See [`brewzilla-equipment-learning.md`](brewzilla-equipment-learning.md) for model details.
-
-## Recommended Brewfather test recipe settings
-
-For BrewAssistant/BrewZilla control testing, short 2-minute ramps are useful stress tests but can make the integration look unstable because target transitions happen before temperatures and telemetry have settled.
-
-Recommended test settings:
-
-```text
-Ramp between targets: 5 min
-Hold/stable time: unchanged
-```
-
-For a realistic mash-in test:
-
-```text
-Strike / mash-in target: 69-72°C depending on recipe and grain temperature
-Mash target after grain: real first mash rest target, for example 66°C
-```
-
-BA should show **Mash-In Started** at strike readiness, then use the active Brewfather mash target as effective control target after the button is pressed.
-
-## What to check in event logs
-
-For the next supervised test, check for:
+## Event/diagnostic evidence to capture
 
 ```yaml
-mash_in_gate_state: ready_for_mash_in
-mash_in_started_visible: true
-event_type: mash_in_started
-mash_in_started_hold_active: true
+mash_in_gate_state: ready_for_mash_in|mash_in_started|mash_in_complete
 mash_in_started_set_target: 66.0
-apply_result: mash_in_started_hold_applied
-event_type: mash_in_confirmed
-apply_result: mash_circulation_started_safe_down_applied
-advice_mash_circulation_floor_active: true
-advice_thermal_mix_active: true
-advice_mash_priority_thermal_mix_active: true
-rcl_value_stale_guard_refresh_requested: true   # only if RCL value actually stalls
-local_regulation_heat_guard_active: true        # only when a stale/guard layer tries to kill heat despite valid target
-brewzilla_equipment_learning_observations: ...
-brewzilla_equipment_learning_suggestion: ...    # optional candidate, not auto-applied
+mash_in_started_set_pump_utilization: 0.0
+seen_paused_after_mash_in_started: true
+rcl_active_hot_side_polling_active: true
+rcl_active_hot_side_poll_interval_seconds: 30
+rcl_active_hot_side_poll_last_requested_at: ...
+rcl_active_hot_side_recovery_active: true|false
+rcl_value_stale_guard_active: true|false
+fail_passive_mode: ...
+apply_result: ...
+actions: ...
 ```
 
-For Manual Brew Control v2 physical validation, additionally verify:
-
-```text
-- manual target remains unchanged beyond the old ~45 s lease window
-- manual heat utilization remains unchanged while heater AUTO is disabled
-- manual pump utilization remains unchanged while pump AUTO is disabled
-- switching one channel back to AUTO lets BA retake only that channel
-- BF active blocks/pauses Manual Brew without causing automatic resume later
-```
-
-Also verify that long stretches of:
-
-```text
-BrewZilla local-control lease active; BA observes while BrewZilla regulates locally.
-```
-
-are limited to short periods after target changes and do not hide needed heat/pump corrections.
+Use Flight Recorder state to decide whether the backend transitioned even if the dashboard presentation appears delayed or ambiguous.

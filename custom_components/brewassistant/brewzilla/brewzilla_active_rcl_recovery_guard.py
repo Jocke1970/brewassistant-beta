@@ -1,12 +1,15 @@
-"""Active hot-side RCL recovery watchdog for BrewZilla.
+"""Active hot-side RCL polling and recovery watchdog for BrewZilla.
 
-This guard is deliberately recovery/diagnostics only. It may request
-``homeassistant.update_entity`` for soft telemetry staleness and a much more
-conservative throttled ``homeassistant.reload_config_entry`` only when RAPT Cloud
-Link/BrewZilla looks hard-disconnected or extremely stale during an active
-hot-side session.
+RAPT Cloud Link normally polls on its own coordinator interval.  During an
+active BrewAssistant hot-side session that cadence is too slow for bounded
+Heatstrike/Mash control, so this guard asks one BrewZilla CoordinatorEntity for
+a real ``homeassistant.update_entity`` refresh every 30 seconds.  Home
+Assistant forwards that request to the entity's DataUpdateCoordinator.
 
-It must not change target, heat, pump, heater or pump state.
+The guard is deliberately telemetry/recovery only.  It never changes target,
+heat, pump, heater or pump state.  A disruptive ``reload_config_entry`` remains
+reserved for hard connection loss/extreme report staleness and is heavily
+throttled.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ _INSTALLED = False
 _ORIGINAL_BUILD: Callable[[HomeAssistant], dict[str, Any]] | None = None
 
 _DATA_KEY = "brewzilla_active_hot_side_rcl_recovery"
-_UPDATE_MIN_INTERVAL_SECONDS = 60
+_ACTIVE_POLL_INTERVAL_SECONDS = 30
 _RELOAD_MIN_INTERVAL_SECONDS = 900
 _HARD_RELOAD_STALE_MULTIPLIER = 3
 _LIVE_TELEMETRY_FRESH_SECONDS = base.RAPT_OBSERVATION_WARN_AGE_SECONDS
@@ -44,6 +47,11 @@ _HOT_SIDE_WORDS = (
     "hopstand",
 )
 _BAD_STATES = {"unknown", "unavailable", "none", ""}
+_REFRESH_TRIGGER_PRIORITY = (
+    "sensor.brewzilla_temperature",
+    "number.brewzilla_target_temperature",
+    "switch.brewzilla",
+)
 
 
 def _now() -> datetime:
@@ -55,6 +63,7 @@ def _store(hass: HomeAssistant) -> dict[str, Any]:
         _DATA_KEY,
         {
             "last_update_at": None,
+            "last_update_reason": None,
             "last_reload_at": None,
             "last_error": None,
             "last_reason": None,
@@ -95,6 +104,20 @@ def _hot_side_context(snapshot: dict[str, Any]) -> bool:
 
 def _known_entity_ids(hass: HomeAssistant) -> list[str]:
     return [entity_id for entity_id in base.RAPT_BREWZILLA_ENTITY_IDS if hass.states.get(entity_id) is not None]
+
+
+def _refresh_trigger_entity_ids(hass: HomeAssistant) -> list[str]:
+    """Return one CoordinatorEntity that represents the BrewZilla coordinator.
+
+    Triggering every BrewZilla entity can fan out into several identical
+    coordinator refresh requests.  One known CoordinatorEntity is sufficient to
+    ask the shared BrewZilla coordinator for fresh cloud data.
+    """
+    for entity_id in _REFRESH_TRIGGER_PRIORITY:
+        if hass.states.get(entity_id) is not None:
+            return [entity_id]
+    known = _known_entity_ids(hass)
+    return known[:1]
 
 
 def _connection_lost(snapshot: dict[str, Any]) -> bool:
@@ -156,11 +179,11 @@ def _aged_entries(candidates: dict[str, Any], *, older_than_seconds: int) -> dic
 def _recovery_need(snapshot: dict[str, Any]) -> tuple[str | None, bool, dict[str, Any]]:
     """Return (reason, allow_reload, diagnostics).
 
-    Soft stale telemetry should only request ``update_entity``.  Reloading the
-    RCL config entry is disruptive because entities briefly disconnect, so it is
-    reserved for hard connection loss or very stale telemetry.  Fresh live
-    temperature/power telemetry wins over a stale/lost connection sensor because
-    the unit is still reporting useful data.
+    Soft stale report traffic should never reload RCL.  Reloading the config
+    entry is disruptive because entities briefly disconnect, so it is reserved
+    for hard connection loss or very stale reporting.  Fresh live
+    temperature/power reports win over an untrusted connection sensor because
+    the unit is still delivering useful data.
     """
 
     freshness = _freshness_diagnostics(snapshot)
@@ -197,24 +220,16 @@ def _recovery_need(snapshot: dict[str, Any]) -> tuple[str | None, bool, dict[str
         oldest_name, oldest_age = max(soft_stale.items(), key=lambda item: item[1])
         return f"brewzilla_{oldest_name}_soft_stale_{int(oldest_age)}s", False, freshness
 
-    # Intentionally do not use rapt_critical_refresh_recommended as a recovery
-    # trigger.  That flag can be true for normal hot-side control reasons such as
-    # an action being needed, target sync, or a step ending soon.  Treating it as
-    # an RCL failure caused needless reloads while telemetry was still flowing.
     return None, False, freshness
 
 
-def _request_recovery(hass: HomeAssistant, *, reason: str, allow_reload: bool) -> dict[str, Any]:
+def _request_coordinator_refresh(hass: HomeAssistant, *, reason: str) -> dict[str, Any]:
+    """Ask one BrewZilla CoordinatorEntity for a real coordinator refresh."""
     store = _store(hass)
-    entity_ids = _known_entity_ids(hass)
+    entity_ids = _refresh_trigger_entity_ids(hass)
+    update_recent = _is_recent(store.get("last_update_at"), seconds=_ACTIVE_POLL_INTERVAL_SECONDS)
     update_requested = False
-    reload_requested = False
     error = None
-
-    update_recent = _is_recent(store.get("last_update_at"), seconds=_UPDATE_MIN_INTERVAL_SECONDS)
-    reload_recent = _is_recent(store.get("last_reload_at"), seconds=_RELOAD_MIN_INTERVAL_SECONDS)
-    reload_available = hass.services.has_service("homeassistant", "reload_config_entry")
-    reload_suppressed_reason = None
 
     if entity_ids and not update_recent:
         try:
@@ -228,8 +243,55 @@ def _request_recovery(hass: HomeAssistant, *, reason: str, allow_reload: bool) -
             )
             update_requested = True
             store["last_update_at"] = _now()
+            store["last_update_reason"] = reason
         except Exception as exc:  # pragma: no cover - defensive HA runtime guard
             error = f"update_entity:{type(exc).__name__}: {exc}"
+
+    store["last_error"] = error
+    store["last_entity_ids"] = entity_ids
+    last_update_at = store.get("last_update_at")
+
+    return {
+        "requested": update_requested,
+        "recent": update_recent,
+        "entity_ids": entity_ids,
+        "error": error,
+        "last_update_at": last_update_at,
+        "last_update_reason": store.get("last_update_reason"),
+    }
+
+
+def _active_poll_diagnostics(refresh: dict[str, Any]) -> dict[str, Any]:
+    last_update_at = refresh.get("last_update_at")
+    return {
+        "rcl_active_hot_side_polling_active": True,
+        "rcl_active_hot_side_poll_interval_seconds": _ACTIVE_POLL_INTERVAL_SECONDS,
+        "rcl_active_hot_side_poll_requested": bool(refresh.get("requested")),
+        "rcl_active_hot_side_poll_recently_requested": bool(refresh.get("recent")),
+        "rcl_active_hot_side_poll_entity_ids": refresh.get("entity_ids") or [],
+        "rcl_active_hot_side_poll_last_requested_at": last_update_at.isoformat()
+        if isinstance(last_update_at, datetime)
+        else None,
+        "rcl_active_hot_side_poll_last_reason": refresh.get("last_update_reason"),
+        "rcl_active_hot_side_poll_error": refresh.get("error"),
+    }
+
+
+def _request_recovery(
+    hass: HomeAssistant,
+    *,
+    reason: str,
+    allow_reload: bool,
+    refresh: dict[str, Any],
+) -> dict[str, Any]:
+    store = _store(hass)
+    entity_ids = refresh.get("entity_ids") or _refresh_trigger_entity_ids(hass)
+    reload_requested = False
+    error = refresh.get("error")
+
+    reload_recent = _is_recent(store.get("last_reload_at"), seconds=_RELOAD_MIN_INTERVAL_SECONDS)
+    reload_available = hass.services.has_service("homeassistant", "reload_config_entry")
+    reload_suppressed_reason = None
 
     if not allow_reload:
         reload_suppressed_reason = "live_telemetry_fresh_or_soft_stale_update_only"
@@ -261,14 +323,14 @@ def _request_recovery(hass: HomeAssistant, *, reason: str, allow_reload: bool) -
     return {
         "rcl_active_hot_side_recovery_active": True,
         "rcl_active_hot_side_recovery_reason": reason,
-        "rcl_active_hot_side_recovery_update_requested": update_requested,
+        "rcl_active_hot_side_recovery_update_requested": bool(refresh.get("requested")),
         "rcl_active_hot_side_recovery_reload_requested": reload_requested,
         "rcl_active_hot_side_recovery_reload_allowed": allow_reload,
         "rcl_active_hot_side_recovery_reload_suppressed_reason": reload_suppressed_reason,
-        "rcl_active_hot_side_recovery_update_recently_requested": update_recent,
+        "rcl_active_hot_side_recovery_update_recently_requested": bool(refresh.get("recent")),
         "rcl_active_hot_side_recovery_reload_recently_requested": reload_recent,
         "rcl_active_hot_side_recovery_reload_available": reload_available,
-        "rcl_active_hot_side_recovery_update_interval_seconds": _UPDATE_MIN_INTERVAL_SECONDS,
+        "rcl_active_hot_side_recovery_update_interval_seconds": _ACTIVE_POLL_INTERVAL_SECONDS,
         "rcl_active_hot_side_recovery_reload_interval_seconds": _RELOAD_MIN_INTERVAL_SECONDS,
         "rcl_active_hot_side_recovery_hard_stale_seconds": base.RAPT_OBSERVATION_WARN_AGE_SECONDS * _HARD_RELOAD_STALE_MULTIPLIER,
         "rcl_active_hot_side_recovery_last_update_at": last_update_at.isoformat() if isinstance(last_update_at, datetime) else None,
@@ -282,36 +344,49 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
     if not _hot_side_context(snapshot):
         return {
             **snapshot,
+            "rcl_active_hot_side_polling_active": False,
             "rcl_active_hot_side_recovery_active": False,
             "rcl_active_hot_side_recovery_reason": None,
         }
+
+    # Normal active hot-side behavior: one real coordinator refresh request on
+    # the BA cadence. This is not a failure/recovery event.
+    refresh = _request_coordinator_refresh(hass, reason="active_hot_side_poll")
+    polling = _active_poll_diagnostics(refresh)
 
     reason, allow_reload, freshness = _recovery_need(snapshot)
     if reason is None:
         return {
             **snapshot,
             **freshness,
+            **polling,
             "rcl_active_hot_side_recovery_active": False,
             "rcl_active_hot_side_recovery_reason": None,
         }
 
-    recovery = _request_recovery(hass, reason=reason, allow_reload=allow_reload)
+    recovery = _request_recovery(
+        hass,
+        reason=reason,
+        allow_reload=allow_reload,
+        refresh=refresh,
+    )
     local_target = snapshot.get("applied_target") or snapshot.get("requested_target")
     control_reason = str(snapshot.get("control_reason") or "").strip()
     if allow_reload:
         reload_note = "reload_config_entry allowed for hard RCL failure"
     elif freshness.get("rcl_active_hot_side_recovery_live_telemetry_fresh"):
-        reload_note = "reload_config_entry suppressed because live temperature/power telemetry is fresh"
+        reload_note = "reload_config_entry suppressed because live temperature/power reporting is fresh"
     else:
-        reload_note = "reload_config_entry suppressed because telemetry is only soft-stale"
+        reload_note = "reload_config_entry suppressed because report telemetry is only soft-stale"
     recovery_reason = (
-        f"Active hot-side RCL recovery: {reason}; update_entity requested when throttling allows; "
+        f"Active hot-side RCL recovery: {reason}; coordinator refresh requested when 30s throttling allows; "
         f"{reload_note}; BrewZilla local target is preserved."
     )
     return {
         **snapshot,
         **recovery,
         **freshness,
+        **polling,
         "rapt_critical_refresh_recommended": True,
         "rcl_active_hot_side_recovery_local_regulation_preserved": local_target is not None,
         "rcl_active_hot_side_recovery_preserved_target": local_target,
@@ -320,7 +395,7 @@ def _augment_snapshot(hass: HomeAssistant, snapshot: dict[str, Any]) -> dict[str
 
 
 def install_active_rcl_recovery_guard() -> None:
-    """Install active hot-side RCL recovery diagnostics around orchestration snapshots."""
+    """Install active hot-side RCL polling/recovery around orchestration snapshots."""
     global _INSTALLED, _ORIGINAL_BUILD
     if _INSTALLED:
         return

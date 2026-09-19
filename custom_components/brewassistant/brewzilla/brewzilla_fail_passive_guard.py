@@ -1,14 +1,15 @@
 """Fail-passive BrewZilla fallback for active hot-side control.
 
 BrewAssistant is allowed to be the smarter supervisory regulator while RAPT/
-BrewZilla telemetry is current.  A telemetry outage is not, by itself, a reason
+BrewZilla telemetry is current. A telemetry outage is not, by itself, a reason
 to turn BrewZilla off: the appliance already has a local target and local
 regulator.
 
 During an active hot-side phase this guard therefore turns ordinary data loss
-into a *no new writes* state.  The last target/utilization/switch state is left
-untouched so BrewZilla can continue locally.  ABORT and explicit hard-safety
-paths remain outside this contract and retain authority.
+into a *no new writes* state. The last target/utilization/switch state is left
+untouched so BrewZilla can continue locally. ABORT, explicit hard-safety paths
+and an explicit RAPT Cooling/ChillOut ownership handoff remain outside this
+contract and retain safe-down authority.
 """
 
 from __future__ import annotations
@@ -86,6 +87,12 @@ def _fail_passive_reason(hass: HomeAssistant, snapshot: dict[str, Any]) -> tuple
     if snapshot.get("abort_lockout_active"):
         return None, health
 
+    # ChillOut/Cooling is a verified process boundary rather than a telemetry
+    # failure. The RAPT bridge may explicitly remove hot-side heat authority
+    # there even when the outgoing mash/process probe is stale.
+    if snapshot.get("rapt_cooling_handoff_active"):
+        return None, health
+
     # Explicit hard-safety/ABORT paths must still be allowed to safe-down.
     safety = str(snapshot.get("safety_state") or "").strip().lower()
     if safety in {"abort", "aborted", "emergency", "hard_stop", "hard-stop"}:
@@ -97,7 +104,7 @@ def _fail_passive_reason(hass: HomeAssistant, snapshot: dict[str, Any]) -> tuple
     if health.get("fail_passive_temperature_reason"):
         return str(health["fail_passive_temperature_reason"]), health
 
-    # Older layers may expose these diagnostics.  They are treated as a reason
+    # Older layers may expose these diagnostics. They are treated as a reason
     # to stop *BA writes*, never as an instruction to zero BrewZilla outputs.
     if snapshot.get("rcl_degraded") or snapshot.get("heat_strike_rcl_degraded"):
         return "rcl_control_surface_degraded", health

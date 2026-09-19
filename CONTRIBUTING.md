@@ -1,109 +1,87 @@
 # BrewAssistant development workflow
 
-BrewAssistant intentionally uses only three long-lived branches.
+BrewAssistant uses **only three long-lived branches**:
 
 ```text
-dev  ->  beta  ->  main  ->  GitHub Release
+dev  ->  beta  ->  main
+         |        |
+         v        v
+  GitHub prerelease   Stable GitHub release
 ```
 
 ## Branch roles
 
-### `dev`
+### `dev` — development
 
-Active development branch.
-
-- All normal BrewAssistant code, dashboard and documentation work starts here.
-- Direct project work is committed to `dev`.
-- Dependabot targets `dev`.
+- All normal code, dashboard, tests, versions and documentation changes start here.
+- Commit project work directly to `dev`; Dependabot targets `dev`.
 - CI, HACS validation and Hassfest run on every push.
-- Do not create persistent feature/fix branches in this repository.
+- Do not create extra project branches. External contributors may use forks targeting `dev`.
 
-External contributors may use a fork and open a pull request against `dev`.
+### `beta` — installable field-test candidate and prerelease source
 
-### `beta`
+- Receives changes **only** from `dev` using a PR and **Create a merge commit**.
+- Contains the coherent beta candidate to install via HACS for supervised tests.
+- No unrelated development directly on `beta`; fix failures on `dev`, then promote again.
+- CI, HACS validation and Hassfest must pass on the actual `beta` merge commit before tagging.
+- GitHub tags `vX.Y.Z-beta.N` and their **Pre-release** publications point to the tested `beta` commit, never `dev` or an older branch head.
 
-Integration and field-test branch.
+### `main` — validated/stable distribution
 
-- Receives promotion only from `dev`.
-- Used for a coherent beta candidate after the current `dev` state is ready for practical Home Assistant/BrewZilla testing.
-- No unrelated development is performed directly on `beta`.
-- CI, HACS validation and Hassfest must be green before promotion continues.
+- Receives validated changes only from `beta` using a PR and **Create a merge commit**.
+- Do not promote a beta merely because CI is green: complete the required supervised field-test protocol first.
+- Stable tags such as `v0.2.0` originate from the verified `main` merge commit and are published as normal GitHub releases.
+- Never do unrelated development directly on `main`.
 
-### `main`
-
-Installable/runnable branch.
-
-- Receives promotion only from `beta`.
-- Represents the current version considered safe enough to install and run.
-- No normal development is performed directly on `main`.
-- A promotion to `main` should correspond to a versioned GitHub Release.
-
-## Promotion flow
+## Promotion and release flow
 
 ```text
-work and regression checks
-        |
-        v
+develop + regression tests
+       |
       dev
-        |
-        | PR: dev -> beta
-        v
+       | PR dev -> beta; Create a merge commit
+       v
       beta
-        |
-        | practical validation + green watchdogs
-        | PR: beta -> main
-        v
+       | CI + HACS + Hassfest on beta merge SHA
+       | tag vX.Y.Z-beta.N AT THIS EXACT beta SHA
+       | GitHub Release: target beta, Pre-release = yes
+       v
+HACS beta install -> supervised water-only / field validation
+       | failure: fix dev; promote and issue a NEW beta version
+       | validation PASS + stable-release decision
+       v
+PR beta -> main; Create a merge commit
+       |
       main
-        |
-        | tag + GitHub Release
-        v
-  released version
+       | verified stable-version manifest, tag at main SHA
+       v
+Normal GitHub Release (not a prerelease)
 ```
 
-The repository promotion guard rejects:
+**Beta release is required before the physical beta field test:** without a correctly tagged GitHub prerelease, HACS can install the wrong/default-branch code. A published prerelease is an experimental distribution, **not** proof of hardware safety or approval for malt/unattended operation.
 
-- PRs to `beta` from anything other than `dev`
-- PRs to `main` from anything other than `beta`
+### Promotion merge method and repository settings
 
-GitHub branch protection/rules should additionally require pull requests for `beta` and `main`, so direct pushes cannot bypass the promotion model.
+For both `dev -> beta` and `beta -> main`, use **Create a merge commit** to preserve ancestry. Do not squash or rebase permanent promotion sources. Keep **Automatically delete head branches** disabled; `dev` and `beta` are permanent. Branch protection/rules should require PRs for `beta` and `main`. The promotion guard requires PRs to `beta` from `dev`, and PRs to `main` from `beta`.
 
-## Branch cleanup
+## Release checklist — mandatory, every version
 
-Only `dev`, `beta` and `main` are long-lived repository branches.
+1. On `dev`, update integration `manifest.json`, complete release Markdown, relevant Swedish/English cards and test instructions **before** promotion. Historical test reports remain unchanged; add new dated evidence instead.
+2. Open/review a `dev -> beta` PR and its entire diff. Require green CI/HACS/Hassfest, then **Create a merge commit**. Do not delete `dev`.
+3. Note the resulting **beta merge commit SHA**. Recheck CI (Python 3.11, 3.12, 3.13), HACS and Hassfest **on that exact SHA**. Verify that manifest version, mash-interlock installation and release notes are present in `beta`.
+4. Create a **new** tag `vX.Y.Z-beta.N` from the exact beta merge SHA. In the GitHub release form set **Target = beta**, select the intended commit/tag, paste the **entire** Markdown file, mark **Set as a pre-release**, and do not mark it latest/stable.
+5. **After publication**, fetch the tag's actual commit SHA, tagged `manifest.json` and critical integration files. Require all to match the validated beta SHA and version. Verify that the release's tag and title agree; do not infer package identity from release prose alone.
+6. Back up HA integration/dashboard, install **that exact tag** via HACS with beta versions enabled, restart HA and independently install the manually pasted dashboard cards from the **same tag**. Verify expected entities/attributes, pump/heater OFF, freshness and ABORT before initiating a supervised water-only field test.
+7. If any check or test fails, stop, record findings, correct **on `dev`**, promote again and use a **new** beta.N+1 tag. Never rewrite/move a published tag or silently replace its archive. Do not promote to `main` until the relevant field evidence passes.
 
-Temporary Dependabot branches may exist while an update pull request is open and should disappear after merge/close. Old development branches should not be retained as archives; merged work is preserved by Git history, pull requests, tags and releases.
+### Stable release
 
-## Releases
+After appropriate successful field validation, prepare the intended stable version on `dev`, promote it via `beta -> main` with a merge commit and require the validations on the final `main` SHA. Create a distinct stable tag from that `main` SHA and publish a normal GitHub release. Do not move an existing beta tag to `main` or re-label an untested beta as stable.
 
-While BrewAssistant remains beta, use semantic prerelease versions:
+### Historical mistake: beta.10
 
-```text
-v0.2.0-beta.9
-v0.2.0-beta.10
-...
-```
+`v0.2.0-beta.10` was published from an old `beta` commit with a `beta.9` manifest and without the physical mash interlock, despite its release description. Keep the old tag for traceability; **do not install it for the mash test or retarget it**. The corrective candidate is `v0.2.0-beta.11`, which must first be promoted to `beta` and then checked by tag SHA and tagged files as above.
 
-Release rules:
+## Branch cleanup and documentation
 
-1. Version is prepared on `dev`.
-2. `dev` is promoted to `beta`.
-3. The beta candidate is validated in Home Assistant and, where relevant, against real brewing hardware.
-4. `beta` is promoted to `main`.
-5. Create the matching tag and GitHub Release from the resulting `main` commit.
-6. Mark beta versions as GitHub prereleases.
-
-Do not create releases from `dev` or `beta`.
-
-When BrewAssistant reaches a non-beta milestone, switch to normal semantic versions such as `v0.2.0` or `v1.0.0`.
-
-## Documentation sync
-
-A promotion candidate should update documentation together with the behavior it describes. In particular, keep these current before promotion to `main`:
-
-- `CHANGELOG.md`
-- current release notes under `docs/`
-- `docs/roadmap.md`
-- relevant backend/architecture documentation
-- physical-validation notes after meaningful hardware tests
-
-Historical physical-validation documents are snapshots of what was observed at that date and should not be rewritten to make later behavior look retroactively correct. Add a new dated validation document instead.
+Only `dev`, `beta`, `main` are long-lived project branches. Contributor/Dependabot branches may be removed after their work is reviewed/merged; do not delete anything with independent changes. Keep version history in tags/releases, not archive branches. Documentation that describes a candidate must be synchronized with its actual code and release route; update `README.md`, `CHANGELOG.md`, current release notes, `docs/roadmap.md`, relevant backend/dashboard docs and new physical-validation reports. Historical physical-test reports must not be rewritten retroactively.

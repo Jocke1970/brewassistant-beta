@@ -1,10 +1,11 @@
-"""RCL value-stale recovery for BrewZilla heat-strike control.
+"""RCL value-stale diagnostics for BrewZilla heat-strike control.
 
-RAPT Cloud Link / Home Assistant may sometimes report fresh entity timestamps
-without the underlying temperature value actually changing.  During heat-strike
-that is dangerous in two directions: BA may coast too early from one stale hot
-value, or it may keep waiting on a stale external mash/BLE value while the kettle
-has already moved on.
+RAPT Cloud Link / Home Assistant may legitimately report the same physical value
+many times.  This guard therefore tracks *value stagnation* separately from
+transport/report freshness.  It may flag a suspiciously unchanged heat-strike
+value, but it must never redefine the canonical process-temperature freshness
+clock.  Active coordinator refresh cadence is owned by
+``brewzilla_active_rcl_recovery_guard``.
 """
 
 from __future__ import annotations
@@ -13,15 +14,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from . import brewzilla_advice_control as advice_control
 from . import brewzilla_heat_strike_profile as heat_strike
-from . import brewzilla_temperature
 
 _INSTALLED = False
 _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE = None
-_ORIGINAL_TEMPERATURE_AGE_SECONDS = None
 
 _DATA_KEY = "brewzilla_rcl_value_recovery_guard"
 _RCL_VALUE_STALE_WARN_SECONDS = 120
@@ -30,7 +28,7 @@ _GATE_COLD_DELTA_C = 5.0
 _INTERNAL_NEAR_STRIKE_COAST_C = 1.0
 _LOW_HOLD_HEAT_FAR_FROM_STRIKE = 20.0
 _LOW_HOLD_HEAT_NEAR_STRIKE = 10.0
-_VALUE_STALE_RELOAD_SUPPRESSED_REASON = "value_stale_update_only_active_rcl_recovery_guard_owns_reload_policy"
+_VALUE_STALE_RELOAD_SUPPRESSED_REASON = "active_rcl_polling_owns_refresh_and_reload_policy"
 
 _RCL_RECOVERY_ENTITY_IDS = [
     "sensor.brewzilla_temperature",
@@ -45,7 +43,6 @@ _RCL_RECOVERY_ENTITY_IDS = [
     "sensor.brewzilla_control_device_temperature",
 ]
 
-
 _ACTIVE_STATES = {"live", "running", "paused", "awaiting_snapshot", "prepared", "awaiting_confirm"}
 _OFF_BRAKE_PHASES = {"transition_fast_rise_coast", "transition_final_coast"}
 
@@ -59,25 +56,6 @@ def _num(value: Any) -> float | None:
         return None
 
 
-def _state_value_age_seconds(hass: HomeAssistant, entity_id: str | None) -> int | None:
-    """Return age since the actual state value/attributes changed, not last report.
-
-    Home Assistant's last_reported can be refreshed even when RCL repeats an old
-    value.  For mash-probe eligibility and RCL safety we need value freshness.
-    """
-    if not entity_id:
-        return None
-    state = hass.states.get(entity_id)
-    if state is None:
-        return None
-    updated = state.last_updated
-    if updated is None:
-        return None
-    if updated.tzinfo is None:
-        updated = updated.replace(tzinfo=UTC)
-    return max(0, int(round((datetime.now(UTC) - updated).total_seconds())))
-
-
 def _store(hass: HomeAssistant) -> dict[str, Any]:
     return hass.data.setdefault("brewassistant", {}).setdefault(
         _DATA_KEY,
@@ -85,9 +63,6 @@ def _store(hass: HomeAssistant) -> dict[str, Any]:
             "last_temp": None,
             "last_temp_source": None,
             "last_changed_at": None,
-            "last_reload_at": None,
-            "last_reload_error": None,
-            "last_reload_entity_ids": [],
         },
     )
 
@@ -124,49 +99,23 @@ def _transition_guard_temperature(out: dict[str, Any]) -> tuple[float | None, st
     return None, None
 
 
-def _refresh_rcl_value_entities(hass: HomeAssistant, *, stale_seconds: int, reason: str) -> dict[str, Any]:
-    """Refresh RCL entities for a stale heat-strike value without reloading RCL.
+def _delegate_rcl_value_refresh(hass: HomeAssistant, *, stale_seconds: int, reason: str) -> dict[str, Any]:
+    """Flag suspicious value stagnation and delegate cloud refresh ownership.
 
-    This guard detects one specific heat-strike symptom: the selected temperature
-    value has not changed for a suspiciously long time.  The non-disruptive
-    recovery path is an ``update_entity`` request.  The active hot-side RCL
-    recovery guard owns the disruptive ``reload_config_entry`` decision because
-    it can also check whether live temperature/power telemetry is still flowing.
+    The active hot-side RCL guard already requests one real CoordinatorEntity
+    refresh on the active cadence.  Sending another update request from this
+    lower heat-strike layer could create duplicate cloud fetches in the same BA
+    cycle, so this guard is detection/diagnostics only.
     """
 
-    store = _store(hass)
-    entity_ids = _known_entity_ids(hass)
-    update_requested = False
-    reload_available = hass.services.has_service("homeassistant", "reload_config_entry")
-    error = None
-
-    if entity_ids:
-        try:
-            hass.async_create_task(
-                hass.services.async_call(
-                    "homeassistant",
-                    "update_entity",
-                    {"entity_id": entity_ids},
-                    blocking=False,
-                )
-            )
-            update_requested = True
-        except Exception as exc:  # pragma: no cover - defensive HA runtime guard
-            error = f"update_entity:{type(exc).__name__}: {exc}"
-            store["last_reload_error"] = error
-
     return {
-        "rcl_value_stale_guard_refresh_requested": update_requested,
+        "rcl_value_stale_guard_refresh_requested": False,
+        "rcl_value_stale_guard_refresh_delegated": True,
         "rcl_value_stale_guard_reload_requested": False,
         "rcl_value_stale_guard_reload_allowed": False,
         "rcl_value_stale_guard_reload_suppressed_reason": _VALUE_STALE_RELOAD_SUPPRESSED_REASON,
-        "rcl_value_stale_guard_reload_available": reload_available,
-        "rcl_value_stale_guard_reload_recently_requested": False,
-        "rcl_value_stale_guard_last_reload_at": store.get("last_reload_at").isoformat()
-        if isinstance(store.get("last_reload_at"), datetime)
-        else None,
-        "rcl_value_stale_guard_entity_ids": entity_ids,
-        "rcl_value_stale_guard_error": error or store.get("last_reload_error"),
+        "rcl_value_stale_guard_entity_ids": _known_entity_ids(hass),
+        "rcl_value_stale_guard_error": None,
         "rcl_value_stale_guard_reason": reason,
         "rcl_value_stale_guard_stale_seconds": stale_seconds,
     }
@@ -221,7 +170,7 @@ def _track_rcl_value_staleness(hass: HomeAssistant, out: dict[str, Any]) -> dict
     if stale_seconds < _RCL_VALUE_STALE_WARN_SECONDS:
         return guarded
 
-    recovery_attrs = _refresh_rcl_value_entities(
+    recovery_attrs = _delegate_rcl_value_refresh(
         hass,
         stale_seconds=stale_seconds,
         reason="heatstrike_temperature_value_not_changing",
@@ -230,7 +179,7 @@ def _track_rcl_value_staleness(hass: HomeAssistant, out: dict[str, Any]) -> dict
     guarded["control_reason"] = (
         str(guarded.get("control_reason") or "")
         + f" RCL value-stale guard: {source} has stayed at {round(float(temp), 2)}°C for {stale_seconds}s; "
-        "update_entity was requested; reload_config_entry is suppressed here because active hot-side RCL recovery owns reload decisions."
+        "active hot-side RCL polling owns coordinator refresh/reload decisions."
     ).strip()
     return guarded
 
@@ -338,13 +287,10 @@ def _patched_apply_pre_mash_in_heat_strike_profile(hass: HomeAssistant, out: dic
 
 
 def install_rcl_value_recovery_guard() -> None:
-    """Install RCL value-freshness and heat-strike recovery patches."""
-    global _INSTALLED, _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE, _ORIGINAL_TEMPERATURE_AGE_SECONDS
+    """Install heat-strike value-stagnation diagnostics without owning freshness."""
+    global _INSTALLED, _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE
     if _INSTALLED:
         return
-
-    _ORIGINAL_TEMPERATURE_AGE_SECONDS = brewzilla_temperature._state_age_seconds
-    brewzilla_temperature._state_age_seconds = _state_value_age_seconds
 
     _ORIGINAL_APPLY_PRE_MASH_IN_HEAT_STRIKE_PROFILE = heat_strike._apply_pre_mash_in_heat_strike_profile
     heat_strike._apply_pre_mash_in_heat_strike_profile = _patched_apply_pre_mash_in_heat_strike_profile

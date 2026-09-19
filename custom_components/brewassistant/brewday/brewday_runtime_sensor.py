@@ -21,6 +21,7 @@ from ..brewzilla.brewzilla_sensor import create_brewzilla_sensors
 from ..const import DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
+from ..hlt.sensor import create_hlt_sensors
 
 
 BREWDAY_RUNTIME_SENSORS: dict[str, dict[str, Any]] = {
@@ -83,7 +84,7 @@ def _display_name_from_key(key: str) -> str:
 def create_brewday_runtime_sensors(
     coordinator: BrewAssistantCoordinator,
 ) -> list[SensorEntity]:
-    """Create all Brewday Runtime, BrewZilla, Stage Engine, Audit, Learning, Energy and Addition sensors."""
+    """Create Brewday Runtime, BrewZilla, HLT, Audit, Learning and Energy sensors."""
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
         + create_brewday_physical_timing_sensors(coordinator)
@@ -102,6 +103,7 @@ def create_brewday_runtime_sensors(
         + create_brewzilla_learning_sensors(coordinator)
         + create_brewzilla_energy_sensors(coordinator)
         + create_brewday_addition_alert_sensors(coordinator)
+        + create_hlt_sensors(coordinator)
     )
 
 

@@ -1,7 +1,7 @@
 # BrewAssistant Python backend layout
 
 Status: active development  
-Code snapshot documented: 2026-09-05
+Code snapshot documented: 2026-09-10
 
 This directory contains the Home Assistant integration entry points plus the Python-owned BrewAssistant backend domains.
 
@@ -16,7 +16,8 @@ The code-local `README.md` files are the first place to check when changing back
 | [`cooling/`](./cooling/) | Cooling Runtime v2, CFC/immersion/manual cooling and cooling advice | Read/advice today; BrewZilla wort pump is operator-owned |
 | [`fermentation_tracking/`](./fermentation_tracking/) | Independent SG/temperature observations, calculations and readiness | Read/track only |
 | [`fermentation_chamber/`](./fermentation_chamber/) | Chamber-air recommendation and supervised climate target bridge | Recommendation + Supervised Apply |
-| [`fermentation/`](./fermentation/) | Compatibility imports for the two separated fermentation backends | Compatibility only |
+| [`grainfather_fermenter/`](./grainfather_fermenter/) | Grainfather fermentation-device discovery/normalization; initial target GF30 | Phase 1 read-only/fail-passive; future Supervised Apply target bridge after live validation |
+| [`fermentation/`](./fermentation/) | Compatibility imports for the separated fermentation backends | Compatibility only |
 | [`carbonation_backend/`](./carbonation_backend/) | Persistent carbonation session and pressure/volume guidance | Read/guidance only |
 | [`climate_backend/`](./climate_backend/) | Kegerator Climate Supervisor | Direct climate-target adjustment when enabled/in scope |
 | [`kegerator/`](./kegerator/) | Serving-fridge guard, fan control/model and serving presets | Policy-mediated fan/legacy guard actions |
@@ -24,6 +25,8 @@ The code-local `README.md` files are the first place to check when changing back
 | [`shared/`](./shared/) | Cross-domain helpers, currently rolling temperature statistics | Read-only support |
 | `brand/` | Home Assistant integration artwork | Assets only |
 | `translations/` | Home Assistant strings (`en`, `sv`) | Presentation only |
+
+The reserved `grainfather` module in the module registry remains the future **hot-side** adapter for Grainfather brewing systems such as G30/G40-class hardware. `grainfather_fermenter/` is deliberately separate and must not take over that reservation.
 
 ## Root files
 
@@ -73,7 +76,20 @@ The BrewZilla internal temperature remains the kettle/safety temperature and mus
 
 ### Fermentation split
 
-`fermentation_tracking` owns observations and fermentation state calculations. `fermentation_chamber` consumes normalized tracking output to recommend chamber air targets. The legacy `fermentation/` package only preserves old imports/registrations.
+`fermentation_tracking` owns observations and fermentation state calculations. Physical temperature actuation is delegated to exactly one selected provider. The current provider is `fermentation_chamber`; `grainfather_fermenter` is the prepared alternative for Grainfather fermentation hardware such as GF30. The legacy `fermentation/` package only preserves old imports/registrations.
+
+```text
+                    fermentation_tracking
+                           |
+                    target/recommendation
+                           |
+              +------------+------------+
+              |                         |
+ fermentation_chamber            grainfather_fermenter
+ current chamber provider        future GF30 provider
+```
+
+The GF30 path is currently read-only. A future target write must pass through BrewAssistant Supervised Apply first and must not be enabled until real hardware/service readback has been validated. Both physical providers must never control the same fermentation simultaneously.
 
 ### Kegerator split
 

@@ -1,0 +1,157 @@
+type: conditional
+conditions:
+  - entity: sensor.brewassistant_brewday_runtime_source
+    state: RAPT BrewZilla Profile
+card:
+  type: custom:button-card
+  entity: binary_sensor.brewzilla_profile_active
+  name: RAPT-profilruntime
+  icon: mdi:playlist-play
+  show_state: false
+  show_label: true
+  tap_action:
+    action: more-info
+  triggers_update:
+    - binary_sensor.brewzilla_profile_active
+    - sensor.brewassistant_brewday_runtime_source
+    - sensor.brewassistant_brewday_runtime_state
+    - sensor.brewassistant_brewday_runtime_stage
+    - sensor.brewassistant_brewday_runtime_step
+    - sensor.brewassistant_brewday_runtime_next_step
+    - sensor.brewassistant_brewday_target_temperature
+    - sensor.brewassistant_brewday_snapshot_age_minutes
+    - sensor.brewassistant_brewzilla_control_reason
+  label: |
+    [[[
+      const clean = (v) => {
+        if (v === undefined || v === null) return null;
+        const s = String(v);
+        return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
+      };
+      const num = (v) => {
+        const n = Number(String(v ?? '').replace(',', '.'));
+        return Number.isFinite(n) ? n : null;
+      };
+      const fmtTemp = (v) => {
+        const n = num(v);
+        return n === null ? '—' : `${n.toFixed(1)} °C`;
+      };
+      const short = (v, m = 52) => {
+        const s = String(v ?? '—');
+        return s.length > m ? `${s.slice(0, m - 1)}…` : s;
+      };
+
+      const a = states['binary_sensor.brewzilla_profile_active']?.attributes || {};
+      const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+      const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
+      const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
+      const runtimeStep = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
+      const nextRuntime = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
+      const baTarget = num(states['sensor.brewassistant_brewday_target_temperature']?.state);
+      const age = num(states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state);
+
+      const profile = clean(a.profile_name) || 'RAPT BrewZilla Profile';
+      const stepName = clean(a.step_name) || runtimeStep;
+      const stepNo = num(a.step_number);
+      const stepCount = num(a.step_count);
+      const rawTarget = num(a.step_target_temperature);
+      const nextName = clean(a.next_step_name) || nextRuntime;
+      const nextTarget = num(a.next_step_target_temperature);
+      const endType = clean(a.step_end_type) || '—';
+      const durationType = clean(a.step_duration_type) || '—';
+      const length = num(a.step_length);
+      const gate = String(oz.mash_in_gate_state || 'idle').toLowerCase();
+      const manual = String(endType).toLowerCase() === 'manual';
+      const cooling = String(stage).toLowerCase().includes('cool') || String(stepName).toLowerCase().includes('chill');
+      const hold = oz.rapt_mash_in_strike_hold_active === true;
+
+      let statusText = 'RAPT ger processdirektiv · BrewAssistant styr target/heat/pump';
+      let actionText = manual
+        ? 'RAPT väntar på manuellt knapptryck på BrewZillan.'
+        : `Nästa: ${short(nextName, 62)}${nextTarget !== null ? ` · ${fmtTemp(nextTarget)}` : ''}`;
+      let badge = runtimeState === 'source_unavailable' ? 'KÄLLA SAKNAS' : runtimeState === 'inactive' ? 'STOPPAD' : 'RAPT → BA';
+      let badgeBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.16)' : 'rgba(156,39,176,.13)';
+      let badgeBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.38)' : 'rgba(156,39,176,.30)';
+
+      if (String(stepName).toLowerCase().includes('mash in')) {
+        if (gate === 'ready_for_mash_in') {
+          actionText = 'Strike redo · tryck INMÄSKNING PÅBÖRJAD i BrewAssistant när du börjar tillsätta malten.';
+        } else if (gate === 'mash_in_started') {
+          actionText = 'Inmäskning pågår · BA använder mäskmålet men håller pumpen pausad tills INMÄSKNING KLAR.';
+        } else if (gate === 'mash_in_complete') {
+          actionText = 'BA:s inmäskning är klar · fortsätt det manuella RAPT-steget på BrewZillan till Mash Rest.';
+        }
+      }
+
+      if (hold) {
+        statusText = `RAPT har gått till Mash In (${fmtTemp(rawTarget)}) · BA håller fortfarande strike ${fmtTemp(baTarget)}`;
+      }
+
+      if (cooling) {
+        statusText = `ChillOut är processmarkör · RAPT-target ${fmtTemp(rawTarget)} skickas inte som hot-side target`;
+        actionText = 'BA stoppar värme/heat-utilization och lämnar BrewZilla-pumpen till Cooling Runtime/operatören.';
+      }
+
+      const duration = length !== null ? `${length.toFixed(0)} min` : '—';
+      const stepIndex = stepNo !== null && stepCount !== null ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const timerText = String(endType).toLowerCase() === 'duration'
+        ? `${duration} · timer ${String(durationType).toLowerCase() === 'target' ? 'från target' : durationType}`
+        : endType;
+
+      const chip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.8px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
+
+      return `<div style="line-height:1.25;min-width:0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div style="min-width:0;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.60;text-transform:uppercase;">RAPT · processkälla</div><div style="margin-top:2px;font-size:17px;font-weight:950;letter-spacing:-.025em;">${short(profile, 58)}</div></div>
+          <div style="padding:6px 9px;border-radius:999px;background:${badgeBg};border:1px solid ${badgeBorder};font-size:10px;font-weight:950;white-space:nowrap;">${badge}</div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">
+          ${chip('RAPT PROFILE','mdi:playlist-play','rgba(156,39,176,.10)','rgba(156,39,176,.25)')}<span style="opacity:.45;">→</span>
+          ${chip('BREWASSISTANT','mdi:brain','rgba(33,150,243,.10)','rgba(33,150,243,.24)')}<span style="opacity:.45;">→</span>
+          ${chip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.09)','rgba(0,188,212,.22)')}<span style="opacity:.45;">→</span>
+          ${chip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.09)','rgba(76,175,80,.22)')}
+        </div>
+
+        <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">AKTIVT DIREKTIV</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${short(stepName, 54)}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
+
+        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(rawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT-target</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTarget)}</b><br><span style="font-size:9px;opacity:.62;">BA-target</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(0,188,212,.08);border:1px solid rgba(0,188,212,.20);text-align:center;"><b>${stepIndex}</b><br><span style="font-size:9px;opacity:.62;">profilsteg</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${age !== null ? `${age.toFixed(1)} min` : '—'}</b><br><span style="font-size:9px;opacity:.62;">snapshot</span></div>
+        </div>
+
+        <div style="margin-top:8px;padding:8px 9px;border-radius:13px;background:${manual || cooling ? 'rgba(255,193,7,.10)' : 'rgba(127,127,127,.055)'};border:1px solid ${manual || cooling ? 'rgba(255,193,7,.28)' : 'rgba(127,127,127,.13)'};font-size:11.2px;font-weight:820;text-align:center;">${actionText}</div>
+        <div style="margin-top:7px;font-size:9.8px;font-weight:780;opacity:.58;text-align:center;">Slutvillkor: ${timerText} · control ${clean(a.step_control_type) || '—'} · BA styr inte efter RAPT heat/pump-utilization</div>
+      </div>`;
+    ]]]
+  styles:
+    card:
+      - border-radius: 22px
+      - padding: 14px
+      - background: linear-gradient(135deg, rgba(156,39,176,.10), rgba(33,150,243,.035))
+      - border: 1px solid rgba(156,39,176,.22)
+      - box-shadow: 0 2px 10px rgba(0,0,0,.08)
+    grid:
+      - grid-template-areas: '"i n" "i l"'
+      - grid-template-columns: 42px minmax(0,1fr)
+      - column-gap: 12px
+    icon:
+      - width: 27px
+      - height: 27px
+      - color: rgb(156,39,176)
+    img_cell:
+      - width: 42px
+      - height: 42px
+      - border-radius: 50%
+      - background: rgba(156,39,176,.13)
+    name:
+      - justify-self: start
+      - font-size: 15px
+      - font-weight: 950
+    label:
+      - justify-self: stretch
+      - text-align: left
+      - white-space: normal
+      - margin-top: 4px

@@ -13,8 +13,8 @@ RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
 RUNTIME_SENSOR = ROOT / "custom_components/brewassistant/brewday/brewday_runtime_sensor.py"
 BUTTON = ROOT / "custom_components/brewassistant/button.py"
 COORDINATOR = ROOT / "custom_components/brewassistant/coordinator.py"
-CARD_EN = ROOT / "dashboard/cards/brewassistant_brewday.yaml"
-CARD_SV = ROOT / "dashboard/cards/brewassistant_brewday_sv.yaml"
+CARD_EN = ROOT / "dashboard/cards/brewday_operator_actions.yaml"
+CARD_SV = ROOT / "dashboard/cards/brewday_operator_actions_sv.yaml"
 
 
 def test_abort_python_sources_parse() -> None:

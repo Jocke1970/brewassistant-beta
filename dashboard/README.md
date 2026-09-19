@@ -15,77 +15,72 @@ BrewAssistant maintains two presentation tracks over the same backend:
 
 Both tracks must use the same BrewAssistant entity IDs, service/action IDs, machine-state comparisons, conditions and hardware-control paths. The Swedish files may translate labels, headings, confirmation text and displayed status wording, but they must not translate values that backend logic or automations depend on.
 
-Examples:
+When adding or materially changing a canonical dashboard card, update its `_sv.yaml` mirror in the same development pass whenever practical. CI enforces filename parity and machine-reference safety through `tests/test_dashboard_language_parity.py`.
+
+## Dashboard composition policy
+
+`dashboard/cards/` is a library of **standalone reusable cards**, not one prescribed BrewAssistant dashboard.
+
+A BrewAssistant user may compose a personal Brewday view from whichever cards fit their setup. No backend feature may exist only inside a private or monolithic dashboard stack. If a UI function is generally useful, it belongs in its own card first; personal dashboards may then embed or combine those cards locally.
+
+The intended boundary is:
 
 ```text
-cards/brewzilla.yaml       -> canonical English UI
-cards/brewzilla_sv.yaml    -> Swedish UI
-cards/fermentation.yaml    -> canonical English UI
-cards/fermentation_sv.yaml -> Swedish UI
+BrewAssistant backend
+  -> entities, orchestration, safety and actions
+
+dashboard/cards/
+  -> reusable UI building blocks
+
+dashboard/examples/
+  -> composition guidance/examples only
+
+user dashboard
+  -> personal ordering, stacking and selection of the reusable cards
 ```
 
-When adding or materially changing a canonical dashboard card, update its `_sv.yaml` mirror in the same development pass whenever practical.
+`cards/brewassistant_brewday.yaml` is therefore the compact Brewday **overview/status card**. It is intentionally action-free. Operator actions, diagnostics, timing, Mash-In and source-specific runtime surfaces are separate cards.
 
-CI enforces filename parity and machine-reference safety through `tests/test_dashboard_language_parity.py`.
-
-## Current structure
-
-The current baseline contains 24 canonical cards, 24 Swedish mirrors, plus canonical and Swedish sanity dashboards.
+A typical RAPT-based Brewday composition might use:
 
 ```text
-dashboard/
-  brewassistant_sanity.yaml
-  brewassistant_sanity_sv.yaml
-  cards/
-    brewassistant_hub.yaml
-    brewassistant_hub_sv.yaml
-    brewassistant_visibility_badges.yaml
-    brewassistant_visibility_badges_sv.yaml
-    brewassistant_brewday.yaml
-    brewassistant_brewday_sv.yaml
-    brewassistant_brewsteps.yaml
-    brewassistant_brewsteps_sv.yaml
-    brewassistant_brewday_bf_reload.yaml
-    brewassistant_brewday_bf_reload_sv.yaml
-    brewassistant_brewday_event_log.yaml
-    brewassistant_brewday_event_log_sv.yaml
-    brewassistant_manual_brewday.yaml
-    brewassistant_manual_brewday_sv.yaml
-    brewassistant_source_health.yaml
-    brewassistant_source_health_sv.yaml
-    brewfather_feed.yaml
-    brewfather_feed_sv.yaml
-    brewfather_recipe.yaml
-    brewfather_recipe_sv.yaml
-    brewtracker_runtime.yaml
-    brewtracker_runtime_sv.yaml
-    brewzilla.yaml
-    brewzilla_sv.yaml
-    brewzilla_ble_status.yaml
-    brewzilla_ble_status_sv.yaml
-    brewzilla_ble_indicator.yaml
-    brewzilla_ble_indicator_sv.yaml
-    brewzilla_dual_temperature_gauge.yaml
-    brewzilla_dual_temperature_gauge_sv.yaml
-    brewzilla_mash_in_confirm.yaml
-    brewzilla_mash_in_confirm_sv.yaml
-    brewzilla_mash_in_controls.yaml
-    brewzilla_mash_in_controls_sv.yaml
-    brewzilla_local_control.yaml
-    brewzilla_local_control_sv.yaml
-    brewzilla_safety_rcl.yaml
-    brewzilla_safety_rcl_sv.yaml
-    brewzilla_learning.yaml
-    brewzilla_learning_sv.yaml
-    carbonation.yaml
-    carbonation_sv.yaml
-    counterflow_chiller.yaml
-    counterflow_chiller_sv.yaml
-    fermentation.yaml
-    fermentation_sv.yaml
-    kegerator.yaml
-    kegerator_sv.yaml
+brewassistant_brewday
+rapt_profile_runtime
+brewzilla_mash_in_controls
+brewday_physical_timing
+brewday_operator_actions
+brewday_details
 ```
+
+A Brewfather/BrewTracker composition can replace `rapt_profile_runtime` with `brewtracker_runtime`. Users are free to omit, reorder or place cards in separate views.
+
+## Current Brewday building blocks
+
+```text
+dashboard/cards/
+  brewassistant_brewday.yaml
+  brewassistant_brewday_sv.yaml
+  brewday_operator_actions.yaml
+  brewday_operator_actions_sv.yaml
+  brewday_details.yaml
+  brewday_details_sv.yaml
+  brewday_physical_timing.yaml
+  brewday_physical_timing_sv.yaml
+  brewassistant_brewday_runtime_flow.yaml
+  brewassistant_brewday_runtime_flow_sv.yaml
+  brewassistant_brewday_event_log.yaml
+  brewassistant_brewday_event_log_sv.yaml
+  brewtracker_runtime.yaml
+  brewtracker_runtime_sv.yaml
+  rapt_profile_runtime.yaml
+  rapt_profile_runtime_sv.yaml
+  brewzilla_mash_in_controls.yaml
+  brewzilla_mash_in_controls_sv.yaml
+  brewzilla_mash_in_confirm.yaml
+  brewzilla_mash_in_confirm_sv.yaml
+```
+
+Other module cards remain standalone in the same directory, including BrewZilla, fermentation, CFC/cooling, carbonation, kegerator, source health and Brewfather recipe/feed surfaces.
 
 ## Hub replacement workflow
 
@@ -116,38 +111,22 @@ switch.brewassistant_show_kegerator
 
 The `switch.brewassistant_show_*` entities are persistent backend visibility controls. Existing dashboard cards can be wrapped with conditional-card visibility against these switches, or left as-is until that UI pass is done.
 
-## Cards
-
-Every canonical card listed below has a matching `_sv.yaml` presentation mirror.
+## Brewday card roles
 
 | Canonical file | Purpose |
 | --- | --- |
-| `brewassistant_hub.yaml` | Compact mission-control overview with module visibility switches and BrewZilla main power. |
-| `brewassistant_visibility_badges.yaml` | Compact toggle badges for advanced Bryggråd/Brewing Advice and Safety/RCL cards. |
-| `brewassistant_brewday.yaml` | Normalized brewday runtime/operator card. |
-| `brewassistant_brewsteps.yaml` | Read-only Heat strike → Transfer process map shown only while Brewfather/BrewTracker owns an active Brewday. |
-| `brewassistant_brewday_bf_reload.yaml` | Compact Brewfather/BrewTracker reload button for placement on or near the Brewday Runtime card. |
+| `brewassistant_brewday.yaml` | Action-free Brewday overview with normalized runtime, source chain, stage, step and progress. |
+| `brewday_operator_actions.yaml` | Prepare Manual Brewday, Supervised Apply CONFIRM/REJECT, Brewday ABORT and rearm. |
+| `brewday_details.yaml` | Expandable normalized runtime/detail entity list. |
+| `brewday_physical_timing.yaml` | Physical ramp/hold timing and history independent of the directive source. |
+| `brewassistant_brewday_runtime_flow.yaml` | Runtime/process-flow guidance. |
 | `brewassistant_brewday_event_log.yaml` | Brewday event log controls and latest-event diagnostics. |
-| `brewassistant_manual_brewday.yaml` | Manual Brewday operator controls and runtime overview. |
-| `brewassistant_source_health.yaml` | Source/feed health and integration status overview. |
-| `brewfather_feed.yaml` | Brewfather post-brew batch context, shown during the `fermenting` phase. |
-| `brewfather_recipe.yaml` | Brewfather recipe/batch/instruction card. |
-| `brewtracker_runtime.yaml` | Brewday-focused BrewTracker card for Planning/ready, Brewing pre-start and active live runtime. |
-| `brewzilla.yaml` | BrewZilla orchestration/operator card. |
-| `brewzilla_ble_status.yaml` | Detailed BLE/external mash-temperature source status. |
-| `brewzilla_ble_indicator.yaml` | Compact BLE/external mash-temperature source indicator. |
-| `brewzilla_dual_temperature_gauge.yaml` | Dual mash/wort BrewZilla temperature gauge with target and source context. |
-| `brewzilla_mash_in_confirm.yaml` | Legacy mash-in confirmation and explicit mash-circulation action card. |
-| `brewzilla_mash_in_controls.yaml` | Two-step mash-in operator controls: Mash-In Started, then Mash-In Complete. |
-| `brewzilla_local_control.yaml` | BrewZilla local regulator handoff card: target, lease, heat profile and pump profile. |
-| `brewzilla_safety_rcl.yaml` | Safety/RCL conditional card; warning/guard/filter/abort diagnostics. |
-| `brewzilla_learning.yaml` | Single consolidated Brewing Advice/Bryggråd surface: recommendation, risk, trends, APPLY/DENY actions and expandable learning diagnostics. |
-| `carbonation.yaml` | Carbonation runtime/status/control card. |
-| `counterflow_chiller.yaml` | Counter Flow Chiller sanitation/ready controls. |
-| `fermentation.yaml` | Fermentation chamber/Pill/smart recommendation cockpit. |
-| `kegerator.yaml` | Kegerator fan, guard and cooling visibility card. |
+| `brewtracker_runtime.yaml` | BrewTracker-specific directive/runtime surface. |
+| `rapt_profile_runtime.yaml` | RAPT-profile-specific directive/runtime surface, including RAPT target versus effective BA target. |
+| `brewzilla_mash_in_controls.yaml` | Two-step physical Mash-In gate: Mash-In Started and Mash-In Complete. |
+| `brewzilla_mash_in_confirm.yaml` | Legacy Mash-In compatibility/fallback card. |
 
-`brewzilla_advice_auto.yaml` / `_sv.yaml` were retired when their compact advice content was consolidated into `brewzilla_learning.yaml` / `_sv.yaml`. Remove the old Advice card from local dashboards instead of keeping two parallel advisory surfaces.
+These cards are building blocks. None of them is required to be nested inside `brewassistant_brewday.yaml`.
 
 ## Brewfather / BrewTracker process-phase roles
 
@@ -174,36 +153,48 @@ Technical feed/source health
 
 The normalized `sensor.brewassistant_brewfather_batch_phase` is the presentation boundary and uses the same backend phase resolver as Brewfather hot-side ownership. Dashboard code should not invent a separate interpretation of `Planning`, `Brewing` or `Fermenting`.
 
-`brewassistant_brewsteps.yaml` / `_sv.yaml` adds an additional ownership boundary: it is visible only when `sensor.brewassistant_brewday_runtime_source` is exactly `Brewfather Brew Tracker` and the normalized runtime is not `idle`. It is intentionally read-only because Brewfather/BrewTracker owns progression; Manual Brewday retains its own interactive cockpit only when Manual owns runtime.
+`brewassistant_brewsteps.yaml` / `_sv.yaml` is visible only when `sensor.brewassistant_brewday_runtime_source` is exactly `Brewfather Brew Tracker` and the normalized runtime is not `idle`. It is intentionally read-only because Brewfather/BrewTracker owns directive progression; Manual Brewday retains its own interactive cockpit only when Manual owns runtime.
 
-## BrewZilla two-step mash-in controls
+## RAPT Profile runtime role
 
-`cards/brewzilla_mash_in_controls.yaml` is the canonical operator card for the mash-in handoff; `cards/brewzilla_mash_in_controls_sv.yaml` is the Swedish presentation mirror.
+`rapt_profile_runtime.yaml` / `_sv.yaml` is the source-specific RAPT directive surface. It must not become a second BrewZilla controller.
+
+The ownership chain is:
+
+```text
+RAPT Profile -> BrewAssistant -> RAPT Cloud Link -> BrewZilla
+```
+
+RAPT provides the current profile step, target, end condition and next-step intent. BrewAssistant remains the hot-side controller for target application, heat utilization, pump utilization and hardware ON/OFF decisions.
+
+The reference Mash-In convention is:
+
+```text
+Heatstrike -> target reached
+Mash In    -> manual/device-button step
+Mash Rest  -> timed hold, timer starts at target
+```
+
+This allows BrewAssistant's physical Mash-In gate to remain synchronized with RAPT progression without starting the mash timer during the physical grain-in operation.
+
+## BrewZilla two-step Mash-In controls
+
+`cards/brewzilla_mash_in_controls.yaml` is the canonical operator card for the Mash-In handoff; `cards/brewzilla_mash_in_controls_sv.yaml` is the Swedish presentation mirror.
 
 Expected flow:
 
 ```text
-1. BrewAssistant detects mash-in/strike readiness.
+1. BrewAssistant detects Mash-In/strike readiness.
 2. Only button.brewassistant_mash_in_started is visible.
 3. Operator starts adding malt and presses Mash-In Started.
-4. BA releases strike target toward the next mash target, keeps pump OFF and allows low anti-drop heat.
+4. BA releases strike target toward the mash target, keeps pump OFF and allows low anti-drop heat.
 5. Only button.brewassistant_mash_in_complete is visible.
 6. Operator finishes stirring/settling the malt bed and presses Mash-In Complete.
-7. BA starts mash circulation using pump utilization 50 % plus pump switch.
-8. Both mash-in buttons disappear.
+7. BA starts mash circulation using the active pump strategy.
+8. Both Mash-In buttons disappear.
 ```
 
-Entities used:
-
-```text
-button.brewassistant_mash_in_started
-button.brewassistant_mash_in_complete
-button.brewassistant_brewzilla_start_mash_circulation
-```
-
-The legacy `cards/brewzilla_mash_in_confirm.yaml` remains for compatibility during migration, but the two-step card should be used for realistic 69°C strike / 66°C mash-in tests.
-
-The fallback `Starta mäskcirkulation` button in the Swedish UI is intentionally explicit. It calls the same BrewAssistant button entity as the canonical UI and must not be replaced with a duplicate service workaround.
+The legacy `cards/brewzilla_mash_in_confirm.yaml` remains for compatibility during migration. The two-step card is the preferred operator surface.
 
 ## BrewZilla local-control split
 
@@ -211,7 +202,7 @@ The intended split is:
 
 ```text
 BrewZilla = operator/hardware cockpit
-BrewZilla Mash-In Controls = explicit two-step mash-in handoff
+BrewZilla Mash-In Controls = explicit two-step Mash-In handoff
 BrewZilla Local Control = what BA handed to BZ and whether lease is active
 Brewing Advice / Bryggråd = what BA recommends, why, risk/confidence and learning detail
 Safety/RCL = freshness/guards/filter/abort diagnostics
@@ -221,7 +212,7 @@ Safety/RCL = freshness/guards/filter/abort diagnostics
 
 ## Brewfather reload placement
 
-Use `cards/brewassistant_brewday_bf_reload.yaml` or `cards/brewassistant_brewday_bf_reload_sv.yaml` as a quick action on or directly below the Brewday Runtime card. Both call `brewassistant.force_brewfather_refresh`.
+Use `cards/brewassistant_brewday_bf_reload.yaml` or `cards/brewassistant_brewday_bf_reload_sv.yaml` as an optional quick action near whichever BrewTracker/Brewday cards the user has chosen. Both call `brewassistant.force_brewfather_refresh`.
 
 ## Sanity dashboard
 
@@ -254,7 +245,7 @@ Install required frontend cards before copying dashboard YAML into Home Assistan
 - Do not translate machine values that backend logic or automations depend on.
 - CI must fail if a canonical dashboard card lacks a Swedish mirror.
 - CI must fail if a Swedish mirror introduces unexpected machine entity references or changes service/action references.
-- Keep only the current approved card baseline in dashboard/cards/.
+- Keep reusable functionality in standalone cards; personal composed stacks are not canonical implementation surfaces.
 - Avoid storing every visual iteration in the repo.
 - Put backend logic in Python, not in dashboard templates.
 - Use dashboard YAML for presentation and explicit operator actions.
