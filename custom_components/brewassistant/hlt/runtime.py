@@ -127,6 +127,23 @@ def _bz_cruise_observation(hass: Any, brewday: dict[str, Any], now: datetime,
     return cruising, ramp
 
 
+def _brewday_trace_context(brewday: dict[str, Any]) -> dict[str, Any]:
+    """Capture the *selected* runtime snapshot, never select BF/BT/RAPT again."""
+    return {
+        "brewday_source": brewday.get("source"),
+        "brewday_runtime_state": brewday.get("runtime_state"),
+        "brewday_source_status": brewday.get("source_status"),
+        "brewday_target_c": _numeric(brewday.get("target_temperature")),
+        "brewday_target_source": brewday.get("target_temperature_source"),
+        "rapt_profile_session_id": brewday.get("profile_session_id"),
+        "rapt_profile_step_id": brewday.get("profile_step_id"),
+        "rapt_profile_step_number": brewday.get("profile_step_number"),
+        "rapt_profile_source_available": brewday.get("profile_source_available"),
+        "rapt_profile_stop_guard_active": brewday.get("profile_stop_guard_active"),
+        "brewday_operator_abort_active": brewday.get("operator_abort_active"),
+    }
+
+
 async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | None = None) -> dict[str, Any]:
     """Advance virtual HLT and append JSONL; no physical writes, ever."""
     from ..brewday.brewday_audit import get_brewday_audit_log
@@ -186,7 +203,7 @@ async def async_hlt_simulation_tick(hass: Any, entry: Any, *, now: datetime | No
         hlt_switch=_observed(hass, entities.hlt_switch, now, entities.max_age_s),
         stage=stage, step=str(brewday.get("step") or ""),
         usable_budget_w=config.usable_budget_w, hlt_target_c=config.hlt_target_c,
-        hlt_volume_l=water_l,
+        hlt_volume_l=water_l, source_context=_brewday_trace_context(brewday),
     )
     runtime["status"] = result.state
     runtime["last_result"] = result

@@ -17,6 +17,23 @@ SCHEMA_VERSION = 2
 SAMPLE_INTERVAL_S = 30.0
 _DATA_KEY = "hlt_trace_recorder"
 
+# Additive JSONL fields from the *same normalized Brewday snapshot* used by
+# the HLT simulation. None is unknown, never a fabricated OFF/zero. Existing
+# version-2 fields and file paths remain unchanged.
+SOURCE_CONTEXT_FIELDS = (
+    "brewday_source",
+    "brewday_runtime_state",
+    "brewday_source_status",
+    "brewday_target_c",
+    "brewday_target_source",
+    "rapt_profile_session_id",
+    "rapt_profile_step_id",
+    "rapt_profile_step_number",
+    "rapt_profile_source_available",
+    "rapt_profile_stop_guard_active",
+    "brewday_operator_abort_active",
+)
+
 
 def _number(value: Any) -> float | None:
     if isinstance(value, bool):
@@ -41,6 +58,45 @@ def _append_line(path: Path, line: str) -> None:
         stream.write(line + "\n")
 
 
+def _ha_diagnostics(hass: Any, sample_s: float) -> dict[str, Any]:
+    """Read published HA states for diagnosis only, NEVER for power permission.
+
+    Values are labelled HA-published because coordinator sensors can lag the
+    simulator's direct runtime snapshot. An old or unavailable measurement is
+    preserved as evidence with its age, not treated as zero or as fresh.
+    """
+    states = getattr(hass, "states", None)
+
+    def read(entity_id: str) -> tuple[str | None, float | None]:
+        state = states.get(entity_id) if states is not None else None
+        if state is None:
+            return None, None
+        value = str(state.state)
+        updated = getattr(state, "last_updated", None)
+        age_s = None
+        if isinstance(updated, datetime):
+            if updated.tzinfo is not None:
+                age_s = _number(sample_s - updated.timestamp())
+            if age_s is not None and age_s < 0:
+                age_s = None
+        return value, age_s
+
+    temperature, temperature_age = read("sensor.brewzilla_temperature")
+    device_target, device_target_age = read("number.brewzilla_target_temperature")
+    brewday_target, brewday_target_age = read("sensor.brewassistant_brewday_target_temperature")
+    virtual_recipient, virtual_recipient_age = read("sensor.brewassistant_hlt_virtual_energy_recipient")
+    return {
+        "bz_temperature_ha_c": _number(temperature),
+        "bz_temperature_ha_age_s": temperature_age,
+        "bz_device_target_ha_c": _number(device_target),
+        "bz_device_target_ha_age_s": device_target_age,
+        "bz_brewday_target_ha_c": _number(brewday_target),
+        "bz_brewday_target_ha_age_s": brewday_target_age,
+        "hlt_virtual_recipient_ha_state": virtual_recipient,
+        "hlt_virtual_recipient_ha_age_s": virtual_recipient_age,
+    }
+
+
 class HLTTraceRecorder:
     """Rate-limited samples, immediate transitions; BZ grants do not exist."""
 
@@ -62,16 +118,21 @@ class HLTTraceRecorder:
                     step: str | None = None,
                     usable_budget_w: float | None = None,
                     hlt_target_c: float | None = None,
-                    hlt_volume_l: float | None = None) -> dict[str, Any] | None:
+                    hlt_volume_l: float | None = None,
+                    source_context: dict[str, Any] | None = None) -> dict[str, Any] | None:
         now_s = _number(inputs.timestamp_s)
         if now_s is None or now_s < 0:
             raise ValueError("Invalid HLT sample timestamp")
         transitions = list(result.events)
         cruising = bool(getattr(inputs, "brewzilla_cruising", False))
         ramp = bool(getattr(inputs, "brewzilla_ramp_requested", False))
+        selected_source = {name: (source_context or {}).get(name) for name in SOURCE_CONTEXT_FIELDS}
+        # Source/session/step change must create a new row at the NEXT HLT tick,
+        # even inside the ordinary 30-second rate limit. No extra timer or IO.
         fingerprint = (result.state, result.reason, result.virtual_heater_on,
                        result.temperature_source, result.power_budget_verified,
-                       inputs.sparge_required, inputs.enable_hlt, cruising, ramp)
+                       inputs.sparge_required, inputs.enable_hlt, cruising, ramp,
+                       tuple(selected_source.values()))
         state_changed = fingerprint != self._last_fingerprint
         due = (self._last_sample_s is None or now_s < self._last_sample_s
                or now_s - self._last_sample_s >= self.sample_interval_s)
@@ -89,6 +150,7 @@ class HLTTraceRecorder:
             "brewzilla_priority": "absolute_unthrottled",
             "stage": stage,
             "step": step,
+            **selected_source,
             "events": transitions,
             "hlt_state": result.state,
             "hlt_reason": result.reason,
@@ -124,6 +186,7 @@ class HLTTraceRecorder:
             record = self.make_record(inputs, result, **context)
             if record is None:
                 return None
+            record.update(_ha_diagnostics(hass, inputs.timestamp_s))
             line = json.dumps(record, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
             await hass.async_add_executor_job(_append_line, self.path, line)
             return self.path
