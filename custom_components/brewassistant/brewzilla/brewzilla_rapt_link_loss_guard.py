@@ -2,6 +2,8 @@
 
 RCL/BrewZilla keep operating without BA. Missing or old telemetry can revoke BA
 write authority, but MUST NEVER be promoted to STOP or cause output commands.
+An observed STOP updates BA's state only; explicit operator STOP/ABORT is a
+separate command transaction through RCL and must not be replayed on readback.
 Install last, after source authority and the RAPT identity guard.
 """
 
@@ -133,7 +135,7 @@ def _ensure_transition_listener(hass):
     def _state_changed(event):
         new = event.data.get("new_state")
         # None, unknown and unavailable enter the original no-write branch.
-        # Only an attested, fresh, matching OFF may authorize STOP cleanup.
+        # Only an attested, fresh, matching OFF may update STOP state.
         if new is not None and new.entity_id != target:
             return
         hass.async_create_task(runtime._async_process_transition(hass, new))
@@ -143,7 +145,7 @@ def _ensure_transition_listener(hass):
 
 
 async def _guarded_safe_off_call(hass, domain, service, entity_id, data=None):
-    """Recheck proof before EACH RCL command, including after an awaited call."""
+    """Retain proof validation for legacy callers; never infer OFF from loss."""
     assert _BASE_CALL is not None
     state = runtime._profile_state(hass)
     known = runtime._store(hass).get("last_known", {})
@@ -153,6 +155,31 @@ async def _guarded_safe_off_call(hass, domain, service, entity_id, data=None):
     if not stopped or stopped != known.get("profile_session_id"):
         raise PermissionError("RCL STOP identity mismatch; no BA output write")
     return await _BASE_CALL(hass, domain, service, entity_id, data)
+
+
+async def _observe_stop_without_output_commands(hass, token):
+    """A delayed STOP readback is a state event, NOT another command intent.
+
+    _mark_confirmed_stop already records STOP and clears BA-owned control.
+    RCL handles operator STOP/ABORT as its own command; do not fire the old
+    heater OFF / pump OFF / zero-utilization sequence on status propagation.
+    An external RAPT STOP is likewise observational: no implicit actuator
+    commands or claims that the physical outputs have been verified OFF.
+    """
+    store = runtime._store(hass)
+    if store.get("safe_off_token") == token:
+        return
+    store["safe_off_token"] = token
+    store["last_safe_off"] = {
+        "token": token,
+        "at": dt_util.utcnow().isoformat(),
+        "actions": [],
+        "errors": [],
+        "ok": None,
+        "reason": "observed_profile_stop_status_only_no_output_commands",
+        "outputs_physically_off_verified": False,
+    }
+    _LOGGER.info("RAPT STOP observed; BA issued no additional BrewZilla output commands")
 
 
 def install_rapt_link_loss_guard():
@@ -168,5 +195,8 @@ def install_rapt_link_loss_guard():
     runtime._fresh_stopped_contract = _attested_stop
     runtime._ensure_transition_listener = _ensure_transition_listener
     runtime._async_call_if_entity_exists = _guarded_safe_off_call
+    # Last override intentionally supersedes the original four-command
+    # post-STOP safe-off routine. Observed STOP must not replay an ABORT.
+    runtime._async_safe_off_after_profile_stop = _observe_stop_without_output_commands
     _INSTALLED = True
-    _LOGGER.info("RAPT link-loss guard installed; BA output writes require RCL")
+    _LOGGER.info("RAPT link-loss guard installed; STOP readback is status-only")
