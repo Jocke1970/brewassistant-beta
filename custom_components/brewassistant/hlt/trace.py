@@ -17,6 +17,23 @@ SCHEMA_VERSION = 2
 SAMPLE_INTERVAL_S = 30.0
 _DATA_KEY = "hlt_trace_recorder"
 
+# Additive JSONL fields from the *same normalized Brewday snapshot* used by
+# the HLT simulation. None is unknown, never a fabricated OFF/zero. Existing
+# version-2 fields and file paths remain unchanged.
+SOURCE_CONTEXT_FIELDS = (
+    "brewday_source",
+    "brewday_runtime_state",
+    "brewday_source_status",
+    "brewday_target_c",
+    "brewday_target_source",
+    "rapt_profile_session_id",
+    "rapt_profile_step_id",
+    "rapt_profile_step_number",
+    "rapt_profile_source_available",
+    "rapt_profile_stop_guard_active",
+    "brewday_operator_abort_active",
+)
+
 
 def _number(value: Any) -> float | None:
     if isinstance(value, bool):
@@ -101,16 +118,21 @@ class HLTTraceRecorder:
                     step: str | None = None,
                     usable_budget_w: float | None = None,
                     hlt_target_c: float | None = None,
-                    hlt_volume_l: float | None = None) -> dict[str, Any] | None:
+                    hlt_volume_l: float | None = None,
+                    source_context: dict[str, Any] | None = None) -> dict[str, Any] | None:
         now_s = _number(inputs.timestamp_s)
         if now_s is None or now_s < 0:
             raise ValueError("Invalid HLT sample timestamp")
         transitions = list(result.events)
         cruising = bool(getattr(inputs, "brewzilla_cruising", False))
         ramp = bool(getattr(inputs, "brewzilla_ramp_requested", False))
+        selected_source = {name: (source_context or {}).get(name) for name in SOURCE_CONTEXT_FIELDS}
+        # Source/session/step change must create a new row at the NEXT HLT tick,
+        # even inside the ordinary 30-second rate limit. No extra timer or IO.
         fingerprint = (result.state, result.reason, result.virtual_heater_on,
                        result.temperature_source, result.power_budget_verified,
-                       inputs.sparge_required, inputs.enable_hlt, cruising, ramp)
+                       inputs.sparge_required, inputs.enable_hlt, cruising, ramp,
+                       tuple(selected_source.values()))
         state_changed = fingerprint != self._last_fingerprint
         due = (self._last_sample_s is None or now_s < self._last_sample_s
                or now_s - self._last_sample_s >= self.sample_interval_s)
@@ -128,6 +150,7 @@ class HLTTraceRecorder:
             "brewzilla_priority": "absolute_unthrottled",
             "stage": stage,
             "step": step,
+            **selected_source,
             "events": transitions,
             "hlt_state": result.state,
             "hlt_reason": result.reason,

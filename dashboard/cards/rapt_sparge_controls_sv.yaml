@@ -1,0 +1,90 @@
+# Endast aktiv RAPT Sparge. Kortet är UI; backend kontrollerar källa,
+# session, steg, telemetri och kvittens igen före varje verkligt kommando.
+# HA:s OFF-avläsning är inte ett elektriskt frånskiljningsbevis.
+type: conditional
+conditions:
+  - entity: binary_sensor.brewzilla_profile_active
+    state: "on"
+  - entity: sensor.brewassistant_brewday_runtime_source
+    state: "RAPT BrewZilla Profile"
+  - condition: or
+    conditions:
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Sparge"
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Lakning"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: button.brewassistant_confirm_sparge_lift
+      name: RAPT · Lakning
+      icon: mdi:grain
+      show_state: false
+      show_label: true
+      tap_action:
+        action: more-info
+      triggers_update:
+        - button.brewassistant_confirm_sparge_lift
+        - binary_sensor.brewzilla_profile_active
+        - sensor.brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewzilla_orchestration_mode
+        - sensor.brewassistant_brewzilla_control_reason
+        - switch.brewzilla_heater
+        - switch.brewzilla_pump
+        - number.brewzilla_heat_utilization
+        - number.brewzilla_pump_utilization
+      label: |
+        [[[
+          const a = entity?.attributes || {};
+          const phase = String(a.phase || 'inactive');
+          const off = a.outputs_confirmed_off === true;
+          const heater = String(a.heater_readback ?? 'okänd').toUpperCase();
+          const pump = String(a.pump_readback ?? 'okänd').toUpperCase();
+          const mode = String(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '');
+          const controlReason = String(states['sensor.brewassistant_brewzilla_control_reason']?.state || '');
+          if (phase === 'awaiting_lift') {
+            return `VÄNTAR PÅ LYFT · värme ${heater} · pump ${pump} · avläsning ${off ? 'AV/0 bekräftad i HA' : 'EJ bekräftad'}. Kontrollera lokalt innan maltpipan hanteras.`;
+          }
+          if (phase === 'heat_to_boil') {
+            if (mode === 'sparge-local-target-conflict-blocked' || controlReason.includes('positive BA heating blocked')) {
+              return `LYFT KVITTERAT · FÖRKOKSVÄRME BLOCKERAD. RAPT:s lokala mål avviker från BA:s 95 °C eller kan inte verifieras. Kontrollera RAPT-profilen; ingen värme får startas från BA.`;
+            }
+            return `LYFT KVITTERAT · pumpen ska förbli AV · BA förkok max ${a.preboil_target_c ?? 95} °C. Värme kräver separat övervakad BEKRÄFTA.`;
+          }
+          return 'Källa/steg inte verifierat. Ingen lyftkvittens; kontrollera RAPT och BA.';
+        ]]]
+    - type: custom:button-card
+      entity: button.brewassistant_confirm_sparge_lift
+      name: Kvittera lyft + vört över elementen
+      icon: mdi:check-decagram-outline
+      show_state: false
+      show_label: true
+      label: Kontrollera att maltpipan är säkert upplyft OCH att värmeelementen täcks av vört. Uppvärmning kräver separat kvittens.
+      tap_action:
+        action: call-service
+        service: button.press
+        service_data:
+          entity_id: button.brewassistant_confirm_sparge_lift
+        confirmation:
+          text: "Jag bekräftar BÅDE: (1) maltpipan är säkert upplyft och (2) tillräckligt med vört täcker värmeelementen. Fortsätt till separat kvittens för förkoksvärme?"
+      styles:
+        card:
+          - border: 1px solid var(--warning-color)
+          - padding: 12px
+        label:
+          - white-space: normal
+          - font-size: 12px
+      state:
+        - operator: template
+          value: |
+            [[[
+              return entity?.attributes?.operator_confirmation_available !== true;
+            ]]]
+          styles:
+            card:
+              - opacity: 0.65
+      hold_action:
+        action: more-info
