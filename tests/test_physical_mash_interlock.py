@@ -98,7 +98,7 @@ def test_completion_stops_pump_and_timer_never_energizes_it():
     assert commands == before, "a timer must only offer an operator action"
 
 
-def test_pump_rejects_early_then_requires_two_distinct_operator_actions():
+def test_pump_rejects_early_stale_and_requires_two_distinct_operator_actions():
     n, hass, clock, commands, state, _, _ = _harness()
     _complete(n, hass)
     action = {"brewday_state": "running", "connected": True}
@@ -106,6 +106,10 @@ def test_pump_rejects_early_then_requires_two_distinct_operator_actions():
     assert "blocked:settling" in early["apply_result"]
     assert ("switch.brewzilla_pump", "on") not in commands
     clock.now += timedelta(minutes=10)
+    stale = asyncio.run(n["_circulation"](hass, action, action_name="start_mash_circulation"))
+    assert "blocked:temperature_stale" in stale["apply_result"]
+    assert ("switch.brewzilla_pump", "on") not in commands
+    hass.states["sensor.mash"].last_reported = clock.now
     low = asyncio.run(n["_circulation"](hass, action, action_name="start_mash_circulation"))
     assert low["pump_started"] is True
     assert ("number.brewzilla_pump_utilization", 25) in commands
@@ -115,6 +119,7 @@ def test_pump_rejects_early_then_requires_two_distinct_operator_actions():
     before = list(commands)
     assert n["_tick"](hass)["phase"] == "normal_ready"
     assert commands == before
+    hass.states["sensor.mash"].last_reported = clock.now
     normal = asyncio.run(n["_circulation"](hass, action, action_name="start_mash_circulation"))
     assert "awaiting_readback" in normal["apply_result"]
     assert ("number.brewzilla_pump_utilization", 50) in commands
