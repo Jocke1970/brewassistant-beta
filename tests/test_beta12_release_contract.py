@@ -1,6 +1,6 @@
-"""Keep the exact beta candidate's version, test notes and safety graph aligned.
+"""Preserve published beta.12 evidence and verify the current beta.13 candidate.
 
-This is an artifact identity/preservation check, not a real HA or hardware test.
+Artifact identity/preservation checks only; not a real HA or hardware test.
 """
 
 from __future__ import annotations
@@ -9,25 +9,42 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.2.0-beta.12"
-TAG = "v" + VERSION
-RELEASE_NAME = "2026_09-01"
+PUBLISHED_VERSION = "0.2.0-beta.12"
+PUBLISHED_TAG = "v" + PUBLISHED_VERSION
+PUBLISHED_NAME = "2026_09-01"
+CANDIDATE_VERSION = "0.2.0-beta.13"
+CANDIDATE_TAG = "v" + CANDIDATE_VERSION
+CANDIDATE_NAME = "2026_09-02"
 
 
-def test_manifest_and_new_release_notes_have_same_unique_version():
-    manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
+def test_published_beta12_release_notes_preserve_historical_identity():
+    """A new candidate must not repurpose the already published beta.12 notes."""
     notes = (ROOT / "docs/beta12-prerelease-notes_sv.md").read_text(encoding="utf-8")
-    assert manifest["version"] == VERSION
-    assert notes.startswith(f"# BrewAssistant {RELEASE_NAME} — beta-prerelease ({TAG})")
-    assert f"**Releasenamn:** `{RELEASE_NAME}`" in notes
-    assert f"GitHub-tagg `{TAG}`" in notes
-    assert f"integrationsmanifest `{VERSION}`" in notes
-    assert TAG in notes
+    assert notes.startswith(f"# BrewAssistant {PUBLISHED_NAME} — beta-prerelease ({PUBLISHED_TAG})")
+    assert f"**Releasenamn:** `{PUBLISHED_NAME}`" in notes
+    assert f"GitHub-tagg `{PUBLISHED_TAG}`" in notes
+    assert f"integrationsmanifest `{PUBLISHED_VERSION}`" in notes
+    assert PUBLISHED_TAG in notes
     assert "Create a merge commit" in notes
     assert "HACS" in notes and "water-only" in notes
     assert "beta-mergecommit" in notes and "main" in notes
     assert "78 °C" in notes and "95 °C" in notes
     assert (ROOT / "docs/beta11-prerelease-notes_sv.md").is_file()
+
+
+def test_current_manifest_and_beta13_notes_have_unique_new_version():
+    manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
+    notes = (ROOT / "docs/beta13-prerelease-notes_sv.md").read_text(encoding="utf-8")
+    assert manifest["version"] == CANDIDATE_VERSION
+    assert CANDIDATE_VERSION != PUBLISHED_VERSION
+    assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — beta ({CANDIDATE_TAG})")
+    assert CANDIDATE_TAG in notes and CANDIDATE_VERSION in notes
+    assert "v0.5.0-beta.1" in notes
+    assert "Create a merge commit" in notes
+    assert "Pre-release" in notes and "HACS" in notes
+    assert "beta-merge-SHA" in notes and "main" in notes
+    assert "STOP" in notes and "ABORT" in notes
+    assert "fysiskt" in notes
 
 
 def test_installer_retains_existing_safety_and_all_new_restrictions():
