@@ -25,23 +25,31 @@ class FakeHass:
         self.services = FailIfWritten()
 
 
-def observe_stop():
-    source = GUARD.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    node = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
-                and n.name == "_observe_stop_without_output_commands")
+def guard_method(name):
+    tree = ast.parse(GUARD.read_text(encoding="utf-8"))
+    node = next(n for n in tree.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
     runtime = SimpleNamespace(_store=lambda hass: hass.data.setdefault("profile", {}))
     dt_util = SimpleNamespace(utcnow=lambda: NOW)
     logger = SimpleNamespace(info=lambda *args: None)
-    ns = {"runtime": runtime, "dt_util": dt_util, "_LOGGER": logger}
+    base_snapshot = lambda hass, state, store: {
+        "summary": "stopped · safe-off · RAPT handoff guard",
+        "profile_name": "Test profile",
+        "profile_stop_guard_active": True,
+        "profile_stop_confirmed": True,
+    }
+    ns = {"runtime": runtime, "dt_util": dt_util, "_LOGGER": logger,
+          "_BASE_STOPPED_SNAPSHOT": base_snapshot}
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(GUARD), "exec"), ns)
-    return ns["_observe_stop_without_output_commands"]
+    return ns[name]
 
 
 class PassiveStopTest(unittest.IsolatedAsyncioTestCase):
     async def test_delayed_stop_status_sends_no_output_commands(self):
         hass = FakeHass()
-        await observe_stop()(hass, "run-1:observation-time")
+        await guard_method("_observe_stop_without_output_commands")(
+            hass, "run-1:observation-time"
+        )
         record = hass.data["profile"]["last_safe_off"]
         self.assertEqual(record["actions"], [])
         self.assertEqual(record["reason"], "observed_profile_stop_status_only_no_output_commands")
@@ -50,16 +58,27 @@ class PassiveStopTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_duplicate_stop_observation_is_idempotent(self):
         hass = FakeHass()
-        stop = observe_stop()
+        stop = guard_method("_observe_stop_without_output_commands")
         await stop(hass, "run-1:observation-time")
         first = hass.data["profile"]["last_safe_off"]
         await stop(hass, "run-1:observation-time")
         self.assertIs(first, hass.data["profile"]["last_safe_off"])
 
+    def test_stop_snapshot_does_not_claim_physical_safe_off(self):
+        snapshot = guard_method("_stopped_snapshot_status_only")(
+            FakeHass(), None, {}
+        )
+        self.assertNotIn("safe-off", snapshot["summary"])
+        self.assertEqual(snapshot["brewassistant_role"], "stop_status_observer")
+        self.assertFalse(snapshot["profile_stop_guard_active"])
+        self.assertTrue(snapshot["profile_stop_confirmed"])
+        self.assertFalse(snapshot["hot_side_outputs_physically_off_verified"])
+
     def test_runtime_status_transition_uses_passive_override(self):
         guard = GUARD.read_text(encoding="utf-8")
         runtime = RUNTIME.read_text(encoding="utf-8")
         self.assertIn("runtime._async_safe_off_after_profile_stop = _observe_stop_without_output_commands", guard)
+        self.assertIn("runtime._stopped_snapshot = _stopped_snapshot_status_only", guard)
         self.assertIn("await _async_safe_off_after_profile_stop(hass, token)", runtime)
         self.assertIn('clear_owned_control(hass, reason="rapt_profile_stop_confirmed")', runtime)
 
