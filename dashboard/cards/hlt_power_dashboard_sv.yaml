@@ -90,8 +90,11 @@ label: |
     const status = raw('status');
     const reason = raw('reason');
     const realRecipient = recipients[raw('actual_energy_recipient')] || 'Okänt';
-    const virtualRecipient = raw('virtual_energy_recipient') === 'hlt' ? 'HLT (virtuell)' :
-      raw('virtual_energy_recipient') === 'none' ? 'Ingen' : 'Okänt';
+    // 'none' is an explicit virtual state, not an unknown numeric observation.
+    // Read this categorical sensor directly; keep raw() strict for measurements.
+    const virtualState = states['sensor.brewassistant_hlt_virtual_energy_recipient']?.state;
+    const virtualRecipient = virtualState === 'hlt' ? 'HLT (virtuell)' :
+      virtualState === 'none' ? 'Ingen' : 'Okänt';
     const owner = raw('power_owner') === 'brewzilla_with_virtual_hlt'
       ? 'BZ prioriterad · virtuell HLT tillåten' : 'BZ prioriterad · HLT sekundär';
     const sourceLabels = {
