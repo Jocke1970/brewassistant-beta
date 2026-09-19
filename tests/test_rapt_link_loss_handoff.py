@@ -1,4 +1,4 @@
-"""No-hardware contract tests for the actual #217 guard and runtime functions."""
+"""No-hardware regression tests for the actual #217 guard and runtime gates."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1] / "custom_components/brewassistant"
 GUARD = ROOT / "brewzilla/brewzilla_rapt_link_loss_guard.py"
 RUNTIME = ROOT / "brewday/rapt_profile_runtime.py"
+ISOLATION = ROOT / "brewzilla/brewzilla_rapt_brewing_read_isolation.py"
 IDENTITY = ROOT / "brewzilla/brewzilla_rapt_identity_guard.py"
 AUTHORITY = ROOT / "brewzilla/brewzilla_source_authority_runtime.py"
 NOW = datetime(2026, 9, 19, 21, 30, tzinfo=timezone.utc)
@@ -51,14 +52,15 @@ class Hass:
 
 
 def load_guard():
-    text = GUARD.read_text(encoding="utf-8")
-    tree = ast.parse(text)
+    tree = ast.parse(GUARD.read_text(encoding="utf-8"))
     funcs = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
              and node.name in {"_recent", "_profile_state", "_active_fresh", "_attested_stop",
                                "_ensure_transition_listener", "_guarded_safe_off_call"}]
     dt_util = SimpleNamespace(utcnow=lambda: NOW, as_utc=lambda value: value.astimezone(timezone.utc))
     runtime = SimpleNamespace(
-        RAPT_PROFILE_ENTITY="binary_sensor.brewzilla_profile_active", LISTENER_KEY="listener",
+        RAPT_PROFILE_ENTITY="binary_sensor.brewzilla_profile_active",
+        RAPT_PROFILE_BA_SOURCE=MARKER,
+        LISTENER_KEY="listener",
         _store=lambda hass: hass.data.setdefault("store", {"last_known": {"entity_id": ID,
                                                                           "profile_session_id": "run"}}),
         _is_rcl_contract=lambda s: bool(s is not None and s.attributes.get("ba_source") == MARKER
@@ -72,7 +74,9 @@ def load_guard():
         return lambda: calls.append(("unsubscribed", None))
 
     ns = {"dt_util": dt_util, "runtime": runtime, "_MAX_AGE_SECONDS": 90,
-          "_LISTENER_ENTITY_KEY": "listener_entity", "DOMAIN": DOMAIN,
+          "_LISTENER_ENTITY_KEY": "listener_entity",
+          "_AMBIGUOUS_ENTITY": "binary_sensor.brewzilla_profile_ambiguous",
+          "SimpleNamespace": SimpleNamespace, "DOMAIN": DOMAIN,
           "_OBSERVED_SESSIONS": {}, "_BASE_ACTIVE": lambda s: s is not None and s.state == "on"
           and runtime._is_rcl_contract(s),
           "_BASE_STOP": lambda s: s is not None and s.state == "off"
@@ -87,10 +91,46 @@ def load_guard():
 
 class LinkLossTest(unittest.IsolatedAsyncioTestCase):
     def test_dynamic_entity_id_discovered_by_ba_marker(self):
-        ns, runtime, _ = load_guard()
-        hass = Hass([State()])
+        ns, _, _ = load_guard()
+        self.assertEqual(ns["_profile_state"](Hass([State()])).entity_id, ID)
+        # Restored ON remains visible to the existing RAPT read-isolation
+        # lockout; it must never authorize positive writes or a STOP.
+        restored = ns["_profile_state"](Hass([State(restored=True)]))
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.state, "on")
+        self.assertFalse(ns["_active_fresh"](restored))
+        self.assertFalse(ns["_attested_stop"](restored))
+
+    def test_canonical_restored_on_without_marker_still_blocks_source_fallback(self):
+        ns, _, _ = load_guard()
+        state = State(entity_id="binary_sensor.brewzilla_profile_active", restored=True,
+                      ba_source="")
+        found = ns["_profile_state"](Hass([state]))
+        self.assertIs(found, state)
+        self.assertFalse(ns["_active_fresh"](found))
+
+    def test_ambiguous_profiles_fail_closed_without_arbitrary_entity_listener(self):
+        ns, _, calls = load_guard()
+        alternate = "binary_sensor.second_brewzilla_profile_active"
+        hass = Hass([State(), State(entity_id=alternate)])
+        hass.data["store"] = {"last_known": {}}
+        selected = ns["_profile_state"](hass)
+        self.assertEqual(selected.entity_id, "binary_sensor.brewzilla_profile_ambiguous")
+        self.assertEqual(selected.state, "on")
+        self.assertTrue(selected.attributes["restored"])
+        self.assertFalse(ns["_active_fresh"](selected))
+        self.assertFalse(ns["_attested_stop"](selected))
+        ns["_ensure_transition_listener"](hass)
+        self.assertEqual(calls, [])
+        self.assertNotIn("listener", hass.data.get(DOMAIN, {}))
+        isolation = ISOLATION.read_text(encoding="utf-8")
+        self.assertIn('or _unverified_rapt_profile_on(profile)', isolation)
+        self.assertIn('return attrs.get("ba_source") == rapt.RAPT_PROFILE_BA_SOURCE', isolation)
+
+    def test_previous_selected_entity_can_be_retained_across_multiple_devices(self):
+        ns, _, _ = load_guard()
+        hass = Hass([State(), State(entity_id="binary_sensor.other_profile_active")])
         self.assertEqual(ns["_profile_state"](hass).entity_id, ID)
-        self.assertIsNone(ns["_profile_state"](Hass([State(entity_id=ID, restored=True)])))
 
     def test_stale_active_never_grants_fresh_contract(self):
         ns, _, _ = load_guard()
@@ -135,7 +175,7 @@ class LinkLossTest(unittest.IsolatedAsyncioTestCase):
         return transition
 
     async def test_no_output_calls_on_loss_and_recheck_stop_session(self):
-        ns, runtime, _ = load_guard()
+        ns, _, _ = load_guard()
         hass = Hass([State("unavailable")])
         writes = []
 
