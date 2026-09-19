@@ -11,13 +11,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.2.0-beta.12"
 TAG = "v" + VERSION
+RELEASE_NAME = "2026_09-01"
 
 
 def test_manifest_and_new_release_notes_have_same_unique_version():
     manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
     notes = (ROOT / "docs/beta12-prerelease-notes_sv.md").read_text(encoding="utf-8")
     assert manifest["version"] == VERSION
-    assert f"BrewAssistant v{VERSION}" in notes
+    assert notes.startswith(f"# BrewAssistant {RELEASE_NAME} — beta-prerelease ({TAG})")
+    assert f"**Releasenamn:** `{RELEASE_NAME}`" in notes
+    assert f"GitHub-tagg `{TAG}`" in notes
+    assert f"integrationsmanifest `{VERSION}`" in notes
     assert TAG in notes
     assert "Create a merge commit" in notes
     assert "HACS" in notes and "water-only" in notes
