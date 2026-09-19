@@ -6,105 +6,45 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
-      entity: button.brewassistant_mash_in_started
-      name: BrewZilla inmäskningskontroller
+      entity: sensor.brewassistant_brewzilla_control_reason
+      name: Inmäskning och maltbäddsvila
       icon: mdi:barley
       show_state: false
       show_label: true
       triggers_update:
-        - button.brewassistant_mash_in_override
+        - sensor.brewassistant_brewzilla_control_reason
         - button.brewassistant_mash_in_started
         - button.brewassistant_mash_in_complete
         - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-        - sensor.brewassistant_brewzilla_control_reason
         - sensor.brewassistant_brewday_runtime_source
-        - binary_sensor.brewzilla_profile_active
       tap_action:
         action: more-info
       label: |
         [[[
-          function clean(v) {
-            if (v === undefined || v === null) return null;
-            const s = String(v).trim();
-            return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
-          }
-          function numAttr(attrs, key) {
-            const n = Number(String(attrs?.[key] ?? '').replace(',', '.'));
-            return Number.isFinite(n) ? n : null;
-          }
-          function fmt(v, unit = '°C', d = 1) {
-            return Number.isFinite(v) ? `${v.toFixed(d)} ${unit}` : '—';
-          }
-          function boolish(v) {
-            const s = String(v ?? '').toLowerCase();
-            return v === true || ['on','true','yes','1'].includes(s);
-          }
-          const start = states['button.brewassistant_mash_in_started'];
-          const complete = states['button.brewassistant_mash_in_complete'];
-          const override = states['button.brewassistant_mash_in_override'];
-          const oa = override?.attributes || {};
-          const a = start?.attributes || complete?.attributes || {};
-          const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-          const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-          const source = clean(states['sensor.brewassistant_brewday_runtime_source']?.state) || 'None';
-          const rapt = source === 'RAPT BrewZilla Profile';
-          const bf = source === 'Brewfather Brew Tracker';
-          const raptAttrs = states['binary_sensor.brewzilla_profile_active']?.attributes || {};
-          const gateState = clean(a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state || oz.mash_in_gate_state) || 'idle';
-          const startedVisible = a.mash_in_started_visible === true;
-          const completeVisible = a.mash_in_complete_visible === true || gateState === 'mash_in_started';
-          const cleanHeat = boolish(oz.clean_heat_strike_active);
-          const strike = numAttr(oz, 'heat_strike_target') ?? numAttr(oz, 'heat_strike_clean_control_target');
-          const gateTemp = numAttr(oz, 'clean_heat_strike_gate_temperature');
-          const gateDelta = numAttr(oz, 'clean_heat_strike_gate_delta_to_target');
-          const safetyTemp = numAttr(oz, 'clean_heat_strike_safety_temperature');
-          const safetyDelta = numAttr(oz, 'clean_heat_strike_safety_delta_to_target');
-          const heat = numAttr(oz, 'desired_heat_utilization');
-          const pump = numAttr(oz, 'desired_pump_utilization');
-          const pumpReason = clean(oz.clean_heat_strike_pump_reason) || '—';
-          const effective = clean(a.effective_target || a.mash_in_effective_target || gate?.attributes?.effective_target || gate?.attributes?.mash_in_effective_target) || '—';
-          const next = clean(a.next_target || a.mash_in_next_target || gate?.attributes?.next_target || gate?.attributes?.mash_in_next_target) || clean(raptAttrs.next_step_target_temperature) || '—';
-          const process = Number(oa.mash_in_override_process_temperature);
-          const processAge = Number(oa.mash_in_override_process_temperature_age_seconds);
-          const processFresh = oa.mash_in_override_process_temperature_fresh === true;
-          const overrideAvailable = oa.mash_in_override_available === true;
-          const ageText = Number.isFinite(processAge) ? `${Math.floor(processAge / 60)}m ${Math.round(processAge % 60)}s` : 'okänd';
-          const sourceLabel = rapt ? 'RAPT Profile' : bf ? 'BrewTracker' : source === 'Manual Brewday' ? 'Manual' : 'ingen processkälla';
-          const startOk = !!start;
-          const completeOk = !!complete;
-          let msg = `Väntar på beredskap för inmäskning · källa ${sourceLabel}.`;
-          if (!startOk || !completeOk || !override) {
-            msg = 'De nya knapp-entiteterna saknas ännu — kör pull + full HA-omstart.';
-          } else if (oa.mash_in_override_in_scope === true && !processFresh) {
-            msg = `RAPT Cloud MASH-data är stale (${ageText}). BrewZilla reglerar lokalt. ${overrideAvailable ? 'Manuell strike-kvittens är tillgänglig efter fysisk kontroll.' : 'Väntar tills WORT/lokalt target ligger inom säkert override-band.'}`;
-          } else if (cleanHeat && gateState !== 'mash_in_started') {
-            msg = 'Heatstrike pågår. Färsk MASH/process-data ger automatisk READY inom ±1,0 °C. Manuell reservväg visas först inom ±2,0 °C.';
-          } else if (startedVisible) {
-            msg = rapt
-              ? 'Strike är redo. Tryck INMÄSKNING PÅBÖRJAD när du börjar hälla i malten. RAPT står då kvar på sitt manuella Mash In-steg.'
-              : bf
-                ? 'Strike är redo. Tryck INMÄSKNING PÅBÖRJAD när du börjar hälla i malten. Därefter är Brewfather FORTSÄTT primär kvittens.'
-                : 'Strike är redo. Tryck INMÄSKNING PÅBÖRJAD när du börjar hälla i malten.';
-          } else if (completeVisible) {
-            msg = rapt
-              ? 'Inmäskning påbörjad. När malten är inrörd: tryck INMÄSKNING KLAR i BA. Fortsätt därefter det manuella RAPT-steget på BrewZillan till Mash Rest.'
-              : bf
-                ? 'Inmäskning påbörjad. När du är klar: tryck FORTSÄTT i Brewfather. BA slutför inmäskningen och startar cirkulation automatiskt.'
-                : 'Inmäskning påbörjad. När malten är inrörd: tryck INMÄSKNING KLAR i BA.';
-          } else if (gateState === 'mash_in_complete') {
-            msg = rapt
-              ? 'BA:s inmäskning är klar och cirkulationen är släppt. Fortsätt nu RAPT:s manuella Mash In-steg på BrewZillan till Mash Rest.'
-              : bf
-                ? 'Inmäskningen är klar. Brewfather är igång och BA har släppt vidare till normal mäskcirkulation.'
-                : 'Inmäskningen är klar och BA har släppt vidare till normal mäskcirkulation.';
-          }
-          const staleLine = oa.mash_in_override_in_scope === true && !processFresh
-            ? `<br>MASH ${fmt(process)} · stale ${ageText} · WORT ${fmt(Number(oa.mash_in_override_wort_temperature))} · lokalt target ${fmt(Number(oa.mash_in_override_local_target))}`
-            : '';
-          const heatLine = cleanHeat
-            ? `<br>strike ${fmt(strike)} · gate ${fmt(gateTemp)} / Δ ${fmt(gateDelta)} · säkerhet ${fmt(safetyTemp)} / Δ ${fmt(safetyDelta)} · värme ${Number.isFinite(heat) ? heat.toFixed(0) + ' %' : '—'} · pump ${Number.isFinite(pump) ? pump.toFixed(0) + ' %' : '—'} (${pumpReason})`
-            : '';
-          return `${msg}<br>källa ${sourceLabel} · status ${gateState} · effektivt mål ${effective}°C · nästa ${next}°C${staleLine}${heatLine}`;
+          const a = entity?.attributes || {};
+          const gate = a.mash_in_gate_state || states['button.brewassistant_mash_in_started']?.attributes?.state || 'idle';
+          const phase = a.mash_recirculation_phase;
+          const remaining = Math.max(0, Number(a.mash_settle_remaining_seconds) || 0);
+          const ramp = Math.max(0, Number(a.mash_recirculation_ramp_remaining_seconds) || 0);
+          const source = states['sensor.brewassistant_brewday_runtime_source']?.state || 'None';
+          const target = Number(a.mash_physical_hold_target);
+          const hold = Number.isFinite(target) && a.mash_physical_hold_target != null ? ` · fysisk vila ${target.toFixed(1)}°C ${a.mash_physical_hold_complete ? 'klar' : 'väntar'}` : '';
+          const time = n => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2,'0')}`;
+          const pump = a.desired_pump_utilization;
+          let msg = 'Väntar på strike-beredskap. STARTED håller pumpen av.';
+          if (gate === 'mash_in_started') msg = source === 'Brewfather Brew Tracker'
+            ? 'Inmäskning påbörjad. När malten är inrörd: tryck FORTSÄTT i Brewfather. BA markerar klart men startar INTE pumpen.'
+            : 'Inmäskning påbörjad. När malten är inrörd: tryck INMÄSKNING KLAR. Pumpen förblir AV.';
+          if (phase === 'settling') msg = `Maltbädden sätter sig · ${time(remaining)} kvar · pump AV · värmen får hålla mäskmålet.`;
+          if (phase === 'recirculation_ready') msg = '10 min vila klar. Kontrollera bädd och avrinning; kvittera LÅGFLÖDE nedan.';
+          if (phase === 'low_flow_pending') msg = 'Lågflödeskommando skickat; väntar på pumpåterkoppling. Höj inte flödet än.';
+          if (phase === 'low_flow') msg = `Försiktig recirkulation pågår · nästa flödesförslag om ${time(ramp)}. Kontrollera nivån över bädden.`;
+          if (phase === 'normal_ready') msg = 'Ramptid klar. Öka bara efter visuell kontroll av stabil avrinning och ny kvittens.';
+          if (phase === 'normal_pending') msg = 'Normalt flöde begärt; väntar på fysisk återkoppling.';
+          if (phase === 'normal') msg = 'Normal recirkulation bekräftad. Fysiska mäskvilan äger målet tills den är färdig.';
+          if (phase === 'blocked' || phase === 'recovery_required') msg = `Fysisk styrning SPÄRRAD (${a.mash_interlock_reason || phase}). Ingen automatisk omstart; operatörsåtgärd krävs.`;
+          if (gate === 'mash_in_complete' && !phase && a.physical_mash_interlock_active !== false) msg = 'Inmäskning klar. Väntar på backendstatus; anta inte att pumpen får starta.';
+          return `${msg}<br>gate ${gate} · fas ${phase || '—'}${hold} · pumprekommendation ${pump ?? '—'} %`;
         ]]]
       styles:
         card:
@@ -112,43 +52,25 @@ card:
           - padding: 12px
           - background: rgba(127,127,127,.075)
           - border: 1px solid rgba(127,127,127,.18)
-        grid:
-          - grid-template-areas: '"i n" "i l"'
-          - grid-template-columns: 36px minmax(0,1fr)
-          - column-gap: 10px
-        icon:
-          - width: 24px
-          - opacity: 0.82
-        name:
-          - justify-self: start
-          - font-size: 13px
-          - font-weight: 950
         label:
-          - justify-self: start
-          - text-align: left
           - white-space: normal
-          - font-size: 11px
-          - font-weight: 760
-          - line-height: 1.25
-          - opacity: 0.78
-
+          - text-align: left
+          - font-size: 12px
+          - line-height: 1.35
     - type: custom:button-card
       entity: button.brewassistant_mash_in_override
       name: GODKÄNN STRIKE MANUELLT
       icon: mdi:hand-okay
       show_state: false
       show_label: true
-      label: Kvitterar endast READY-gaten · max ±2,0 °C
+      label: Kvitterar enbart READY · kontrollera fysiskt · max ±2,0 °C
       tap_action:
         action: call-service
         service: button.press
         target:
           entity_id: button.brewassistant_mash_in_override
         confirmation:
-          text: >-
-            Kontrollera strike-temperaturen fysiskt på BrewZilla/termometern.
-            Knappen kvitterar endast Mash-In READY och ändrar inte heat, pump
-            eller target. Fortsätt sedan med INMÄSKNING PÅBÖRJAD.
+          text: Kontrollera strike-temperaturen fysiskt. Knappen kvitterar bara READY och ändrar inte pump, värme eller mål.
       styles:
         card:
           - display: |
@@ -156,18 +78,7 @@ card:
                 return entity?.attributes?.mash_in_override_available === true ? 'block' : 'none';
               ]]]
           - border-radius: 18px
-          - padding: 12px
           - background: rgba(255,152,0,.16)
-          - border: 1px solid rgba(255,152,0,.42)
-        name:
-          - font-size: 12px
-          - font-weight: 950
-        label:
-          - white-space: normal
-          - font-size: 10.5px
-          - font-weight: 750
-          - opacity: 0.76
-
     - type: horizontal-stack
       cards:
         - type: custom:button-card
@@ -176,97 +87,81 @@ card:
           icon: mdi:barley
           show_state: false
           show_label: true
-          triggers_update:
-            - button.brewassistant_mash_in_started
-            - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-            - sensor.brewassistant_brewzilla_control_reason
-            - sensor.brewassistant_brewday_runtime_source
-          label: |
-            [[[
-              const a = states['button.brewassistant_mash_in_started']?.attributes || {};
-              const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
-              const target = oz.heat_strike_target ?? oz.heat_strike_clean_control_target ?? a.effective_target ?? a.mash_in_effective_target ?? '—';
-              const gate = oz.clean_heat_strike_gate_temperature ?? '—';
-              const safety = oz.clean_heat_strike_safety_temperature ?? '—';
-              return `Starta fysisk inmäskning · strike ${target}°C · gate ${gate}°C · säkerhet ${safety}°C`;
-            ]]]
+          label: Släpp strike-målet · pump AV
           tap_action:
             action: call-service
             service: button.press
             target:
               entity_id: button.brewassistant_mash_in_started
             confirmation:
-              text: >-
-                Börjar du mäska in nu? Kontrollera att Mash/BLE/control-proben är
-                vid strike-target och att wort/kettle inte springer iväg. BA släpper
-                strike-target, håller pumpen av och siktar på nästa mäskmål med
-                låg anti-drop-värme.
+              text: Börjar du tillsätta malt nu? Kontrollera båda temperaturgivarna. BA byter till mäskmål och håller pumpen av.
           styles:
             card:
               - display: |
                   [[[
-                    const a = states['button.brewassistant_mash_in_started']?.attributes || {};
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const state = a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state;
-                    const visible = a.mash_in_started_visible === true || state === 'ready_for_mash_in' || gate?.state === 'on';
-                    return visible ? 'block' : 'none';
+                    const a = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    const b = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
+                    return a.mash_in_gate_state === 'ready_for_mash_in' || b?.state === 'on' ? 'block' : 'none';
                   ]]]
               - border-radius: 18px
-              - padding: 12px
               - background: rgba(255,193,7,.12)
-              - border: 1px solid rgba(255,193,7,.28)
-            name:
-              - font-size: 12px
-              - font-weight: 950
-            label:
-              - white-space: normal
-              - font-size: 10.5px
-              - font-weight: 750
-              - opacity: 0.74
         - type: custom:button-card
           entity: button.brewassistant_mash_in_complete
           name: INMÄSKNING KLAR
-          icon: mdi:pump
+          icon: mdi:barley-off
           show_state: false
           show_label: true
-          label: |
-            [[[
-              const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
-              const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
-              const target = a.effective_target ?? a.mash_in_effective_target ?? '—';
-              if (source === 'RAPT BrewZilla Profile') return `BA släpper mäskcirkulation · mål ${target}°C · fortsätt sedan RAPT på BrewZillan`;
-              if (source === 'Brewfather Brew Tracker') return `Reservväg · primärt FORTSÄTT i Brewfather · mål ${target}°C · pump 50%`;
-              return `Slutför inmäskning · mål ${target}°C · pump 50%`;
-            ]]]
+          label: Malt inrörd · börja 10 min vila · pump AV
           tap_action:
             action: call-service
             service: button.press
             target:
               entity_id: button.brewassistant_mash_in_complete
             confirmation:
-              text: >-
-                Är den fysiska inmäskningen klar? BA slutför Mash-In-gaten och
-                släpper normal mäskcirkulation. Om processkällan är RAPT fortsätter
-                du därefter profilens manuella Mash In-steg på BrewZillan.
+              text: Är all malt inrörd? Kvitteringen startar maltbäddsvila och pumpen förblir AV. I Brewfather är FORTSÄTT den primära kvittensen.
           styles:
             card:
               - display: |
                   [[[
-                    const a = states['button.brewassistant_mash_in_complete']?.attributes || {};
-                    const gate = states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending'];
-                    const state = a.state || a.mash_in_gate_state || gate?.attributes?.state || gate?.attributes?.mash_in_gate_state;
-                    const visible = a.mash_in_complete_visible === true || state === 'mash_in_started';
-                    return visible ? 'block' : 'none';
+                    const a = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+                    return a.mash_in_gate_state === 'mash_in_started' ? 'block' : 'none';
                   ]]]
               - border-radius: 18px
-              - padding: 12px
               - background: rgba(76,175,80,.12)
-              - border: 1px solid rgba(76,175,80,.26)
-            name:
-              - font-size: 12px
-              - font-weight: 950
-            label:
-              - white-space: normal
-              - font-size: 10.5px
-              - font-weight: 750
-              - opacity: 0.74
+    - type: custom:button-card
+      entity: button.brewassistant_start_mash_circulation
+      name: STARTA / ÖKA RECIRKULATION
+      icon: mdi:pump
+      show_state: false
+      show_label: true
+      triggers_update:
+        - sensor.brewassistant_brewzilla_control_reason
+        - button.brewassistant_start_mash_circulation
+      label: |
+        [[[
+          const phase = states['sensor.brewassistant_brewzilla_control_reason']?.attributes?.mash_recirculation_phase;
+          return phase === 'recirculation_ready'
+            ? 'Steg 1 · starta lågflöde ca 25 % · kontrollera maltbädd och avrinning'
+            : 'Steg 2 · efter ca 5 min, öka till normalflöde ca 50 % endast vid stabil avrinning';
+        ]]]
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_start_mash_circulation
+        confirmation:
+          text: Bekräfta att maltbädden dränerar bra och att nivån ovanför inte stiger. Starta lågflöde eller öka ett steg? Nivå-/flödessensor saknas; kontrollera visuellt.
+      styles:
+        card:
+          - display: |
+              [[[
+                const phase = states['sensor.brewassistant_brewzilla_control_reason']?.attributes?.mash_recirculation_phase;
+                return ['recirculation_ready','normal_ready'].includes(phase) ? 'block' : 'none';
+              ]]]
+          - border-radius: 18px
+          - padding: 12px
+          - background: rgba(33,150,243,.13)
+          - border: 1px solid rgba(33,150,243,.4)
+        label:
+          - white-space: normal
+          - font-size: 11px
