@@ -83,12 +83,7 @@ class BrewAssistantButtonEntity(BrewAssistantEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Return true for explicit operator action buttons.
-
-        Buttons are commands, not telemetry. They must remain pressable even if
-        the coordinator has a stale or failed refresh, otherwise recovery actions
-        such as mash circulation cannot be used exactly when they are needed.
-        """
+        """Recovery buttons stay pressable even if the coordinator is stale."""
         return True
 
 
@@ -104,7 +99,6 @@ class BrewAssistantSupervisedApplyButton(BrewAssistantButtonEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return supervised apply diagnostics."""
         return build_supervised_apply_snapshot(self.coordinator.hass)
 
 
@@ -112,14 +106,9 @@ class BrewAssistantConfirmSupervisedApplyButton(BrewAssistantSupervisedApplyButt
     """Confirm pending supervised action."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
-        super().__init__(
-            coordinator,
-            "confirm_supervised_apply",
-            "mdi:check-decagram",
-        )
+        super().__init__(coordinator, "confirm_supervised_apply", "mdi:check-decagram")
 
     async def async_press(self) -> None:
-        """Confirm and execute pending supervised action."""
         await async_confirm_pending_action(self.coordinator.hass)
         self.async_write_ha_state()
 
@@ -128,20 +117,15 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
     """Cancel pending supervised action."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
-        super().__init__(
-            coordinator,
-            "cancel_supervised_apply",
-            "mdi:cancel",
-        )
+        super().__init__(coordinator, "cancel_supervised_apply", "mdi:cancel")
 
     async def async_press(self) -> None:
-        """Cancel pending supervised action."""
         cancel_pending_action(self.coordinator.hass)
         self.async_write_ha_state()
 
 
 class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
-    """Operator ABORT for the whole Brewday hot-side control path."""
+    """Latch hot-side control off; safe-down is scoped by physical source."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "abort_brewday")
@@ -151,7 +135,7 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_abort_brewday"
 
     async def async_press(self) -> None:
-        """Latch ownership off, cancel pending work and physically safe-down BrewZilla."""
+        """Latch ABORT and request safe-down only when source authority allows."""
         hass = self.coordinator.hass
         runtime = build_brewday_runtime_snapshot(hass)
         await async_latch_brewday_operator_abort(
@@ -160,17 +144,19 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
             stage=str(runtime.get("stage") or "Idle"),
             step=str(runtime.get("step") or "Idle"),
         )
-
         cancel_pending_action(hass)
         get_manual_brewday_session(hass).reset()
-
         result = await async_abort_brewzilla(hass)
+        note = (
+            "Operator ABORT latched; BA safe-down commands requested. "
+            "Verify actual BrewZilla outputs on the device."
+            if result.get("safe_state_enforced")
+            else "Operator ABORT latched; source authority blocked BA BrewZilla writes. "
+                 "Physical outputs NOT verified OFF; check the device."
+        )
         await async_record_brewday_audit_event(
-            hass,
-            "brewday_abort",
-            note="Operator ABORT: Brewday ownership latched off; BrewZilla safe-down executed.",
-            brewzilla_result=result,
-            always_record=True,
+            hass, "brewday_abort", note=note,
+            brewzilla_result=result, always_record=True,
         )
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
@@ -195,13 +181,11 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
         previous = brewday_operator_abort_snapshot(hass)
         await async_clear_brewday_operator_abort(hass)
         await async_record_brewday_audit_event(
-            hass,
-            "brewday_control_rearmed",
+            hass, "brewday_control_rearmed",
             note=(
                 "Operator rearmed Brewday ownership after ABORT; "
                 f"previous source {previous.get('source')} · {previous.get('stage')} · {previous.get('step')}."
-            ),
-            always_record=True,
+            ), always_record=True,
         )
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
@@ -212,7 +196,7 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
 
 
 class BrewAssistantCounterflowChillerReadyButton(BrewAssistantButtonEntity):
-    """Mark the Counter Flow Chiller as connected and start hot-wort circulation."""
+    """Mark Counter Flow Chiller ready; pump remains operator-owned."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "counterflow_chiller_ready")
@@ -271,7 +255,7 @@ class BrewAssistantBrewZillaMashInStartedButton(BrewAssistantButtonEntity):
 
 
 class BrewAssistantBrewZillaMashInCompleteButton(BrewAssistantButtonEntity):
-    """Confirm that manual mash-in is complete and start mash circulation."""
+    """Confirm manual mash-in complete and start mash circulation."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_mash_in_complete")
@@ -311,7 +295,7 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity
 
 
 class BrewAssistantBrewZillaSpargeLiftButton(BrewAssistantButtonEntity):
-    """Confirm lifted malt pipe AND sufficient wort coverage (operator attestation)."""
+    """Confirm lifted malt pipe and sufficient wort coverage."""
 
     def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
         super().__init__(coordinator, "brewzilla_confirm_sparge_lift")
