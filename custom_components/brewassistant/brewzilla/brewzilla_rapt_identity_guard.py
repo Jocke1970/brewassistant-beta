@@ -73,7 +73,7 @@ def _safe_off_allowed(decision, context):
 
 
 def install_rapt_identity_guard():
-    """Install after the source-authority wrapper and then close positive bypass."""
+    """Install after source authority; close write and read bypasses separately."""
     global _INSTALLED, _PREVIOUS_AUTHORITY, _PREVIOUS_SAFE_OFF
     if _INSTALLED:
         return
@@ -82,6 +82,8 @@ def install_rapt_identity_guard():
     authority_runtime._live_authority = _live_authority
     authority_runtime._safe_off_allowed = _safe_off_allowed
     from . import brewzilla_sparge_execution_guard
+    from . import brewzilla_rapt_brewing_read_isolation
 
     brewzilla_sparge_execution_guard.install_sparge_execution_guard()
+    brewzilla_rapt_brewing_read_isolation.install_rapt_brewing_read_isolation()
     _INSTALLED = True
