@@ -87,6 +87,7 @@ def install_rapt_identity_guard():
     from . import brewzilla_supervised_fallback_guard
     from . import brewzilla_policy_payload_guard
     from . import brewzilla_direct_entity_guard
+    from . import brewzilla_rapt_link_loss_guard
     from ..brewday import brewday_rapt_audit_context
 
     brewzilla_sparge_execution_guard.install_sparge_execution_guard()
@@ -104,4 +105,7 @@ def install_rapt_identity_guard():
     # Direct writer functions must not let prefixed HA entity IDs bypass the
     # canonical source guard; Manual and unrelated devices remain unchanged.
     brewzilla_direct_entity_guard.install_direct_entity_guard()
+    # A missing RCL report MUST NOT trigger OFF. Discover real profile entity,
+    # require connected session-bound STOP proof and recheck before each OFF.
+    brewzilla_rapt_link_loss_guard.install_rapt_link_loss_guard()
     _INSTALLED = True
