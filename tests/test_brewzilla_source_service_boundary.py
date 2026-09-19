@@ -132,7 +132,7 @@ def test_unknown_rapt_contract_never_emits_positive_or_off_writes():
     assert len(denied) == 3
 
 
-def test_rapt_stop_only_allows_direct_off_and_zero_not_positive():
+def test_rapt_stop_only_allows_off_and_zero_not_positive():
     hass, result, denied = asyncio.run(_run_case("blocked", stop=True))
     assert ("switch", "on", HEATER, None) not in hass.service_calls
     assert ("switch", "off", HEATER, None) in hass.service_calls
@@ -140,9 +140,10 @@ def test_rapt_stop_only_allows_direct_off_and_zero_not_positive():
     assert ("stop", "off", "session-a", None) in hass.service_calls
     assert all(not (call[0] == "number" and call[3] > 0) for call in hass.service_calls if call[0] == "number")
     assert result["applied"] is False
-    # Policy router still has no exception even for safe-off with a stopped profile:
-    # its direct route is not the verified RAPT STOP executor.
-    assert len(denied) == 3
+    # Current legacy policy allows a direct pump OFF during confirmed RAPT STOP,
+    # while refusing any positive policy actions. It is not a physical OFF proof.
+    assert ("policy", "turn_off", PUMP, None) in hass.service_calls
+    assert len(denied) == 2
 
 
 def test_unrelated_fermentation_actuator_is_not_blocked_by_hot_side_guard():
