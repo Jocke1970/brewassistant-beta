@@ -1,6 +1,5 @@
-# PASSIVE CARD ONLY. This card does not isolate BA's legacy actuator writers.
-# Do not run a RAPT profile concurrently with BA active hot-side control until
-# the central external-owner write gate is implemented and physically verified.
+# Endast läsning. Kortet isolerar INTE BA:s befintliga skrivvägar.
+# Kör inte aktiv BA-hot-side parallellt med en RAPT-profil före verifierad skrivspärr.
 type: custom:button-card
 entity: binary_sensor.brewzilla_profile_active
 name: RAPT · Lakning (observation)
@@ -24,19 +23,20 @@ label: |
     const attrs = profile?.attributes || {};
     const value = (id) => {
       const raw = states[id]?.state;
-      return raw === undefined || raw === null || ['unknown', 'unavailable', 'none', ''].includes(String(raw).toLowerCase()) ? 'okänt' : String(raw);
+      return raw === undefined || raw === null || ['unknown','unavailable','none',''].includes(String(raw).toLowerCase()) ? 'okänt' : String(raw);
     };
+    const escapeHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const manual = String(attrs.step_end_type || '').toLowerCase() === 'manual';
     const heater = value('switch.brewzilla_heater');
     const pump = value('switch.brewzilla_pump');
     const heat = value('number.brewzilla_heat_utilization');
     const pumpUtil = value('number.brewzilla_pump_utilization');
     const target = value('number.brewzilla_target_temperature');
-    const next = String(attrs.next_step_name || 'okänt');
+    const next = escapeHtml(attrs.next_step_name || 'okänt');
     const stepStatus = manual ? 'RAPT väntar på manuell fortsättning.' : 'VARNING: stegets manuella slutvillkor är inte verifierat.';
     return `<div style="line-height:1.35;white-space:normal;text-align:left;">
-      <div style="font-size:11px;font-weight:950;opacity:.7;">ENBART OBSERVATION · INGEN BA-STYRNING FRÅN DETTA KORT</div>
-      <div style="margin-top:7px;font-size:15px;font-weight:900;">Sparge · 11,38 L lakvatten</div>
+      <div style="font-size:11px;font-weight:950;opacity:.7;">ENBART OBSERVATION · INGA BA-AKTUATORKOMMANDON FRÅN DETTA KORT</div>
+      <div style="margin-top:7px;font-size:15px;font-weight:900;">Sparge · använd receptets lakvattenvolym</div>
       <div style="margin-top:5px;">${stepStatus} Nästa rapporterade steg: ${next}.</div>
       <div style="margin-top:9px;padding:8px;border-radius:10px;background:rgba(127,127,127,.09);">
         BZ-värmare: <b>${heater}</b> · heat: <b>${heat} %</b><br>
