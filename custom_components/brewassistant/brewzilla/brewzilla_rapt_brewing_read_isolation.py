@@ -29,21 +29,72 @@ def _bt_entity(entity: Any) -> bool:
     return isinstance(entity, str) and entity.startswith(_BT_PREFIXES)
 
 
-def rapt_owns_brewing(hass: Any) -> bool:
-    """Resolve active/uncertain RAPT ownership without consulting BT.
+def _unverified_rapt_profile_on(profile: Any) -> bool:
+    """An ON RAPT profile is a competing process even before its contract verifies.
 
-    Once RAPT has been observed active, loss, STOP handoff or a persisted RAPT
-    operator ABORT must not silently select BT as the replacement process.
+    During startup or a restored/partially published RCL entity, the canonical
+    RAPT profile sensor may be ON without the BA marker or a complete step.
+    Never let that ambiguous ON state silently promote BT or Manual to an
+    actuator-controlling fallback. The marker also supports renamed sensors.
     """
+    if profile is None or str(getattr(profile, "state", "")).lower() != "on":
+        return False
+    if getattr(profile, "entity_id", None) == rapt.RAPT_PROFILE_ENTITY:
+        return True
+    attrs = getattr(profile, "attributes", {}) or {}
+    return attrs.get("ba_source") == rapt.RAPT_PROFILE_BA_SOURCE
+
+
+def rapt_owns_brewing(hass: Any) -> bool:
+    """Resolve active, unverified, lost or stopped RAPT ownership without BT."""
     profile = rapt._profile_state(hass)
     store = rapt._store(hass)
     operator = brewday_operator_abort_snapshot(hass)
     return bool(
         rapt._active_contract(profile)
+        or _unverified_rapt_profile_on(profile)
         or store.get("was_active")
         or store.get("stop_guard_active")
         or (operator.get("active") and operator.get("source") == rapt.RAPT_PROFILE_SOURCE)
     )
+
+
+def _rapt_runtime_snapshot(hass: Any) -> dict[str, Any] | None:
+    """Fail closed on an ON profile with missing RCL contract, including startup.
+
+    The RAPT adapter normally returns None before its source marker verifies;
+    returning None here would let the old resolver select BT or Manual. Do not
+    set was_active, pretend to have a valid step, or send an OFF command.
+    """
+    previous = _ORIGINALS["rapt.build_rapt_profile_runtime_snapshot"](hass)
+    if previous is not None:
+        return previous
+    profile = rapt._profile_state(hass)
+    if not _unverified_rapt_profile_on(profile):
+        return None
+    return {
+        "source": rapt.RAPT_PROFILE_SOURCE,
+        "status": "unavailable",
+        "source_status": "unverified",
+        "runtime_state": "source_unverified",
+        "stage": "RAPT Profile",
+        "step": "Unverified RAPT profile",
+        "raw_step_name": None,
+        "next_step": "None",
+        "target_temperature": None,
+        "target_temperature_source": None,
+        "time_remaining_seconds": None,
+        "time_remaining_minutes": None,
+        "profile_active": None,
+        "profile_contract_complete": False,
+        "profile_session_id": None,
+        "profile_step_id": None,
+        "profile_step_number": None,
+        "profile_source_available": False,
+        "direct_brewzilla_control_allowed": False,
+        "control_owner": "unknown_preserve_rapt_handoff",
+        "summary": "RAPT profile ON but source/step contract unverified; no BT fallback or new BA commands.",
+    }
 
 
 def _runtime_core_source(hass: Any) -> str:
@@ -126,6 +177,11 @@ def install_rapt_brewing_read_isolation() -> None:
     global _INSTALLED
     if _INSTALLED:
         return
+
+    # This must be in place before the runtime chooses a BT/Manual fallback.
+    # It only changes ambiguous RAPT ON and does not forge a verified step.
+    _ORIGINALS["rapt.build_rapt_profile_runtime_snapshot"] = rapt.build_rapt_profile_runtime_snapshot
+    rapt.build_rapt_profile_runtime_snapshot = _rapt_runtime_snapshot
 
     # Do NOT monkey-patch core.state/attr/state_obj/resolved_entity_id or
     # brewfather_batch_phase: they are useful in independent BT information
