@@ -1,4 +1,6 @@
-# BrewAssistant v0.2.0-beta.12 — RAPT-källisolering och övervakad vattenvalidering
+# BrewAssistant 2026_09-01 — beta-prerelease (v0.2.0-beta.12)
+
+**Releasenamn:** `2026_09-01` (år_månad-löpnummer, med ny månadsserie från 01). **Teknisk identitet för denna kandidat:** GitHub-tagg `v0.2.0-beta.12` och integrationsmanifest `0.2.0-beta.12`. Namnet är en visningsrubrik, inte en omskrivning av den tekniska versionen eller en flytt av gamla taggar. Markera GitHub-releasen som *Pre-release*. Nästa release i samma månad får ett nytt löpnummer, t.ex. `2026_09-02`.
 
 > [!WARNING]
 > **Installerbar testversion, inte bevis på fysisk säkerhet.** Endast vatten, operatör närvarande hela tiden. Ingen obevakad drift eller maltprovning baserat på denna beta. Stoppa vid avvikande värme-/pumpåterkoppling. HLT SIM-1 är en ren simulering, inte elektriskt interlock. Publicera inte denna releasebeskrivning som ett färdigt resultat förrän `beta`-mergecommittens exakta SHA, checks och tagg verifierats.
@@ -28,7 +30,7 @@ Denna beta gör det möjligt att testa BrewAssistant med RAPT BrewZilla Profile 
 1. Kontrollera `dev` efter feature→dev-merge: manifestversion **`0.2.0-beta.12`**, hela BF/BT-korten, RAPT Sparge-kort, loggmoduler och båda extra service-spärrarna ska finnas. CI/Hassfest/HACS gröna för faktiska dev-SHA:n.
 2. Skapa en **separat** PR `dev → beta`; granska hela diffen och välj **Create a merge commit**, aldrig squash/rebase. Låt `dev` och `main` vara kvar.
 3. Anteckna beta-mergecommittens fullständiga SHA. Kräv CI (Python 3.11/3.12/3.13), Hassfest och HACS **på just den SHA:n**; kontrollera manifest, `brewzilla/__init__.py`, `brewzilla_rapt_identity_guard.py`, release notes, UI-filer och testschema direkt på `beta`.
-4. Skapa en **NY** tagg `v0.2.0-beta.12` från exakt verifierad `beta`-mergecommit. GitHub Release: target `beta`, fullständig text från denna fil, kryssa **Set as a pre-release**, inte latest/stable. Återanvänd eller flytta aldrig beta.11 eller äldre taggar.
+4. Skapa en **NY** tagg `v0.2.0-beta.12` från exakt verifierad `beta`-mergecommit. GitHub Release: namn **`BrewAssistant 2026_09-01 — beta`**, target `beta`, fullständig text från denna fil, kryssa **Set as a pre-release**, inte latest/stable. Återanvänd eller flytta aldrig beta.11 eller äldre taggar.
 5. Läs publicerad taggs commit-SHA och filen `custom_components/brewassistant/manifest.json` via taggen; kräv samma SHA som `beta`, `0.2.0-beta.12` i manifestet och installerade interlock/spärrar. Om mismatch: ingen installation eller test.
 
 ## HACS och fysiskt water-only-protokoll (ENDAST efter publicerad prerelease)
@@ -40,4 +42,4 @@ Denna beta gör det möjligt att testa BrewAssistant med RAPT BrewZilla Profile 
 5. Kör Sparge stegvis: verifiera faktisk vattennivå över elementen och upplyft maltpipa innan operatörskvittens. Läs färsk fysisk OFF/0-återkoppling. Vid lokal RAPT 78 °C mot BA 95 °C: verifiera att positiv uppvärmning blockeras; försök inte kringgå spärren. Positivt förkokstest endast efter dokumenterat matchande aktuellt RAPT-mål, separat Supervised Apply-kvittens och operatörens verifiering av vattennivå och lokal reglering.
 6. Spara Brewday Audit, HLT JSONL, relevanta RCL-entiteter/attribut, fysisk återkoppling, installerad tagg och utfallet i en **ny daterad fältrapport**. Vid avvikelse: stoppa, rätta i utvecklingsflödet, promotera via dev→beta och publicera ny tagg. `main` ändras först efter användarens uttryckliga godkännande.
 
-**Versionsidentitet att verifiera efter promotion:** tagg `v0.2.0-beta.12` = manifest `0.2.0-beta.12` = verifierad beta-mergecommit. Denna fil är releaseunderlag; den är inte i sig bevis på publicerad release.
+**Versionsidentitet att verifiera efter promotion:** releasenamn `2026_09-01` · tagg `v0.2.0-beta.12` = manifest `0.2.0-beta.12` = verifierad beta-mergecommit. Denna fil är releaseunderlag; den är inte i sig bevis på publicerad release.
