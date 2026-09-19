@@ -41,6 +41,7 @@ from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_sa
 from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from . import brewzilla_physical_mash_interlock as _physical_mash_interlock
+from . import brewzilla_rapt_sparge_controller as _rapt_sparge_controller
 from . import brewzilla_source_authority_runtime as _source_authority_runtime
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
@@ -104,7 +105,7 @@ _rcl_value_recovery_guard.install_rcl_value_recovery_guard()
 _pre_mash_in_strike_sensor_guard.install_pre_mash_in_strike_sensor_guard()
 _equipment_learning_patch.install_equipment_learning_patch()
 _advice_control.install_advice_control()
-_mash_wort_delta_pump_guard.install_mash_wort_delta_pump_guard()
+_mash_wort_delta_pump_guard.install_wort_delta_pump_guard()
 _mash_priority_thermal_mix_guard.install_mash_priority_thermal_mix_guard()
 _clean_heat_strike_guard.install_clean_heat_strike_guard()
 _advice_notification_gate.install_advice_notification_gate()
@@ -161,17 +162,19 @@ _brewtracker_pause_checkpoint_guard.install_brewtracker_pause_checkpoint_guard()
 # supervised policy used for Brew Tracker while keeping source-loss fail-passive.
 _rapt_profile_control_bridge.install_rapt_profile_control_bridge()
 
-# Install absolutely last: ordinary RCL/process telemetry loss stops BA writes
-# and leaves BrewZilla's last local target/output state untouched. ABORT and
-# explicit hard-safety paths are exempt and remain authoritative.
+# Ordinary RCL/process telemetry loss stops BA writes and leaves BrewZilla's
+# last local target/output state untouched. ABORT and hard-safety paths remain.
 _fail_passive_guard.install_fail_passive_guard()
 
-# Physical mash holds and operator-confirmed recirculation apply to both the
-# normal and Brewfather-resume paths. Install outside all prior control wrappers
-# so the live Supervised Apply plan sees the same physical limits.
+# Physical mash holds and operator-confirmed recirculation apply to the
+# existing mash control paths, below the source and Sparge boundaries.
 _physical_mash_interlock.install_physical_mash_interlock()
 
-# Outermost source authority: BF brewing is observer-only; only verified RAPT
-# brewing intent may authorize new automatic BrewZilla writes. This layer
-# also guards shared primitive setters and the policy-router execution path.
+# RAPT-only Sparge operator interlock. It must see final mash regulation, then
+# be constrained by source authority on all actuator service primitives.
+_rapt_sparge_controller.install_rapt_sparge_controller()
+
+# Outermost source authority: BF brewing is observer-only; verified RAPT
+# brewing intent may authorize new BrewZilla writes. Guard shared setters and
+# the policy-router execution path against obsolete or ambiguous process intent.
 _source_authority_runtime.install_source_authority_runtime()
