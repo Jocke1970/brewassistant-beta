@@ -7,8 +7,14 @@ conditions:
     state: "on"
   - entity: sensor.brewassistant_brewday_runtime_source
     state: "RAPT BrewZilla Profile"
-  - entity: sensor.brewassistant_brewday_runtime_step
-    state: "Sparge"
+  - condition: or
+    conditions:
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Sparge"
+      - condition: state
+        entity: sensor.brewassistant_brewday_runtime_step
+        state: "Lakning"
 card:
   type: vertical-stack
   cards:
@@ -24,6 +30,8 @@ card:
         - button.brewassistant_confirm_sparge_lift
         - binary_sensor.brewzilla_profile_active
         - sensor.brewassistant_brewday_runtime_step
+        - sensor.brewassistant_brewzilla_orchestration_mode
+        - sensor.brewassistant_brewzilla_control_reason
         - switch.brewzilla_heater
         - switch.brewzilla_pump
         - number.brewzilla_heat_utilization
@@ -35,10 +43,15 @@ card:
           const off = a.outputs_confirmed_off === true;
           const heater = String(a.heater_readback ?? 'okänd').toUpperCase();
           const pump = String(a.pump_readback ?? 'okänd').toUpperCase();
+          const mode = String(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '');
+          const controlReason = String(states['sensor.brewassistant_brewzilla_control_reason']?.state || '');
           if (phase === 'awaiting_lift') {
             return `VÄNTAR PÅ LYFT · värme ${heater} · pump ${pump} · avläsning ${off ? 'AV/0 bekräftad i HA' : 'EJ bekräftad'}. Kontrollera lokalt innan maltpipan hanteras.`;
           }
           if (phase === 'heat_to_boil') {
+            if (mode === 'sparge-local-target-conflict-blocked' || controlReason.includes('positive BA heating blocked')) {
+              return `LYFT KVITTERAT · FÖRKOKSVÄRME BLOCKERAD. RAPT:s lokala mål avviker från BA:s 95 °C eller kan inte verifieras. Kontrollera RAPT-profilen; ingen värme får startas från BA.`;
+            }
             return `LYFT KVITTERAT · pumpen ska förbli AV · BA förkok max ${a.preboil_target_c ?? 95} °C. Värme kräver separat övervakad BEKRÄFTA.`;
           }
           return 'Källa/steg inte verifierat. Ingen lyftkvittens; kontrollera RAPT och BA.';
