@@ -1,8 +1,9 @@
 """Read HA state into the HLT simulator; this adapter never calls a service.
 
-Power is interpreted as current consumption, not a free-capacity authorization.
-The optional HLT temperature sensor is informational/calibration input, and
-must be fresh before use; falling back to the thermal model is explicit.
+Power is current consumption, not free-capacity authorization. A continuously
+held BZ utilization setting does not get a fresh last_updated timestamp: do not
+mistake an unchanged number for a lost signal. Physical measurements and HLT
+switch readback still require fresh data. This is simulation ONLY.
 """
 from __future__ import annotations
 
@@ -24,14 +25,23 @@ class EntityConfig:
     heater_active_threshold_w: float = 20.0
 
 
-def _fresh(hass, entity_id: str | None, now: datetime, age_s: float):
+def _fresh(hass, entity_id: str | None, now: datetime, age_s: float,
+           *, allow_unchanged: bool = False):
+    """Read a valid HA state; require recent updates only for observations.
+
+    An unchanged setpoint/utilization may be older than age_s while remaining
+    valid in HA. Unknown/unavailable/missing is rejected in either mode.
+    `allow_unchanged` MUST NOT be used for wattmeters, probes or OFF readback.
+    """
     if not entity_id:
         return None
     state = hass.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable", "none", ""):
+    if state is None or str(state.state).lower() in {"unknown", "unavailable", "none", ""}:
         return None
-    if (now - state.last_updated).total_seconds() > age_s:
-        return None
+    if not allow_unchanged:
+        age = (now - state.last_updated).total_seconds()
+        if not 0 <= age <= age_s:
+            return None
     return state
 
 
@@ -48,10 +58,14 @@ def _float(state):
 def collect_inputs(hass, config: EntityConfig, *, sparge_required: bool,
                    enabled: bool, brewzilla_unconstrained: bool = True,
                    now: datetime | None = None) -> Inputs:
-    """Collect fresh HA readings; unknown states remain None (never zero)."""
+    """Collect read-only HA inputs; missing data stays None, never zero."""
     now = now or datetime.now(timezone.utc)
     bz_power = _float(_fresh(hass, config.brewzilla_power, now, config.max_age_s))
-    bz_util = _float(_fresh(hass, config.brewzilla_utilization, now, config.max_age_s))
+    # Utilization is a held setting, not a periodically sampled measurement.
+    # The simulator still requires fresh BZ watts and fresh temperature evidence
+    # before declaring a virtual cruise opportunity.
+    bz_util = _float(_fresh(hass, config.brewzilla_utilization, now,
+                            config.max_age_s, allow_unchanged=True))
     hlt_temp = _float(_fresh(hass, config.hlt_temperature, now, config.max_age_s))
     switch = _fresh(hass, config.hlt_switch, now, config.max_age_s)
     hlt_power = _float(_fresh(hass, config.hlt_power, now, config.max_age_s))
