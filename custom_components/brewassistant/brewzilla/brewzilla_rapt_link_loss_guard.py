@@ -8,6 +8,8 @@ Install last, after source authority and the RAPT identity guard.
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
+
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
@@ -22,8 +24,9 @@ _BASE_ACTIVE = None
 _BASE_STOP = None
 _MAX_AGE_SECONDS = 90
 _LISTENER_ENTITY_KEY = "rapt_brewzilla_profile_runtime_listener_entity"
-# Active session identity is learned only from a fresh, non-restored RCL ON
-# state in the current HA process; no persisted/offline OFF state can grant STOP.
+_AMBIGUOUS_ENTITY = "binary_sensor.brewzilla_profile_ambiguous"
+# Active identity is learned only from a fresh, non-restored RCL ON state in
+# this HA process; no cached/restored OFF state can grant STOP.
 _OBSERVED_SESSIONS: dict[str, str] = {}
 
 
@@ -42,25 +45,45 @@ def _recent(state, *, changed: bool = False) -> bool:
 
 
 def _profile_state(hass):
-    """The BA source marker, not an assumed fixed HA entity ID, is authority."""
+    """Find real entity by marker; keep restored/ambiguous ON as unverified.
+
+    A restored ON must reach read-isolation's ownership lockout, even though
+    _is_rcl_contract refuses it as actuation evidence. When multiple devices
+    are indistinguishable, expose a *restored* unverified synthetic ON to the
+    existing read-isolation guard. It cannot authorize active/STOP or be used
+    as a real service target; do not subscribe to its synthetic entity ID.
+    """
     previous = runtime._store(hass).get("last_known", {}).get("entity_id")
     try:
-        candidates = [s for s in hass.states.async_all()
-                      if s.entity_id.startswith("binary_sensor.")
-                      and runtime._is_rcl_contract(s)]
+        candidates = [
+            state for state in hass.states.async_all()
+            if state.entity_id.startswith("binary_sensor.")
+            and (
+                state.attributes.get("ba_source") == runtime.RAPT_PROFILE_BA_SOURCE
+                or state.entity_id == runtime.RAPT_PROFILE_ENTITY
+                or (previous and state.entity_id == previous)
+            )
+        ]
     except (AttributeError, TypeError):
         candidates = []
     if previous:
         for state in candidates:
             if state.entity_id == previous:
                 return state
-    # Multiple BrewZillas require an explicit selected entity, not arbitrary
-    # first-match controller ownership.
     if len(candidates) == 1:
         return candidates[0]
-    state = hass.states.get(runtime.RAPT_PROFILE_ENTITY)
-    if not candidates and runtime._is_rcl_contract(state):
-        return state
+    if len(candidates) > 1:
+        # This is an ownership LOCKOUT hint, not fabricated live telemetry.
+        return SimpleNamespace(
+            entity_id=_AMBIGUOUS_ENTITY,
+            state="on",
+            attributes={
+                "ba_source": runtime.RAPT_PROFILE_BA_SOURCE,
+                "restored": True,
+                "profile_contract_complete": False,
+                "ambiguous_profile_entities": [state.entity_id for state in candidates],
+            },
+        )
     return None
 
 
@@ -86,9 +109,16 @@ def _attested_stop(state):
 
 
 def _ensure_transition_listener(hass):
-    """Follow the actual RCL entity, rebind on ID changes, never invent STOP."""
+    """Follow actual RCL entity, rebind on ID changes, never invent STOP."""
     data = hass.data.setdefault(DOMAIN, {})
     state = runtime._profile_state(hass)
+    if state is not None and state.entity_id == _AMBIGUOUS_ENTITY:
+        # Discard any prior listener; no arbitrary physical owner is chosen.
+        previous_unsub = data.pop(runtime.LISTENER_KEY, None)
+        if callable(previous_unsub):
+            previous_unsub()
+        data.pop(_LISTENER_ENTITY_KEY, None)
+        return
     target = (state.entity_id if state is not None else
               runtime._store(hass).get("last_known", {}).get("entity_id"))
     if not target:
@@ -102,15 +132,13 @@ def _ensure_transition_listener(hass):
     @callback
     def _state_changed(event):
         new = event.data.get("new_state")
-        # None, unknown and unavailable all enter the no-write/unavailable
-        # branch in the original runtime. Only an attested fresh OFF can STOP.
+        # None, unknown and unavailable enter the original no-write branch.
+        # Only an attested, fresh, matching OFF may authorize STOP cleanup.
         if new is not None and new.entity_id != target:
             return
         hass.async_create_task(runtime._async_process_transition(hass, new))
 
-    data[runtime.LISTENER_KEY] = async_track_state_change_event(
-        hass, [target], _state_changed,
-    )
+    data[runtime.LISTENER_KEY] = async_track_state_change_event(hass, [target], _state_changed)
     data[_LISTENER_ENTITY_KEY] = target
 
 
