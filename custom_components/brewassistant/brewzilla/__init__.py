@@ -40,6 +40,7 @@ from . import brewzilla_local_regulation_heat_guard as _local_regulation_heat_gu
 from . import brewzilla_mash_in_complete_safe_down_guard as _mash_in_complete_safe_down_guard
 from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from . import brewzilla_fail_passive_guard as _fail_passive_guard
+from . import brewzilla_physical_mash_interlock as _physical_mash_interlock
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -163,3 +164,8 @@ _rapt_profile_control_bridge.install_rapt_profile_control_bridge()
 # and leaves BrewZilla's last local target/output state untouched. ABORT and
 # explicit hard-safety paths are exempt and remain authoritative.
 _fail_passive_guard.install_fail_passive_guard()
+
+# Physical mash holds and operator-confirmed recirculation apply to both the
+# normal and Brewfather-resume paths. Install outside all prior control wrappers
+# so the live Supervised Apply plan sees the same physical limits.
+_physical_mash_interlock.install_physical_mash_interlock()
