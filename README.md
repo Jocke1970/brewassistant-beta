@@ -1,3 +1,18 @@
+# BrewAssistant 2026_09-01 — beta candidate (`v0.2.0-beta.12`)
+
+> [!IMPORTANT]
+> **Current development status after PR #215 (2026-09-19):** `dev` now contains source-scoped RAPT/BT authority guards, supervised RAPT Sparge and regression tests. This code is **not yet published or installed as a new beta** and has **not passed physical acceptance**. The historical beta.11 incident and paused-hot-side operating decision below remain valid for the *installed beta.11*, but its proposed architecture of a passive, no-write BA observer has been superseded for the beta.12 candidate. Do not treat older beta.11-only statements below as a description of the new candidate's implemented source contract.
+>
+> **Current architecture:** RAPT, when selected, is BA's *sole brewing input* (steps, timing and temperature directives); BA may control BrewZilla target, heat and pump through RAPT Cloud Link only within its source-, identity-, phase- and supervised-apply guards. RAPT's own profile runner advances steps. BF fermentation is independent; BF and BT share Brewfather upstream and may read, update and display anything without influencing RAPT's brewing control. BT selected for brewing remains observer-only for BA hot-side writes; Manual retains its own policy. Missing/contradictory RAPT data never selects BT as a hidden fallback. A blocked service request does not prove physical heater or pump OFF. The proposed alternative of completely passive BA with RAPT as sole physical controller is **not** what PR #215 implements.
+>
+> **Release route:** [PR #215](https://github.com/Jocke1970/brewassistant-beta/pull/215) was merged to `dev`; separate [PR #216](https://github.com/Jocke1970/brewassistant-beta/pull/216) promotes the candidate to `beta`. Require successful checks on the eventual beta merge SHA, create a **new** tag `v0.2.0-beta.12` on exactly that SHA and publish GitHub **Pre-release** named `2026_09-01`. Verify tag/manifest/HACS installation before any supervised water-only test. No physical testing from `dev`, no simultaneous competing regulators, no unattended/malt use, and no `main` promotion before field evidence and sign-off. See [beta.12 release notes](docs/beta12-prerelease-notes_sv.md) and [beta-first validation](docs/beta-first-physical-validation-2026-09-19_sv.md).
+
+---
+
+## Historical beta.11 incident checkpoint — retained for traceability
+
+The following is the documentation snapshot of the previously installed beta.11 and the then-proposed passive-controller redesign. It is retained, not retroactively rewritten; the current beta.12 candidate contract above takes precedence for development and release planning.
+
 # BrewAssistant v0.2.0-beta.11 — hot-side control paused
 
 **BrewAssistant** is a modular Home Assistant brewing assistant for Brewday intelligence, BrewZilla/RAPT integration, cooling, carbonation, serving/climate, fermentation tracking, dashboards and notifications.
