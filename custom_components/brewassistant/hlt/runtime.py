@@ -23,10 +23,17 @@ from .simulation import HLTSimulator, SimulationConfig
 _LOGGER = logging.getLogger(__name__)
 _KEY = "hlt_simulation_runtime"
 _INTERVAL = timedelta(seconds=30)
-_TERMINAL_STAGE_WORDS = (
-    "boil", "kok", "hopstand", "hop stand", "whirlpool", "chill", "cool",
-    "kyl", "transfer", "överför", "cleanup", "clean", "rengör", "pre-boil",
-)
+# Explicit known hot-side stages only. Unknown/new/terminal stages fail closed;
+# a name that merely lacks 'boil' or 'chill' is NOT permission to heat HLT.
+_HLT_ELIGIBLE_STAGES = frozenset({
+    "setup", "heat strike", "heat strike water", "mash", "mash in",
+    "mash out", "sparge",
+})
+# The normalized step text may explicitly request a ramp even while delayed
+# device temperature/target snapshots temporarily happen to match. A ramp
+# indication is a veto, never an authorization for virtual HLT heating.
+_RAMP_STEP_PREFIXES = ("ramp to ", "ramp ", "heat to ", "heating to ", "värm till ")
+_RAMP_STEP_NAMES = frozenset({"mash out", "heat strike water"})
 _INACTIVE = {"idle", "completed", "complete", "finished", "aborted", "error", "stopped"}
 
 
@@ -88,19 +95,27 @@ def _observed(hass: Any, entity_id: str, now: datetime, max_age_s: float,
 
 
 def _allowed_stage(stage: Any) -> bool:
-    text = str(stage or "").lower()
-    return bool(text) and not any(word in text for word in _TERMINAL_STAGE_WORDS)
+    """Allow simulation only in explicitly named mash/sparge preparation stages."""
+    return str(stage or "").strip().lower().replace("_", " ") in _HLT_ELIGIBLE_STAGES
+
+
+def _ramp_step_requested(step: Any) -> bool:
+    """Explicit runtime ramp wording vetoes HLT even if telemetry looks idle."""
+    text = str(step or "").strip().lower()
+    return text in _RAMP_STEP_NAMES or text.startswith(_RAMP_STEP_PREFIXES)
 
 
 def _bz_cruise_observation(hass: Any, brewday: dict[str, Any], now: datetime,
                            age_s: float, tolerance_c: float = 0.5) -> tuple[bool, bool]:
-    """Observed cruise only; unavailable evidence is UNKNOWN, not a ramp.
+    """Observed cruise only; missing telemetry cannot grant a virtual opportunity.
 
     Require a fresh internal temperature and valid held device/runtime target.
-    A target is a setting, not a periodically updating probe. The simulator
-    separately requires fresh measured BZ watts before any virtual opportunity.
+    A target is a setting, not a periodically updating probe. Explicit ramp
+    step intent vetoes cruise even when sampled temperatures happen to match.
     No HA sample can predict an autonomous BZ heater cycle.
     """
+    if _ramp_step_requested(brewday.get("step")):
+        return False, True
     actual_c = _numeric(_observed(hass, "sensor.brewzilla_temperature", now, age_s))
     device_c = _numeric(_observed(hass, "number.brewzilla_target_temperature", now,
                                   age_s, allow_unchanged=True))
