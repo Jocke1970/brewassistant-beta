@@ -1,17 +1,10 @@
-# BF fermentation is independent of RAPT/BT brewing source selection.
-# Show only during BA's normalized fermentation or cold-crash process.
+# Fermentation is separate from RAPT-owned hot-side Brewing.
+# Do not reference sensor.brewfather_brew_tracker_* here: the dashboard
+# runs in the browser and cannot be protected by backend read guards.
 type: conditional
 conditions:
-  - entity: switch.brewassistant_show_brewfather_feed
-    state: "on"
-  - condition: or
-    conditions:
-      - condition: state
-        entity: sensor.brewassistant_process_current_action_stage
-        state: "fermentation"
-      - condition: state
-        entity: sensor.brewassistant_process_current_action_stage
-        state: "cold_crash"
+  - entity: sensor.brewassistant_brewfather_batch_phase
+    state: "fermenting"
 card:
   type: vertical-stack
   cards:
@@ -22,7 +15,7 @@ card:
       show_state: false
       show_label: true
       triggers_update:
-        - sensor.brewassistant_process_current_action_stage
+        - sensor.brewassistant_brewfather_batch_phase
         - sensor.brewfather_recipe_name
         - climate.fermentation_chamber
       tap_action:
