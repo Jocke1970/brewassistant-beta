@@ -152,6 +152,52 @@ def test_cruise_then_ramp_keeps_bz_unrestricted_and_logs_conflict(rig):
     assert len(files[0].read_text().splitlines()) >= 3
 
 
+def test_unchanged_old_bz_settings_still_identify_real_ramp(rig):
+    """Field regression: target/heat held > 180s must not become UNKNOWN."""
+    at = rig.started + timedelta(minutes=16)
+    rig.sample(at, bz_power=2356.3, bz_util=100, current=50.05, device_target=71.8)
+    rig.brewday["target_temperature"] = 71.8
+    rig.hass.values["number.brewzilla_target_temperature"].last_updated = at - timedelta(seconds=819)
+    rig.hass.values["number.brewzilla_heat_utilization"].last_updated = at - timedelta(seconds=892)
+    rig.hass.values["sensor.brewzilla_temperature"].last_updated = at - timedelta(seconds=35)
+    rig.hass.values["sensor.brewzilla_power"].last_updated = at - timedelta(seconds=19)
+    result = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
+    assert result["bz_ramp_requested"] is True
+    assert result["bz_cruising_observed"] is False
+    assert result["last_result"].state == "WAITING_FOR_POWER"
+    assert result["last_result"].reason == "brewzilla_ramp_or_not_cruising"
+    assert result["last_result"].brewzilla_request_w is not None
+    assert result["last_result"].virtual_heater_on is False
+    assert result["last_result"].brewzilla_would_cap_utilization is None
+
+
+def test_unchanged_old_bz_settings_allow_only_fresh_measured_cruise(rig):
+    at = rig.started + timedelta(minutes=16)
+    rig.sample(at, bz_power=440, bz_util=20, current=65, device_target=65)
+    rig.hass.values["number.brewzilla_target_temperature"].last_updated = at - timedelta(minutes=15)
+    rig.hass.values["number.brewzilla_heat_utilization"].last_updated = at - timedelta(minutes=15)
+    observed = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
+    assert observed["bz_cruising_observed"] is True
+    assert observed["last_result"].virtual_heater_on is True
+
+    # A held target and requested utilization must NEVER excuse stale actual watts.
+    at += timedelta(minutes=4)
+    rig.hass.values["sensor.brewzilla_temperature"].last_updated = at
+    stale_watts = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
+    assert stale_watts["last_result"].virtual_heater_on is False
+    assert stale_watts["last_result"].reason == "brewzilla_power_priority" or stale_watts["last_result"].reason == "brewzilla_power_or_request_unknown"
+
+
+def test_unavailable_held_utilization_still_fails_closed(rig):
+    at = rig.started + timedelta(minutes=16)
+    rig.sample(at)
+    rig.hass.values["number.brewzilla_heat_utilization"].state = "unavailable"
+    result = asyncio.run(rig.runtime.async_hlt_simulation_tick(rig.hass, rig.entry, now=at))
+    assert result["last_result"].state == "WAITING_FOR_POWER"
+    assert result["last_result"].reason == "brewzilla_power_or_request_unknown"
+    assert not result["last_result"].virtual_heater_on
+
+
 def test_missing_temperature_is_unknown_not_fabricated_ramp(rig):
     at = rig.started + timedelta(minutes=1)
     rig.sample(at)
