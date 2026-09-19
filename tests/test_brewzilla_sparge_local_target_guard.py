@@ -7,9 +7,10 @@ boundaries. None of the existing BT/BF sensors or UI cards are disabled.
 from __future__ import annotations
 
 import ast
+from collections.abc import Mapping
 import math
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ def _functions(*names):
     tree = ast.parse(GUARD.read_text(encoding="utf-8"))
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names]
     assert {node.name for node in selected} == set(names)
-    env = {"Any": Any, "math": math}
+    env = {"Any": Any, "math": math, "Mapping": Mapping}
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(GUARD), "exec"), env)
     return env
 
@@ -99,6 +100,17 @@ def test_matching_rapt_target_keeps_original_sparge_functionality():
     assert out["rapt_sparge_local_target_agrees"]
     assert FN["_write_allowed"](hass, TARGET, value=95)
     assert FN["_write_allowed"](hass, HEATER, switch_action="on")
+
+
+def test_immutable_ha_attributes_are_accepted_without_bypassing_target_check():
+    _setup()
+    hass = FakeHass(95.0)
+    hass.profile.attributes = MappingProxyType(hass.profile.attributes)
+    assert FN["_profile_target_agrees"](hass) == (True, 95.0)
+    hass.profile = SimpleNamespace(state="on", attributes=MappingProxyType({
+        **hass.profile.attributes, "step_target_temperature": 78.0,
+    }))
+    assert FN["_profile_target_agrees"](hass) == (False, 78.0)
 
 
 def test_mismatched_target_blocks_positive_writes_but_keeps_off_and_zero():
