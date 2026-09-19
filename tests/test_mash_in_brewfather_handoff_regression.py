@@ -45,16 +45,14 @@ def test_running_brewfather_that_predates_mash_in_started_cannot_complete() -> N
 
 
 def test_runtime_flow_prefers_live_orchestration_mash_in_state() -> None:
-    preferred = (
-        "oz.mash_in_gate_state || gate?.attributes?.state || "
-        "gate?.attributes?.mash_in_gate_state"
-    )
-    stale_first = (
-        "a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state"
-    )
-
+    """The live orchestration sensor, not a stale button's attrs, owns visibility."""
     for path in RUNTIME_FLOW_CARDS:
         source = path.read_text(encoding="utf-8")
-        assert preferred in source, f"live mash-in state priority missing from {path.name}"
-        assert stale_first not in source, f"stale button state still outranks live state in {path.name}"
-        assert "['ready_for_mash_in','mash_in_started'].includes(state)" in source
+        assert "entity: sensor.brewassistant_brewzilla_control_reason" in source
+        assert "const a = entity?.attributes || {};" in source
+        assert "const gate = a.mash_in_gate_state || states['binary_sensor.brewassistant_brewzilla_mash_in_gate_pending']" in source
+        assert "a.mash_in_gate_state === 'ready_for_mash_in'" in source
+        assert "a.mash_in_gate_state === 'mash_in_started'" in source
+        assert "a.mash_in_gate_state || a.state || gate?.attributes?.mash_in_gate_state" not in source
+        assert "starts pump/circulation automatically" not in source
+        assert "startar pump/cirkulation automatiskt" not in source
