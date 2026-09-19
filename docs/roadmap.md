@@ -1,3 +1,20 @@
+# Roadmap — current beta.12 candidate and retained beta.11 history
+
+> [!IMPORTANT]
+> **Current development decision after PR #215 (2026-09-19):** The source-scoped controller is now merged into `dev`, but is **not installed, physically validated or released as beta.12**. The beta.11 failure and previous proposed all-passive architecture below remain historical evidence; they do not override the current code/source contract. No hardware test is allowed from `dev`. See [beta.12 release notes](beta12-prerelease-notes_sv.md) and [beta-first validation](beta-first-physical-validation-2026-09-19_sv.md).
+>
+> **Input is not actuation:** RAPT is the sole selected BA brewing **input** for steps/target/timing; BA may control BrewZilla through RCL only through the live RAPT source/step, safety and Supervised Apply gates. RAPT advances its own profile steps. BF and BT share Brewfather upstream, remain readable/displayable and cannot affect RAPT brewing decisions; BF fermentation is independent. BT as selected brewing source is observer-only for BA hot-side writes. Manual retains its existing policy. RAPT loss/STOP/ABORT must never imply physical OFF or automatically choose BT. The alternative design where BA is entirely read-only and RAPT controls all physical outputs is **not the architecture implemented by #215**.
+>
+> **Current promotion work:** [#215](https://github.com/Jocke1970/brewassistant-beta/pull/215) merged to `dev` with `64bd1a69d25e319a18c38d087921d0ba039ee076`; CI, HACS and Hassfest are green on that exact SHA. [#216](https://github.com/Jocke1970/brewassistant-beta/pull/216) is the separate `dev → beta` promotion; its final diff and merge-commit checks must pass before a new immutable `v0.2.0-beta.12` prerelease, displayed as `2026_09-01`, can be published. Verify the tag's exact beta SHA, tagged manifest and HACS version **before** supervised water-only testing. Any fix requires a new beta version; never retarget an old tag. Do not promote to `main` without field evidence and explicit approval.
+>
+> **Post-installation acceptance, not claimed as passed:** verify actual RCL source/session/step and temperature target, readback and local heater/pump state, old pending plans, loss/STOP/ABORT, EN/SV Lovelace cards and HLT-only simulation. Start read-only/observer with operator present. If RAPT's active Sparge target is 78 °C or missing while BA proposes 95 °C, positive preboil heating **must remain blocked**; no artificial target or bypass. Independently confirm sufficient water and safe physical output state before any positive command. No malt, unattended or physical HLT use authorized by an automated green check.
+
+---
+
+## Historical beta.11 incident and previously proposed passive architecture (preserved)
+
+The following content records the 2026-09-19 beta.11 operating pause and the design then proposed. Its historical instructions remain evidence, not current beta.12 design or permission to run dev physically.
+
 # Roadmap
 
 BrewAssistant's Python integration owns runtime/diagnostics and presently contains actuator-control paths; dashboard YAML displays data and can invoke operator actions. **As of 2026-09-19, the hot-side actuator feature is paused, not accepted for physical use.** This is an operational decision/documentation update, **not** an implemented monitor-only code guard.
