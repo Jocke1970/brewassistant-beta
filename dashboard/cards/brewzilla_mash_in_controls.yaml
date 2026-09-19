@@ -13,6 +13,7 @@ card:
       show_label: true
       triggers_update:
         - sensor.brewassistant_brewzilla_control_reason
+        - button.brewassistant_mash_in_override
         - button.brewassistant_mash_in_started
         - button.brewassistant_mash_in_complete
         - binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
@@ -22,6 +23,7 @@ card:
       label: |
         [[[
           const a = entity?.attributes || {};
+          const oa = states['button.brewassistant_mash_in_override']?.attributes || {};
           const gate = a.mash_in_gate_state || states['button.brewassistant_mash_in_started']?.attributes?.state || 'idle';
           const phase = a.mash_recirculation_phase;
           const remaining = Math.max(0, Number(a.mash_settle_remaining_seconds) || 0);
@@ -43,7 +45,11 @@ card:
           if (phase === 'normal') msg = 'Normal recirculation confirmed. Physical mash hold still owns target until complete.';
           if (phase === 'blocked' || phase === 'recovery_required') msg = `Physical control BLOCKED (${a.mash_interlock_reason || phase}). No automatic restart; operator recovery required.`;
           if (gate === 'mash_in_complete' && !phase && a.physical_mash_interlock_active !== false) msg = 'Mash-in complete. Waiting for interlock telemetry; do not assume pump can run.';
-          return `${msg}<br>gate ${gate} · phase ${phase || '—'}${hold}`;
+          const staleAge = oa.mash_in_override_process_temperature_age_seconds;
+          const age = Number(staleAge);
+          const stale = oa.mash_in_override_in_scope === true && oa.mash_in_override_process_temperature_fresh === false;
+          const staleLine = stale ? `<br>RCL MASH report stale (${Number.isFinite(age) ? Math.floor(age) + 's' : 'age unknown'}) · BrewZilla regulates locally; manual strike only after physical verification.` : '';
+          return `${msg}<br>gate ${gate} · phase ${phase || '—'}${hold}${staleLine}`;
         ]]]
       styles:
         card:
