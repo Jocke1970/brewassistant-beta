@@ -1,9 +1,9 @@
 # Brewday / BrewZilla: testschema för fysisk mäskning och maltbäddsvila – 2026-09-19
 
-**Status: endast kod och CI verifierade. Fälttest i Home Assistant/RAPT/BrewZilla återstår.** Detta är ett övervakat utvecklingstest, inte obemannad bryggautomatik. Gäller verifierad kod på befintliga `dev`, inte `main`. HLT är fortfarande **enbart simulering** och ingår inte i testet.
+**Status: kod och CI verifierade; fälttest i Home Assistant/RAPT/BrewZilla återstår.** Detta är ett övervakat utvecklingstest, inte obemannad bryggautomatik. Testkoden måste först promoteras från `dev` till den permanenta `beta`-grenen och publiceras i en korrekt taggad prerelease. `main` ingår inte i denna testrelease. HLT är fortfarande **enbart simulering**.
 
 > [!WARNING]
-> Den publicerade `v0.2.0-beta.10` pekar på fel commit och saknar den nya mash-interlocken. **Använd inte beta.10 för nästa styrtest.** Skapa/publicera i stället `v0.2.0-beta.11` från exakt verifierad slutcommit på `dev`, där manifestet anger `0.2.0-beta.11` och `brewzilla/__init__.py` installerar `brewzilla_physical_mash_interlock`. Kontrollera båda filerna via **taggen**, inte enbart via `dev`, före HA-installation. Flytta inte den gamla taggen och skapa ingen ny branch. Se [`beta11-prerelease-notes_sv.md`](beta11-prerelease-notes_sv.md).
+> Den publicerade `v0.2.0-beta.10` pekar på fel commit och saknar den nya mash-interlocken. **Använd inte beta.10 för nästa styrtest.** Promotera `dev` till `beta` med PR och **Create a merge commit**; verifiera den nya beta-mergecommitten och dess CI/HACS/Hassfest. Skapa/publicera därefter `v0.2.0-beta.11` från **exakt den verifierade `beta`-mergecommitten**, med manifest `0.2.0-beta.11` och installation av `brewzilla_physical_mash_interlock`. Kontrollera båda filerna via **taggen**, inte enbart `dev` eller `beta`, före HA-installation. Flytta inte den gamla taggen och skapa ingen ny branch. Se [`beta11-prerelease-notes_sv.md`](beta11-prerelease-notes_sv.md) och [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Syfte och förväntat beteende
 
@@ -17,7 +17,8 @@ Vid Complete ska pumpen ställas till **0 % och OFF** och en **10-minuters maltb
 
 - [ ] Avsluta föregående bryggkörning. Bekräfta att BrewZilla är inaktiv och att värmare och pump är **OFF**.
 - [ ] Säkerhetskopiera installerad `custom_components/brewassistant` och dashboard-YAML. Anteckna installerad version och Git-revision.
-- [ ] Kontrollera att CI (Python 3.11–3.13), HACS och Hassfest är gröna för exakt commit som ska taggas. Skapa `v0.2.0-beta.11` med **`dev` som target**, och verifiera att taggens commit är identisk med denna slutcommit. Kontrollera taggens manifestversion och installerad interlock-kod.
+- [ ] Kontrollera att `dev` har rätt manifest och interlock. Granska PR `dev -> beta`, använd **Create a merge commit** och anteckna exakt ny `beta`-SHA.
+- [ ] Kontrollera att CI (Python 3.11–3.13), HACS och Hassfest är gröna på **denna `beta`-mergecommit**. Skapa `v0.2.0-beta.11` med `beta` som target från exakt samma SHA. Kontrollera därefter taggens SHA, manifestversion och installerad interlock-kod. Ingen tagg från `dev` eller `main`.
 - [ ] Installera **endast den verifierade `v0.2.0-beta.11`** via HACS med prereleases aktiverade. Beta.10 är felpaketerad. Om release/taggkontrollen misslyckas ska **inget fysiskt test påbörjas**. En Git-commit uppdaterar inte HA automatiskt.
 - [ ] Starta om hela Home Assistant.
 - [ ] Uppdatera det dashboardkort du faktiskt använder från **samma verifierade tagg**: `dashboard/cards/brewassistant_brewday_runtime_flow_sv.yaml` och/eller `dashboard/cards/brewzilla_mash_in_controls_sv.yaml`. YAML som tidigare klistrats in i HA ersätts inte av en integrationsuppdatering. Uppdatera webbläsarens cache.
@@ -54,6 +55,6 @@ Avbryt om BrewZillas verkliga mål höjs mot nästa receptsteg innan den fysiska
 
 Anteckna Git-commit och tagg, HA-version, installations-/integrationsversion, version av dashboard-YAML, Brewfather-recept och exakta stegtider, batch-/vattenvolym, eventuell maltmängd och maltkrossgap, vald styrkälla, RCL:s rapporttider, MASH-/WORT-temperaturkurvor, BrewZillas mål-/värme-/pumpinställningar och faktisk återkoppling, alla knapptryckningar, Flight Recorder-/audit-export samt fel och oväntade automatiska skrivningar.
 
-Sammanställ `PASS / FAIL / EJ TESTAD` per kontrollpunkt. Först efter godkänt **övervakat** fälttest kan koden bedömas för fortsatt releasehantering. Granska särskilt konservativ värmereglering när pumpen står stilla och verklig återkoppling efter pumpkommandon innan någon obemannad användning övervägs.
+Sammanställ `PASS / FAIL / EJ TESTAD` per kontrollpunkt. Först efter godkänt **övervakat** fälttest kan koden bedömas för stabil promotion till `main`. Granska särskilt konservativ värmereglering när pumpen står stilla och verklig återkoppling efter pumpkommandon innan någon obemannad användning övervägs.
 
-**Engelsk källversion:** [`physical-mash-test-plan-2026-09-19.md`](physical-mash-test-plan-2026-09-19.md). Detta är den svenska motsvarigheten med samma säkerhets- och funktionskrav samt ett tillägg för det felaktigt taggade beta.10-paketet.
+**Engelsk källversion:** [`physical-mash-test-plan-2026-09-19.md`](physical-mash-test-plan-2026-09-19.md). Detta är den svenska motsvarigheten med samma säkerhets- och funktionskrav samt ett tillägg för rätt beta.11-paketering.
