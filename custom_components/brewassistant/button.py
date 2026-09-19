@@ -33,6 +33,10 @@ from .brewzilla.brewzilla_mash_in_readiness_contract import (
     async_override_mash_in_ready,
     build_mash_in_readiness_snapshot,
 )
+from .brewzilla.brewzilla_rapt_sparge_controller import (
+    async_confirm_sparge_lift,
+    build_sparge_snapshot,
+)
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla
 from .brewzilla.brewzilla_owned_control import remember_owned_control_from_apply_result
 from .const import DOMAIN
@@ -65,6 +69,7 @@ async def async_setup_entry(
             BrewAssistantBrewZillaMashInStartedButton(coordinator),
             BrewAssistantBrewZillaMashInCompleteButton(coordinator),
             BrewAssistantBrewZillaStartMashCirculationButton(coordinator),
+            BrewAssistantBrewZillaSpargeLiftButton(coordinator),
             BrewAssistantBrewZillaLearningApplyButton(coordinator),
             BrewAssistantBrewZillaLearningDenyButton(coordinator),
         ]
@@ -303,6 +308,30 @@ class BrewAssistantBrewZillaStartMashCirculationButton(BrewAssistantButtonEntity
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return build_mash_in_gate_snapshot(self.coordinator.hass)
+
+
+class BrewAssistantBrewZillaSpargeLiftButton(BrewAssistantButtonEntity):
+    """Confirm lifted malt pipe AND sufficient wort coverage (operator attestation)."""
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewzilla_confirm_sparge_lift")
+        self._attr_unique_id = f"{DOMAIN}_button_brewzilla_confirm_sparge_lift"
+        self._attr_name = "Confirm Sparge Lift and Wort Coverage"
+        self._attr_icon = "mdi:hand-okay"
+        self._attr_suggested_object_id = f"{DOMAIN}_confirm_sparge_lift"
+
+    async def async_press(self) -> None:
+        result = await async_confirm_sparge_lift(self.coordinator.hass)
+        await async_record_brewday_audit_event(
+            self.coordinator.hass, "sparge_lift_operator_confirmation",
+            note=str(result.get("apply_result")), always_record=True,
+        )
+        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return build_sparge_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantBrewZillaLearningApplyButton(BrewAssistantButtonEntity):
