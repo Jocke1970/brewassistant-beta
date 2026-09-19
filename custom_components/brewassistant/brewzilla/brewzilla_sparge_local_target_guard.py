@@ -11,6 +11,7 @@ result alone never proves that physical outputs are OFF.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import math
 from typing import Any
 
@@ -32,7 +33,7 @@ def _profile_target_agrees(hass: Any) -> tuple[bool, float | None]:
     if profile is None or not rapt._active_contract(profile):
         return False, None
     attrs = getattr(profile, "attributes", None)
-    if not isinstance(attrs, dict) or attrs.get("profile_contract_complete") is not True:
+    if not isinstance(attrs, Mapping) or attrs.get("profile_contract_complete") is not True:
         return False, None
     if not sparge.state_machine.is_sparge_step(attrs.get("step_name")):
         return False, None
