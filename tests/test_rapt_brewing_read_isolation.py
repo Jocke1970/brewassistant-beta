@@ -10,8 +10,8 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
-PATH = (Path(__file__).resolve().parents[1] /
-        "custom_components/brewassistant/brewzilla/brewzilla_rapt_brewing_read_isolation.py")
+ROOT = Path(__file__).resolve().parents[1]
+PATH = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_rapt_brewing_read_isolation.py"
 SOURCE = PATH.read_text(encoding="utf-8")
 
 
@@ -121,8 +121,8 @@ def test_bt_updates_cannot_change_rapt_process_source_snapshot_or_learning():
 def test_bt_specific_information_and_bf_fermentation_remain_readable():
     env = _configure()
     hass = FakeHass(active=True)
-    # The unmodified generic core state reader remains available to independent
-    # BT informational views; it is not a process-source selector.
+    # Generic core state access remains available to BT informational views;
+    # it is not itself an authoritative source-selection call.
     env["core"].state = lambda hass, entity: hass.states.get(entity).state
     assert env["core"].state(hass, "sensor.brewfather_brew_tracker_status") == "brewing"
     hass.bt_status = "paused"
@@ -130,7 +130,7 @@ def test_bt_specific_information_and_bf_fermentation_remain_readable():
     assert hass.states.get("sensor.brewfather_fermentation_target").state == "18.0"
     assert FN["_runtime_core_source"](hass) == "None"
     assert FN["_runtime_core_snapshot"](hass)["target_temperature"] is None
-    # When RAPT is not selected, BT is still a valid explicitly chosen process source.
+    # When RAPT is not selected, BT is still a valid process feed.
     other = FakeHass(active=False)
     assert FN["_runtime_core_source"](other) == "Brewfather Brew Tracker"
     assert FN["_runtime_core_snapshot"](other)["step"] == "brewing"
@@ -179,3 +179,14 @@ def test_installer_gates_process_consumers_not_global_bt_or_fermentation():
     assert "setattr(core, name" not in SOURCE
     assert "ownership.brewfather_batch_phase =" not in SOURCE
     assert "fermentation" not in SOURCE.split("def install_rapt_brewing_read_isolation", 1)[1]
+
+
+def test_normalized_brewday_checks_rapt_before_legacy_core_and_abort_is_gated():
+    runtime = (ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py").read_text(encoding="utf-8")
+    ramp = (ROOT / "custom_components/brewassistant/brewday/brewday_ramp_target_gate.py").read_text(encoding="utf-8")
+    sensor = (ROOT / "custom_components/brewassistant/brewday/brewday_runtime_sensor.py").read_text(encoding="utf-8")
+    assert runtime.index("rapt_snapshot = build_rapt_profile_runtime_snapshot(hass)") < runtime.index("runtime_source = core_source(hass)")
+    assert "snapshot = build_core_snapshot(hass)" in runtime  # operator ABORT uses guarded core
+    assert "snapshot = core.build_core_snapshot(hass)" in ramp  # dynamic lookup, not captured callable
+    assert "from .brewfather_ownership import brewfather_batch_phase" in sensor
+    assert "return brewfather_batch_phase(self.coordinator.hass)" in sensor  # BT informational phase preserved
