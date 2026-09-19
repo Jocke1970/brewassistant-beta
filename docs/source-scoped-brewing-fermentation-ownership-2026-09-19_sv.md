@@ -11,7 +11,7 @@
 | Brewing / Hot Side, Manual | Manuell processkälla | Existerande manuell kontroll måste granskas separat; behåll tidigare säkerhetspolicy tills explicit beslut/test | RCL/BrewZilla när manuell kontroll är verifierat tillåten |
 | Fermentation / Cold Side | Brewfather: jässteg och temperaturdirektiv | Reglerar jäskammarens värme/kyla enligt separat fermentationssäkerhet | Home Assistant / jäskammare |
 
-Brewfather kan tillhandahålla receptmetadata under en RAPT-bryggning utan att därmed bli hot-side-processkälla. Fermentationens källa påverkar aldrig val av BrewZilla-regulator eller dess skrivbehörighet.
+Brewfather kan tillhandahålla receptmetadata under en RAPT-bryggning utan att därmed bli hot-side-processkälla. **Men BrewTrackers bryggsensorer får inte läsas ens som metadata, fallback eller diagnostik av BA:s brewing-flöde när RAPT är vald källa.** Fermentationens källa påverkar aldrig val av BrewZilla-regulator eller dess skrivbehörighet.
 
 ## Process- och styrkedja
 
@@ -22,6 +22,15 @@ Brewfather hot-side process -> BrewAssistant observer only (NO BrewZilla writes)
 ```
 
 RAPT-profilen äger alltid själva stegövergången; BA får inte hitta på en Next/Continue-övergång eller starta koktimern. RCL är transport och rapporteringsyta, inte en konkurrerande BA-regulator. BrewZillas lokala skydd/funktion måste testas och får inte antas bekräftad av ett lyckat HA-serviceanrop.
+
+## Nytt uttryckligt krav: inga BT-sensorläsningar när RAPT äger Brewing
+
+- Välj brewing-källa **före** insamling av stegnamn, status, temperaturdirektiv, recept-/batchkontext, timers, audit och dashboarddata. Vid RAPT används bara aktuell RAPT-profil/telemetri, BA:s egna data och BrewZillas hardware-readback. BrewTracker-sensorer som `sensor.brewfather_brew_tracker_*` får inte anropas via `hass.states.get`, templates eller läsas som reservvärden av brewing-flödet.
+- Vid saknad, ofullständig, stale eller motstridig RAPT-data: rapportera `unavailable`/blockera ny positiv styrning; växla **inte** tyst till BrewTracker. En tidigare RAPT-session eller BT-värde får inte ärvas.
+- Undantaget gäller **Brewfather Fermentation och dess separata jäsprofil-/temperatursensorer**, inte BrewTracker-sensorerna. Jäsningen får fortsätta oberoende.
+- Normaliserade `sensor.brewassistant_brewday_*` ska vara gemensam utgång till UI; backend ansvarar för källval och autentisering. BrewZillas temperatur, verkliga target, pump, heat och utilization läses fortsatt från RCL/BrewZilla eftersom det är **fysisk readback**, inte BT.
+- Konkreta läckor som identifierats i feature-granskning: `brewzilla_learning._batch_context_snapshot` läser `_brewfather_batch_context` ovillkorligt; `brewday_audit_autostart` läser BT-status oberoende av runtime-källa; `brewfather_batch_phase` sensorn och `dashboard/cards/brewtracker_runtime*.yaml` använder BF/BT-tillstånd utan en RAPT-source exclusion. `_operator_aborted_snapshot` i `brewday_runtime.py` anropar BF-core trots RAPT ABORT. Detta är identifierade fel, **inte ännu tätade bara av detta dokument**.
+- Acceptanstest: kör all tillgänglig brewing-kod med simulerad aktiv/otillgänglig RAPT-profil och en `hass.states.get`-fälla som räknar eller avvisar ALLA `sensor.brewfather_brew_tracker_*`/`sensor.brewfather_brewtracker_*`-läsningar. Verifiera noll läsningar på bryggflödet inklusive Learning, audit, källa, dashboards och ABORT; BF Fermentation ska fortfarande kunna läsa sina separata jässensorer. Ingen fysisk utrustning behövs för detta test.
 
 ## Sparge, endast när RAPT är giltig brewing-källa
 
@@ -44,8 +53,8 @@ RAPT-profilen äger alltid själva stegövergången; BA får inte hitta på en N
 ## Releaseordning (obligatorisk)
 
 1. Arbeta på `feature/*` från aktuell `dev`; öppna PR mot `dev`. Inga direkta ändringar på `beta` eller `main`.
-2. Kodgranskning, simulering/utan fysisk utrustning, CI, HACS, Hassfest och regression för källbyte, Sparge, omstart, ABORT, återanslutning och fermentation. Slå inte ihop en PR vars säkerhetskrav inte klarats.
-3. Efter godkänd `dev`: PR `dev -> beta`. Ny prerelease endast från verifierad beta-commit; äldre taggar ändras inte. Fysisk supervised water-only-verifiering krävs före produktionsbruk.
+2. Kodgranskning, simulering/utan fysisk utrustning, CI, HACS, Hassfest och regression för källbyte, BT-läsisolering, Sparge, omstart, ABORT, återanslutning och fermentation. Slå inte ihop en PR vars säkerhetskrav inte klarats.
+3. Efter godkänd `dev`: PR `dev -> beta`. Ny prerelease endast från verifierad beta-commit; äldre taggar ändras inte. **Användarens release-först-ordning:** fysisk supervised water-only-verifiering sker först efter publicerad prerelease och installerad beta; ingen fysisk provkörning före release.
 4. `beta -> main` först efter separat uttryckligt godkännande och verifierad stabil drift. Inga automatiska mergar eller releasepåståenden från gröna CI-checkar ensamma.
 
-**Första implementationstegen:** (a) central auktoritets-/skrivgräns per hot-side-källa, (b) BF passiv isolering, (c) sessionsbunden Sparge-interlock och svensk/engelsk status/kvittens, (d) jäsningsregression. Inget av detta är verifierat enbart genom detta dokument.
+**Första implementationstegen:** (a) central auktoritets-/skrivgräns per hot-side-källa, (b) noll BT-läsningar under RAPT brewing, (c) BF passiv isolering, (d) sessionsbunden Sparge-interlock och svensk/engelsk status/kvittens, (e) jäsningsregression. Inget av detta är verifierat enbart genom detta dokument.
