@@ -31,15 +31,20 @@ async def async_record_hlt_tick(
     usable_budget_w: float | None = None,
     hlt_target_c: float | None = None,
     hlt_volume_l: float | None = None,
+    source_context: dict[str, Any] | None = None,
 ) -> None:
     """Full samples in JSONL; power/timing UI updates, high-signal Audit only."""
     from ..brewday import brewday_audit as audit
 
+    # The trace context comes from the already-selected normalized Brewday
+    # snapshot. Do not read raw BT or make another source selection here.
+    selected_context = dict(source_context or {})
     path = await async_record_hlt_trace(
         hass, session_id, inputs, result,
         hlt_power_w=hlt_power_w, hlt_switch=hlt_switch,
         stage=stage, step=step, usable_budget_w=usable_budget_w,
         hlt_target_c=hlt_target_c, hlt_volume_l=hlt_volume_l,
+        source_context=selected_context,
     )
     state_data = hass.data.setdefault("brewassistant", {})
     if path is not None:
@@ -57,10 +62,19 @@ async def async_record_hlt_tick(
 
     log = audit.get_brewday_audit_log(hass)
     conflict = "simulation_budget_conflict" in result.events
+    # Source/session/step transitions are high-signal and must not be collapsed
+    # merely because HLT's virtual heater remains in the same state.
+    source_identity = tuple(selected_context.get(field) for field in (
+        "brewday_source", "brewday_runtime_state", "brewday_source_status",
+        "rapt_profile_session_id", "rapt_profile_step_id",
+        "rapt_profile_step_number", "rapt_profile_source_available",
+        "rapt_profile_stop_guard_active", "brewday_operator_abort_active",
+    ))
     state_key = (session_id, result.state, result.reason, result.virtual_heater_on,
                  result.temperature_source, result.power_budget_verified,
                  inputs.sparge_required, getattr(inputs, "brewzilla_cruising", False),
-                 getattr(inputs, "brewzilla_ramp_requested", False), conflict)
+                 getattr(inputs, "brewzilla_ramp_requested", False), conflict,
+                 source_identity)
     old_key = state_data.get("hlt_audit_state_key")
     if not log.active:
         state_data.pop("hlt_audit_state_key", None)
@@ -99,6 +113,7 @@ async def async_record_hlt_tick(
         "hlt_observed_heating_estimate_seconds": dashboard["observed_heating_estimate_seconds"],
         "hlt_yield_count": dashboard["yield_count"],
         "hlt_transition_events": list(transitions),
+        **selected_context,
     })
     event["severity"] = "warning" if conflict else "info"
     audit._append_event(log, event)
