@@ -18,7 +18,7 @@ from . import brewzilla_heat_strike_profile as _heat_strike_profile
 from . import brewzilla_heat_strike_transition_guard as _heat_strike_transition_guard
 from . import brewzilla_rcl_value_recovery_guard as _rcl_value_recovery_guard
 from . import brewzilla_active_rcl_recovery_guard as _active_rcl_recovery_guard
-from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor
+from . import brewzilla_pre_mash_in_strike_sensor_guard as _pre_mash_in_strike_sensor_guard
 from . import brewzilla_advice_notification_gate as _advice_notification_gate
 from . import brewzilla_mash_in_gate as _mash_in_gate
 from . import brewzilla_mash_in_readiness_contract as _mash_in_readiness_contract
