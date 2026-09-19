@@ -1,8 +1,9 @@
-"""Keep BrewTracker *brewing* observations out of an RAPT-owned brewday.
+"""Keep BrewTracker out of RAPT-owned *brewing decisions*, not out of HA.
 
-The Brewfather fermentation adapter is intentionally not touched. This is a
-scoped compatibility boundary for existing callers while the older BrewTracker
-adapter is gradually retired; it does not alter HA's own external integrations.
+BT is our Brewfather-derived brewing extension. Its sensors and BT-specific
+informational views may continue to work while RAPT is selected; they must not
+supply the normalized RAPT runtime, Learning control context or audit session
+selection. The independent Brewfather fermentation adapter is untouched.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from typing import Any
 
 from ..brewday import brewday_audit_autostart as audit
 from ..brewday import brewday_runtime_core as core
-from ..brewday import brewfather_ownership as ownership
 from ..brewday import rapt_profile_runtime as rapt
 from ..brewday.brewday_operator_abort import brewday_operator_abort_snapshot
 from . import brewzilla_learning as learning
@@ -23,17 +23,17 @@ _BT_PREFIXES = ("sensor.brewfather_brew_tracker_", "sensor.brewfather_brewtracke
 
 
 def _bt_entity(entity: Any) -> bool:
-    """Identify only BrewTracker entities, never Brewfather fermentation."""
+    """Identify BT brewing entities without matching BF fermentation entities."""
     if isinstance(entity, (tuple, list)):
         return bool(entity) and all(_bt_entity(item) for item in entity)
     return isinstance(entity, str) and entity.startswith(_BT_PREFIXES)
 
 
 def rapt_owns_brewing(hass: Any) -> bool:
-    """Read only RAPT profile and BA's handoff/ABORT state, never BT.
+    """Resolve active/uncertain RAPT ownership without consulting BT.
 
-    An unavailable-after-active profile still owns the handoff. A persisted
-    RAPT ABORT also keeps BT isolated even though normalized runtime is 'None'.
+    Once RAPT has been observed active, loss, STOP handoff or a persisted RAPT
+    operator ABORT must not silently select BT as the replacement process.
     """
     profile = rapt._profile_state(hass)
     store = rapt._store(hass)
@@ -46,28 +46,37 @@ def rapt_owns_brewing(hass: Any) -> bool:
     )
 
 
-def _read_wrapper(name: str, blocked: Any) -> Callable[..., Any]:
-    original = getattr(core, name)
-    _ORIGINALS[f"core.{name}"] = original
+def _runtime_core_source(hass: Any) -> str:
+    """Only the selected process source may enter the normalized runtime."""
+    if rapt_owns_brewing(hass):
+        return "None"
+    return _ORIGINALS["core.source"](hass)
 
-    def guarded(hass: Any, entity: Any, *args: Any, **kwargs: Any) -> Any:
-        if _bt_entity(entity) and rapt_owns_brewing(hass):
-            # For state(), preserve the caller's default; never consult BT.
-            if name == "state":
-                return args[0] if args else kwargs.get("default", "")
-            if name == "resolved_entity_id":
-                candidates = core.entity_candidates(entity)
-                return candidates[0]
-            return blocked
-        return original(hass, entity, *args, **kwargs)
 
-    return guarded
+def _runtime_core_snapshot(hass: Any) -> dict[str, Any]:
+    """Prevent BT process fields from leaking through legacy core fallbacks.
+
+    Normal Brewday routing checks RAPT first and builds the RAPT snapshot. The
+    inactive core result is for older callers and the operator ABORT route;
+    it is NEVER a claim that the physical BrewZilla is switched off.
+    """
+    if rapt_owns_brewing(hass):
+        return core.inactive_snapshot()
+    return _ORIGINALS["core.build_core_snapshot"](hass)
 
 
 def _learning_tracker_data(hass: Any) -> tuple[None, None] | Any:
+    """Do not silently substitute BT recipe/mash values in RAPT Learning."""
     if rapt_owns_brewing(hass):
         return None, None
     return _ORIGINALS["learning._brewfather_tracker_data"](hass)
+
+
+def _audit_session_active(hass: Any) -> bool:
+    """A BT update cannot start or rotate an RAPT flight-recorder session."""
+    if rapt_owns_brewing(hass):
+        return False
+    return _ORIGINALS["audit.brewfather_session_active"](hass)
 
 
 def _audit_bt_status(hass: Any) -> str | None:
@@ -95,10 +104,7 @@ def _audit_entity_state(hass: Any, entity: str) -> Any:
 
 
 def _audit_state_subscription(hass: Any, entities: Any, callback: Callable[..., Any]) -> Any:
-    """Discard BT events *before* the audit callback accesses their state.
-
-    Keep normal BT event logging if BF is independently selected later.
-    """
+    """Ignore BT event *as a brewday trigger* without blocking its HA sensor."""
     def source_filtered(event: Any) -> Any:
         entity = event.data.get("entity_id")
         if _bt_entity(entity) and rapt_owns_brewing(hass):
@@ -109,23 +115,33 @@ def _audit_state_subscription(hass: Any, entities: Any, callback: Callable[..., 
 
 
 def _batch_guard_bt_active(hass: Any) -> bool:
+    """BT cannot assert a competing hot-side batch-control context."""
     if rapt_owns_brewing(hass):
         return False
     return _ORIGINALS["batch_guard._brewfather_tracker_is_active"](hass)
 
 
 def install_rapt_brewing_read_isolation() -> None:
-    """Install once, after source authority, before BA entities are polled."""
+    """Install process-boundary adapters after the BrewZilla source guard."""
     global _INSTALLED
     if _INSTALLED:
         return
-    for name, blocked in (("state", None), ("state_obj", None), ("attr", None),
-                          ("resolved_entity_id", None)):
-        setattr(core, name, _read_wrapper(name, blocked))
+
+    # Do NOT monkey-patch core.state/attr/state_obj/resolved_entity_id or
+    # brewfather_batch_phase: they are useful in independent BT information
+    # views. Only the normalized process-source and snapshot routes are gated.
+    _ORIGINALS["core.source"] = core.source
+    core.source = _runtime_core_source
+    _ORIGINALS["core.build_core_snapshot"] = core.build_core_snapshot
+    core.build_core_snapshot = _runtime_core_snapshot
 
     _ORIGINALS["learning._brewfather_tracker_data"] = learning._brewfather_tracker_data
     learning._brewfather_tracker_data = _learning_tracker_data
 
+    # audit.brewfather_session_active was imported by value: patch that
+    # consumer explicitly instead of globally changing the core BT observer.
+    _ORIGINALS["audit.brewfather_session_active"] = audit.brewfather_session_active
+    audit.brewfather_session_active = _audit_session_active
     for name, replacement in (
         ("_brewfather_status", _audit_bt_status),
         ("_brewfather_backend_available", _audit_bt_available),
@@ -136,18 +152,7 @@ def install_rapt_brewing_read_isolation() -> None:
         _ORIGINALS[f"audit.{name}"] = getattr(audit, name)
         setattr(audit, name, replacement)
 
-    # This optional legacy patch can otherwise read BT even after Learning's
-    # batch-context reader is source-gated. Import after Learning initialization.
     from . import brewzilla_batch_context_guard as batch_guard
     _ORIGINALS["batch_guard._brewfather_tracker_is_active"] = batch_guard._brewfather_tracker_is_active
     batch_guard._brewfather_tracker_is_active = _batch_guard_bt_active
-
-    # Future imports of the BF batch-phase function get an explicit observer
-    # result; existing imports still go through source-gated core primitives.
-    original_phase = ownership.brewfather_batch_phase
-
-    def scoped_batch_phase(hass: Any) -> str:
-        return "inactive" if rapt_owns_brewing(hass) else original_phase(hass)
-
-    ownership.brewfather_batch_phase = scoped_batch_phase
     _INSTALLED = True
