@@ -83,7 +83,11 @@ def install_rapt_identity_guard():
     authority_runtime._safe_off_allowed = _safe_off_allowed
     from . import brewzilla_sparge_execution_guard
     from . import brewzilla_rapt_brewing_read_isolation
+    from . import brewzilla_sparge_local_target_guard
 
     brewzilla_sparge_execution_guard.install_sparge_execution_guard()
     brewzilla_rapt_brewing_read_isolation.install_rapt_brewing_read_isolation()
+    # Additive last boundary: conflicting RAPT local targets cannot heat against
+    # BA's proposed preboil target; all existing readers and OFF paths remain.
+    brewzilla_sparge_local_target_guard.install_sparge_local_target_guard()
     _INSTALLED = True
