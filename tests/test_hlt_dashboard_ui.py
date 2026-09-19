@@ -61,3 +61,14 @@ def test_hlt_dashboard_never_casts_missing_power_to_zero_or_claims_safe_headroom
         assert "NOT authorization" in text or "EJ starttillstånd" in text
         assert "30 s" in text
         assert "JSONL" in text
+
+
+def test_virtual_none_is_not_mislabelled_unknown_or_inferred_from_zero_watts():
+    """The categorical 'none' means no virtual recipient, unlike missing watts."""
+    for path in (EN, SV):
+        text = path.read_text(encoding="utf-8")
+        assert "const virtualState = states['sensor.brewassistant_hlt_virtual_energy_recipient']?.state;" in text
+        assert "virtualState === 'hlt'" in text
+        assert "virtualState === 'none'" in text
+        assert "raw('virtual_energy_recipient') === 'none'" not in text
+        assert "virtual === 0" not in text
