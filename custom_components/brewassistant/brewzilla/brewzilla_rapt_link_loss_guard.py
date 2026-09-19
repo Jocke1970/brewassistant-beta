@@ -24,6 +24,7 @@ _INSTALLED = False
 _BASE_CALL = None
 _BASE_ACTIVE = None
 _BASE_STOP = None
+_BASE_STOPPED_SNAPSHOT = None
 _MAX_AGE_SECONDS = 90
 _LISTENER_ENTITY_KEY = "rapt_brewzilla_profile_runtime_listener_entity"
 _AMBIGUOUS_ENTITY = "binary_sensor.brewzilla_profile_ambiguous"
@@ -182,14 +183,28 @@ async def _observe_stop_without_output_commands(hass, token):
     _LOGGER.info("RAPT STOP observed; BA issued no additional BrewZilla output commands")
 
 
+def _stopped_snapshot_status_only(hass, state, store):
+    """Do not tell the operator that an observed STOP enforced physical OFF."""
+    assert _BASE_STOPPED_SNAPSHOT is not None
+    snapshot = _BASE_STOPPED_SNAPSHOT(hass, state, store)
+    snapshot.update(
+        summary=f"stopped · RAPT status observed · {snapshot.get('profile_name') or 'RAPT BrewZilla profile'}",
+        brewassistant_role="stop_status_observer",
+        profile_stop_guard_active=False,
+        hot_side_outputs_physically_off_verified=False,
+    )
+    return snapshot
+
+
 def install_rapt_link_loss_guard():
     """Install a fail-passive boundary without altering upstream RCL code."""
-    global _INSTALLED, _BASE_CALL, _BASE_ACTIVE, _BASE_STOP
+    global _INSTALLED, _BASE_CALL, _BASE_ACTIVE, _BASE_STOP, _BASE_STOPPED_SNAPSHOT
     if _INSTALLED:
         return
     _BASE_ACTIVE = runtime._active_contract
     _BASE_STOP = runtime._fresh_stopped_contract
     _BASE_CALL = runtime._async_call_if_entity_exists
+    _BASE_STOPPED_SNAPSHOT = runtime._stopped_snapshot
     runtime._profile_state = _profile_state
     runtime._active_contract = _active_fresh
     runtime._fresh_stopped_contract = _attested_stop
@@ -198,5 +213,6 @@ def install_rapt_link_loss_guard():
     # Last override intentionally supersedes the original four-command
     # post-STOP safe-off routine. Observed STOP must not replay an ABORT.
     runtime._async_safe_off_after_profile_stop = _observe_stop_without_output_commands
+    runtime._stopped_snapshot = _stopped_snapshot_status_only
     _INSTALLED = True
     _LOGGER.info("RAPT link-loss guard installed; STOP readback is status-only")
