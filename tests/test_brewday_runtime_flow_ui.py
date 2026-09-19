@@ -43,3 +43,30 @@ def test_runtime_flow_does_not_expose_direct_brewzilla_hardware_toggles() -> Non
         assert "switch.brewzilla_pump" not in source
         assert "number.brewzilla_heat_utilization" not in source
         assert "number.brewzilla_pump_utilization" not in source
+
+
+def test_runtime_flow_uses_operator_gated_settling_and_no_automatic_pump_claim() -> None:
+    for path in CARDS:
+        source = path.read_text(encoding="utf-8")
+        assert "mash_recirculation_phase" in source
+        assert "mash_settle_remaining_seconds" in source
+        assert "mash_recirculation_ramp_remaining_seconds" in source
+        assert "mash_physical_hold_target" in source
+        assert "mash_physical_hold_complete" in source
+        assert "button.brewassistant_start_mash_circulation" in source
+        assert "recirculation_ready" in source
+        assert "normal_ready" in source
+        assert "confirmation:" in source
+        assert "starts pump/circulation automatically" not in source
+        assert "startar pump/cirkulation automatiskt" not in source
+
+
+def test_runtime_flow_retains_stale_probe_diagnostics_and_operator_override() -> None:
+    for path in CARDS:
+        source = path.read_text(encoding="utf-8")
+        assert "mash_in_override_process_temperature_age_seconds" in source
+        assert "mash_in_override_process_temperature_fresh" in source
+        assert "mash_in_override_available" in source
+        assert "mash_in_auto_ready_tolerance_c" in source
+        assert "mash_in_override_tolerance_c" in source
+        assert "button.brewassistant_mash_in_override" in source
