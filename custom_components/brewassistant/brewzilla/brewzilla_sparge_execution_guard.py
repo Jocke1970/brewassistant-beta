@@ -3,11 +3,13 @@
 Lift acknowledgement does not grant arbitrary BA actuator writes. Only the
 registered explicitly confirmed Supervised Apply executor can send positive
 preboil commands, subject to the live source/step/readback gates on EACH write.
-No capability persists after execution or propagates to another task.
+A ContextVar alone is insufficient: asyncio child tasks inherit its context.
+Bind the grant to the exact executing task and revoke it in a finally block.
 """
 
 from __future__ import annotations
 
+import asyncio
 from contextvars import ContextVar
 
 from ..supervised_apply import register_supervised_executor
@@ -19,9 +21,18 @@ from . import brewzilla_supervised_runtime_guard as supervised
 _INSTALLED = False
 _PREVIOUS_WRITE = None
 _PREVIOUS_EXECUTE = None
-_SUPERVISED_SPARGE_EXECUTION: ContextVar[bool] = ContextVar(
-    "brewassistant_supervised_sparge_execution", default=False
+_SUPERVISED_SPARGE_EXECUTION: ContextVar[asyncio.Task | None] = ContextVar(
+    "brewassistant_supervised_sparge_execution_task", default=None
 )
+
+
+def _supervised_task_has_grant() -> bool:
+    """Reject child-task context inheritance and synchronous/non-task calls."""
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        return False
+    return task is not None and _SUPERVISED_SPARGE_EXECUTION.get() is task
 
 
 def _positive_sparge_write(entity: str, *, switch_action: str | None, value: float | None) -> bool:
@@ -42,15 +53,20 @@ def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value
         state = sparge._observe(hass)
         if state.phase == "heat_to_boil" and _positive_sparge_write(
             entity, switch_action=switch_action, value=value
-        ) and not _SUPERVISED_SPARGE_EXECUTION.get():
+        ) and not _supervised_task_has_grant():
             return False
     return _PREVIOUS_WRITE(hass, entity, switch_action=switch_action, value=value)
 
 
 async def _execute_confirmed_plan(hass, pending):
-    """One task receives the grant, and only after the operator pressed CONFIRM."""
+    """Grant only the current CONFIRM executor task, not its child tasks."""
     assert _PREVIOUS_EXECUTE is not None
-    token = _SUPERVISED_SPARGE_EXECUTION.set(True)
+    task = asyncio.current_task()
+    if task is None:
+        return {"applied": False, "actions": [],
+                "apply_result": "supervised_sparge_missing_executor_task",
+                "supervised_confirmation_consumed": False}
+    token = _SUPERVISED_SPARGE_EXECUTION.set(task)
     try:
         # The original executor independently rechecks the live plan ID,
         # source, step, ABORT, policy and readback before physical apply.
