@@ -1,30 +1,40 @@
-# HLT SIM-1 — BrewZilla always has absolute power priority
+# HLT SIM-1 — BrewZilla har alltid absolut effektprioritet
 
-Status: **simulation connected to BA startup through an independent 30-second timer; physical control NOT implemented**. PR targets `dev`, then `beta`, then `main` after verification.
+**Status 2026-09-19:** SIM-1 är mergad i `dev` via [PR #212](https://github.com/Jocke1970/brewassistant-beta/pull/212), merge-commit `746633cfd5c22483fc25e821a966cccb25f84784`. CI, HACS och Hassfest passerade på både PR-head och sammanslagen `dev`. **Endast läsning, simulering och dashboard; ingen fysisk HLT-styrning.** Detta är inte en release till `beta` eller `main` och ingen fysisk certifiering. Fälttestets observationer och kvarvarande risker finns i [den daterade överlämningen](../../../docs/hlt-sim1-field-validation-2026-09-19.md).
 
-## Operating contract
+## Effektprioritet och simulatorns beslut
 
-- **Never throttle or cap BrewZilla for HLT.** BZ may always use the power required for the brew.
-- HLT is secondary. The virtual HLT may heat while BZ is *observed* cruising at its current target, physical/normalized targets agree, readings are fresh, and observed BZ W + full HLT heater W fit within the configured scenario budget.
-- A next target/ramp, departure from target, unavailable BZ data, or insufficient observed capacity revokes the virtual HLT opportunity at the next simulation tick. Its reservation is held through a **virtual** OFF delay and then released. BZ is never capped during this delay; an observed overlap is reported as `simulation_budget_conflict`, not hidden by clipping BZ consumption. Missing target or temperature means *unknown*, not an invented ramp.
-- HLT remains off for No Sparge and once its own target is reached.
-- A low instantaneous BZ wattage reading alone is NOT proof that its heater cannot turn on again. This model has no physical grant authority and `power_budget_verified` is **always false**. The old `brewzilla_would_grant_w`/`brewzilla_would_cap_utilization` compatibility result properties return `None` and must never be used for actuation. The legacy `brewzilla_unconstrained` input is not a control permission.
+- BrewZilla får aldrig strypas, kaps eller skrivas om för HLT:s skull. BZ:s uppmätta effekt kan öka när som helst, inklusive mellan två HA-prover.
+- HLT är sekundär. Virtuell HLT får värma endast vid *observerad* BZ-cruise vid aktuell target, överensstämmande enhets-/runtime-target, färska fysiska effekt- och temperaturvärden, känd BZ-utnyttjandegrad och plats för **hela** den virtuella HLT-värmarens watt inom ett **simuleringsscenario**.
+- Låg momentan BZ-effekt räcker aldrig ensam för tillstånd. Ett explicit rampsteg (`Ramp to 72°C` och motsvarande prefix) veto:ar cruise även om target/temperatur tillfälligt verkar sammanfalla.
+- Endast explicit kända steg `Setup`, `Heat strike`, `Heat strike water`, `Mash`, `Mash in`, `Mash out` och `Sparge` får simulera. Okända/terminala steg fail-closed. Detta är en konservativ startpolicy, inte ett färdigvaliderat normaliserat lakningskontrakt för alla källor.
+- Vid ny BZ-ramp, ändrat effektbehov, mätbortfall eller saknat utrymme släpps virtuellt HLT-tillstånd vid nästa simuleringstick. Reservationen kan kvarstå under en **virtuell** OFF-fördröjning, medan BZ aldrig kaps. Överlapp redovisas som `simulation_budget_conflict`, inte som en godkänd verklig effektbudget.
+- Noll normaliserat lakvatten = No Sparge / HLT `IDLE`; okänd volym = ingen start. `sparge_water_l` är separat från `mash_water_l`/`strike_water_l`.
+- `power_budget_verified` är alltid `false`. Kompatibilitetsfälten `brewzilla_would_grant_w` och `brewzilla_would_cap_utilization` är `None` och får aldrig användas för hårdvarustyrning. Äldre `brewzilla_unconstrained` är ingen aktiveringsflagga för kontroll.
 
-**Physical interlock requirement:** BZ's own thermostat/RAPT control can re-energize between HA's 30-second samples. A software-only watchdog or virtual OFF timer cannot guarantee the circuit budget. Before real HLT switching, implement fail-off HLT hardware/load-shed behavior independent of polling and verify HLT actual OFF via wattmeter or trusted feedback; coordinate planned ramps by shutting HLT down ahead of ramp, without limiting BZ. Verify actual circuit/wiring, measured wattage and protection before commissioning. `2500 W` is only a default simulation scenario, NOT a verified safe load.
+**Elsäkerhet:** Den återkommande simuleringen var 30:e sekund är inte ett elektriskt överlastskydd. BZ:s termostat/RAPT kan slå på värmaren mellan avläsningar. `2500 W` är ett standardsättningsvärde i scenariot, **inte** verifierad säkringsgräns. Fysisk drift kräver en separat, snabb och oberoende fail-OFF-frånkoppling av HLT, bekräftad fysisk OFF-återkoppling, dokumenterade effekt-/kabel-/säkringsförutsättningar samt torrkokningsskydd. BZ ska få full effekt utan att invänta en långsam HA-loop eller virtuellt kvitto.
 
-## Inputs and temperature
+## In- och utdata
 
-Default BZ inputs: `sensor.brewzilla_power`, `number.brewzilla_heat_utilization` (observed diagnostic only), `sensor.brewzilla_temperature`, `number.brewzilla_target_temperature` and normalized Brewday `target_temperature`. The latter three must agree within 0.5°C for a cruising observation; missing/stale data blocks the opportunity. Brewday volume comes from normalized batch context (`sparge_water_l`); unknown volume means no simulation, zero volume means No Sparge.
+Standard-BZ: `sensor.brewzilla_power`, `number.brewzilla_heat_utilization`, `sensor.brewzilla_temperature`, `number.brewzilla_target_temperature` samt normaliserad Brewday `target_temperature`. Inställningarna i `number.*` kan vara oförändrade länge och avvisas **inte** enbart utifrån `last_updated`; `unknown`/`unavailable` avvisas däremot. Fysiska BZ-effekt- och temperaturvärden kräver fortfarande färska prover. Cruise kräver att target-/temperaturvärdena överensstämmer inom 0,5 °C, och ett explicit rampsteg blockerar ändå tillstånd.
 
-Provisional HLT inputs are configurable: `switch.sparge_heater`, `sensor.sparge_heater_power`, optional HLT temperature entity. Fresh HLT temperature takes precedence; otherwise simulated temperature integrates `heater_w * efficiency - heat_loss` against water volume. A thermostat heating→OFF observation can calibrate only against a separately configured known cutoff temperature. Manual switch OFF is not thermostat cutoff. Temperature must be labelled measured or estimated. Thermal model is approximate and does not model stratification/boiling comprehensively.
+Volym hämtas från BrewZilla Batch Contexts effektiva `sparge_water_l`. `Water only` betyder inte automatiskt 0 lakvatten; men mäsk-/testvattnet i BZ får inte återanvändas som påhittat lakvatten. Provisoriska och valbara HLT-entity IDs: `switch.sparge_heater`, `sensor.sparge_heater_power` och valfri HLT-temperatursensor. De fysiska HLT-entiteterna fanns inte i det första testet och ska då vara **okända**, inte 0 W eller bekräftat OFF.
 
-## File logging and Flight Recorder
+HLT-temperatur använder färsk fysisk givare när sådan finns. I annat fall integrerar modellen virtuell effekt mot volym, starttemperatur, effektivitet och förlust. Termostatkalibrering kräver separat känd bryttemperatur och ett belagt värme→OFF-förlopp; manuellt OFF är inte en termostatkalibrering. Modellen är en uppskattning, inte en mätning.
 
-While Brewday Audit is active, `async_setup_hlt_simulation()` runs a separate simulation-only timer every 30s and calls `async_record_hlt_tick()`. There are **no `hass.services` hardware writes or BZ caps in the HLT package**. An uploadable JSONL file is created per session under `/config/brewassistant/logs/hlt-sim-<session-hash>.jsonl` in standard HA installations. A normal sample is limited to one per 30 seconds, with immediate state/virtual-switch/conflict records; each row says `simulation: true`, `physical_writes: false` and separates observed BZ power from virtual HLT power and measured from estimated HLT temperature. Significant transitions are also added to the existing `sensor.brewassistant_brewday_event_log_summary` event list, without flooding its 250-event retention limit. Export the JSONL file through File Editor, Samba or SSH and upload it for analysis.
+## Driftsättning, logg och HA-ytor
 
-## Remaining before merge
+`async_setup_hlt_simulation()` registrerar en frånkopplingsbar, självständig 30-sekunderstimer när BA startar. HLT-paketet har inga HA-hårdvaruserviceanrop och utfärdar inga BZ-caps. HLT-sensorerna uppdateras i BA:s koordinator och kortet kan ligga något prov efter. 31 läsande sensorvärden inkluderar status/orsak, faktisk kontra virtuell effekt, energimottagare, temperatur och källa, scenariototaler, väntan/värmetid/uppskattad energi samt aktuell JSONL-sökväg. Se [sensoravtalet](../../../docs/hlt-dashboard-backend.md).
 
-- Verify all simulation/runner/trace tests and full repository CI; no passing CI has been established for the latest code yet.
-- Expose clear diagnostic entities / current trace path in HA UI (currently stored in `hass.data['brewassistant']['hlt_trace_path']`).
-- Check actual Brewday target and batch-volume sources against real BA/RAPT/Brewfather sessions; test stale/missing readbacks, target transitions, real thermostat cycling and session rotation.
-- Keep this PR draft. It adds **no physical HLT operation**. Any future hardware stage requires independent interlock, physical OFF confirmation and supervised validation.
+Vid aktiv Brewday Audit skrivs JSONL per session under `/config/brewassistant/logs/hlt-sim-<session-hash>.jsonl`. Full aktuell sökväg visas i `sensor.brewassistant_hlt_trace_path` (HA kan ge entity-ID-suffix). Varje rad särskiljer uppmätt och virtuell effekt, uppmätt och skattad temperatur och markerar simulering/inga fysiska skrivningar. Betydande övergångar skrivs även i Brewday Event Log. Tid-/Wh-räknare lagras i minnet och återställs vid HA-omstart; JSONL ligger kvar på disk. Se [kort- och testguiden](../../../docs/hlt-dashboard-card.md).
+
+**Installation och samordning:** PR #212 är redan mergad till den gemensamma `dev`-grenen. Den tidigare lokala testinstallationen på commit `977136c5` är inte den sammanslagna `dev` och saknar de sista ramp-/stegpolicyändringarna. Byt aldrig hela den installerade integrationen mot ett äldre feature-arkiv samtidigt som andra BA-arbeten fortgår. Jämför version, backup och lokal installation före uppdatering. En GitHub-merge installerar ingenting automatiskt i HA.
+
+## Återstår före `beta`/`main` eller fysisk HLT
+
+1. Testa senaste `dev` i HA: held `number.*` kontra färsk fysisk watt/temperatur, verkliga rampstegsnamn från Brewfather/Manual/RAPT och fail-closed vid okänt steg.
+2. Följ en hel virtuell kedja BZ-ramp → cruise → virtuellt HLT-tillstånd → BZ-ramp/yield, samt kontrollera JSONL och UI mot verkliga BZ-avläsningar. Loggen från 2026-09-19 visade en felaktig virtuell grant under `Ramp to 72°C`; kodfixen är CI-verifierad men väntar på omtest i HA.
+3. Bedöm uppskattad HLT-temperatur, tillgänglig uppvärmningstid, omstarter och sessionshantering. Automatiskt självlärande kontrollpolicy är **inte implementerad**; inlärning ska tills vidare vara granskad rådgivning.
+4. För **fysisk** HLT: separat elsäkerhetskonstruktion med oberoende fail-OFF, fysisk OFF-bekräftelse, torrkokningsskydd och operatörsstyrd driftsättning; ingen av dessa funktioner är levererad i SIM-1.
+
+Se [fältöverlämningen 2026-09-19](../../../docs/hlt-sim1-field-validation-2026-09-19.md) och [roadmapen](../../../docs/roadmap.md).
