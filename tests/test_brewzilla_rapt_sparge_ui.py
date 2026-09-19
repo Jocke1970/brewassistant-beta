@@ -17,7 +17,9 @@ def test_sparge_cards_source_and_step_scoped_with_matching_machine_ids():
         for guard in (
             "entity: binary_sensor.brewzilla_profile_active\n    state: \"on\"",
             "entity: sensor.brewassistant_brewday_runtime_source\n    state: \"RAPT BrewZilla Profile\"",
-            "entity: sensor.brewassistant_brewday_runtime_step\n    state: \"Sparge\"",
+            "entity: sensor.brewassistant_brewday_runtime_step\n        state: \"Sparge\"",
+            "entity: sensor.brewassistant_brewday_runtime_step\n        state: \"Lakning\"",
+            "condition: or",
             "entity: button.brewassistant_confirm_sparge_lift",
             "service: button.press",
             "confirmation:",
