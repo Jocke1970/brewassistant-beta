@@ -1,8 +1,8 @@
-"""BF fermentation feed must not depend on BT brewing batch phase.
+"""BF and BT presentation must not be rewritten to enforce RAPT brewing authority.
 
-The UI uses BA's fermentation/cold-crash process stage, not the selected RAPT
-or BrewTracker hot-side source. These are source/structure assertions, not
-browser or actual HA Lovelace rendering tests.
+BF/BT may read, update and display the same upstream Brewfather data. Only the
+selected brewing input can influence BA's normalized hot-side process/control.
+These assertions validate card structure, not a Home Assistant browser test.
 """
 
 from pathlib import Path
@@ -10,26 +10,22 @@ from pathlib import Path
 CARDS = Path(__file__).resolve().parents[1] / "dashboard" / "cards"
 
 
-def test_fermentation_feed_en_sv_do_not_read_bt_or_gate_on_bt_phase():
+def test_existing_bf_feed_presentation_is_preserved_for_both_languages():
     for name in ("brewfather_feed.yaml", "brewfather_feed_sv.yaml"):
         card = (CARDS / name).read_text(encoding="utf-8")
-        assert "sensor.brewfather_brew_tracker_" not in card
-        assert "sensor.brewfather_brewtracker_" not in card
-        assert "sensor.brewassistant_brewfather_batch_phase" not in card
-        assert "switch.brewassistant_show_brewfather_feed" in card
-        assert "sensor.brewassistant_process_current_action_stage" in card
-        assert 'state: "fermentation"' in card
-        assert 'state: "cold_crash"' in card
+        assert "sensor.brewassistant_brewfather_batch_phase" in card
+        assert 'state: "fermenting"' in card
         assert "sensor.brewfather_recipe_name" in card
         assert "climate.fermentation_chamber" in card
-        assert "brewassistant.force_brewfather_refresh" not in card
+        # No imposed link from RAPT source selection to BF feed visibility.
+        assert "sensor.brewassistant_brewday_runtime_source" not in card
+        assert "binary_sensor.brewzilla_profile_active" not in card
 
 
-def test_fermentation_process_stage_is_not_derived_from_bt_brewing_status():
-    coordinator = (CARDS.parents[1] / "custom_components/brewassistant/coordinator.py").read_text(encoding="utf-8")
-    sensor = (CARDS.parents[1] / "custom_components/brewassistant/sensor.py").read_text(encoding="utf-8")
-    assert 'runtime_status = _state_string(self.hass, "sensor.recipe_runtime_status")' in coordinator
-    assert 'elif normalized_runtime == "fermenting":' in coordinator
-    assert 'or bool(fermentation.get("active"))' in coordinator
-    assert 'key="process_current_action_stage"' in sensor
-    assert "brewfather_brew_tracker" not in coordinator
+def test_bf_fermentation_logic_is_outside_brewing_source_guard():
+    root = CARDS.parents[1]
+    source_guard = (root / "custom_components/brewassistant/brewzilla/brewzilla_rapt_brewing_read_isolation.py").read_text(encoding="utf-8")
+    installer = source_guard.split("def install_rapt_brewing_read_isolation", 1)[1]
+    assert "fermentation" not in installer
+    assert "setattr(core, name" not in source_guard
+    assert "ownership.brewfather_batch_phase =" not in source_guard
