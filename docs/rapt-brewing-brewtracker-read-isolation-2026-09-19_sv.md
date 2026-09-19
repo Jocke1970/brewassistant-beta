@@ -4,7 +4,7 @@
 
 ## Beslut
 
-När RAPT äger Brewing ska BA inte läsa BrewTracker-sensorer för bryggsteg, temperaturmål, batchkontext, fallback, audit eller frontend. RAPT/RCL levererar steg och processmål, BrewZilla/RCL levererar faktisk hårdvarutelemetri. Vid RAPT source-loss, STOP-handoff eller RAPT-ABORT får gamla BT-data inte återanvändas. Brewfather Fermentation ska fortsätta läsa separata jäsningssensorer och styra jäskammaren oberoende.
+När RAPT äger Brewing ska BA:s bryggningsflöde inte läsa BrewTracker-sensorer för bryggsteg, temperaturmål, batchkontext, fallback, audit eller frontend. RAPT/RCL levererar steg och processmål, BrewZilla/RCL levererar faktisk hårdvarutelemetri. Vid RAPT source-loss, STOP-handoff eller RAPT-ABORT får gamla BT-data inte återanvändas. Brewfather Fermentation ska fortsätta läsa separata jäsningssensorer och styra jäskammaren oberoende.
 
 ## Genomförd kod på feature-branchen
 
@@ -16,7 +16,7 @@ När RAPT äger Brewing ska BA inte läsa BrewTracker-sensorer för bryggsteg, t
 
 1. Dashboardkort `brewfather_recipe*.yaml`, `brewtracker_runtime*.yaml`, `brewassistant_source_health*.yaml` och eventuellt andra har direkta BT-referenser. Ta bort eller källspärra dem, inklusive EN/SV, och testa faktisk Lovelace-rendering; Python-wrappern skyddar inte frontend.
 2. Frikoppla fermentationssynlighet och dess styrning från BT-batchfasen, så att samtidigt aktiv RAPT-bryggning och BF-jäsning fungerar utan BT-läsning i BA:s bryggningsflöde.
-3. Kör fullständig HA-integrationstest med förbjuden BT-läsning vid aktiv/tappad/stoppad/aborterad RAPT, inklusive tidigare importerade funktioner och kontroll av separata fermentationssensorer.
+3. Kör fullständigt HA-integrationstest med förbjuden BT-läsning vid aktiv/tappad/stoppad/aborterad RAPT, inklusive tidigare importerade funktioner och kontroll av separata fermentationssensorer.
 4. Initialt ofullständigt RAPT-kontrakt får inte leda till tyst BT-fallback. Skilj vald RAPT-källa från giltigt styrkontrakt.
 5. Granska alla BA→BrewZilla-skrivvägar och lös eventuell lokal RAPT-regleringskonflikt i Sparge (78 °C kontra BA:s möjliga 95 °C) innan beta-publicering.
 
