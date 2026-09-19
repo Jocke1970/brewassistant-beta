@@ -100,6 +100,8 @@ def test_core_brewtracker_accessors_do_not_access_registry_under_rapt():
         else:
             assert result is None
         assert rapt_hass.states.calls == ["binary_sensor.brewzilla_profile_active"]
+    # A separately selected BF source retains access to its legacy accessor.
+    env["core"].state = lambda hass, ref: "fermenting"
     assert FN["_read_wrapper"]("state", None)(FakeHass(active=False), aliases) == "fermenting"
 
 
