@@ -55,6 +55,7 @@ class FakeHass:
 
 def _configure():
     env = FN["rapt_owns_brewing"].__globals__
+    env["_BT_PREFIXES"] = ("sensor.brewfather_brew_tracker_", "sensor.brewfather_brewtracker_")
     env["rapt"] = SimpleNamespace(
         RAPT_PROFILE_SOURCE="RAPT BrewZilla Profile",
         _profile_state=lambda hass: hass.states.get("binary_sensor.brewzilla_profile_active") if hass.active else None,
