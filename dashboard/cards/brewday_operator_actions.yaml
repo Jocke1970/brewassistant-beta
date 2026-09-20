@@ -1,4 +1,5 @@
-# BA-only action controls. Observation is fail-closed in backend; UI is not a safety boundary.
+# Emergency ABORT is independent of BA read-only, runtime state and owner.
+# UI visibility is not a safety boundary; the backend emergency lane is definitive.
 type: conditional
 conditions:
   - entity: switch.brewassistant_show_brewday
@@ -6,6 +7,53 @@ conditions:
 card:
   type: vertical-stack
   cards:
+    - type: custom:button-card
+      entity: button.brewassistant_abort_brewday
+      name: ABORT · EMERGENCY STOP
+      icon: mdi:alert-octagon
+      show_state: false
+      show_label: true
+      label: Always available · request active RAPT profile STOP and BZ OFF/0 · verify physical shutdown
+      tap_action:
+        action: call-service
+        service: button.press
+        target:
+          entity_id: button.brewassistant_abort_brewday
+      styles:
+        card:
+          - border-radius: 16px
+          - padding: 13px
+          - min-height: 76px
+          - background: rgba(244,67,54,.22)
+          - border: 3px solid rgba(244,67,54,.85)
+        label:
+          - white-space: normal
+          - font-size: 12px
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_operator_control_state
+          state: "aborted"
+      card:
+        type: custom:button-card
+        entity: button.brewassistant_rearm_brewday_control
+        name: REARM AFTER ABORT
+        icon: mdi:shield-check-outline
+        show_label: true
+        label: Separate operator acknowledgement · does not reactivate BA read-only switch
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.brewassistant_rearm_brewday_control
+          confirmation:
+            text: Have you physically checked BrewZilla and want to release the ABORT latch? BA read-only and other safety interlocks remain separate.
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 10px
+            - background: rgba(255,193,7,.14)
+          label:
+            - white-space: normal
     - type: conditional
       conditions:
         - entity: sensor.brewassistant_brewzilla_orchestration_mode
@@ -13,12 +61,38 @@ card:
       card:
         type: markdown
         content: >-
-          **OBSERVATION ONLY · CONTROL BREWZILLA LOCALLY** 🔒
+          **BA READ-ONLY · MANUAL CONTROL ALLOWED** 🔒
 
-          BA action buttons are hidden. Use the BrewZilla controls for heat,
-          pump and stop. BA sends no OFF/0 % either. Verify actual shutdown
-          at the device. Separate rearm is required even after turning the
-          observation switch OFF.
+          BA automatic target, heater and pump commands are denied.
+          **ABORT/EMERGENCY STOP above always applies.** Direct BrewZilla control
+          and explicit operator actions in the Manual Brewday UI remain available.
+          An active RAPT profile must be stopped with confirmed STOP before
+          Manual Brewday takeover; read-only does not stop RAPT automatically.
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_brewday_runtime_state
+          state: "idle"
+        - entity: sensor.brewfather_brew_tracker_status
+          state_not: "active"
+      card:
+        type: custom:button-card
+        name: PREPARE MANUAL BREWDAY
+        icon: mdi:clipboard-check-outline
+        show_state: false
+        show_label: true
+        label: Available while BA is read-only · active RAPT profile must first have confirmed STOP
+        tap_action:
+          action: call-service
+          service: brewassistant.manual_brewday_prepare
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px
+            - min-height: 64px
+            - background: rgba(255,152,0,.10)
+            - border: 1px solid rgba(255,152,0,.24)
+          label:
+            - white-space: normal
     - type: conditional
       conditions:
         - entity: switch.brewassistant_brewzilla_observe_only
@@ -32,31 +106,6 @@ card:
       card:
         type: vertical-stack
         cards:
-          - type: conditional
-            conditions:
-              - entity: sensor.brewassistant_brewday_runtime_state
-                state: "idle"
-              - entity: sensor.brewfather_brew_tracker_status
-                state_not: "active"
-            card:
-              type: custom:button-card
-              name: PREPARE MANUAL BREWDAY
-              icon: mdi:clipboard-check-outline
-              show_state: false
-              show_label: true
-              label: Prepare the manual brew session without starting it
-              tap_action:
-                action: call-service
-                service: brewassistant.manual_brewday_prepare
-              styles:
-                card:
-                  - border-radius: 16px
-                  - padding: 12px
-                  - min-height: 64px
-                  - background: rgba(255,152,0,.10)
-                  - border: 1px solid rgba(255,152,0,.24)
-                label:
-                  - white-space: normal
           - type: conditional
             conditions:
               - entity: sensor.brewassistant_brewzilla_pending_action
@@ -119,58 +168,3 @@ card:
                       - border-radius: 16px
                       - padding: 12px
                       - background: rgba(255,152,0,.10)
-          - type: conditional
-            conditions:
-              - entity: sensor.brewassistant_brewday_runtime_state
-                state_not: "idle"
-            card:
-              type: horizontal-stack
-              cards:
-                - type: custom:button-card
-                  entity: button.brewassistant_abort_brewday
-                  name: ABORT BREWDAY
-                  icon: mdi:alert-octagon-outline
-                  show_label: true
-                  label: Locks BA. Physical OFF is not guaranteed.
-                  tap_action:
-                    action: call-service
-                    service: button.press
-                    target:
-                      entity_id: button.brewassistant_abort_brewday
-                    confirmation:
-                      text: Abort BA brewday and lock BA control? Check heater, pump and power separately on BrewZilla. Physical shutdown is not guaranteed.
-                  styles:
-                    card:
-                      - border-radius: 16px
-                      - padding: 10px
-                      - min-height: 62px
-                      - background: rgba(244,67,54,.16)
-                      - border: 2px solid rgba(244,67,54,.50)
-                    label:
-                      - white-space: normal
-                - type: conditional
-                  conditions:
-                    - entity: sensor.brewassistant_brewday_operator_control_state
-                      state: "aborted"
-                  card:
-                    type: custom:button-card
-                    entity: button.brewassistant_rearm_brewday_control
-                    name: REARM CONTROL
-                    icon: mdi:shield-check-outline
-                    show_label: true
-                    label: Releases BA ABORT lock only, not observation
-                    tap_action:
-                      action: call-service
-                      service: button.press
-                      target:
-                        entity_id: button.brewassistant_rearm_brewday_control
-                      confirmation:
-                        text: Release BA operator ABORT? Observation and its separate rearm, plus BrewZilla's own ABORT lock, still apply.
-                    styles:
-                      card:
-                        - border-radius: 16px
-                        - padding: 10px
-                        - min-height: 62px
-                        - background: rgba(255,193,7,.14)
-                      label:
-                        - white-space: normal
