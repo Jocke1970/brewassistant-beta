@@ -48,6 +48,7 @@ from . import brewzilla_rapt_identity_guard as _rapt_identity_guard
 from . import brewzilla_observe_only as _observe_only
 from . import brewzilla_observe_only_dispatch_guard as _observe_dispatch
 from . import brewzilla_emergency_abort as _emergency_abort
+from ..brewday import brewday_audit_missing_readback_guard as _audit_missing_readbacks
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -141,6 +142,8 @@ _source_authority_runtime.install_source_authority_runtime()
 # Narrow final identity check: never treat an active RAPT profile with missing
 # or conflicting session/step data as sufficient permission to write.
 _rapt_identity_guard.install_rapt_identity_guard()
+# Readback loss must clear volatile fields from coalesced Flight Recorder rows.
+_audit_missing_readbacks.install_missing_readback_guard()
 # The operator's local-control decision must exist before switch restoration.
 _observe_only.install_observe_only_guard()
 # Final BA policy-request and direct-entity checks, including the main switch.
