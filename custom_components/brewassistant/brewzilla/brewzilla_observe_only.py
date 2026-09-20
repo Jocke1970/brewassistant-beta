@@ -153,9 +153,8 @@ async def async_rearm(hass: Any) -> None:
     if brewday_operator_abort_active(hass):
         raise HomeAssistantError("ABORT-spärren måste återställas separat efter fysisk kontroll.")
     verified_rapt = decision.mode == "rapt_controller" and decision.may_write_brewzilla is True
-    manual = decision.mode == "manual_legacy_unresolved" and (
-        context.get("runtime") or {}).get("source") == "Manual Brewday"
-    )
+    manual = (decision.mode == "manual_legacy_unresolved"
+              and (context.get("runtime") or {}).get("source") == "Manual Brewday")
     if manual:
         from ..brewday import rapt_profile_runtime
         if rapt_profile_runtime.rapt_profile_runtime_claims_source(hass):
