@@ -1,5 +1,5 @@
 # BA controls only its own automation. Emergency ABORT is always separate.
-# Place this whole card at the top of Brewday. Requires beta.14 candidate.
+# Standalone card: place alongside Manual Brewday; BA-owned setpoints do not apply while read-only.
 type: vertical-stack
 cards:
   - type: custom:button-card
@@ -46,7 +46,7 @@ cards:
           ? 'BA CONTROL ENABLED'
           : 'BA AUTHORITY NOT VERIFIED';
         const note = s?.state === 'on'
-          ? 'BA reads, logs and learns but sends no ordinary BrewZilla commands. ABORT above still works. Use physical BrewZilla controls or the direct manual RCL controls below when Manual Brewday owns the process.'
+          ? 'BA reads, logs and learns but sends no ordinary BrewZilla commands. ABORT above still works. Direct RCL controls appear only when Manual Brewday is active and the RAPT profile reports OFF.'
           : s?.state === 'off' && a.observe_only_effective === false
           ? 'BA may issue new commands under existing source and safety rules. Old pending plans were discarded when switching. ABORT always works.'
           : 'BA control authority has not been verified. Check switch and integration. ABORT always works.';
@@ -69,6 +69,8 @@ cards:
         state: "on"
       - entity: sensor.brewassistant_brewday_runtime_source
         state: "Manual Brewday"
+      - entity: binary_sensor.brewzilla_profile_active
+        state: "off"
       - entity: sensor.brewassistant_brewday_operator_control_state
         state_not: "aborted"
     card:
@@ -79,10 +81,12 @@ cards:
             **MANUAL BREWDAY · DIRECT RCL CONTROL** 🛠️
 
             These controls write directly to RCL/BrewZilla at your explicit
-            request, **not** through BA's automatic setpoint transport. Confirm
-            STOP of any previous RAPT profile before taking over.
+            request, **not** through BA's automatic setpoint transport. The panel
+            requires the RAPT profile to report OFF; always confirm the previous
+            profile has actually stopped before changing hardware values. Missing
+            or unknown profile status hides direct controls. ABORT always applies.
             BA-owned setpoint fields in other Manual Brewday cards do **not**
-            write to BrewZilla while BA is read-only. ABORT above always applies.
+            write to BrewZilla while BA is read-only.
         - type: entities
           title: "Manual setpoints · directly on BrewZilla"
           show_header_toggle: false
