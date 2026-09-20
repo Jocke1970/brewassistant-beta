@@ -98,10 +98,12 @@ def test_manual_brewday_direct_operator_controls_exist_in_read_only():
             f"{path.name}: fail-closed manual UI must require RAPT profile OFF"
         )
         assert '- entity: sensor.brewassistant_brewday_operator_control_state\n        state_not: "aborted"' in block
+        # Entities rows use '- entity:', custom:button-card uses 'entity:'.
+        # Both are real, operator-clickable RCL controls in this conditional.
         reachable = {
-            line.split("- entity: ", 1)[1].strip()
+            line.strip().split("entity: ", 1)[1].strip()
             for line in block.splitlines()
-            if line.strip().startswith("- entity: ")
+            if line.strip().startswith(("- entity: ", "entity: "))
         }
         assert DIRECT <= reachable, f"{path.name}: missing direct controls {sorted(DIRECT - reachable)}"
         assert not any(entity.startswith("number.brewassistant_brewzilla_manual_") for entity in reachable)
