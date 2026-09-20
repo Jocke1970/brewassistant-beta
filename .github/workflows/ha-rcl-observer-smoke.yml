@@ -52,6 +52,10 @@ jobs:
         working-directory: ba
         run: PYTHONPATH=. python tests/integration/ha_rcl_observe_smoke.py
 
+      - name: Verify unconditional operator emergency ABORT in real isolated HA
+        working-directory: ba
+        run: PYTHONPATH=. python tests/integration/ha_emergency_abort_smoke.py
+
       - name: Check passive learning and real HA audit Store across object reload
         working-directory: ba
         run: PYTHONPATH=. python tests/integration/ha_observe_passive_smoke.py
