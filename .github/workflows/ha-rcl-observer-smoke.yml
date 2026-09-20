@@ -1,0 +1,61 @@
+name: HA + RCL observer smoke (isolated)
+
+# Release candidates only. No tests on dev pushes or PRs targeting dev.
+on:
+  push:
+    branches: ["release/**"]
+  pull_request:
+    branches: ["release/**", beta]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ha-rcl-observer-smoke:
+    if: github.ref_name != 'dev' && github.base_ref != 'dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact BA candidate commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: ba
+
+      - name: Check out published RCL beta.1 commit (immutable)
+        uses: actions/checkout@v7
+        with:
+          repository: Jocke1970/home-assistant-rapt-cloud-link
+          ref: 149d51aaa4d467fd37c932ceaf8161c9f1387314
+          path: rcl
+
+      - name: Set up Home Assistant Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14.2"
+
+      - name: Install real Home Assistant Core
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'homeassistant==2026.9.3'
+          python -c 'import sys, homeassistant.const; print(sys.version); print(homeassistant.const.__version__)'
+
+      - name: Stage both integrations in isolated working tree
+        run: |
+          cp -R rcl/custom_components/rapt_cloud_link ba/custom_components/rapt_cloud_link
+          python -m json.tool ba/custom_components/brewassistant/manifest.json >/dev/null
+          python -m json.tool ba/custom_components/rapt_cloud_link/manifest.json >/dev/null
+          test "$(python -c 'import json; print(json.load(open("ba/custom_components/rapt_cloud_link/manifest.json"))["version"])')" = '0.5.0-beta.1'
+
+      - name: Exercise real HA StateMachine and ServiceRegistry (no cloud/hardware)
+        working-directory: ba
+        run: PYTHONPATH=. python tests/integration/ha_rcl_observe_smoke.py
+
+      - name: Verify unconditional operator emergency ABORT in real isolated HA
+        working-directory: ba
+        run: PYTHONPATH=. python tests/integration/ha_emergency_abort_smoke.py
+
+      - name: Check passive learning and real HA audit Store across object reload
+        working-directory: ba
+        run: PYTHONPATH=. python tests/integration/ha_observe_passive_smoke.py

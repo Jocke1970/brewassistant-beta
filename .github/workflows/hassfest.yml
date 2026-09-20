@@ -1,10 +1,11 @@
 name: Hassfest
 
+# Do not execute against dev; daily schedule runs only on default branch.
 on:
   push:
-    branches: [dev, beta, main]
+    branches: ["release/**", beta, main]
   pull_request:
-    branches: [dev, beta, main]
+    branches: ["release/**", beta, main]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   hassfest:
+    if: github.ref_name != 'dev' && github.base_ref != 'dev'
     name: Hassfest
     runs-on: ubuntu-latest
     steps:

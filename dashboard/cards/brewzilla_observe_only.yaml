@@ -1,0 +1,127 @@
+# BA controls only its own automation. Emergency ABORT is always separate.
+# Standalone card: place alongside Manual Brewday; BA-owned setpoints do not apply while read-only.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    name: "ABORT · EMERGENCY STOP"
+    icon: mdi:alert-octagon
+    show_label: true
+    label: "Always available · request profile STOP and BrewZilla OFF/0. Verify shutdown at the physical device."
+    tap_action:
+      action: call-service
+      service: brewassistant.abort_brewzilla
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 12px
+        - min-height: 66px
+        - background: rgba(244,67,54,.22)
+        - border: 3px solid rgba(244,67,54,.82)
+      label:
+        - white-space: normal
+  - type: entities
+    title: "BrewAssistant · control / read-only"
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        name: "BA READ-ONLY · ON = BA does not control"
+        icon: mdi:eye-outline
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    name: CONTROL MODE
+    icon: mdi:shield-eye-outline
+    triggers_update: all
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const s = states['switch.brewassistant_brewzilla_observe_only'];
+        const a = entity?.attributes || {};
+        const clean = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const mode = s?.state === 'on' && a.observe_only_effective === true
+          ? 'BA READ-ONLY · OPERATOR IN CONTROL'
+          : s?.state === 'off' && a.observe_only_effective === false
+          ? 'BA CONTROL ENABLED'
+          : 'BA AUTHORITY NOT VERIFIED';
+        const note = s?.state === 'on'
+          ? 'BA reads, logs and learns but sends no ordinary BrewZilla commands. ABORT above still works. Direct RCL controls appear only when Manual Brewday is active and the RAPT profile reports OFF.'
+          : s?.state === 'off' && a.observe_only_effective === false
+          ? 'BA may issue new commands under existing source and safety rules. Old pending plans were discarded when switching. ABORT always works.'
+          : 'BA control authority has not been verified. Check switch and integration. ABORT always works.';
+        return `<div style="text-align:left;line-height:1.4;">
+          <b style="font-size:15px;">${mode}</b><br>${note}<br>
+          <span style="opacity:.78;font-size:11px;">Source ${clean(a.runtime_source)} · step ${clean(a.runtime_step)} · heater ${clean(a.heater_on)} · pump ${clean(a.pump_on)} · physical OFF unverified.</span>
+        </div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 12px
+        - background: rgba(33,150,243,.07)
+      label:
+        - white-space: normal
+        - text-align: left
+  - type: conditional
+    conditions:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        state: "on"
+      - entity: sensor.brewassistant_brewday_runtime_source
+        state: "Manual Brewday"
+      - entity: binary_sensor.brewzilla_profile_active
+        state: "off"
+      - entity: sensor.brewassistant_brewday_operator_control_state
+        state_not: "aborted"
+    card:
+      type: vertical-stack
+      cards:
+        - type: markdown
+          content: >-
+            **MANUAL BREWDAY · DIRECT RCL CONTROL** 🛠️
+
+            These controls write directly to RCL/BrewZilla at your explicit
+            request, **not** through BA's automatic setpoint transport. The panel
+            requires the RAPT profile to report OFF; always confirm the previous
+            profile has actually stopped before changing hardware values. Missing
+            or unknown profile status hides direct controls. ABORT always applies.
+            BA-owned setpoint fields in other Manual Brewday cards do **not**
+            write to BrewZilla while BA is read-only.
+        - type: entities
+          title: "Manual setpoints · directly on BrewZilla"
+          show_header_toggle: false
+          entities:
+            - entity: number.brewzilla_target_temperature
+              name: Temperature target
+            - entity: number.brewzilla_heat_utilization
+              name: Heat utilization
+            - entity: number.brewzilla_pump_utilization
+              name: Pump utilization
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              entity: switch.brewzilla_heater
+              name: HEATER · DIRECT
+              icon: mdi:fire
+              tap_action:
+                action: toggle
+                confirmation:
+                  text: "Direct control outside BA: change BrewZilla heater state? Check target and liquid level at the device."
+              styles:
+                card:
+                  - border-radius: 14px
+                  - padding: 12px
+                  - background: rgba(255,152,0,.13)
+            - type: custom:button-card
+              entity: switch.brewzilla_pump
+              name: PUMP · DIRECT
+              icon: mdi:pump
+              tap_action:
+                action: toggle
+                confirmation:
+                  text: "Direct control outside BA: change BrewZilla pump state? Check flow and liquid level at the device."
+              styles:
+                card:
+                  - border-radius: 14px
+                  - padding: 12px
+                  - background: rgba(33,150,243,.13)
