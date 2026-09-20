@@ -1,21 +1,25 @@
-# Beta.14: BA Sparge actions only when observation is OFF and the backend is rearmed.
-# No hard-coded RCL profile entity ID; backend validates the session and step.
+# Only a verified RAPT Sparge step, with BA observation OFF and explicit rearm.
+# BA backend independently rechecks identity, output readback and permission.
 type: conditional
 conditions:
   - entity: switch.brewassistant_brewzilla_observe_only
     state: "off"
   - entity: sensor.brewassistant_brewzilla_orchestration_mode
     state_not: observe-only
+  - entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state_not: unavailable
+  - entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state_not: unknown
   - entity: sensor.brewassistant_brewday_runtime_source
-    state: RAPT BrewZilla Profile
+    state: "RAPT BrewZilla Profile"
   - condition: or
     conditions:
       - condition: state
         entity: sensor.brewassistant_brewday_runtime_step
-        state: Sparge
+        state: "Sparge"
       - condition: state
         entity: sensor.brewassistant_brewday_runtime_step
-        state: Lakning
+        state: "Lakning"
 card:
   type: vertical-stack
   cards:
@@ -35,11 +39,16 @@ card:
           const off = a.outputs_confirmed_off === true;
           const heater = String(a.heater_readback ?? 'unknown').toUpperCase();
           const pump = String(a.pump_readback ?? 'unknown').toUpperCase();
+          const mode = String(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '');
+          const controlReason = String(states['sensor.brewassistant_brewzilla_control_reason']?.state || '');
           const profile = Object.values(states).find(s => s?.entity_id?.startsWith('binary_sensor.') && s?.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' && s.state === 'on');
-          if (!profile) return 'No active RCL profile sensor found. Do not confirm the lift; inspect RAPT locally.';
-          if (phase === 'awaiting_lift') return `AWAITING LIFT · heater ${heater} · pump ${pump} · HA readback ${off ? 'OFF/0' : 'NOT confirmed'}. Verify physical outputs before lifting.`;
-          if (phase === 'heat_to_boil') return 'LIFT ACKNOWLEDGED · keep pump OFF · pre-boil BA heating needs a separate supervised confirmation. Check RAPT target and power locally.';
-          return 'No lift confirmation currently available. Backend controls safety.';
+          if (!profile) return 'No active RCL profile sensor found. Do not confirm lift; inspect RAPT locally.';
+          if (phase === 'awaiting_lift') return `AWAITING LIFT · heater ${heater} · pump ${pump} · HA readback ${off ? 'OFF/0' : 'NOT confirmed'}. Verify locally before lifting.`;
+          if (phase === 'heat_to_boil') {
+            if (mode === 'sparge-local-target-conflict-blocked' || controlReason.includes('positive BA heating blocked')) return 'LIFT ACKNOWLEDGED · PREBOIL HEAT BLOCKED. RAPT local target differs from BA 95 °C or cannot be verified; do not start BA heating.';
+            return `LIFT ACKNOWLEDGED · pump stays OFF · BA preboil ceiling ${a.preboil_target_c ?? 95} °C. Heating still requires separate supervised CONFIRM.`;
+          }
+          return 'Source or step not verified. No lift confirmation; check RAPT and BA.';
         ]]]
       styles:
         card:
@@ -47,21 +56,28 @@ card:
           - padding: 12px
         label:
           - white-space: normal
+    - type: markdown
+      content: >-
+        {% set reason = states('sensor.brewassistant_brewzilla_control_reason') %}
+        **Reason:** {{ reason }}  
+        **Heat utilization:** {{ states('number.brewzilla_heat_utilization') }} %  
+        **Pump utilization:** {{ states('number.brewzilla_pump_utilization') }} %  
+        HA OFF/0 readback is not proof of electrical isolation.
     - type: custom:button-card
       entity: button.brewassistant_confirm_sparge_lift
-      name: CONFIRM LIFT AND WORT LEVEL
+      name: CONFIRM LIFT AND WORT COVERAGE
       icon: mdi:check-decagram-outline
       show_state: false
       show_label: true
       triggers_update: all
-      label: Confirm only when the grain pipe is secure and wort covers the elements. Heating requires separate confirmation.
+      label: Confirm only when the malt pipe is safely lifted AND wort covers the heating elements. Heating needs separate confirmation.
       tap_action:
         action: call-service
         service: button.press
         target:
           entity_id: button.brewassistant_confirm_sparge_lift
         confirmation:
-          text: Have you physically verified BOTH the grain pipe is lifted safely AND the elements are covered by wort? This does not prove electrical isolation.
+          text: Have you physically verified BOTH the malt pipe is safely lifted and the heating elements are covered with wort? This is not proof of electrical isolation.
       styles:
         card:
           - display: |
