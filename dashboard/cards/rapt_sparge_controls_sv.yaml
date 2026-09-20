@@ -1,21 +1,25 @@
-# Beta.14: BA Sparge operator actions require observation OFF AND a rearmed backend.
-# No hardcoded RCL profile-active entity; backend validates active session/step.
+# Only a verified RAPT Sparge step, with BA observation OFF and explicit rearm.
+# BA backend independently rechecks identity, output readback and permission.
 type: conditional
 conditions:
   - entity: switch.brewassistant_brewzilla_observe_only
     state: "off"
   - entity: sensor.brewassistant_brewzilla_orchestration_mode
     state_not: observe-only
+  - entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state_not: unavailable
+  - entity: sensor.brewassistant_brewzilla_orchestration_mode
+    state_not: unknown
   - entity: sensor.brewassistant_brewday_runtime_source
-    state: RAPT BrewZilla Profile
+    state: "RAPT BrewZilla Profile"
   - condition: or
     conditions:
       - condition: state
         entity: sensor.brewassistant_brewday_runtime_step
-        state: Sparge
+        state: "Sparge"
       - condition: state
         entity: sensor.brewassistant_brewday_runtime_step
-        state: Lakning
+        state: "Lakning"
 card:
   type: vertical-stack
   cards:
@@ -35,11 +39,16 @@ card:
           const off = a.outputs_confirmed_off === true;
           const heater = String(a.heater_readback ?? 'okänd').toUpperCase();
           const pump = String(a.pump_readback ?? 'okänd').toUpperCase();
+          const mode = String(states['sensor.brewassistant_brewzilla_orchestration_mode']?.state || '');
+          const controlReason = String(states['sensor.brewassistant_brewzilla_control_reason']?.state || '');
           const profile = Object.values(states).find(s => s?.entity_id?.startsWith('binary_sensor.') && s?.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' && s.state === 'on');
-          if (!profile) return 'Ingen aktiv, verifierad RCL-profilsensor hittades. Ingen lyftkvittens; kontrollera RAPT lokalt.';
-          if (phase === 'awaiting_lift') return `VÄNTAR PÅ LYFT · värme ${heater} · pump ${pump} · avläsning ${off ? 'OFF/0 återläst i HA' : 'INTE verifierad'}. Kontrollera fysiskt före lyft.`;
-          if (phase === 'heat_to_boil') return 'LYFT KVITTERAT · pumpen ska vara AV · BA-förkoksvärme kräver separat övervakad kvittens. Kontrollera RAPT-target och effekt lokalt.';
-          return 'Ingen aktuell lyftkvittens tillgänglig. Backend äger säkerhetskontrollen.';
+          if (!profile) return 'Ingen aktiv RCL-profilsensor hittades. Ingen lyftkvittens; kontrollera RAPT lokalt.';
+          if (phase === 'awaiting_lift') return `VÄNTAR PÅ LYFT · värme ${heater} · pump ${pump} · HA-avläsning ${off ? 'AV/0' : 'INTE verifierad'}. Kontrollera lokalt före lyft.`;
+          if (phase === 'heat_to_boil') {
+            if (mode === 'sparge-local-target-conflict-blocked' || controlReason.includes('positive BA heating blocked')) return 'LYFT KVITTERAT · FÖRKOKSVÄRME BLOCKERAD. RAPT:s lokala mål avviker från BA:s 95 °C eller är inte verifierat; ingen BA-värme får startas.';
+            return `LYFT KVITTERAT · pumpen ska vara AV · BA förkok max ${a.preboil_target_c ?? 95} °C. Värme kräver separat övervakad BEKRÄFTA.`;
+          }
+          return 'Källa eller steg inte verifierat. Ingen lyftkvittens; kontrollera RAPT och BA.';
         ]]]
       styles:
         card:
@@ -47,6 +56,13 @@ card:
           - padding: 12px
         label:
           - white-space: normal
+    - type: markdown
+      content: >-
+        {% set reason = states('sensor.brewassistant_brewzilla_control_reason') %}
+        **Orsak:** {{ reason }}  
+        **Värmeutnyttjande:** {{ states('number.brewzilla_heat_utilization') }} %  
+        **Pumputnyttjande:** {{ states('number.brewzilla_pump_utilization') }} %  
+        HA:s OFF/0-avläsning är inte ett bevis på elektrisk frånskiljning.
     - type: custom:button-card
       entity: button.brewassistant_confirm_sparge_lift
       name: KVITTERA LYFT OCH VÖRTNIVÅ
@@ -54,14 +70,14 @@ card:
       show_state: false
       show_label: true
       triggers_update: all
-      label: Kvittera endast om maltpipan är säker och vörten täcker värmeelementen. Värme kräver separat kvittens.
+      label: Kontrollera att maltpipan är säkert upplyft OCH att värmeelementen täcks av vört. Uppvärmning kräver separat kvittens.
       tap_action:
         action: call-service
         service: button.press
         target:
           entity_id: button.brewassistant_confirm_sparge_lift
         confirmation:
-          text: Har du fysiskt verifierat BÅDE maltpipans lyft och vört över elementen? Detta är inte ett bevis på elektrisk frånskiljning.
+          text: Har du fysiskt verifierat BÅDE att maltpipan är säkert upplyft och att vört täcker värmeelementen? Detta är inte ett bevis på elektrisk frånskiljning.
       styles:
         card:
           - display: |
