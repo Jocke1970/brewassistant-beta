@@ -46,4 +46,4 @@ jobs:
 
       - name: Exercise real HA StateMachine and ServiceRegistry (no cloud/hardware)
         working-directory: ba
-        run: python tests/integration/ha_rcl_observe_smoke.py
+        run: PYTHONPATH=. python tests/integration/ha_rcl_observe_smoke.py
