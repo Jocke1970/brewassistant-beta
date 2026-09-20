@@ -39,6 +39,7 @@ from .kegerator.guard import (
     async_enable_kegerator_guard,
     build_kegerator_guard_snapshot,
 )
+from .brewzilla.brewzilla_observe_only import BrewAssistantBrewZillaObserveOnlySwitch
 
 
 ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
@@ -241,7 +242,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
         [
             BrewAssistantSafetySwitch(coordinator, key, config)
             for key, config in ORCHESTRATION_SWITCHES.items()
-        ]
+        ] + [BrewAssistantBrewZillaObserveOnlySwitch(coordinator)]
     )
 
 
