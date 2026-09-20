@@ -1,7 +1,8 @@
-"""Fail-closed operator observation for BrewZilla, independent of RCL (issue #220).
+"""Operator read-only switch for BA's *ordinary* BrewZilla writes.
 
-ON never sends OFF/zero; commands already dispatched cannot be recalled. The
-physical BrewZilla controller and RCL remain independent of BrewAssistant.
+The separate explicit operator emergency ABORT is NOT an ordinary BA write.
+Turning observation ON does not stop physical outputs, and neither switch
+position grants bypass of an active RAPT/Brewfather source or ABORT latch.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from .brewzilla_owned_control import clear_owned_control
 from . import brewzilla_local_control_lease_v2 as local_lease
 
 ENTITY_ID = "switch.brewassistant_brewzilla_observe_only"
-REARM_SERVICE = "brewzilla_rearm_after_observe"
+REARM_SERVICE = "brewzilla_rearm_after_observe"  # compatibility; UI needs only the switch
 DATA_KEY = "brewzilla_observe_only_runtime"
 MAX_REARM_AGE_SECONDS = 90
 _INSTALLED = False
@@ -35,7 +36,7 @@ _PREVIOUS_RAPT_CALL = None
 
 
 def _store(hass: Any) -> dict[str, Any]:
-    # Absence of the switch during startup must block every BA output.
+    # Missing entity, failed restoration or a restart may never silently arm BA.
     return hass.data.setdefault(DOMAIN, {}).setdefault(
         DATA_KEY, {"enabled": True, "rearmed": False, "reason": "startup_fail_closed"},
     )
@@ -51,7 +52,7 @@ def observation_reason(hass: Any) -> str:
 
 
 def _invalidate(hass: Any, reason: str) -> None:
-    """Discard old intent; absolutely no BrewZilla service is sent here."""
+    """Discard automatic intent without an actuator command (not emergency ABORT)."""
     clear_pending_action(hass, reason=reason)
     clear_owned_control(hass, reason=reason)
     lease = local_lease._store(hass)
@@ -96,7 +97,7 @@ async def _policy_execute(hass: Any, action: dict[str, Any]):
         from .. import control_policy
         return control_policy._store_policy_result(hass, {
             **action, "status": "observe_only_denied",
-            "summary": "BrewZilla controlled locally: no BA actuator service sent.",
+            "summary": "BA automatic BrewZilla output denied; direct operator control and emergency ABORT are separate.",
         })
     return await _PREVIOUS_POLICY_EXECUTE(hass, action)
 
@@ -109,13 +110,14 @@ def _build(hass: Any) -> dict[str, Any]:
     fields = dict(observe_only_enabled=store.get("enabled") is not False,
                   observe_only_effective=observing,
                   observe_only_rearm_required=store.get("enabled") is False and observing,
-                  observe_only_service=f"{DOMAIN}.{REARM_SERVICE}")
+                  observe_only_service=f"{DOMAIN}.{REARM_SERVICE}",
+                  emergency_abort_always_available=True)
     if observing:
         result = authority._observer_snapshot(result, HotSideAuthority(
             "blocked", False, observation_reason(hass),
         ))
         result.update(orchestration_mode="observe-only",
-                      control_reason="Endast observation: BA skickar inga BrewZilla-kommandon. Kontrollera utgångarna lokalt.")
+                      control_reason="BA read-only: automatic BrewZilla writes blocked. Operator ABORT remains available. Check physical outputs locally.")
     result.update(fields)
     return result
 
@@ -124,7 +126,7 @@ async def _rapt_call(hass: Any, domain: str, service: str, entity_id: str,
                      data: dict[str, Any] | None = None):
     assert _PREVIOUS_RAPT_CALL is not None
     if observation_required(hass):
-        raise PermissionError("BA observe-only blocks RAPT/BrewZilla output commands")
+        raise PermissionError("BA read-only blocks ordinary RAPT/BrewZilla output commands")
     return await _PREVIOUS_RAPT_CALL(hass, domain, service, entity_id, data)
 
 
@@ -140,30 +142,41 @@ def _reported_fresh(hass: Any, entity_id: str) -> bool:
 
 
 async def async_rearm(hass: Any) -> None:
-    """Separate explicit operator action; no cached pending plan may be reused."""
+    """Validate a single operator switch-OFF before arming BA; no stale replay."""
     store = _store(hass)
     if store.get("enabled") is not False:
         raise HomeAssistantError("Stäng först av switchen Endast observation.")
     if _PREVIOUS_AUTHORITY is None:
         raise HomeAssistantError("Styrspärren är inte installerad.")
-    decision, _ = _PREVIOUS_AUTHORITY(hass)
-    if decision.mode != "rapt_controller" or decision.may_write_brewzilla is not True:
-        raise HomeAssistantError(f"RAPT-session och säkerhet är inte verifierade: {decision.reason}")
+    decision, context = _PREVIOUS_AUTHORITY(hass)
+    from ..brewday.brewday_operator_abort import brewday_operator_abort_active
+    if brewday_operator_abort_active(hass):
+        raise HomeAssistantError("ABORT-spärren måste återställas separat efter fysisk kontroll.")
+    verified_rapt = decision.mode == "rapt_controller" and decision.may_write_brewzilla is True
+    manual = decision.mode == "manual_legacy_unresolved" and (
+        context.get("runtime") or {}).get("source") == "Manual Brewday"
+    )
+    if manual:
+        from ..brewday import rapt_profile_runtime
+        if rapt_profile_runtime.rapt_profile_runtime_claims_source(hass):
+            raise HomeAssistantError("RAPT-överlämning ej verifierad. Avsluta profilen och invänta bekräftad STOP.")
+    if not (verified_rapt or manual):
+        raise HomeAssistantError(f"Bryggkälla och säkerhet är inte verifierade: {decision.reason}")
     readbacks = (base.BREWZILLA_TEMP_SENSOR, base.BREWZILLA_TARGET_NUMBER,
                  base.BREWZILLA_HEATER_SWITCH, base.BREWZILLA_PUMP_SWITCH,
                  base.BREWZILLA_HEAT_UTILIZATION, base.BREWZILLA_PUMP_UTILIZATION)
     if not all(_reported_fresh(hass, entity) for entity in readbacks):
-        raise HomeAssistantError("Färsk BrewZilla-telemetri saknas; återaktivering nekad.")
+        raise HomeAssistantError("Färsk BrewZilla-telemetri saknas; BA-styrning nekad.")
     _invalidate(hass, "observe_only_rearm_old_plan_revoked")
-    store.update(rearmed=True, reason="explicit_operator_rearm")
+    store.update(rearmed=True, reason="operator_switch_control_enabled")
     from ..brewday.brewday_audit import async_record_brewday_audit_event
     await async_record_brewday_audit_event(hass, "brewzilla_observe_only_rearmed",
-        note="Operator explicitly rearmed verified RAPT control. Old pending plans discarded.",
+        note="Operator switched BA read-only OFF; validated source/readbacks and revoked old plans.",
         always_record=True)
 
 
 class BrewAssistantBrewZillaObserveOnlySwitch(RestoreEntity, SwitchEntity):
-    """Self-contained entity to avoid importing the coordinator during package init."""
+    """Single operator control: ON=BA read-only; OFF=BA control after checks."""
 
     _attr_has_entity_name = True
     _attr_name = "Endast observation – BrewZilla styrs lokalt"
@@ -182,13 +195,15 @@ class BrewAssistantBrewZillaObserveOnlySwitch(RestoreEntity, SwitchEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        restored = await self.async_get_last_state()
-        self._attr_is_on = restored is None or restored.state != "off"
-        _store(self.hass).update(enabled=self._attr_is_on, rearmed=False,
-            reason="restored_observe_only" if self._attr_is_on else "startup_rearm_required")
+        # A previously OFF switch must not silently resume physical control on restart.
+        # Show ON (real effective mode) until the operator deliberately switches OFF.
+        self._attr_is_on = True
+        _store(self.hass).update(enabled=True, rearmed=False,
+            reason="startup_requires_operator_control_selection")
         _invalidate(self.hass, "observe_only_startup")
         if not self.hass.services.has_service(DOMAIN, REARM_SERVICE):
             async def _handle_rearm(call: Any) -> None:
+                # Compatibility only. The normal UI has a single switch.
                 await async_rearm(self.hass)
             self.hass.services.async_register(DOMAIN, REARM_SERVICE, _handle_rearm)
         self.async_write_ha_state()
@@ -204,13 +219,24 @@ class BrewAssistantBrewZillaObserveOnlySwitch(RestoreEntity, SwitchEntity):
         _invalidate(self.hass, "observe_only_enabled")
         from ..brewday.brewday_audit import async_record_brewday_audit_event
         await async_record_brewday_audit_event(self.hass, "brewzilla_observe_only_enabled",
-            note="BA outputs revoked; no OFF/zero sent. Verify BrewZilla locally.", always_record=True)
+            note="BA ordinary outputs revoked; emergency ABORT remains available. No OFF/zero sent on toggle.",
+            always_record=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        _store(self.hass).update(enabled=False, rearmed=False, reason="operator_rearm_required")
+        # Keep the guard effective while validating the ONE switch transition.
+        store = _store(self.hass)
+        store.update(enabled=False, rearmed=False, reason="operator_control_validation_pending")
+        try:
+            await async_rearm(self.hass)
+        except Exception:
+            # Any unsuccessful validation leaves both the backend AND visible
+            # switch in read-only. Never show OFF with a hidden second step.
+            store.update(enabled=True, rearmed=False, reason="control_validation_denied")
+            self._attr_is_on = True
+            self.async_write_ha_state()
+            raise
         self._attr_is_on = False
         self.async_write_ha_state()
-        _invalidate(self.hass, "observe_only_switch_off_rearm_required")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -220,8 +246,9 @@ class BrewAssistantBrewZillaObserveOnlySwitch(RestoreEntity, SwitchEntity):
             "rearm_required": not self._attr_is_on and observation_required(self.hass),
             "rearm_service": f"{DOMAIN}.{REARM_SERVICE}",
             "ba_output_commands_allowed": not observation_required(self.hass),
+            "emergency_abort_always_available": True,
             "physical_outputs_off_verified": False,
-            "note": "ON sends no OFF/zero. OFF requires separate rearm; local BrewZilla controls are independent.",
+            "note": "ON blocks BA automatic writes but NOT ABORT. OFF validates control atomically; no old plan replay.",
         }
 
 
