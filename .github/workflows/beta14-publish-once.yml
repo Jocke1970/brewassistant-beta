@@ -1,7 +1,6 @@
 name: Publish beta.14 prerelease once
 
-# Intentionally scoped to this one file's introduction on beta. Remove it after
-# a verified release; it must never run for normal development or promotions.
+# One version, one tested target, one controlled beta-only publishing workflow.
 on:
   push:
     branches: [beta]
@@ -14,12 +13,15 @@ permissions:
 
 jobs:
   publish-beta14:
-    if: github.ref == 'refs/heads/beta' && github.event.head_commit.message == 'chore(beta.14): one-time prerelease publishing workflow'
+    if: >-
+      github.ref == 'refs/heads/beta' &&
+      github.event.head_commit.message == 'fix(beta.14): validate one-time publisher YAML and exact commit chain'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
       EXPECTED_SHA: 1a956c04044df870e005392b6bfe946097b9d440
+      FIRST_WORKFLOW_SHA: 6fce635a2a39bd860f415c3eaa00940708432d51
       CANDIDATE_SHA: e87b319170ed1819bcce69c82f01c8fea3dbd1e3
       TAG: v0.2.0-beta.14
     steps:
@@ -29,7 +31,7 @@ jobs:
           ref: 1a956c04044df870e005392b6bfe946097b9d440
           persist-credentials: false
 
-      - name: Verify exact SHA, manifest, workflow parent and all release checks
+      - name: Verify exact SHA, manifest, workflow chain and release checks
         shell: bash
         run: |
           set -euo pipefail
@@ -39,7 +41,9 @@ jobs:
           live_beta="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/beta" --jq '.object.sha')"
           test "$live_beta" = "$GITHUB_SHA"
           parent="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${GITHUB_SHA}" --jq '.parents[0].sha')"
-          test "$parent" = "$EXPECTED_SHA"
+          test "$parent" = "$FIRST_WORKFLOW_SHA"
+          original_parent="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${FIRST_WORKFLOW_SHA}" --jq '.parents[0].sha')"
+          test "$original_parent" = "$EXPECTED_SHA"
           for run_id in 35538135365 35538135442 35538135409; do
             result="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.head_sha + ":" + .conclusion')"
             test "$result" = "$EXPECTED_SHA:success"
@@ -47,11 +51,11 @@ jobs:
           smoke="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/35536081305" --jq '.head_sha + ":" + .conclusion')"
           test "$smoke" = "$CANDIDATE_SHA:success"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
-            echo "Release tag already exists; refusing to move it or overwrite a release." >&2
+            echo 'Release tag already exists; refusing to overwrite it.' >&2
             exit 1
           fi
           if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" >/dev/null 2>&1; then
-            echo "Release already exists; refusing to overwrite it." >&2
+            echo 'Release already exists; refusing to overwrite it.' >&2
             exit 1
           fi
 
@@ -62,14 +66,14 @@ jobs:
           cat > /tmp/beta14-release-notes.md <<'NOTES'
           BrewAssistant 0.2.0-beta.14 — beta för övervakad testning med vatten.
 
-          **Inte fysiskt verifierad:** Använd endast under uppsikt och med möjlighet till separat fysisk avstängning. Ett skickat ABORT-kommando är inte bevis på att värmare, pump eller huvudström verkligen slagits av.
+          **Inte fysiskt verifierad:** Använd endast under uppsikt och med separat möjlighet till fysisk avstängning. Ett ABORT-anrop bevisar inte fysisk avstängning.
 
           - En read-only-switch för BA:s styrbehörighet. Den gamla orchestration_enabled-entiteten avvecklas; uppdatera egna dashboards och automationer.
-          - Oberoende ABORT som alltid försöker stoppa RAPT-profilen och skicka OFF/0; kontrollera fysisk återkoppling.
-          - Fristående svenska och engelska observationskort med direkta RCL-reglage för Manual Brewday. Lägg till kortet bredvid befintligt Manual Brewday-kort. Äldre BA-ägda talfält transporteras inte i read-only.
-          - Python 3.11–3.13, kvalitet, HACS och Hassfest är gröna på exakt beta-merge-commit. Isolerat HA/RCL-test är grönt på den kodidentiska releasekandidaten; ingen riktig moln- eller hårdvarutest ingår.
+          - Oberoende ABORT försöker stoppa RAPT-profilen och skicka OFF/0; kontrollera fysisk återkoppling.
+          - Separata svenska och engelska observationskort har direkta RCL-reglage för Manual Brewday. Lägg till observationskortet bredvid ditt befintliga Manual Brewday-kort.
+          - CI för Python 3.11–3.13, HACS och Hassfest är gröna på exakt beta-merge-commit; HA/RCL-isolerad smoke är grön på den kodidentiska kandidaten, inte mot fysisk hårdvara.
 
-          Fullständiga ändringar, begränsningar och instruktioner för vattenprov: [svenska releaseanteckningar](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md).
+          [Fullständiga svenska anteckningar och vattenprov](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md).
           NOTES
           gh release create "$TAG" --target "$EXPECTED_SHA" --title 'BrewAssistant 2026_09-20 — fix-beta (v0.2.0-beta.14)' --notes-file /tmp/beta14-release-notes.md --prerelease
           tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')"
