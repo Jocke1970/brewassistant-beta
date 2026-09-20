@@ -1,0 +1,97 @@
+# BrewZilla operator mode: place this whole card at the TOP of the Brewday dashboard.
+# Requires beta containing issue #220 backend. Does not work with v0.2.0-beta.13.
+# Only controls BrewAssistant; BrewZilla's local controls remain independent.
+type: vertical-stack
+cards:
+  - type: entities
+    title: "BrewZilla · vem styr?"
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        name: "Endast observation · styr på BrewZilla"
+        icon: mdi:eye-outline
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    name: OPERATÖRSLÄGE
+    icon: mdi:shield-eye-outline
+    show_state: false
+    show_label: true
+    triggers_update: all
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const sw = states['switch.brewassistant_brewzilla_observe_only'];
+        const a = entity?.attributes || {};
+        const clean = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const fmt = v => v === null || v === undefined || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(1);
+        let headline, instruction, bg;
+        if (!sw || !['on','off'].includes(sw.state)) {
+          headline = 'INGEN VERIFIERAD OBSERVATIONSSWITCH';
+          instruction = 'BA-styrning får inte antas blockerad. Kontrollera installerad version, entitet och bryggverk lokalt.';
+          bg = 'rgba(244,67,54,.15)';
+        } else if (sw.state === 'on' && a.observe_only_effective === true) {
+          headline = 'ENDAST OBSERVATION · BZ STYRS LOKALT';
+          instruction = 'BA läser, loggar och lär passivt. Inga BA-kommandon till BrewZilla, inte heller OFF/0 %. Kontrollera faktiska utgångar på bryggverket.';
+          bg = 'rgba(76,175,80,.13)';
+        } else if (sw.state === 'off' && a.observe_only_rearm_required === true) {
+          headline = 'ÅTERAKTIVERING KRÄVS';
+          instruction = 'Switchen är AV men BA är fortfarande spärrad. Kontrollera RAPT-session, temperatur och BrewZilla lokalt. Bekräfta separat nedan endast om BA verkligen ska få reglera igen.';
+          bg = 'rgba(255,193,7,.15)';
+        } else if (sw.state === 'off' && a.observe_only_effective === false) {
+          headline = 'BA-STYRNING ÅTERAKTIVERAD';
+          instruction = 'BA kan nu skicka nya kommandon enligt ordinarie regler. Heatstrike/Mash-in kan reglera utan kvittens per ändring. Övervaka bryggverket.';
+          bg = 'rgba(255,152,0,.14)';
+        } else {
+          headline = 'BEHÖRIGHET OKLAR';
+          instruction = 'Verifiera styrspärr och återkoppling innan praktiskt test.';
+          bg = 'rgba(244,67,54,.15)';
+        }
+        return `<div style="line-height:1.4;">
+          <div style="padding:12px;border-radius:14px;background:${bg};font-weight:950;font-size:16px;">${headline}</div>
+          <div style="margin-top:8px;font-size:12px;font-weight:750;">${instruction}</div>
+          <div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:11px;">
+            <div>RAPT/Runtime: <b>${clean(a.runtime_source)}</b><br>Steg: <b>${clean(a.runtime_step)}</b></div>
+            <div>Temperatur: <b>${fmt(a.current_temperature)} °C</b><br>Enhetsmål: <b>${fmt(a.applied_target)} °C</b></div>
+            <div>Värmare: <b>${clean(a.heater_on)}</b> · ${fmt(a.heat_utilization)} %</div>
+            <div>Pump: <b>${clean(a.pump_on)}</b> · ${fmt(a.pump_utilization)} %</div>
+          </div>
+          <div style="margin-top:9px;font-size:10px;opacity:.73;">BA-skrivrätt: ${a.hot_side_actuator_writes_allowed === false ? 'NEJ' : a.hot_side_actuator_writes_allowed === true ? 'JA' : 'ej verifierad'} · fysisk avstängning: inte verifierad av BA. Befintliga Lovelace-kort som styr RCL direkt ligger utanför BA-spärren.</div>
+        </div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 14px
+        - background: rgba(33,150,243,.06)
+        - border: 1px solid rgba(33,150,243,.20)
+      label:
+        - white-space: normal
+        - text-align: left
+        - font-size: 12px
+  - type: custom:button-card
+    entity: switch.brewassistant_brewzilla_observe_only
+    name: "BEKRÄFTA ÅTERAKTIVERING AV BA"
+    icon: mdi:shield-check-outline
+    show_state: false
+    show_label: true
+    label: "Endast när du vill lämna lokal styrning. Kontrollerar aktiv RAPT-session och färsk återkoppling. Gamla kommandon kastas."
+    tap_action:
+      action: call-service
+      service: brewassistant.brewzilla_rearm_after_observe
+      confirmation:
+        text: "Vill du ge BrewAssistant styrbehörighet igen? Verifiera BrewZilla lokalt. BA kan efter detta skicka nya värme-, pump- och temperaturkommandon automatiskt."
+    styles:
+      card:
+        - display: |
+            [[[
+              const s = states['switch.brewassistant_brewzilla_observe_only'];
+              return s?.state === 'off' && s?.attributes?.rearm_required === true ? 'block' : 'none';
+            ]]]
+        - border-radius: 18px
+        - background: rgba(255,193,7,.17)
+        - border: 2px solid rgba(255,193,7,.48)
+        - padding: 13px
+      label:
+        - white-space: normal
+        - font-size: 11px
