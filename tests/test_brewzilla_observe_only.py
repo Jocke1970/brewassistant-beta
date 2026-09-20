@@ -1,4 +1,4 @@
-"""Executable fail-passive acceptance checks for operator observation-only mode."""
+"""Executable fail-passive checks for BA's single read-only switch."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def _hass():
                            services=SimpleNamespace())
 
 
-def test_missing_state_and_restored_off_fail_closed_without_rearm():
+def test_missing_state_and_unverified_off_fail_closed():
     env = _load("_store", "observation_required", "observation_reason")
     hass = _hass()
     assert env["observation_required"](hass)
@@ -67,7 +67,7 @@ def test_missing_state_and_restored_off_fail_closed_without_rearm():
     assert env["observation_required"](hass)
 
 
-def test_final_authority_and_safe_down_denied_in_observation():
+def test_final_authority_and_ordinary_safe_down_denied_in_observation():
     env = _load("_store", "observation_required", "observation_reason",
                 "_live_authority", "_safe_off_allowed")
     hass = _hass()
@@ -145,9 +145,10 @@ def test_observer_snapshot_never_claims_physically_off():
     assert result["orchestration_mode"] == "observe-only" and result["heater_on"] is True
     assert result["hot_side_outputs_physically_off_verified"] is False
     assert result["hot_side_actuator_writes_allowed"] is False
+    assert result["emergency_abort_always_available"] is True
 
 
-def test_legacy_rapt_output_path_passive():
+def test_ordinary_legacy_rapt_output_path_remains_passive():
     env = _load("_store", "observation_required", "_rapt_call")
     calls = []
     async def previous(*args):
@@ -158,30 +159,42 @@ def test_legacy_rapt_output_path_passive():
     assert not calls
 
 
-def test_rearm_denies_missing_or_unverified_source():
+def test_rearm_denies_missing_source_and_abort():
     env = _load("_store", "async_rearm")
     hass = _hass()
     with pytest.raises(HomeAssistantError):
         asyncio.run(env["async_rearm"](hass))
     env["_store"](hass).update(enabled=False, rearmed=False)
     env["_PREVIOUS_AUTHORITY"] = lambda h: (Authority("blocked", False, "stale"), {})
-    with pytest.raises(HomeAssistantError):
+    env["brewday_operator_abort_active"] = lambda h: False
+    with pytest.raises((HomeAssistantError, ImportError)):
         asyncio.run(env["async_rearm"](hass))
     assert env["_store"](hass)["rearmed"] is False
 
 
-def test_registration_and_ui_and_on_path_without_off_services():
+def test_registration_one_switch_emergency_and_on_path_without_output():
     package = PACKAGE.read_text(encoding="utf-8")
     assert package.index("_rapt_identity_guard.install_rapt_identity_guard()") < package.index(
         "_observe_only.install_observe_only_guard()")
+    assert package.index("_observe_dispatch.install_observe_only_dispatch_guard()") < package.index(
+        "_emergency_abort.install_emergency_abort()")
     assert "BrewAssistantBrewZillaObserveOnlySwitch(coordinator)" in SWITCH_PLATFORM.read_text(encoding="utf-8")
     card = UI.read_text(encoding="utf-8")
-    assert "switch.brewassistant_brewzilla_observe_only" in card
-    assert "brewassistant.brewzilla_rearm_after_observe" in card
+    assert card.count("entity: switch.brewassistant_brewzilla_observe_only") >= 1
+    assert "brewassistant.abort_brewzilla" in card
+    assert "brewassistant.brewzilla_rearm_after_observe" not in card
+    assert "number.brewzilla_target_temperature" in card
+    assert "sensor.brewassistant_brewday_runtime_source" in card
     tree = ast.parse(SOURCE)
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef)
                and node.name == "BrewAssistantBrewZillaObserveOnlySwitch")
     on = next(node for node in cls.body if isinstance(node, ast.AsyncFunctionDef)
               and node.name == "async_turn_on")
+    off = next(node for node in cls.body if isinstance(node, ast.AsyncFunctionDef)
+               and node.name == "async_turn_off")
+    restore = next(node for node in cls.body if isinstance(node, ast.AsyncFunctionDef)
+                   and node.name == "async_added_to_hass")
     for forbidden in ("async_call(", "_set_number(", "_call_switch(", "_safe_state("):
         assert forbidden not in ast.unparse(on)
+    assert "await async_rearm(self.hass)" in ast.unparse(off)
+    assert 'self._attr_is_on = True' in ast.unparse(restore)
