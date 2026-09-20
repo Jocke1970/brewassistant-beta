@@ -15,10 +15,12 @@ BUTTON = ROOT / "custom_components/brewassistant/button.py"
 COORDINATOR = ROOT / "custom_components/brewassistant/coordinator.py"
 CARD_EN = ROOT / "dashboard/cards/brewday_operator_actions.yaml"
 CARD_SV = ROOT / "dashboard/cards/brewday_operator_actions_sv.yaml"
+EMERGENCY = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_emergency_abort.py"
+BZ_INIT = ROOT / "custom_components/brewassistant/brewzilla/__init__.py"
 
 
 def test_abort_python_sources_parse() -> None:
-    for path in (ABORT, OWNERSHIP, RUNTIME, RUNTIME_SENSOR, BUTTON, COORDINATOR):
+    for path in (ABORT, OWNERSHIP, RUNTIME, RUNTIME_SENSOR, BUTTON, COORDINATOR, EMERGENCY):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -72,6 +74,12 @@ def test_brewday_abort_reuses_physical_abort_and_discards_pending_intent() -> No
     assert "async_clear_brewday_operator_abort" in rearm_class
     assert '"brewday_control_rearmed"' in rearm_class
     assert "async_abort_brewzilla" not in rearm_class
+    assert "_emergency_abort.install_emergency_abort()" in BZ_INIT.read_text(encoding="utf-8")
+    emergency = EMERGENCY.read_text(encoding="utf-8")
+    assert '"end_brewzilla_profile"' in emergency
+    assert '"turn_off"' in emergency
+    assert '"set_value"' in emergency
+    assert '"physical_outputs_off_verified"] = False' in emergency
 
 
 def test_aborted_runtime_is_non_owning_and_visible_to_dashboard() -> None:
@@ -84,19 +92,20 @@ def test_aborted_runtime_is_non_owning_and_visible_to_dashboard() -> None:
     assert '"brewday_operator_control_state": {"field": "operator_control_state"}' in sensor
 
 
-def test_brewday_dashboard_separates_reject_from_abort() -> None:
+def test_brewday_dashboard_separates_reject_from_unconditional_abort() -> None:
     for path in (CARD_EN, CARD_SV):
         source = path.read_text(encoding="utf-8")
-        assert "button.brewassistant_abort_brewday" in source
+        abort = source.index("entity: button.brewassistant_abort_brewday")
+        observe = source.index("entity: switch.brewassistant_brewzilla_observe_only")
+        manual_prepare = source.index("service: brewassistant.manual_brewday_prepare")
+        assert abort < observe, "ABORT may not be nested under read-only or runtime conditions"
+        assert manual_prepare < observe, "Manual session preparation must survive BA read-only"
         assert "button.brewassistant_rearm_brewday_control" in source
         assert "sensor.brewassistant_brewday_operator_control_state" in source
         assert "aborted" in source
-
+        assert "button.brewassistant_cancel_supervised_apply" in source
+        assert source.count("entity: button.brewassistant_abort_brewday") == 1
     en = CARD_EN.read_text(encoding="utf-8")
     sv = CARD_SV.read_text(encoding="utf-8")
-    assert "REJECT ACTION" in en
-    assert "ABORT BREWDAY" in en
-    assert "REARM CONTROL" in en
-    assert "AVVISA ÅTGÄRD" in sv
-    assert "ABORT BRYGGDAG" in sv
-    assert "ÅTERAKTIVERA STYRNING" in sv
+    assert "REJECT ACTION" in en and "ABORT · EMERGENCY STOP" in en
+    assert "AVVISA ÅTGÄRD" in sv and "ABORT · NÖDSTOPP" in sv
