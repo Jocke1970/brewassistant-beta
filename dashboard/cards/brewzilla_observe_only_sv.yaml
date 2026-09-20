@@ -1,5 +1,5 @@
 # BA controls only its own automation. Emergency ABORT is always separate.
-# Place this whole card at the top of Brewday. Requires beta.14 candidate.
+# Standalone card: place alongside Manual Brewday; never assume BA setpoints apply in read-only.
 type: vertical-stack
 cards:
   - type: custom:button-card
@@ -46,7 +46,7 @@ cards:
           ? 'BA-STYRNING AKTIVERAD'
           : 'BA-BEHÖRIGHET EJ VERIFIERAD';
         const note = s?.state === 'on'
-          ? 'BA läser, loggar och lär men skickar inga vanliga BrewZilla-kommandon. ABORT ovanför fungerar ändå. Styr direkt på BrewZilla eller via manuella RCL-reglage nedan när Manual Brewday äger processen.'
+          ? 'BA läser, loggar och lär men skickar inga vanliga BrewZilla-kommandon. ABORT ovanför fungerar ändå. Manuell RCL-styrning visas först när Manual Brewday är aktiv och RAPT-profilen rapporterar OFF.'
           : s?.state === 'off' && a.observe_only_effective === false
           ? 'BA får skicka nya styrkommandon enligt ordinarie säkerhet och källa. Tidigare planer kastades vid växlingen. ABORT gäller alltid.'
           : 'BA har inte bekräftad styrbehörighet. Kontrollera switchen och integrationen. ABORT gäller alltid.';
@@ -69,6 +69,8 @@ cards:
         state: "on"
       - entity: sensor.brewassistant_brewday_runtime_source
         state: "Manual Brewday"
+      - entity: binary_sensor.brewzilla_profile_active
+        state: "off"
       - entity: sensor.brewassistant_brewday_operator_control_state
         state_not: "aborted"
     card:
@@ -79,10 +81,12 @@ cards:
             **MANUAL BREWDAY · DIREKT RCL-STYRNING** 🛠️
 
             Reglagen nedan styr RCL/BrewZilla direkt på ditt uttryckliga initiativ,
-            **inte** via BA:s automatiska börvärdestransport. Kontrollera att en
-            tidigare RAPT-profil har bekräftad STOP innan du tar över.
+            **inte** via BA:s automatiska börvärdestransport. Panelen kräver att
+            RAPT-profilens HA-status är OFF, men bekräfta alltid att den tidigare
+            profilen verkligen stoppat innan du ändrar några värden. Om RAPT-status
+            är okänd eller saknas visas inga direkta reglage. ABORT gäller alltid.
             BA:s automatiska börvärdesfält i övriga Manual Brewday-kort styr
-            **inte** bryggverket när BA är read-only. ABORT ovanför gäller alltid.
+            **inte** bryggverket när BA är read-only.
         - type: entities
           title: "Manuella börvärden · direkt på BrewZilla"
           show_header_toggle: false
