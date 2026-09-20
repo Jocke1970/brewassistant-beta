@@ -47,6 +47,7 @@ from . import brewzilla_source_authority_runtime as _source_authority_runtime
 from . import brewzilla_rapt_identity_guard as _rapt_identity_guard
 from . import brewzilla_observe_only as _observe_only
 from . import brewzilla_observe_only_dispatch_guard as _observe_dispatch
+from . import brewzilla_emergency_abort as _emergency_abort
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -144,3 +145,6 @@ _rapt_identity_guard.install_rapt_identity_guard()
 _observe_only.install_observe_only_guard()
 # Final BA policy-request and direct-entity checks, including the main switch.
 _observe_dispatch.install_observe_only_dispatch_guard()
+# Explicit emergency is not an ordinary BA policy/write, and MUST override
+# read-only, owner and positive-command lockout without granting control.
+_emergency_abort.install_emergency_abort()
