@@ -62,7 +62,8 @@ def fixture_bundle():
     observer = load_functions(
         OBS, "_store", "observation_required", "observation_reason",
         "_live_authority", "_safe_off_allowed", "_protected", "_policy_execute", "_rapt_call",
-        env={"HotSideAuthority": Authority, "Mapping": Mapping},
+        env={"HotSideAuthority": Authority, "Mapping": Mapping,
+             "DOMAIN": "brewassistant", "DATA_KEY": "brewzilla_observe_only_runtime"},
     )
     observer["authority"] = SimpleNamespace(BREWZILLA_ENTITIES=PROTECTED)
     observer["base"] = SimpleNamespace(BREWZILLA_MAIN_SWITCH="switch.brewzilla")
