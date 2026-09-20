@@ -1,7 +1,6 @@
 name: HA + RCL observer smoke (isolated)
 
-# Run the integration smoke only on release candidates or beta promotion.
-# Never run it on dev pushes or PRs targeting dev.
+# Release candidates only. No tests on dev pushes or PRs targeting dev.
 on:
   push:
     branches: ["release/**"]
@@ -52,3 +51,7 @@ jobs:
       - name: Exercise real HA StateMachine and ServiceRegistry (no cloud/hardware)
         working-directory: ba
         run: PYTHONPATH=. python tests/integration/ha_rcl_observe_smoke.py
+
+      - name: Check passive learning and real HA audit Store across object reload
+        working-directory: ba
+        run: PYTHONPATH=. python tests/integration/ha_observe_passive_smoke.py
