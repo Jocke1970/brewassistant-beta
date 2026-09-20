@@ -42,12 +42,10 @@ from .kegerator.guard import (
 from .brewzilla.brewzilla_observe_only import BrewAssistantBrewZillaObserveOnlySwitch
 
 
+# Do not re-register brewzilla_orchestration_enabled: it only changed its own
+# state and never guarded the BrewZilla output paths. observe_only is the one
+# authoritative BA control/read-only switch. Leave unrelated settings intact.
 ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
-    "brewzilla_orchestration_enabled": {
-        "name": "BrewAssistant BrewZilla Orchestration Enabled",
-        "object_id": "brewassistant_brewzilla_orchestration_enabled",
-        "icon": "mdi:robot-outline",
-    },
     "brewzilla_apply_target_temp": {
         "name": "BrewAssistant BrewZilla Apply Target Temp",
         "object_id": "brewassistant_brewzilla_apply_target_temp",
@@ -236,8 +234,14 @@ ORCHESTRATION_SWITCHES: dict[str, dict[str, Any]] = {
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
-    """Set up BrewAssistant orchestration switches."""
+    """Set up BrewAssistant orchestration switches and retire the old no-op switch."""
     coordinator: BrewAssistantCoordinator = hass.data[DOMAIN][entry.entry_id]
+    registry = er.async_get(hass)
+    deprecated_unique_id = f"{DOMAIN}_switch_brewzilla_orchestration_enabled"
+    deprecated_entity = registry.async_get_entity_id("switch", DOMAIN, deprecated_unique_id)
+    if deprecated_entity is not None:
+        # Only our exact obsolete unique ID is removed. No actuator commands.
+        registry.async_remove(deprecated_entity)
     async_add_entities(
         [
             BrewAssistantSafetySwitch(coordinator, key, config)
