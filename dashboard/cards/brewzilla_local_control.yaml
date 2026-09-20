@@ -1,3 +1,5 @@
+# Beta.14: strictly read-only HA/RCL readback. Do not embed editable switch/number rows:
+# clicking them controls RCL directly, outside BA's observe-only guard.
 type: conditional
 conditions:
   - condition: state_not
@@ -7,121 +9,45 @@ card:
   type: vertical-stack
   cards:
     - type: markdown
-      title: BrewZilla Local Control
-      content: >
+      title: BrewZilla · local control readback
+      content: >-
         {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
-        {% set mode = states(orch) %}
-        {% set lease = state_attr(orch, 'local_control_lease_active') %}
-        {% set target = state_attr(orch, 'local_control_lease_target') or state_attr(orch, 'requested_target') %}
-        {% set heat = state_attr(orch, 'local_control_lease_heat_utilization') or state_attr(orch, 'desired_heat_utilization') %}
-        {% set pump = state_attr(orch, 'local_control_lease_pump_utilization') or state_attr(orch, 'desired_pump_utilization') %}
-        {% set rcl_degraded = state_attr(orch, 'rcl_degraded') or state_attr(orch, 'heat_strike_rcl_degraded') %}
-        {% set strike = state_attr(orch, 'heat_strike_target') %}
-        {% set control = state_attr(orch, 'heat_strike_control_target') %}
-        {% set next = state_attr(orch, 'heat_strike_next_mash_target') %}
-        **Mode:** `{{ mode }}`  
-        **Lease:** {{ 'aktiv' if lease else 'inte aktiv' }}  
-        **RCL:** {{ 'degraded / control blocked' if rcl_degraded else 'ok' }}  
-        **BA target:** {{ target if target is not none else '—' }} °C  
-        **BA heat profile:** {{ heat if heat is not none else '—' }} %  
-        **BA pump profile:** {{ pump if pump is not none else '—' }} %  
-        **Heatstrike:** strike {{ strike if strike is not none else '—' }} °C · BZ {{ control if control is not none else '—' }} °C · next {{ next if next is not none else '—' }} °C  
-        **Reason:** {{ states('sensor.brewassistant_brewzilla_control_reason') }}
+        {% set observing = state_attr(orch, 'observe_only_effective') %}
+        {% set sw = states('switch.brewassistant_brewzilla_observe_only') %}
+        {% if observing != false or sw != 'off' %}
+        **🔒 READBACK ONLY – OPERATE BREWZILLA AT ITS OWN PANEL.**
+
+        BA observation sends no commands, not even OFF/0 %. Verify physical
+        shutdown at the device. Other Lovelace cards controlling RCL directly
+        are independent of BA's guard.
+        {% else %}
+        **BA observation lock released.** Other safety locks remain in force;
+        this card does not verify physical outputs.
+        {% endif %}
+
+        **Orchestration:** `{{ states(orch) }}`  
+        **Control reason:** {{ states('sensor.brewassistant_brewzilla_control_reason') }}  
+        **RCL connection:** {{ states('sensor.brewzilla_connection') }}  
+        **Kettle temperature:** {{ states('sensor.brewzilla_temperature') }} °C  
+        **Target readback:** {{ states('number.brewzilla_target_temperature') }} °C  
+        **Heater readback:** {{ states('switch.brewzilla_heater') }}  
+        **Pump readback:** {{ states('switch.brewzilla_pump') }}  
+        **Heat utilization readback:** {{ states('number.brewzilla_heat_utilization') }} %  
+        **Pump utilization readback:** {{ states('number.brewzilla_pump_utilization') }} %  
+        **Power:** {{ states('sensor.brewassistant_brewzilla_power') }} W
     - type: custom:expander-card
-      title: BA control model
+      title: BA control model · diagnostic only
       cards:
-        - type: entities
-          show_header_toggle: false
-          entities:
-            - entity: sensor.brewassistant_brewzilla_orchestration_mode
-              name: Orchestration mode
-            - entity: sensor.brewassistant_brewzilla_safety_state
-              name: Safety state
-            - entity: sensor.brewassistant_brewzilla_control_reason
-              name: Control reason
-            - entity: sensor.brewassistant_brewzilla_requested_target
-              name: Requested/control target
-            - entity: sensor.brewassistant_brewzilla_applied_target
-              name: Applied BrewZilla target
-            - entity: sensor.brewassistant_brewzilla_target_delta
-              name: Target delta
-            - entity: sensor.brewassistant_brewzilla_target_sync_needed
-              name: Target sync needed
-            - entity: sensor.brewassistant_brewzilla_can_apply_target
-              name: Can apply target
-            - entity: sensor.brewassistant_brewzilla_wort_temperature
-              name: BA wort / kettle temperature
-            - entity: sensor.brewassistant_brewzilla_mash_temperature
-              name: BA mash temperature
-            - entity: sensor.brewassistant_brewzilla_temperature_delta_mash_wort
-              name: BA mash/wort delta
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: heat_strike_latch_active
-              name: Heat-strike latch active
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: heat_strike_target
-              name: Heat-strike target
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: heat_strike_control_target
-              name: Heat-strike BrewZilla control target
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: heat_strike_next_mash_target
-              name: Next mash target
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: desired_heat_utilization
-              name: Desired heat utilization
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: desired_pump_utilization
-              name: Desired pump utilization
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: rcl_degraded
-              name: RCL degraded
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: rcl_degraded_missing
-              name: RCL degraded missing fields
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: local_control_lease_active
-              name: Local-control lease active
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: local_control_lease_target
-              name: Lease target
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: local_control_lease_heat_utilization
-              name: Lease heat profile
-            - type: attribute
-              entity: sensor.brewassistant_brewzilla_orchestration_mode
-              attribute: local_control_lease_pump_utilization
-              name: Lease pump profile
-    - type: custom:expander-card
-      title: BrewZilla/RCL raw readback
-      cards:
-        - type: entities
-          show_header_toggle: false
-          entities:
-            - entity: sensor.brewzilla_connection
-              name: RCL connection
-            - entity: sensor.brewzilla_temperature
-              name: BrewZilla internal temperature
-            - entity: number.brewzilla_target_temperature
-              name: BrewZilla target readback
-            - entity: sensor.brewzilla_power
-              name: BrewZilla power
-            - entity: switch.brewzilla_heater
-              name: Heater output
-            - entity: switch.brewzilla_pump
-              name: Pump output
-            - entity: number.brewzilla_heat_utilization
-              name: Heat utilization readback
-            - entity: number.brewzilla_pump_utilization
-              name: Pump utilization readback
+        - type: markdown
+          content: >-
+            {% set orch = 'sensor.brewassistant_brewzilla_orchestration_mode' %}
+            **BA write permission:** {{ state_attr(orch, 'hot_side_actuator_writes_allowed') }}  
+            **Observation effective:** {{ state_attr(orch, 'observe_only_effective') }}  
+            **Rearm required:** {{ state_attr(orch, 'observe_only_rearm_required') }}  
+            **Requested target:** {{ states('sensor.brewassistant_brewzilla_requested_target') }} °C  
+            **Applied target:** {{ states('sensor.brewassistant_brewzilla_applied_target') }} °C  
+            **Target delta:** {{ states('sensor.brewassistant_brewzilla_target_delta') }}  
+            **Wort/kettle:** {{ states('sensor.brewassistant_brewzilla_wort_temperature') }} °C  
+            **Mash:** {{ states('sensor.brewassistant_brewzilla_mash_temperature') }} °C  
+            **RCL degraded:** {{ state_attr(orch, 'rcl_degraded') }}  
+            **Local control lease:** {{ state_attr(orch, 'local_control_lease_active') }}
