@@ -17,7 +17,9 @@ def _load(*names):
     funcs = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
              and node.name in names]
     assert {node.name for node in funcs} == set(names)
-    env = {"Any": object}
+    # AST extracts these functions without importing Home Assistant. Python
+    # evaluates default argument expressions at function definition time.
+    env = {"Any": object, "control_policy": SimpleNamespace(SOURCE_MANUAL="manual")}
     exec(compile(ast.Module(body=funcs, type_ignores=[]), str(MODULE), "exec"), env)
     return env
 
