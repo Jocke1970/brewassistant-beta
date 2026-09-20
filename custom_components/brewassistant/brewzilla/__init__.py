@@ -45,6 +45,7 @@ from . import brewzilla_rapt_sparge_controller as _rapt_sparge_controller
 from . import brewzilla_sparge_plan_identity as _sparge_plan_identity
 from . import brewzilla_source_authority_runtime as _source_authority_runtime
 from . import brewzilla_rapt_identity_guard as _rapt_identity_guard
+from . import brewzilla_observe_only as _observe_only
 from .brewzilla_temp_filter import install_temp_filter as _install_temp
 
 
@@ -138,3 +139,6 @@ _source_authority_runtime.install_source_authority_runtime()
 # Narrow final identity check: never treat an active RAPT profile with missing
 # or conflicting session/step data as sufficient permission to write.
 _rapt_identity_guard.install_rapt_identity_guard()
+# The operator's local-control decision is the final hot-side writer boundary.
+# It must be active even before switch entities have been restored on startup.
+_observe_only.install_observe_only_guard()
