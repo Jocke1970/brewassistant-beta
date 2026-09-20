@@ -1,8 +1,4 @@
-"""Static regression checks for beta.14's explicitly guarded legacy UI surfaces.
-
-These tests check repository YAML contracts, NOT browser rendering or backend
-safety. All other dashboards and user-customized cards need separate review.
-"""
+"""Static beta.14 UI regression checks; not browser rendering or hardware proof."""
 
 from pathlib import Path
 
@@ -14,12 +10,10 @@ MODE = "sensor.brewassistant_brewzilla_orchestration_mode"
 
 
 @pytest.mark.parametrize("filename", [
-    "brewday_operator_actions_sv.yaml",
-    "brewday_operator_actions.yaml",
-    "rapt_sparge_controls_sv.yaml",
-    "rapt_sparge_controls.yaml",
+    "brewday_operator_actions_sv.yaml", "brewday_operator_actions.yaml",
+    "rapt_sparge_controls_sv.yaml", "rapt_sparge_controls.yaml",
 ])
-def test_operator_actions_are_hidden_until_explicit_rearm(filename):
+def test_ordinary_ba_actions_are_hidden_until_explicit_rearm(filename):
     content = (CARDS / filename).read_text(encoding="utf-8")
     assert "type: conditional" in content
     assert f"- entity: {OBSERVE}\n          state: \"off\"" in content or (
@@ -45,7 +39,7 @@ def test_sparge_uses_dynamic_rcl_profile_and_requires_effective_write_permission
 @pytest.mark.parametrize("filename", [
     "brewzilla_local_control_sv.yaml", "brewzilla_local_control.yaml",
 ])
-def test_local_readback_cannot_toggle_rcl_entities_in_entities_card(filename):
+def test_legacy_local_readback_is_not_a_hidden_rcl_control_card(filename):
     content = (CARDS / filename).read_text(encoding="utf-8")
     assert "type: markdown" in content
     assert "tap_action:" not in content
@@ -55,8 +49,19 @@ def test_local_readback_cannot_toggle_rcl_entities_in_entities_card(filename):
     assert "observe_only_effective" in content
 
 
-def test_abort_ui_does_not_promise_physical_shutdown():
+def test_abort_ui_remains_available_and_does_not_claim_physical_shutdown():
     sv = (CARDS / "brewday_operator_actions_sv.yaml").read_text(encoding="utf-8")
     en = (CARDS / "brewday_operator_actions.yaml").read_text(encoding="utf-8")
-    assert "Fysisk OFF är inte garanterad" in sv
-    assert "Physical OFF is not guaranteed" in en
+    for source, marker, warning in (
+        (sv, "ABORT · NÖDSTOPP", "kontrollera fysisk avstängning"),
+        (en, "ABORT · EMERGENCY STOP", "verify physical shutdown"),
+    ):
+        assert marker in source and warning in source
+        assert source.index("entity: button.brewassistant_abort_brewday") < source.index(
+            f"entity: {OBSERVE}"
+        )
+        assert source.index("service: brewassistant.manual_brewday_prepare") < source.index(
+            f"entity: {OBSERVE}"
+        )
+        assert source.count("entity: button.brewassistant_abort_brewday") == 1
+        assert "physical shutdown guaranteed" not in source.lower()
