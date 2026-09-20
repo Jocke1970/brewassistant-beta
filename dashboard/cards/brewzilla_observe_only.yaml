@@ -1,0 +1,96 @@
+# BrewZilla operator mode: place this whole card at the top of the Brewday view.
+# Requires issue #220 backend. Published beta.13 does NOT include the switch.
+type: vertical-stack
+cards:
+  - type: entities
+    title: "BrewZilla · control owner"
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        name: "Observe only · use BrewZilla's local controls"
+        icon: mdi:eye-outline
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    name: OPERATOR MODE
+    icon: mdi:shield-eye-outline
+    show_state: false
+    show_label: true
+    triggers_update: all
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const sw = states['switch.brewassistant_brewzilla_observe_only'];
+        const a = entity?.attributes || {};
+        const clean = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const fmt = v => v === null || v === undefined || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(1);
+        let headline, instruction, bg;
+        if (!sw || !['on','off'].includes(sw.state)) {
+          headline = 'NO VERIFIED OBSERVATION SWITCH';
+          instruction = 'Do not assume BA writes are blocked. Check the installed version, entity and physical device.';
+          bg = 'rgba(244,67,54,.15)';
+        } else if (sw.state === 'on' && a.observe_only_effective === true) {
+          headline = 'OBSERVE ONLY · LOCAL BREWZILLA CONTROL';
+          instruction = 'BA reads, logs and learns passively. No BA BrewZilla commands, including OFF/0 %. Inspect real outputs at the device.';
+          bg = 'rgba(76,175,80,.13)';
+        } else if (sw.state === 'off' && a.observe_only_rearm_required === true) {
+          headline = 'EXPLICIT REARM REQUIRED';
+          instruction = 'The switch is OFF but BA writes remain blocked. Verify the RAPT session, telemetry and physical device before rearming below.';
+          bg = 'rgba(255,193,7,.15)';
+        } else if (sw.state === 'off' && a.observe_only_effective === false) {
+          headline = 'BA CONTROL REARMED';
+          instruction = 'New BA writes are permitted under existing guards. Heatstrike/Mash-in may modulate automatically without per-write confirmation.';
+          bg = 'rgba(255,152,0,.14)';
+        } else {
+          headline = 'AUTHORITY UNCERTAIN';
+          instruction = 'Verify write authority and readback before a hardware test.';
+          bg = 'rgba(244,67,54,.15)';
+        }
+        return `<div style="line-height:1.4;">
+          <div style="padding:12px;border-radius:14px;background:${bg};font-weight:950;font-size:16px;">${headline}</div>
+          <div style="margin-top:8px;font-size:12px;font-weight:750;">${instruction}</div>
+          <div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:11px;">
+            <div>Source: <b>${clean(a.runtime_source)}</b><br>Step: <b>${clean(a.runtime_step)}</b></div>
+            <div>Temperature: <b>${fmt(a.current_temperature)} °C</b><br>Device target: <b>${fmt(a.applied_target)} °C</b></div>
+            <div>Heater: <b>${clean(a.heater_on)}</b> · ${fmt(a.heat_utilization)} %</div>
+            <div>Pump: <b>${clean(a.pump_on)}</b> · ${fmt(a.pump_utilization)} %</div>
+          </div>
+          <div style="margin-top:9px;font-size:10px;opacity:.73;">BA write permission: ${a.hot_side_actuator_writes_allowed === false ? 'NO' : a.hot_side_actuator_writes_allowed === true ? 'YES' : 'not verified'} · BA does not verify physically OFF. Other Lovelace cards that address RCL directly are outside this BA-only guard.</div>
+        </div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 18px
+        - padding: 14px
+        - background: rgba(33,150,243,.06)
+        - border: 1px solid rgba(33,150,243,.20)
+      label:
+        - white-space: normal
+        - text-align: left
+        - font-size: 12px
+  - type: custom:button-card
+    entity: switch.brewassistant_brewzilla_observe_only
+    name: "CONFIRM BA CONTROL REARM"
+    icon: mdi:shield-check-outline
+    show_state: false
+    show_label: true
+    label: "Only when you want BA control again. Requires a verified active RAPT session and fresh readback; previous plans are discarded."
+    tap_action:
+      action: call-service
+      service: brewassistant.brewzilla_rearm_after_observe
+      confirmation:
+        text: "Allow BrewAssistant to control BrewZilla again? Inspect the physical device first. BA may send NEW heat/pump/target commands after this."
+    styles:
+      card:
+        - display: |
+            [[[
+              const s = states['switch.brewassistant_brewzilla_observe_only'];
+              return s?.state === 'off' && s?.attributes?.rearm_required === true ? 'block' : 'none';
+            ]]]
+        - border-radius: 18px
+        - background: rgba(255,193,7,.17)
+        - border: 2px solid rgba(255,193,7,.48)
+        - padding: 13px
+      label:
+        - white-space: normal
+        - font-size: 11px
