@@ -1,9 +1,7 @@
-"""Operator-owned, fail-closed BrewZilla observation mode (issue #220).
+"""Fail-closed operator observation for BrewZilla, independent of RCL (issue #220).
 
-This blocks BA-originated writes; it never turns BrewZilla outputs OFF when
-observation is selected. RCL and BrewZilla remain separate integrations and
-physical control is never intercepted. A service call already dispatched before
-the toggle cannot be recalled: use the physical controls to verify outputs.
+ON never sends OFF/zero; commands already dispatched cannot be recalled. The
+physical BrewZilla controller and RCL remain independent of BrewAssistant.
 """
 
 from __future__ import annotations
@@ -16,8 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN
-from ..entity import BrewAssistantEntity
+from ..const import DOMAIN, NAME
 from ..supervised_apply import clear_pending_action
 from . import brewzilla_orchestration as base
 from . import brewzilla_source_authority_runtime as authority
@@ -38,24 +35,23 @@ _PREVIOUS_RAPT_CALL = None
 
 
 def _store(hass: Any) -> dict[str, Any]:
-    # Missing state during HA startup MUST NOT authorize writes.
+    # Absence of the switch during startup must block every BA output.
     return hass.data.setdefault(DOMAIN, {}).setdefault(
         DATA_KEY, {"enabled": True, "rearmed": False, "reason": "startup_fail_closed"},
     )
 
 
 def observation_required(hass: Any) -> bool:
-    state = _store(hass)
-    return state.get("enabled") is not False or state.get("rearmed") is not True
+    data = _store(hass)
+    return data.get("enabled") is not False or data.get("rearmed") is not True
 
 
 def observation_reason(hass: Any) -> str:
-    state = _store(hass)
-    return "operator_observe_only" if state.get("enabled") is not False else "operator_rearm_required"
+    return "operator_observe_only" if _store(hass).get("enabled") is not False else "operator_rearm_required"
 
 
 def _invalidate(hass: Any, reason: str) -> None:
-    """Clear BA intent without emitting actuator services, including OFF/zero."""
+    """Discard old intent; absolutely no BrewZilla service is sent here."""
     clear_pending_action(hass, reason=reason)
     clear_owned_control(hass, reason=reason)
     lease = local_lease._store(hass)
@@ -76,39 +72,31 @@ def _live_authority(hass: Any):
 
 
 def _safe_off_allowed(decision: Any, context: dict[str, Any]) -> bool:
-    """No implicit safe-down: OFF/zero is still an actuator command."""
     assert _PREVIOUS_SAFE_OFF is not None
-    if context.get("observe_only"):
-        return False
-    # Re-evaluate the current switch to cover a toggle after the authority read.
-    if context.get("hass_observe_only"):
-        return False
-    return _PREVIOUS_SAFE_OFF(decision, context)
+    return False if context.get("observe_only") else _PREVIOUS_SAFE_OFF(decision, context)
 
 
 def _protected(value: Any) -> bool:
-    """Check actual service payload as well as advertised metadata and aliases."""
     if isinstance(value, (list, tuple, set)):
         return any(_protected(item) for item in value)
     if not isinstance(value, str):
         return False
-    item = value.strip().lower()
-    protected = (*authority.BREWZILLA_ENTITIES, base.BREWZILLA_MAIN_SWITCH)
-    return any(item == canonical or (
-        item.startswith(canonical.split(".", 1)[0] + ".")
-        and item.endswith("_" + canonical.split(".", 1)[1])
-    ) for canonical in protected)
+    value = value.strip().lower()
+    return any(value == canonical or (
+        value.startswith(canonical.split(".", 1)[0] + ".")
+        and value.endswith("_" + canonical.split(".", 1)[1])
+    ) for canonical in (*authority.BREWZILLA_ENTITIES, base.BREWZILLA_MAIN_SWITCH))
 
 
 async def _policy_execute(hass: Any, action: dict[str, Any]):
     assert _PREVIOUS_POLICY_EXECUTE is not None
-    data = action.get("service_data")
-    target = data.get("entity_id") if isinstance(data, Mapping) else None
+    payload = action.get("service_data")
+    target = payload.get("entity_id") if isinstance(payload, Mapping) else None
     if observation_required(hass) and (_protected(target) or _protected(action.get("entity_id"))):
         from .. import control_policy
         return control_policy._store_policy_result(hass, {
             **action, "status": "observe_only_denied",
-            "summary": "BrewZilla controlled locally: BA emitted no actuator service.",
+            "summary": "BrewZilla controlled locally: no BA actuator service sent.",
         })
     return await _PREVIOUS_POLICY_EXECUTE(hass, action)
 
@@ -116,28 +104,19 @@ async def _policy_execute(hass: Any, action: dict[str, Any]):
 def _build(hass: Any) -> dict[str, Any]:
     assert _PREVIOUS_BUILD is not None
     result = _PREVIOUS_BUILD(hass)
+    store = _store(hass)
     observing = observation_required(hass)
-    result.update(
-        observe_only_enabled=_store(hass).get("enabled") is not False,
-        observe_only_effective=observing,
-        observe_only_rearm_required=not _store(hass).get("enabled") and observing,
-        observe_only_service=f"{DOMAIN}.{REARM_SERVICE}",
-    )
+    fields = dict(observe_only_enabled=store.get("enabled") is not False,
+                  observe_only_effective=observing,
+                  observe_only_rearm_required=store.get("enabled") is False and observing,
+                  observe_only_service=f"{DOMAIN}.{REARM_SERVICE}")
     if observing:
         result = authority._observer_snapshot(result, HotSideAuthority(
             "blocked", False, observation_reason(hass),
         ))
-        result.update(
-            orchestration_mode="observe-only",
-            observe_only_enabled=_store(hass).get("enabled") is not False,
-            observe_only_effective=True,
-            observe_only_rearm_required=_store(hass).get("enabled") is False,
-            observe_only_service=f"{DOMAIN}.{REARM_SERVICE}",
-            control_reason=(
-                "Endast observation: BA skickar inga BrewZilla-kommandon. "
-                "Styr lokalt och verifiera värme/pump på bryggverket."
-            ),
-        )
+        result.update(orchestration_mode="observe-only",
+                      control_reason="Endast observation: BA skickar inga BrewZilla-kommandon. Kontrollera utgångarna lokalt.")
+    result.update(fields)
     return result
 
 
@@ -145,7 +124,7 @@ async def _rapt_call(hass: Any, domain: str, service: str, entity_id: str,
                      data: dict[str, Any] | None = None):
     assert _PREVIOUS_RAPT_CALL is not None
     if observation_required(hass):
-        raise PermissionError("RAPT/BrewZilla output call blocked: BA observe-only")
+        raise PermissionError("BA observe-only blocks RAPT/BrewZilla output commands")
     return await _PREVIOUS_RAPT_CALL(hass, domain, service, entity_id, data)
 
 
@@ -161,34 +140,30 @@ def _reported_fresh(hass: Any, entity_id: str) -> bool:
 
 
 async def async_rearm(hass: Any) -> None:
-    """Explicit second action after switch OFF, with fresh RAPT readback proof."""
-    state = _store(hass)
-    if state.get("enabled") is not False:
+    """Separate explicit operator action; no cached pending plan may be reused."""
+    store = _store(hass)
+    if store.get("enabled") is not False:
         raise HomeAssistantError("Stäng först av switchen Endast observation.")
     if _PREVIOUS_AUTHORITY is None:
-        raise HomeAssistantError("BrewZilla-styrspärren är inte installerad.")
-    decision, context = _PREVIOUS_AUTHORITY(hass)
+        raise HomeAssistantError("Styrspärren är inte installerad.")
+    decision, _ = _PREVIOUS_AUTHORITY(hass)
     if decision.mode != "rapt_controller" or decision.may_write_brewzilla is not True:
-        raise HomeAssistantError(f"RAPT-källa, session eller säkerhet inte verifierad: {decision.reason}")
-    required = (
-        base.BREWZILLA_TEMP_SENSOR, base.BREWZILLA_TARGET_NUMBER,
-        base.BREWZILLA_HEATER_SWITCH, base.BREWZILLA_PUMP_SWITCH,
-        base.BREWZILLA_HEAT_UTILIZATION, base.BREWZILLA_PUMP_UTILIZATION,
-    )
-    if not all(_reported_fresh(hass, entity) for entity in required):
-        raise HomeAssistantError("Färsk BrewZilla-telemetri saknas. Återaktivering nekad.")
-    # Clear old plan, output ownership and local lease before making authority visible.
-    _invalidate(hass, "observe_only_rearmed_old_plan_revoked")
-    state["rearmed"] = True
-    state["reason"] = "explicit_operator_rearm"
+        raise HomeAssistantError(f"RAPT-session och säkerhet är inte verifierade: {decision.reason}")
+    readbacks = (base.BREWZILLA_TEMP_SENSOR, base.BREWZILLA_TARGET_NUMBER,
+                 base.BREWZILLA_HEATER_SWITCH, base.BREWZILLA_PUMP_SWITCH,
+                 base.BREWZILLA_HEAT_UTILIZATION, base.BREWZILLA_PUMP_UTILIZATION)
+    if not all(_reported_fresh(hass, entity) for entity in readbacks):
+        raise HomeAssistantError("Färsk BrewZilla-telemetri saknas; återaktivering nekad.")
+    _invalidate(hass, "observe_only_rearm_old_plan_revoked")
+    store.update(rearmed=True, reason="explicit_operator_rearm")
     from ..brewday.brewday_audit import async_record_brewday_audit_event
     await async_record_brewday_audit_event(hass, "brewzilla_observe_only_rearmed",
-        note="Operator explicitly rearmed RAPT hot-side control; new commands may follow."
-             " Previously pending commands were discarded.", always_record=True)
+        note="Operator explicitly rearmed verified RAPT control. Old pending plans discarded.",
+        always_record=True)
 
 
-class BrewAssistantBrewZillaObserveOnlySwitch(BrewAssistantEntity, RestoreEntity, SwitchEntity):
-    """Persistent operator switch; ON is passive and OFF alone never rearms."""
+class BrewAssistantBrewZillaObserveOnlySwitch(RestoreEntity, SwitchEntity):
+    """Self-contained entity to avoid importing the coordinator during package init."""
 
     _attr_has_entity_name = True
     _attr_name = "Endast observation – BrewZilla styrs lokalt"
@@ -198,22 +173,24 @@ class BrewAssistantBrewZillaObserveOnlySwitch(BrewAssistantEntity, RestoreEntity
     _attr_entity_id = ENTITY_ID
 
     def __init__(self, coordinator: Any) -> None:
-        super().__init__(coordinator, "brewzilla_observe_only")
+        self.coordinator = coordinator
         self._attr_is_on = True
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
+            "name": NAME, "manufacturer": "BrewAssistant", "model": "Python Core",
+        }
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         restored = await self.async_get_last_state()
         self._attr_is_on = restored is None or restored.state != "off"
-        state = _store(self.coordinator.hass)
-        state.update(enabled=self._attr_is_on, rearmed=False,
-                     reason="restored_observe_only" if self._attr_is_on else "startup_rearm_required")
-        _invalidate(self.coordinator.hass, "observe_only_startup")
-        hass = self.coordinator.hass
-        if not hass.services.has_service(DOMAIN, REARM_SERVICE):
+        _store(self.hass).update(enabled=self._attr_is_on, rearmed=False,
+            reason="restored_observe_only" if self._attr_is_on else "startup_rearm_required")
+        _invalidate(self.hass, "observe_only_startup")
+        if not self.hass.services.has_service(DOMAIN, REARM_SERVICE):
             async def _handle_rearm(call: Any) -> None:
-                await async_rearm(hass)
-            hass.services.async_register(DOMAIN, REARM_SERVICE, _handle_rearm)
+                await async_rearm(self.hass)
+            self.hass.services.async_register(DOMAIN, REARM_SERVICE, _handle_rearm)
         self.async_write_ha_state()
 
     @property
@@ -221,39 +198,35 @@ class BrewAssistantBrewZillaObserveOnlySwitch(BrewAssistantEntity, RestoreEntity
         return bool(self._attr_is_on)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        state = _store(self.coordinator.hass)
-        state.update(enabled=True, rearmed=False, reason="operator_observe_only")
+        _store(self.hass).update(enabled=True, rearmed=False, reason="operator_observe_only")
         self._attr_is_on = True
         self.async_write_ha_state()
-        _invalidate(self.coordinator.hass, "observe_only_enabled")
+        _invalidate(self.hass, "observe_only_enabled")
         from ..brewday.brewday_audit import async_record_brewday_audit_event
-        await async_record_brewday_audit_event(self.coordinator.hass,
-            "brewzilla_observe_only_enabled",
-            note="BA actuator writes revoked; no OFF or zero issued. Verify physical BrewZilla locally.",
-            always_record=True)
+        await async_record_brewday_audit_event(self.hass, "brewzilla_observe_only_enabled",
+            note="BA outputs revoked; no OFF/zero sent. Verify BrewZilla locally.", always_record=True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        state = _store(self.coordinator.hass)
-        state.update(enabled=False, rearmed=False, reason="operator_rearm_required")
+        _store(self.hass).update(enabled=False, rearmed=False, reason="operator_rearm_required")
         self._attr_is_on = False
         self.async_write_ha_state()
-        _invalidate(self.coordinator.hass, "observe_only_switch_off_rearm_required")
+        _invalidate(self.hass, "observe_only_switch_off_rearm_required")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "ba_source": "brewassistant_brewzilla_observe_only",
-            "effective_observe_only": observation_required(self.coordinator.hass),
-            "rearm_required": self._attr_is_on is False and observation_required(self.coordinator.hass),
+            "effective_observe_only": observation_required(self.hass),
+            "rearm_required": not self._attr_is_on and observation_required(self.hass),
             "rearm_service": f"{DOMAIN}.{REARM_SERVICE}",
-            "ba_output_commands_allowed": not observation_required(self.coordinator.hass),
+            "ba_output_commands_allowed": not observation_required(self.hass),
             "physical_outputs_off_verified": False,
-            "note": "ON does not send OFF/zero. OFF needs separate explicit rearm; local BrewZilla controls remain independent.",
+            "note": "ON sends no OFF/zero. OFF requires separate rearm; local BrewZilla controls are independent.",
         }
 
 
 def install_observe_only_guard() -> None:
-    """Last boundary, after RAPT identity/link-loss installation."""
+    """Install after identity/link-loss protection, before platform setup."""
     global _INSTALLED, _PREVIOUS_AUTHORITY, _PREVIOUS_SAFE_OFF
     global _PREVIOUS_POLICY_EXECUTE, _PREVIOUS_BUILD, _PREVIOUS_RAPT_CALL
     if _INSTALLED:
