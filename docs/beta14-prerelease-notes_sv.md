@@ -1,4 +1,4 @@
-# BrewAssistant v0.2.0-beta.14 – releasekandidat för övervakat vattenprov
+# BrewAssistant 2026_09-20 — fix-beta (v0.2.0-beta.14)
 
 **Repository:** `Jocke1970/brewassistant-beta`  
 **Version i manifest:** `0.2.0-beta.14`  
@@ -28,8 +28,8 @@
 
 1. Installera den exakta nya taggen via HACS först när BrewZilla är inaktiv. Säkerställ att RCL-fork och integrationernas poster är korrekta. Starta om HA; bekräfta att BA read-only står PÅ och att ingen automatisk BA-utgång skickar BrewZilla-kommando.
 2. Lägg både Manual Brewday-kortet och observationskortet i bryggdagsvyn. Verifiera att den gamla `orchestration_enabled` är borta och att det endast finns en read-only-switch.
-3. Verifiera RAPT-profil-STOP innan direktreglagen används. Starta Manual Brewday under uppsikt, använd direct RCL-reglage på observationskortet och kontrollera att BA inte skriver över valt temperaturmål, utilization eller ON/OFF. Läs av faktisk BrewZilla-status; loggning och learning ska fortsätta passivt.
+3. Verifiera RAPT-profil-STOP innan direktreglagen används. Starta Manual Brewday under uppsikt, använd direkta RCL-reglage på observationskortet och kontrollera att BA inte skriver över valt temperaturmål, utilization eller ON/OFF. Läs av faktisk BrewZilla-status; loggning och learning ska fortsätta passivt.
 4. Prova ABORT under kontrollerade vattenförhållanden med möjlighet till fysisk avstängning. Kontrollera faktisk värmare, pump, huvudström och effekt oberoende av HA:s kvittenser. Återställ ABORT och BA-styrning endast efter fysisk kontroll.
 5. Stoppa provet om BA ändrar manuellt valda värden, RCL-status saknas, läsning blir gammal eller fysisk respons avviker.
 
-**Publiceringsordning:** granska all divergens mellan release, dev och beta utan att pusha tester till dev; låt slutlig beta-kod verifieras på exakt beta-merge-SHA. Skapa därefter en ny oflyttad tagg `v0.2.0-beta.14`, markera GitHub-releasen **Pre-release**, verifiera manifestversion och tagg. Ingen promotion till `main`.
+**Publiceringsordning:** granska all divergens mellan release, dev och beta utan att pusha tester till dev. **Create a merge commit** för promotion `dev → beta`, inte squash; verifiera slutlig beta-kod på exakt `beta-merge-SHA`. Skapa därefter en ny oflyttad tagg `v0.2.0-beta.14`, markera GitHub-releasen **Pre-release**, verifiera manifestversion, HACS och tagg. Ingen promotion till `main`.
