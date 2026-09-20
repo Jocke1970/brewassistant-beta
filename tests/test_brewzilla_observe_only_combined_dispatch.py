@@ -48,7 +48,7 @@ def load_functions(path, *names, env=None):
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
     result = ast.fix_missing_locations(RemoveRelativeImports().visit(
         ast.Module(body=[future, *bodies], type_ignores=[])))
-    namespace = dict(env or {})
+    namespace = {"Mapping": Mapping, **dict(env or {})}
     exec(compile(result, str(path), "exec"), namespace)
     return namespace
 
