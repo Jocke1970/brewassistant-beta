@@ -1,15 +1,13 @@
-"""Release blockers that the older green regression suite did not cover.
+"""Beta.14 acceptance gates missing from the previously green suite.
 
-These tests intentionally fail while #220's two outstanding acceptance
-requirements are not implemented. Run on release branches only, never dev.
+The tests intentionally fail until #220's two remaining requirements are
+implemented. Tests run on the release branch only; never dev.
 """
 
 from __future__ import annotations
 
 import ast
 from pathlib import Path
-
-import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SWITCHES = ROOT / "custom_components/brewassistant/switch.py"
@@ -27,14 +25,34 @@ DIRECT = {
 }
 
 
-def _walk(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk(child)
+def _observer_panels(text: str) -> list[str]:
+    """Extract observer-only conditional blocks by indentation, no YAML dependency."""
+    lines = text.splitlines()
+    sections = []
+    for i, line in enumerate(lines):
+        if line.strip() != f"- entity: {READ_ONLY}":
+            continue
+        indent = len(line) - len(line.lstrip())
+        if i + 1 >= len(lines) or lines[i + 1].strip() not in {'state: "on"', "state: 'on'", "state: on"}:
+            continue
+        parent = i - 1
+        while parent >= 0:
+            candidate = lines[parent]
+            if candidate.strip() == "- type: conditional" and len(candidate) - len(candidate.lstrip()) < indent:
+                break
+            parent -= 1
+        if parent < 0:
+            continue
+        parent_indent = len(lines[parent]) - len(lines[parent].lstrip())
+        end = parent + 1
+        while end < len(lines):
+            other = lines[end]
+            other_indent = len(other) - len(other.lstrip())
+            if end > parent and other.strip() and other_indent <= parent_indent:
+                break
+            end += 1
+        sections.append("\n".join(lines[parent:end]))
+    return sections
 
 
 def test_deprecated_orchestration_switch_is_not_registered():
@@ -48,36 +66,25 @@ def test_deprecated_orchestration_switch_is_not_registered():
     )
     entries = ast.literal_eval(declared.value)
     assert "brewzilla_orchestration_enabled" not in entries, (
-        "Deprecated orchestration_enabled is still registered but does not stop BA writes"
+        "Deprecated orchestration_enabled remains registered but cannot stop BA writes"
     )
 
 
-def test_manual_brewday_has_direct_operator_controls_in_read_only():
-    """Manual UI must bypass BA's automatic transport only via explicit HA controls."""
+def test_manual_brewday_direct_operator_controls_exist_in_read_only():
+    """Operators need direct entity controls, not BA-transported setpoints."""
     for path in MANUAL_UI:
-        dashboard = yaml.safe_load(path.read_text(encoding="utf-8"))
-        observer_cards = [
-            item for item in _walk(dashboard)
-            if item.get("type") == "conditional"
-            and any(
-                isinstance(c, dict)
-                and c.get("entity") == READ_ONLY
-                and c.get("state") == "on"
-                for c in item.get("conditions", [])
-            )
-        ]
-        assert observer_cards, f"{path.name}: no manual read-only operator panel"
-        reachable_entities = {
-            item["entity"]
-            for panel in observer_cards
-            for item in _walk(panel.get("card"))
-            if isinstance(item.get("entity"), str)
+        panels = _observer_panels(path.read_text(encoding="utf-8"))
+        assert panels, f"{path.name}: no Manual Brewday read-only operator panel"
+        block = "\n".join(panels)
+        reachable = {
+            line.split("- entity: ", 1)[1].strip()
+            for line in block.splitlines()
+            if line.strip().startswith("- entity: ")
         }
-        assert DIRECT <= reachable_entities, (
-            f"{path.name}: Manual read-only has no explicit direct operator "
-            f"control for {sorted(DIRECT - reachable_entities)}"
+        assert DIRECT <= reachable, (
+            f"{path.name}: missing direct controls {sorted(DIRECT - reachable)}"
         )
         assert not any(
-            item.startswith("number.brewassistant_brewzilla_manual_")
-            for item in reachable_entities
-        ), f"{path.name}: BA-transported setpoints cannot be used in read-only"
+            entity.startswith("number.brewassistant_brewzilla_manual_")
+            for entity in reachable
+        ), f"{path.name}: BA-transported setpoints should not be in read-only controls"
