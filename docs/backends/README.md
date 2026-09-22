@@ -1,7 +1,8 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last HLT sync: 2026-09-19
+Last HLT sync: 2026-09-19  
+GF30 DIY thermal/learning design captured: 2026-09-22 (planned, not implemented)
 
 Canonical short-form documentation lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the *implemented* ownership/control contract. This `docs/backends/` directory remains useful for deeper architecture notes, roadmaps and field evidence. Historical documents must not be retroactively rewritten to claim later fixes were already physically tested.
 
@@ -36,7 +37,8 @@ Canonical short-form documentation lives beside each backend under `custom_compo
 | [`../hlt-sim1-field-validation-2026-09-19.md`](../hlt-sim1-field-validation-2026-09-19.md) | Dated physical BZ-water test/JSONL findings, corrections made afterward and Brewday handoff. Latest HLT field evidence, **not** evidence of final post-fix HA validation. |
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap; its older implementation-pending sections are historical. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP details/examples. |
-| [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 preparation, ownership, live-hardware validation gate and future supervised plan. |
+| [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 cloud-adapter preparation, ownership, live-hardware validation gate and future supervised target plan. |
+| **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **New proposed GF30 DIY cooling architecture:** Pill/internal/frysluft/köldmedium, freezer via generic_thermostat, controller ownership, thermal learning, safety and validation gates. Documentation only; no new control code. |
 | [`../roadmap.md`](../roadmap.md) | Current integrated status, remaining acceptance criteria and promotion gates. |
 
 ## HLT ownership boundary (2026-09-19)
@@ -55,7 +57,7 @@ grainfather_fermenter/
   fermenter hardware adapter (initial GF30 Conical Fermenter)
 ```
 
-Do not reuse the hot-side `grainfather` reservation for GF30 fermenter work.
+Do not reuse the hot-side `grainfather` reservation for GF30 fermenter work. The proposed DIY freezer/reservoir/learning behavior extends `grainfather_fermenter/` as a *separate coolant-control loop* owned physically by `generic_thermostat`, not a new duplicate GF30 provider; read the linked thermal-design contract before implementing.
 
 ## Documentation pattern
 
