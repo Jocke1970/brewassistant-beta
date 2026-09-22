@@ -3,54 +3,53 @@
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.
 
 > [!IMPORTANT]
-> **Projektets aktuella läge, uppdaterat 2026-09-20:** Läs först [projektstatus och nästa steg](docs/project-status-2026-09-20_sv.md) samt [roadmap](docs/roadmap.md). **Senast publicerad prerelease är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14)**; tagg och manifest är verifierade på `1a956c04044df870e005392b6bfe946097b9d440`. Beta.14 har *inte* godkänts i fysisk driftsacceptans. Vi vet inte vilken version användarens HA för närvarande kör.
->
-> **Branchvarning:** denna README ligger på `dev`, vars manifest fortfarande säger `0.2.0-beta.13` och vars kod **inte** innehåller beta.14:s read-only-switch och ABORT-/Manual-UI-förändringar. `beta` har senare kod och är divergerad från `dev`. Läs [jämförelsen](https://github.com/Jocke1970/brewassistant-beta/compare/dev...beta) före ändringar eller installation. En doc-sync återför ingen kod, och en GitHub-merge uppdaterar inte HA.
+> **Aktuellt 2026-09-22:** Läs [status efter branch- och doc-sync](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. `dev` har nu beta.14-koden efter [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), även dev:s tidigare HLT-/dokumentationsarbete bevaras. Dokumentationssynk tillbaka till `beta` är en separat PR; `main` är inte uppgraderad.
 
-## Säker användning och beta.14 i korthet
+## Säker användning av beta.14
 
-- **BA observe-only:** I den [publicerade beta.14](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md) blockerar `switch.brewassistant_brewzilla_observe_only` i läge PÅ BA:s ordinarie/automatiska hot-side-skrivningar. Det stänger **inte** av befintlig fysisk värme eller pump. AV kräver ny käll- och telemetrikontroll; uppstart ska fail-closed. Den äldre `switch.brewassistant_brewzilla_orchestration_enabled` är borttagen i beta.14 och måste rensas från egna YAML-/automationsreferenser.
-- **ABORT:** Separat nödanrop som försöker stoppa profilen och begära OFF/0 även i read-only. Ett service-ACK eller `off` i HA bevisar inte att värmare, pump eller huvudström verkligen är av. Kontrollera maskinen lokalt och ha möjlighet till fysisk frånkoppling.
-- **Manual Brewday:** Beta.14 har ett separat [svenskt observations-/direktreglagekort](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/dashboard/cards/brewzilla_observe_only_sv.yaml) och [engelskt](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/dashboard/cards/brewzilla_observe_only.yaml) att *manuellt* lägga intill Manual Brewday-kortet. Operatörens direkta RCL-entiteter ligger utanför BA:s automationsspärr; kortets visningsvillkor är ingen global åtkomstkontroll. BA:s äldre setpointfält skickar inte styrning i observe-only. Kontrollera verkligen stoppad RAPT-profil före övertagning.
-- **Acceptans:** Automatiserad CI/HACS/Hassfest och isolerad HA/RCL-smoke är rapporterat grön för beta.14, men full installation, faktiska RCL-molnkommandon, Lovelace-klicktest, omstarter och fysisk ABORT-återkoppling är **inte** därmed verifierade. Endast kontrollerade vattenprov med närvarande operatör, backup och lokalt säkerhetsstopp; ingen obevakad användning eller maltprovning kan härledas från gröna tester. Se [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) och [beta.14-anteckningar](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md).
-- **HLT:** HLT SIM-1 är fortfarande endast läsning och virtuell effekt/temperatur. Det styr ingen fysisk HLT, begränsar inte BZ och ger inget elsäkerhetsskydd. [Fältrapport 20/9](docs/hlt-sim1-field-validation-2026-09-20.md) beskriver fem virtuella värmeprover under RAPT-steget `Heat Strike` och tre *hypotetiska* effektkonflikter. Ramp-/HLT-beredskapskontraktet är ännu inte rättat/accepterat.
+- **BA endast observation:** `switch.brewassistant_brewzilla_observe_only` **PÅ** spärrar BA:s ordinarie automatiska BrewZilla-skrivningar. Den stänger **inte** redan aktiv fysisk värme/pump eller externa RCL-/panelkommandon. Switch **AV** genomför kontroll av behörig källa, separat ABORT och sex färska readbacks; misslyckas kontrollen förblir read-only PÅ. HA-start är fail-closed. Avvecklad `switch.brewassistant_brewzilla_orchestration_enabled` får inte ligga kvar i egna kort/automationer.
+- **Känt HA-entitets-ID:** i en riktig beta.14-installation skapade HA `switch.brewassistant_endast_observation_brewzilla_styrs_lokalt` i stället för kanoniska ID:t ovan. Byt ID i HA:s entitetsinställningar eller anpassa lokalt YAML; en automatiserad migrationsfix återstår. Ändra inte `.storage` manuellt.
+- **ABORT:** separat nödåtgärd som försöker stoppa RAPT-profil och begära OFF/0 även under read-only. Service-ACK eller HA `off` verifierar inte fysisk avstängning. Efter fysisk kontroll används `button.brewassistant_rearm_brewday_control`; verifiera `operator_abort_active: false`. Det återger inte i sig BA skrivbehörighet eller väljer bryggkälla.
+- **Manual Brewday:** beta.14:s [SV-observationskort](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/dashboard/cards/brewzilla_observe_only_sv.yaml) och [EN-kort](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/dashboard/cards/brewzilla_observe_only.yaml) monteras manuellt bredvid ordinarie Manual-kort. Direkta RCL-reglage visas bara med observe-only PÅ, vald Manual-källa, bekräftat profil-STOP och ingen ABORT; de direkta kommandona går utanför BA:s automationsspärr. Äldre BA-ägda Manual-setpoints skickas inte i observe-only. Lovelace-synlighet är inte fysisk säkerhetsbarriär.
+- **Senaste HA-fynd:** orchestration-sensorn rapporterade `observe_only_effective: true`, `hot_side_actuator_writes_allowed: false`, men RCL var samtidigt `Disconnected`. Separat ABORT återställdes därefter (`operator_control_state: armed`), men bryggkälla var fortfarande `None`/runtime `idle`. Varken fysisk utgångskontroll eller vattenprov är därmed godkänt. Se [fältanteckningar 22/9](docs/doc-sync-2026-09-22_sv.md).
+- **Acceptans:** 387 automatiserade beta.14-testfall, CI/HACS/Hassfest och isolerad HA/RCL-smoke är inte full verklig config-entry/klicktest/molnkommando/fysisk STOP-verifikation. Endast övervakat vattenprov med backup och åtkomlig fysisk frånkoppling. [Issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) förblir öppen.
+- **HLT:** SIM-1 läser och simulerar virtuell effekt/temperatur. Ingen fysisk HLT-styrning, BZ-begränsning eller elsäkerhet. [Fältrapport 20/9](docs/hlt-sim1-field-validation-2026-09-20.md) innehåller fem virtuella värmeprover och tre hypotetiska effektkonflikter; `Heat Strike`/ramp-beredskap är ännu inte rättad eller accepterad.
 
 ## Kod, roller och körlägen
 
 ```text
 Brewfather Brew Tracker / RAPT profile / Manual Brewday
-   -> Brewday: normaliserad källa, stage, steg, tider, Audit och Flight Recorder
-   -> BrewZilla-backend: policy, aktörsbehörighet och eventuella RCL-kommandon
-   -> HLT SIM-1: fristående, ENBART läsande 30 s-consumer
-Dashboard YAML: visning och uttryckliga operatörsreglage (kan vara direkta RCL-anrop)
+   -> Brewday: källa, stage, steg, timer, Audit och Flight Recorder
+   -> BrewZilla-backend: policy, behörighet, eventuella RCL-kommandon
+   -> HLT SIM-1: fristående, endast läsande 30 s-consumer
+Dashboard YAML: presentation och uttryckliga operatörsreglage (kan vara direkt RCL)
 ```
 
-Källa till recept/profil, ägare av timer och rätt att styra fysisk utrustning är **tre skilda begrepp**. I beta.14 ger den valda RAPT-profilen processintention; BA kan endast styra enligt aktuell källpolicy och spärrar när observe-only är AV. BF-fermentering är självständig; BT som bryggkälla är observerande för BA:s hot-side-skrivningar; Manual har sin separata policy. Ingen tyst övergång till BF/BT vid RAPT-bortfall. Läs [Brewday-lägen](docs/brewday-execution-modes.md), [RAPT-kontrakt](docs/rapt-brewzilla-profile-runtime.md) och [aktuellt käll-/versionsförbehåll](docs/project-status-2026-09-20_sv.md); äldre designtexter kan vara historiska för den implementerade beta.14-versionen.
+Recept/profilkälla, timerägare och tillstånd att styra fysisk utrustning är skilda begrepp. RAPT-profil ger processintention men BA:s skrivrätt följer källpolicy och säkerhetsspärrar; BrewTracker som bryggkälla är observerande i hot-side; Manual har separat policy; Brewfather-fermentering är oberoende. Ingen tyst fallback till BF/BT vid RAPT-bortfall. Se [execution modes](docs/brewday-execution-modes.md), [RAPT-kontrakt](docs/rapt-brewzilla-profile-runtime.md) och [aktuellt fältkontrakt](docs/brewzilla-observe-only-test_sv.md).
 
-`custom_components/brewassistant/` innehåller integration, sensor-/policy-/runtimekod; `dashboard/cards/` innehåller manuella Lovelace-exempel som **inte** automatiskt installeras i en anpassad dashboard. Håll svenska/engelska kort synkade. Samordna installation med aktuell RCL-fork (beta.14-beroende `v0.5.0-beta.1`), rätt BA-tagg och säkerhetskopia; byt aldrig hela HA-integrationen från en äldre feature-branch mitt under parallellt arbete.
+Integrationskoden finns under `custom_components/brewassistant/`. Kort under `dashboard/cards/` monteras inte automatiskt i användarens anpassade dashboard. Håll SV/EN-kort synkade och kontrollera verkliga entitets-ID. Beta.14:s RCL-beroende är `v0.5.0-beta.1`. Byt aldrig integration från gammal featuregren under en aktiv bryggning.
 
-## Brancher och releaseprocess
+## Brancher, tester och releaseflöde
 
 ```text
-dev (gemensam utveckling) -> beta (integrerat test + prerelease) -> main (fältvaliderad stabil)
+dev (utveckling) -> beta (test och prerelease) -> main (fältvaliderad stabil)
 ```
 
-Normalt ska promotion ske med granskad PR, **Create a merge commit** och kvalitetskontroller på exakt resulterande beta-SHA innan en *ny*, oflyttad tagg publiceras. Beta.14 kom från en separat release-/featuregren via [PR #221](https://github.com/Jocke1970/brewassistant-beta/pull/221) och finns ännu inte återförd till `dev`. **Rekonciliera den skillnaden uttryckligen före nästa gemensamma releasearbete**, utan force-push eller återanvändning av taggar. `beta` har även en städcommit efter beta.14-taggen; installera taggen, inte ett antaget branch-head. `main` lämnas orörd tills lämplig fältacceptans och uttryckligt beslut. Se [CONTRIBUTING](CONTRIBUTING.md).
+[PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden från `beta` till `dev` med merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e` och behöll dev:s HLT-/dokumentationsändringar. Dokumentationskomplettering går sedan via granskad `dev → beta`-PR. Detta är **ingen ny release**: beta.14-taggen flyttas inte, `main` ändras inte, och HA uppdateras inte av en GitHub-merge. Ny kodrelease kräver egen manifestversion, granskning, CI/HACS/Hassfest på exakt avsedd SHA, ny oflyttad tagg och separat fältacceptans. Se [CONTRIBUTING](CONTRIBUTING.md).
 
-**Watchdogs:** CI (Python 3.11–3.13), Hassfest och HACS finns. Från 2026-09-20 triggas CI inte automatiskt av `dev`-push/PR; releasebrancher, `beta`, `main` och manuella körningar omfattas av det nya workflow-kontraktet. Avsaknad av en ny körning är inte ett godkänt test. Automatiska kontroller bevisar aldrig fysisk säkerhet.
+CI finns för Python 3.11–3.13, HACS och Hassfest. Automatiska push-/PR-triggers på `dev` är avsiktligt exkluderade enligt workflow 20/9; releasebrancher, `beta`, `main` och explicita manuella körningar används. Att test inte körts är aldrig ett grönt test. Inga automatiska tester ersätter fysisk kontroll.
 
-## Dokumentationskarta: börja här
+## Dokumentationskarta
 
-| Fråga | Dokument |
+| Fråga | Börja här |
 | --- | --- |
-| **Aktuellt läge och prioriterade beslut** | [Status 2026-09-20](docs/project-status-2026-09-20_sv.md), [roadmap](docs/roadmap.md) |
-| **Senaste publicerade BA och vattenprovsinstruktioner** | [Beta.14-release](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), [taggade beta.14-anteckningar](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md), [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) |
-| **HLT senaste fältbevis / tidigare prov** | [20 september](docs/hlt-sim1-field-validation-2026-09-20.md), [19 september](docs/hlt-sim1-field-validation-2026-09-19.md) |
-| HLT kod, sensorer och dashboard | [Backend-README](custom_components/brewassistant/hlt/README.md), [sensoravtal](docs/hlt-dashboard-backend.md), [kortguide](docs/hlt-dashboard-card.md) |
-| Brewday och BrewZilla | [Brewday-README](custom_components/brewassistant/brewday/README.md), [Brewday/BZ](docs/brewday-brewzilla.md), [execution modes](docs/brewday-execution-modes.md) |
-| Observations-/ABORT-test | [Beta.14:s testguide](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/brewzilla-observe-only-test_sv.md) (innehåller äldre förrelease-status; följ publicerad release och 20/9-status) |
-| Historisk beta.11-incident och tidigare fälttest | [BA-paus och RAPT-handoff](docs/ba-hot-side-pause-and-rapt-handoff-2026-09-19_sv.md), [Mash-testplan](docs/physical-mash-test-plan-2026-09-19_sv.md), [validering 6/9](docs/physical-validation-2026-09-06.md) |
-| Utvecklings-/releasekontrakt | [CONTRIBUTING.md](CONTRIBUTING.md), [Brewday Audit](docs/brewday-audit.md) |
-| Backends och övriga moduler | [BrewZilla-backend](docs/backends/brewzilla-backend.md), [Cooling](docs/backends/cooling-backend.md), [Equipment Learning](docs/brewzilla-equipment-learning.md), [dashboard](docs/dashboard-baselines.md), [lokalisering](docs/localization.md) |
+| **Aktuell status och åtgärder** | [22 september](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md), [20 september – historisk status](docs/project-status-2026-09-20_sv.md) |
+| **Installation av publicerad beta.14** | [Installationsguide](docs/INSTALLATION.md), [release](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14) |
+| **Read-only, ABORT, Manual, vattenprov** | [Observationskontrakt](docs/brewzilla-observe-only-test_sv.md), [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) |
+| **HLT SIM-1** | [20/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-20.md), [19/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-19.md), [backend](custom_components/brewassistant/hlt/README.md), [kortguide](docs/hlt-dashboard-card.md) |
+| **Brewday och BrewZilla** | [Brewday README](custom_components/brewassistant/brewday/README.md), [Brewday/BZ](docs/brewday-brewzilla.md), [execution modes](docs/brewday-execution-modes.md) |
+| **Tidigare fälthistorik** | [BA-paus och RAPT-handoff](docs/ba-hot-side-pause-and-rapt-handoff-2026-09-19_sv.md), [Mash-testplan](docs/physical-mash-test-plan-2026-09-19_sv.md), [6/9](docs/physical-validation-2026-09-06.md) |
+| **Andra backends och UI** | [Cooling](docs/backends/cooling-backend.md), [Equipment Learning](docs/brewzilla-equipment-learning.md), [dashboard](docs/dashboard-baselines.md), [lokalisering](docs/localization.md) |
+| **Ändringshistorik och utveckling** | [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [Brewday Audit](docs/brewday-audit.md) |
 
-**Historik:** beta.10-taggen är felaktig för tidigare styrprov; beta.11:s Mash-In-vattenprov avbröts och blev inte godkänt. Beta.12 och beta.13 har egna oförändrade releaseanteckningar. [README-versionen före 20/9-synken](https://github.com/Jocke1970/brewassistant-beta/blob/94b3dbe5f9f62c76d3f847184fad9400b12d3a17/README.md) och daterade underlag ligger kvar för spårbarhet, men äldre ord som "nuvarande beta.12" och "CI på dev" är inte dagens driftinstruktioner.
+**Historiska fakta ändras inte till PASS:** beta.10-taggen var fel för tidigare styrprov, beta.11:s Mash-In-vattenprov avbröts och var inte godkänt, och de taggade beta.14-releaseanteckningarna har äldre förpubliceringsfraser. Senare publicering/fältfynd redovisas separat, utan att publicerad tagg eller gamla testrapporter skrivs om.

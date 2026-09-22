@@ -1,186 +1,58 @@
-# Installation Guide
+# Installation – BrewAssistant Beta
 
-BrewAssistant is installed as a Home Assistant custom integration.
+**Uppdaterat 2026-09-22.** För den installerbara testversionen, använd den oförändrade taggen [`v0.2.0-beta.14`](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14). `dev` är utveckling, `beta` testgren och `main` stabil gren; välj inte `main` för beta.14-tester. Se [aktuellt läge](doc-sync-2026-09-22_sv.md). Beta.14 är **inte fysiskt accepterad** och får bara testas under uppsikt med vatten och lokal fysisk avstängning.
 
-The active repository setup is Python-first:
+## Rekommenderat: HACS som anpassat repository
 
-```text
-custom_components/brewassistant/ = integration/backend logic
-Dashboards                    = optional presentation layer
-Legacy local packages          = not part of mainline install
-```
+1. I HACS: öppna Custom repositories och lägg till `https://github.com/Jocke1970/brewassistant-beta`, kategori **Integration**.
+2. Installera BrewAssistant Beta och välj uttryckligen prerelease **v0.2.0-beta.14** via HACS versionsval om den inte är förvald. Kontrollera visad version före och efter installation; använd inte ett ospecificerat branch-HEAD.
+3. Ta säkerhetskopia, kontrollera kompatibel RAPT Cloud Link-fork `v0.5.0-beta.1`, installera/uppdatera när BrewZilla inte används och starta om Home Assistant.
+4. Lägg till integrationen via Inställningar → Enheter och tjänster om den inte redan finns. HACS lägger integrationskoden under `/config/custom_components/brewassistant/` men installerar **inte** egna Lovelace-dashboardkort automatiskt.
 
----
+## Manuell beta.14-installation (endast med uttryckligt versionsval)
 
-## Recommended install path: HACS custom repository
-
-BrewAssistant Beta can be installed through HACS as a custom repository.
-
-In Home Assistant:
-
-```text
-HACS → three-dot menu → Custom repositories
-```
-
-Add repository URL:
-
-```text
-https://github.com/Jocke1970/brewassistant-beta
-```
-
-Select category/type:
-
-```text
-Integration
-```
-
-Then install **BrewAssistant Beta**.
-
-Restart Home Assistant after installation or update.
-
-Configure from:
-
-```text
-Settings → Devices & services → Add integration → BrewAssistant Beta
-```
-
-Notes:
-
-```text
-- HACS installs the integration under /config/custom_components/brewassistant/.
-- Dashboard YAML files under dashboard/ are examples and are not automatically installed as dashboards.
-- This beta should be treated as a HACS custom repository, not a default HACS repository.
-```
-
----
-
-## Manual install path
-
-Place the integration here in Home Assistant:
-
-```text
-/config/custom_components/brewassistant/
-```
-
-The repository path to sync is:
-
-```text
-custom_components/brewassistant/
-```
-
----
-
-## Manual install / update
-
-From a temporary clone of the repository:
+Synka bara katalogen `custom_components/brewassistant/`, inte tidigare hela repositoryn eller en gammal featurebranch. Exempel i Home Assistants skal när maskinen är inaktiv:
 
 ```bash
-rm -rf /tmp/brewassistant-beta
-git clone --depth 1 --branch main https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta
-
+git clone --depth 1 --branch v0.2.0-beta.14 \
+  https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta14
 mkdir -p /config/brewassistant_backups/custom_components
-
 if [ -d /config/custom_components/brewassistant ]; then
   cp -a /config/custom_components/brewassistant \
-    /config/brewassistant_backups/custom_components/brewassistant_backup_$(date +%Y%m%d_%H%M)
+    "/config/brewassistant_backups/custom_components/brewassistant_$(date +%Y%m%d_%H%M%S)"
 fi
-
+# Granska källan och backupen före synk: --delete tar bort filer i mål som saknas i taggen.
 rsync -a --delete \
-  /tmp/brewassistant-beta/custom_components/brewassistant/ \
+  /tmp/brewassistant-beta14/custom_components/brewassistant/ \
   /config/custom_components/brewassistant/
 ```
 
-Restart Home Assistant after syncing.
+Använd en tom temporär klonkatalog; om sökvägen redan finns, välj en ny. Kontrollera därefter att `/config/custom_components/brewassistant/manifest.json` anger `0.2.0-beta.14` och starta om HA. Följ vanlig backup-/rollbackrutin vid fel. En GitHub-branchmerge uppdaterar aldrig installerad Home Assistant-kod.
 
----
+## Kontroll efter omstart
 
-## First checks after restart
+Sök under Utvecklarverktyg → Tillstånd och Inställningar → Enheter och tjänster → Entiteter (inklusive inaktiverade). Kontrollera bland annat:
 
-Check Developer Tools → States for core entities such as:
+- `sensor.brewassistant_brewzilla_orchestration_mode`
+- `sensor.brewassistant_brewday_operator_control_state`
+- `button.brewassistant_abort_brewday`
+- `button.brewassistant_rearm_brewday_control`
+- Den faktiska switchen med visningsnamn **Endast observation – BrewZilla styrs lokalt**.
 
-```text
-sensor.brewassistant_core_version
-sensor.brewassistant_next_action
-sensor.brewassistant_brewday_runtime_status
-sensor.brewassistant_brewday_stage
-sensor.brewassistant_brewzilla_wort_temperature
-sensor.brewassistant_carbonation_status
-switch.brewassistant_kegerator_fan_auto_enabled
-```
+**Känt beta.14-ID-fynd:** HA registrerade i en verklig installation `switch.brewassistant_endast_observation_brewzilla_styrs_lokalt` i stället för det avsedda `switch.brewassistant_brewzilla_observe_only`. Ändra entitets-ID genom HA:s entitetsinställningar, eller anpassa lokala kort efter faktiskt ID. Editera inte `.storage` manuellt. Detta är en **öppen kodfix**, inte korrigerat i den publicerade taggen. Avsaknad av switchen ska undersökas; anta aldrig att en felande entity innebär fysisk read-only.
 
-For beta.7 BrewZilla mash-in validation, also check:
+Efter HA-start ska switchen vara PÅ och `sensor.brewassistant_brewzilla_orchestration_mode` ha `observe_only_effective: true` och `hot_side_actuator_writes_allowed: false`. Dessa anger endast att BA:s ordinarie skrivningar spärras; kontrollera fysiska utgångar lokalt. Kontrollera RCL:s anslutning och att återläsning är färsk innan styrprov; `Disconnected` är inte fysisk OFF-verifikation.
 
-```text
-binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
-button.brewassistant_brewzilla_mash_in_complete
-button.brewassistant_brewzilla_start_mash_circulation
-```
+**Två separata handgrepp:** efter ABORT och fysisk kontroll tryck `button.brewassistant_rearm_brewday_control`, kontrollera `operator_abort_active: false` och `operator_control_state: armed`. Switch **AV** gör därefter sin egen atomiska kontroll av behörig källa + sex färska readbacks. Ingen separat observe-only-rearmtjänst behövs i normal UI. Med `source: None` eller gammal telemetri nekas styrning och read-only förblir PÅ. För manuellt vattenprov: behåll read-only PÅ, välj Manual Brewday och verifiera uttryckligt RAPT-profil-STOP.
 
-Some entity IDs may be prefixed by Home Assistant, depending on the integration/device/area naming. If dashboard actions do not work, confirm the actual entity IDs in Developer Tools → States before editing dashboard YAML.
+## Dashboard
 
----
+Kort under `dashboard/cards/` är exempel och behöver läggas till manuellt. För beta.14: lägg `dashboard/cards/brewzilla_observe_only_sv.yaml` (eller engelska motsvarigheten) **bredvid** det befintliga `brewassistant_manual_brewday_sv.yaml`. Kontrollera att dess entity-ID matchar faktisk installation. Kortet har ABORT och switch, med direkta RCL-reglage endast under villkoren read-only PÅ, källa Manual Brewday, RAPT-profil bekräftat stoppad och ingen ABORT. Visningsvillkor är inte ett globalt behörighetsskydd för andra direkt-RCL-kort. Rensa lokala referenser till avvecklade `switch.brewassistant_brewzilla_orchestration_enabled`.
 
-## Dashboard setup
+Läs [testkontraktet](brewzilla-observe-only-test_sv.md), [dashboard-baselines](dashboard-baselines.md) och [dashboard/README](../dashboard/README.md). Vanliga frontendberoenden inkluderar `custom:button-card`, `custom:vertical-stack-in-card`, Mushroom, expander-card och övriga cards som respektive YAML-fil anger.
 
-Dashboard YAML is optional. It should display state and expose explicit operator actions, not contain hidden workflow logic.
+## Äldre YAML-paket och säkerhet
 
-Current dashboard baseline notes:
+Äldre BrewAssistant-paket under `/config/packages/` eller `/config/packages_disabled/` är inte denna Python-integrations källa. Kör dem inte parallellt utan avsiktlig migrationsplan eftersom dubbla hjälpare och oanvändbara entity-ID kan uppstå. Ta bort övergivna entities via HA UI, aldrig genom direktmanipulation av `.storage`.
 
-```text
-dashboard/README.md
-docs/dashboard-baselines.md
-```
-
-Install required Lovelace frontend cards through HACS before using dashboard examples.
-
-Common cards used by current dashboard baselines:
-
-```text
-custom:button-card
-custom:vertical-stack-in-card
-custom:mushroom-*
-custom:expander-card
-custom:gauge-card-pro
-custom:bar-card
-custom:apexcharts-card
-```
-
-Important beta.7 BrewZilla operator card:
-
-```text
-dashboard/cards/brewzilla_mash_in_confirm.yaml
-```
-
-That card uses the button entity path:
-
-```text
-UI → button.press → button.brewassistant_brewzilla_mash_in_complete → BrewAssistant backend
-UI → button.press → button.brewassistant_brewzilla_start_mash_circulation → BrewAssistant backend
-```
-
-Do not add duplicate service-workaround paths for these same actions.
-
----
-
-## Legacy package warning
-
-Do not install old BrewAssistant YAML packages as the main setup path.
-
-Older local Home Assistant installs may still contain BrewAssistant YAML packages under `/config/packages/` or `/config/packages_disabled/`. They are legacy/local compatibility files, not the current repository source of truth.
-
-Running old packages together with the Python integration may create duplicate helpers, stale unavailable entities or dashboard drift.
-
-Recommended policy:
-
-```text
-1. Keep old packages disabled unless intentionally testing migration behavior.
-2. Verify dashboards use current Python-backed entities.
-3. Remove orphaned unavailable entities through Home Assistant UI only.
-4. Never edit .storage files manually.
-```
-
----
-
-## Safety scope
-
-BrewAssistant beta is intended for supervised use. Hot-side hardware actions should be monitored by the operator. Always verify heat, pump, power, water volume, pressure equipment, sanitation and transfer decisions manually.
+Beta.14:s ABORT försöker profil-STOP och OFF/0 men varken tjänstekvittens eller HA:s OFF är fysisk avstängningsgaranti. Kontrollera vattennivå, faktisk värme, pump, effekt och huvudström, håll lokal frånkoppling tillgänglig och använd inga obevakade testkörningar. Nästa praktiska acceptans är endast vattenprov; dokumentera nytt resultat innan någon promotion till `main`.

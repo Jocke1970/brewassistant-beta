@@ -1,38 +1,33 @@
-# BrewZilla: endast observation / lokal styrning – testkontrakt
+# BrewZilla – endast observation och lokal styrning: testkontrakt
 
-**Status:** Utvecklingsgren `feat/220-brewzilla-observe-only`, PR #221. Publicerade `v0.2.0-beta.13` saknar funktionen. Installera inte PR-koden som om den vore en färdig HACS-release. Ny unik version och publicerad prerelease krävs för vanlig HACS-installation.
+**Uppdaterat 2026-09-22.** Funktionen finns i publicerad [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), men fysisk acceptans återstår. Senaste [fältfynd och branchstatus](doc-sync-2026-09-22_sv.md). Använd endast vatten, närvarande operatör och möjlighet till lokal fysisk avstängning.
 
-## Syfte och avgränsning
+## Vad read-only faktiskt gör
 
-BA:s switch `switch.brewassistant_brewzilla_observe_only` är PÅ som standard vid första installation. ON blockerar BA-skrivning till BrewZilla: target, heater, pump, nyttjandegrad, huvudström och legacy-profilens direkta utgångsanrop. Även OFF och 0 % räknas som skrivning och ska inte skickas när observering aktiveras. RCL/BrewZilla och kontrollpanelen på det fysiska bryggverket påverkas inte av switchen. Andra Lovelace-kort som direkt adresserar RCL/BrewZilla ligger utanför BA:s spärr och måste hanteras separat.
+`switch.brewassistant_brewzilla_observe_only` **PÅ** blockerar BA:s ordinarie BrewZilla/RAPT-skrivningar, inklusive mål, värmare, pump, nyttjandegrad och ordinarie OFF/0. BA kan fortsätta läsa/logga och generera passiva råd. Switchen stoppar **inte** befintlig fysisk värme/pump, RAPT-profil, BrewZillas lokala reglage eller direkta RCL-anrop från andra HA-kort. Learning APPLY får inte orsaka BA-output i observerande läge. Separat operatörs-ABORT är **alltid tillgänglig** och försöker skicka profil-STOP och OFF/0; kontrollera alltid faktisk fysisk respons.
 
-BA fortsätter att läsa RAPT-profildata, temperaturer, energivärden, status och logga Flight Recorder. Learning får beräkna förslag och historik men **Learning APPLY får inte köras** i observerande läge.
+Efter installation/start ska BA vara read-only PÅ (fail-closed). Beta.14:s HA-entitetsregistrering har i verklig installation skapat `switch.brewassistant_endast_observation_brewzilla_styrs_lokalt` från det svenska visningsnamnet. Omdöp i **HA:s entitetsinställningar** till det kanoniska ID:t ovan, eller anpassa lokalt kort efter faktiskt registrerat ID; ändra inte `.storage` manuellt. En framtida kodfix för stabil ID-migrering återstår.
 
-## Återaktivering
+## Två skilda återställningar
 
-Att slå AV switchen lämnar BA i spärrat `operator_rearm_required`. Först en separat bekräftelse via `brewassistant.brewzilla_rearm_after_observe` kan återge BA skrivbehörighet, och endast när identiteten för aktiv RAPT-session är giltig samt BrewZillas temperatur, mål, värmare, pump och nyttjandegrader rapporterats färskt. Gamla väntande planer ogiltigförklaras. Vid Home Assistant-omstart eller reload är styrningen åter spärrad även om switchen var AV tidigare. ABORT-spärren är separat och får inte kringgås.
+**1. Operatörs-ABORT:** efter kontroll av fysiska utgångar används `button.press` på `button.brewassistant_rearm_brewday_control` eller kortets **ÅTERAKTIVERA EFTER ABORT**. Verifiera `sensor.brewassistant_brewday_operator_control_state`: `operator_control_state: armed` och `operator_abort_active: false`. Detta ger inte automatiskt BA rätt att skriva och aktiverar inte en bryggkälla.
 
-**Viktigt:** När BA återaktiveras kan Heatstrike/Mash-in-reglering ske automatiskt utan kvittens för varje intern justering enligt befintlig implementation. Detta är inte samma sak som att samtliga framtida kommandon kvitteras ett och ett.
+**2. Read-only AV:** själva switch-AV validerar atomiskt aktuell behörig bryggkälla, frånvaro av ABORT och sex färska (max 90 s) BrewZilla-readbacks: temperatur, temperaturmål, värmarswitch, pumpswitch, heat utilization och pump utilization. Antingen behörig RAPT-kontroller eller villkorsstyrd Manual Brewday med bekräftad RAPT-STOP krävs. Okänd källa (`source: None`), `Disconnected`/gammal telemetri eller aktiv ABORT ska ge nekad övergång med switchen kvar PÅ. En äldre kompatibilitetstjänst `brewassistant.brewzilla_rearm_after_observe` finns, men **ingen separat tjänst krävs vid normal switch-AV**. Inga gamla väntande åtgärder får återspelas. Vid HA-omstart återgår switchen till PÅ.
 
-## Körda isolerade kontroller – 2026-09-20
+## Verifierat hittills, inte fysisk PASS
 
-- `tests/test_brewzilla_observe_only_combined_dispatch.py` samt övrig regressionssvit: 376/376 godkända på Python 3.11, 3.12, 3.13, med inspelade simulerade serviceanrop.
-- `tests/integration/ha_rcl_observe_smoke.py` via `.github/workflows/ha-rcl-observer-smoke.yml`: godkänd på verklig Home Assistant Core 2026.9.3 och Python 3.14.2 samt fastlåst, publicerad RCL beta.1-kod (commit `149d51aaa4d467fd37c932ceaf8161c9f1387314`). Workflow: https://github.com/Jocke1970/brewassistant-beta/actions/runs/35518259462.
-- Det isolerade provet instansierar riktig RCL-profil-binärsensor, för in dess data i HA:s StateMachine, kontrollerar BA:s dynamiska profilidentifiering, blockerar BA:s target/värme/pump/nyttjandegrad inkl. OFF och 0 samt separat STOP, verifierar OFF utan rearm och att direkta tjänsteanrop utanför BA inte stoppas. Falska HA-servicehanterare registrerar allt som skulle ha skickats, utan molnkonto eller bryggverk.
-- Det här är **inte** fullständig HA-integrationsuppstart med riktiga config entries eller live RAPT API. Det verifierar inte Flight Recorder/learning genom faktisk omstart, CFC/handoff, redan dispatchade async-anrop, fysiska utgångar eller att samtliga tidigare UI-kort döljer hårdvaruknappar. Sådana punkter förblir öppna och får inte räknas som PASS.
+Beta.14:s automatiska releasegrindar rapporterade 387 tester och CI på Python 3.11–3.13, HACS/Hassfest samt isolerad HA/RCL-smoke. Det isolerade provet använder simulerade servicehanterare, inte riktiga molnkommandon eller fysiska utgångar. Statisk Lovelace-kontroll är inte ett klicktest av användarens dashboard.
 
-## Praktisk acceptans – endast vatten, operatör närvarande och först efter separat publicerad prerelease
+I användarens HA rapporterade orchestration-sensorn `observe_only_enabled: true`, `observe_only_effective: true`, `hot_side_actuator_writes_allowed: false`, inga väntande åtgärder och `hot_side_outputs_physically_off_verified: false`. RCL rapporterade samtidigt `Disconnected`; detta är inte bevis för fysisk avstängning. Separat ABORT återställdes 2026-09-22 (`operator_abort_active: false`, `operator_control_state: armed`); källan var därefter fortfarande `None`, runtime `idle`. Inget praktiskt beta.14-vattenprov är godkänt.
 
-1. Säkerställ lokalt på BrewZilla att vattennivå, temperatur, värme och pump är under kontroll. Lokal avstängning ska vara åtkomlig. Bekräfta installerad **ny** BA-version och att observationsswitchen verkligen finns; avsaknad är INTE read-only. Ha backup av aktuell BA-installation och avbryt om någon status avviker.
-2. Med switchen PÅ: kontrollera `sensor.brewassistant_brewzilla_orchestration_mode` attribut `orchestration_mode: observe-only`, `observe_only_effective: true`, `hot_side_actuator_writes_allowed: false`. Dessa uttrycker BA-behörighet, **inte** att de fysiska utgångarna är av.
-3. Ändra mål/värme/pump på BrewZillas lokala panel under säkra vattenförhållanden. Kontrollera att BA:s temperatur, status, Flight Recorder, passiv learning och energivärden fortsätter uppdateras utan BA-återställning av lokala inställningar. Läs både HA-tjänstehändelser/orsakskedja och RCL-loggar/API-spår; frånvaro av en loggrad ensam bevisar aldrig att inga kommandon skickades.
-4. Gör ett separat negativt test utan aktiv värme/pump: kontrollera BA:s hårdvaruknappar och direkta servicevägar inklusive `OFF`, `0 %`, ABORT, Mash-in, Sparge, bekräftelse och RAPT STOP. Ingen BA-initierad fysisk skrivning får ske under observation. Direkt RCL/Lovelace-kontroll är **inte** skyddad av BA-switchen och ska inte förväxlas med ett BA-kommando.
-5. Testa integration reload, Home Assistant-omstart, tillfälligt telemetribortfall samt switch PÅ medan plan väntar. Ingen ny BA-skrivning, gammal kvittens eller automatisk återstart. Ett kommando redan skickat före switchen PÅ kan inte återkallas. Koppla inte bort nätverket om det riskerar fysisk drift; välj kontrollerad provmiljö.
-6. Slå switchen AV: BA ska fortfarande vara spärrad och gammal plan borttagen. Verifiera separat rearm endast om aktuell RAPT-session och alla nödvändiga readbacks är färska och granskade. Testa inte automatisk Heatstrike-reglering utan operatör och vatten.
-7. Verifiera att CFC/handoff, Flight Recorder, learning och energi förblir observerande under drift och att alla BA-hårdvaruknappar verkligen är dolda/inaktiverade medan observation gäller. Godkänn inte om en enda BA-output finns eller loggbevis saknas.
+## Acceptansprov under uppsikt
 
-## Öppna releasegrindar
+1. Bekräfta installerad tagg/manifest beta.14 och RCL-fork, backup, rätt vattennivå, fysisk avstängningsmöjlighet och faktiska inaktiva utgångar. Kontrollera att inga gamla RAPT-profiler körs.
+2. Verifiera switch PÅ och `sensor.brewassistant_brewzilla_orchestration_mode` med `observe_only_effective: true` och `hot_side_actuator_writes_allowed: false`. Dessa beskriver BA-behörighet, inte fysisk OFF.
+3. Montera manuellt `dashboard/cards/brewzilla_observe_only_sv.yaml` bredvid Manual Brewday-kortet. Välj/förbered Manual Brewday och verifiera uttryckligt profil-STOP innan direkt-RCL-reglagen visas/används. Direkt RCL ligger utanför BA-spärren; de äldre BA-ägda Manual-setpoints transporteras inte i read-only.
+4. Under kontrollerad vattenkörning, justera lokalt/direkt RCL temperaturmål och nyttjandegrad, logga readback samt verifiera att BA inte skriver tillbaka. Kontrollera passiv audit, Flight Recorder, learning och energi. Tyst logg ensam bevisar inte avsaknad av skrivning.
+5. Testa ABORT separat med möjlighet till fysisk strömbrytning; kontrollera faktisk värmare, pump, huvudström och effekt oberoende av HA-ACK. Återställ ABORT med separat knapp först efter kontroll.
+6. Om automatisk BA-styrning ska provas: välj behörig källa, verifiera sex färska readbacks och testa explicit switch-AV under uppsikt. Kontrollera att gammal plan inte återspelas, och att ogiltig källa/telemetri nekar kontroll. Gör även säkra omstarts-/reloadtest och följ upp CFC/handoff samt övriga BA-vägar.
+7. Avbryt om BA återställer manuella val, utgångar inte stämmer fysiskt, telemetri är gammal eller någon okänd skrivväg upptäcks. Dokumentera nytt fälttest och uppdatera [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) först med faktiska resultat.
 
-- Fullständig HA/RCL end-to-end-uppstart och tjänste-/molnspårning samt fysiskt återkopplade utgångar är inte utförda i användarens installation.
-- Befintliga BA-operatörskort kan fortfarande visa knappar trots backend-nekad hårdvaruskrivning; dölj eller inaktivera dem konsekvent. Dokumentera oberoende RCL-kort.
-- Ingen ny BA prerelease-version publicerad; beta.13 innehåller inte observationsspärren. Släpp inte fix-release innan ovanstående grindar har stängts.
+**Ej godkänt:** fysisk end-to-end, utgångsoff-verifikation, heltäckt UI/klicktest, loggad molntrafik, omstarter och obevakad användning. Ändra inte den publicerade beta.14-taggen för att rätta dessa dokument.
