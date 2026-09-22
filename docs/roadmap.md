@@ -10,8 +10,8 @@
 | Del | Verifierat läge | Nästa grind |
 | --- | --- | --- |
 | Publicerad `v0.2.0-beta.14` | Tagg låst vid `1a956c04044df870e005392b6bfe946097b9d440`, manifest `0.2.0-beta.14`, CI Python 3.11–3.13/HACS/Hassfest och isolerad HA/RCL-smoke för releasekandidat. | Kontrollerat faktiskt vattenprov, inga oväntade BA-skrivningar och fysisk ABORT-verifiering. |
-| `dev` | [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) mergade `beta` → `dev` 22/9, merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e`. Beta.14-kod finns nu i dev, HLT SIM-1 och tidigare sep-20-docs finns kvar. | För över korrigerad dokumentation till `beta` via separat granskad PR; ny kod måste utvecklas och testas i dev. |
-| `beta` | Publicerad beta.14-kod. Efter release finns endast separat borttagning av engångsworkflow före doc-sync. | Dokumentationssynk utan ny tagg eller ändring av beta.14-releasen; CI för faktiskt nytt branch-SHA. |
+| `dev` | [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) mergade `beta` → `dev` 22/9 och behöll HLT SIM-1; [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) avslutade separat dokumentationssynk till `beta` på `720f14a9724397cc81bced01a708dd284bc3dc54`. Dokumentationsstädning efter #225 görs åter på `dev`. | Utveckla och testa ny kod på `dev`; granska senare ändringar separat innan promotion till `beta`. |
+| `beta` | Innehåller beta.14-koden och dokumentationssynken från #225. Branchens synk-commit var `720f14a9724397cc81bced01a708dd284bc3dc54`, utan att den publicerade beta.14-taggen ändrades. | CI/test på exakt framtida kandidat-SHA och separat releasebeslut; ingen automatisk promotion av efterföljande `dev`-ändringar. |
 | `main` | Föregående stabil branch, ingen beta.14-promotion. | Separat beslut efter dokumenterad fältacceptans. |
 | HLT SIM-1 | Endast läsande simulator; 19/9 och 20/9-fältutdrag bevarade. | Fastställ källoberoende `Heat Strike`/ramp-startberedskap och omtesta virtuellt; ingen fysisk koppling. |
 
@@ -35,7 +35,7 @@
 ## Prioritet 1 – branchdisciplin, CI och docs
 
 - Normal releaseväg: `dev → beta → main` med granskad PR och **Create a merge commit**, test på exakt resulterande SHA, separat tagg och prerelease för nästa kodversion. Publicerade taggar flyttas aldrig. En branchmerge uppdaterar inte HA.
-- Efter #223 återstår en separat `dev → beta`-PR för doc-sync. Kontrollera att diffen inte medför oavsiktliga ändringar av integrationskod/manifest och att dev:s HLT-/CI-ändringar överförs med rätt innehåll. Ingen `main`-promotion eller ny prerelease enbart för dokumentation.
+- [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden till `dev`; [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) slutförde doc-sync `dev → beta` med en dokumentations-only merge och utan ny tagg eller `main`-promotion. Ändringar som görs efter #225 på `dev` behöver en separat granskad promotion; ange inte dessa som redan synkade till `beta`.
 - CI, HACS, Hassfest: automatiska dev-triggers exkluderade 20/9; releasebranch, beta, main och manuella körningar gäller. Bekräfta faktisk workflow-körning och SHA – gamla gröna kontroller är inte nya testbevis. Säkerhetskritiska flöden måste ha separat HA-integrations-/regressionstest.
 - [Installationsguide](INSTALLATION.md) ska peka på exakt beta.14-tagg, inte `main`. [CHANGELOG](../CHANGELOG.md) dokumenterar UI-migrering och HA-omstart. Äldre daterade fältrapporter och originalreleaseanteckningar skrivs inte om retroaktivt.
 
@@ -49,7 +49,7 @@
 
 ## Prioritet 3 – behåll övriga parallella moduler
 
-- **Fermentation:** SG-styrning/Brewfather-jässcheman separat, Climate Supervisor kräver fullcykeltest.
+- **Fermentation:** SG-styrning/Brewfather-jässcheman separat. [Tvålägeskontrakt, redigerbara SG-/timparametrar och återstående UI/integration](sg-driven-fermentation.md); den rena SG-regelmotorn är ännu inte inkopplad. Climate Supervisor kräver fullcykeltest.
 - **Cooling/CFC/kylspiral:** Boil→Chill, sanitering, kylmetod, pump, extern processsensor och vört-ut under Chill/Transfer. Säkerställ observe-only i skrivvägarna.
 - **Equipment Learning:** läsning/råd/historik utan automatiskt APPLY i observe-only; kontrollera energi, temperatur och HA-omstart.
 - **Manual/BF/BT/RAPT:** håll receptkälla, timer och fysisk styrbehörighet åtskilda. Tidigare paus- och Mash-In-incidenter är inte retroaktivt godkända.
@@ -59,4 +59,4 @@
 
 ## Historik och referenser
 
-2026-08-29–09-11: käll-/ABORT-arbete, Heatstrike/Mash-In, BrewTracker PAUS och tidigare RAPT-fälttest. 2026-09-17: SG-styrning separat. 2026-09-19: HLT SIM-1 på dev via PR #212, beta.11 Mash-In-test avbrutet (inte PASS), senare source-scoped BA-controller och beta.12/13 är separata utvecklingssteg. 2026-09-20: beta.14 via [PR #221](https://github.com/Jocke1970/brewassistant-beta/pull/221), publicerad utan fysisk acceptans; HLT-fältrapport. 2026-09-22: beta.14 återförd till dev via [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), verklig HA-observer-ID/ABORT-kontroll dokumenterad. [Tidigare roadmap före 20/9](https://github.com/Jocke1970/brewassistant-beta/blob/94b3dbe5f9f62c76d3f847184fad9400b12d3a17/docs/roadmap.md) och [projektstatus 20/9](project-status-2026-09-20_sv.md) bevaras som historik.
+2026-08-29–09-11: käll-/ABORT-arbete, Heatstrike/Mash-In, BrewTracker PAUS och tidigare RAPT-fälttest. 2026-09-17: SG-styrning separat. 2026-09-19: HLT SIM-1 på dev via PR #212, beta.11 Mash-In-test avbrutet (inte PASS), senare source-scoped BA-controller och beta.12/13 är separata utvecklingssteg. 2026-09-20: beta.14 via [PR #221](https://github.com/Jocke1970/brewassistant-beta/pull/221), publicerad utan fysisk acceptans; HLT-fältrapport. 2026-09-22: beta.14 återförd till dev via [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), och dokumentation synkad till beta via [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225); verklig HA-observer-ID/ABORT-kontroll dokumenterad. [Tidigare roadmap före 20/9](https://github.com/Jocke1970/brewassistant-beta/blob/94b3dbe5f9f62c76d3f847184fad9400b12d3a17/docs/roadmap.md) och [projektstatus 20/9](project-status-2026-09-20_sv.md) bevaras som historik.
