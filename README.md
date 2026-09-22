@@ -3,7 +3,7 @@
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.
 
 > [!IMPORTANT]
-> **Aktuellt 2026-09-22:** Läs [status efter branch- och doc-sync](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. `dev` har nu beta.14-koden efter [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), även dev:s tidigare HLT-/dokumentationsarbete bevaras. Dokumentationssynk tillbaka till `beta` är en separat PR; `main` är inte uppgraderad.
+> **Aktuellt 2026-09-22:** Läs [status efter branch- och doc-sync](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. `dev` har beta.14-koden efter [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), och [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) slutförde den separata dokumentationssynken `dev → beta` (merge-commit `720f14a9724397cc81bced01a708dd284bc3dc54`). Senare dokumentationsändringar på `dev` kräver separat granskning före eventuell ny synk till `beta`. Ingen ny release eller uppgradering av `main` har följt av dokumentationssynken.
 
 ## Säker användning av beta.14
 
@@ -35,7 +35,7 @@ Integrationskoden finns under `custom_components/brewassistant/`. Kort under `da
 dev (utveckling) -> beta (test och prerelease) -> main (fältvaliderad stabil)
 ```
 
-[PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden från `beta` till `dev` med merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e` och behöll dev:s HLT-/dokumentationsändringar. Dokumentationskomplettering går sedan via granskad `dev → beta`-PR. Detta är **ingen ny release**: beta.14-taggen flyttas inte, `main` ändras inte, och HA uppdateras inte av en GitHub-merge. Ny kodrelease kräver egen manifestversion, granskning, CI/HACS/Hassfest på exakt avsedd SHA, ny oflyttad tagg och separat fältacceptans. Se [CONTRIBUTING](CONTRIBUTING.md).
+[PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden från `beta` till `dev` med merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e` och behöll dev:s HLT-/dokumentationsändringar. Den separata [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) synkade den korrigerade dokumentationen till `beta` med merge-commit `720f14a9724397cc81bced01a708dd284bc3dc54`. Detta var **ingen ny release**: beta.14-taggen flyttades inte, `main` ändrades inte, och HA uppdateras inte av en GitHub-merge. Nya ändringar på `dev`, även dokumentationsändringar, ska granskas separat före promotion. Ny kodrelease kräver egen manifestversion, granskning, CI/HACS/Hassfest på exakt avsedd SHA, ny oflyttad tagg och separat fältacceptans. Se [CONTRIBUTING](CONTRIBUTING.md).
 
 CI finns för Python 3.11–3.13, HACS och Hassfest. Automatiska push-/PR-triggers på `dev` är avsiktligt exkluderade enligt workflow 20/9; releasebrancher, `beta`, `main` och explicita manuella körningar används. Att test inte körts är aldrig ett grönt test. Inga automatiska tester ersätter fysisk kontroll.
 
@@ -48,6 +48,7 @@ CI finns för Python 3.11–3.13, HACS och Hassfest. Automatiska push-/PR-trigge
 | **Read-only, ABORT, Manual, vattenprov** | [Observationskontrakt](docs/brewzilla-observe-only-test_sv.md), [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) |
 | **HLT SIM-1** | [20/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-20.md), [19/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-19.md), [backend](custom_components/brewassistant/hlt/README.md), [kortguide](docs/hlt-dashboard-card.md) |
 | **Brewday och BrewZilla** | [Brewday README](custom_components/brewassistant/brewday/README.md), [Brewday/BZ](docs/brewday-brewzilla.md), [execution modes](docs/brewday-execution-modes.md) |
+| **Fermentation och planerad SG-styrning** | [Backend](custom_components/brewassistant/fermentation_tracking/README.md), [två lägen och UI-kontrakt](docs/sg-driven-fermentation.md) |
 | **Tidigare fälthistorik** | [BA-paus och RAPT-handoff](docs/ba-hot-side-pause-and-rapt-handoff-2026-09-19_sv.md), [Mash-testplan](docs/physical-mash-test-plan-2026-09-19_sv.md), [6/9](docs/physical-validation-2026-09-06.md) |
 | **Andra backends och UI** | [Cooling](docs/backends/cooling-backend.md), [Equipment Learning](docs/brewzilla-equipment-learning.md), [dashboard](docs/dashboard-baselines.md), [lokalisering](docs/localization.md) |
 | **Ändringshistorik och utveckling** | [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [Brewday Audit](docs/brewday-audit.md) |
