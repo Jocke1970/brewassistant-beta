@@ -1,6 +1,4 @@
-"""Sparge controls: hide outside active RAPT, require dual explicit confirmation."""
-
-from __future__ import annotations
+"""Sparge UI: RAPT-only, dynamically discovered profile, guarded observation and lift."""
 
 from pathlib import Path
 
@@ -15,18 +13,23 @@ def test_sparge_cards_source_and_step_scoped_with_matching_machine_ids():
     swedish = (CARDS / "rapt_sparge_controls_sv.yaml").read_text(encoding="utf-8")
     for source in (english, swedish):
         for guard in (
-            "entity: binary_sensor.brewzilla_profile_active\n    state: \"on\"",
-            "entity: sensor.brewassistant_brewday_runtime_source\n    state: \"RAPT BrewZilla Profile\"",
-            "entity: sensor.brewassistant_brewday_runtime_step\n        state: \"Sparge\"",
-            "entity: sensor.brewassistant_brewday_runtime_step\n        state: \"Lakning\"",
+            'entity: switch.brewassistant_brewzilla_observe_only\n    state: "off"',
+            "entity: sensor.brewassistant_brewzilla_orchestration_mode\n    state_not: observe-only",
+            'entity: sensor.brewassistant_brewday_runtime_source\n    state: "RAPT BrewZilla Profile"',
+            'entity: sensor.brewassistant_brewday_runtime_step\n        state: "Sparge"',
+            'entity: sensor.brewassistant_brewday_runtime_step\n        state: "Lakning"',
             "condition: or",
             "entity: button.brewassistant_confirm_sparge_lift",
             "service: button.press",
             "confirmation:",
             "operator_confirmation_available",
             "outputs_confirmed_off",
+            "rapt_cloud_link_brewzilla_profile_runtime",
+            "hot_side_actuator_writes_allowed === true",
+            "observe_only_effective === false",
         ):
             assert guard in source
+        assert "binary_sensor.brewzilla_profile_active" not in source
         assert "number.set_value" not in source
         assert "switch.turn_on" not in source
         assert "brewassistant.apply_brewzilla_target" not in source

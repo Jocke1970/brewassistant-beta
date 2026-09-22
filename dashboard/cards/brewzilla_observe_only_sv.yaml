@@ -1,0 +1,127 @@
+# BA controls only its own automation. Emergency ABORT is always separate.
+# Standalone card: place alongside Manual Brewday; never assume BA setpoints apply in read-only.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    name: "ABORT · NÖDSTOPP"
+    icon: mdi:alert-octagon
+    show_label: true
+    label: "Alltid tillgänglig · begär STOP av profilen och OFF/0 på BrewZilla. Kontrollera avstängning fysiskt."
+    tap_action:
+      action: call-service
+      service: brewassistant.abort_brewzilla
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 12px
+        - min-height: 66px
+        - background: rgba(244,67,54,.22)
+        - border: 3px solid rgba(244,67,54,.82)
+      label:
+        - white-space: normal
+  - type: entities
+    title: "BrewAssistant · styrning / read-only"
+    show_header_toggle: false
+    entities:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        name: "BA READ-ONLY · PÅ = BA styr inte"
+        icon: mdi:eye-outline
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewzilla_orchestration_mode
+    name: STYRLÄGE
+    icon: mdi:shield-eye-outline
+    triggers_update: all
+    show_state: false
+    show_label: true
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const s = states['switch.brewassistant_brewzilla_observe_only'];
+        const a = entity?.attributes || {};
+        const clean = v => String(v ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const mode = s?.state === 'on' && a.observe_only_effective === true
+          ? 'BA READ-ONLY · DU STYR'
+          : s?.state === 'off' && a.observe_only_effective === false
+          ? 'BA-STYRNING AKTIVERAD'
+          : 'BA-BEHÖRIGHET EJ VERIFIERAD';
+        const note = s?.state === 'on'
+          ? 'BA läser, loggar och lär men skickar inga vanliga BrewZilla-kommandon. ABORT ovanför fungerar ändå. Manuell RCL-styrning visas först när Manual Brewday är aktiv och RAPT-profilen rapporterar OFF.'
+          : s?.state === 'off' && a.observe_only_effective === false
+          ? 'BA får skicka nya styrkommandon enligt ordinarie säkerhet och källa. Tidigare planer kastades vid växlingen. ABORT gäller alltid.'
+          : 'BA har inte bekräftad styrbehörighet. Kontrollera switchen och integrationen. ABORT gäller alltid.';
+        return `<div style="text-align:left;line-height:1.4;">
+          <b style="font-size:15px;">${mode}</b><br>${note}<br>
+          <span style="opacity:.78;font-size:11px;">Källa ${clean(a.runtime_source)} · steg ${clean(a.runtime_step)} · värmare ${clean(a.heater_on)} · pump ${clean(a.pump_on)} · fysisk OFF ej verifierad.</span>
+        </div>`;
+      ]]]
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 12px
+        - background: rgba(33,150,243,.07)
+      label:
+        - white-space: normal
+        - text-align: left
+  - type: conditional
+    conditions:
+      - entity: switch.brewassistant_brewzilla_observe_only
+        state: "on"
+      - entity: sensor.brewassistant_brewday_runtime_source
+        state: "Manual Brewday"
+      - entity: binary_sensor.brewzilla_profile_active
+        state: "off"
+      - entity: sensor.brewassistant_brewday_operator_control_state
+        state_not: "aborted"
+    card:
+      type: vertical-stack
+      cards:
+        - type: markdown
+          content: >-
+            **MANUAL BREWDAY · DIREKT RCL-STYRNING** 🛠️
+
+            Reglagen nedan styr RCL/BrewZilla direkt på ditt uttryckliga initiativ,
+            **inte** via BA:s automatiska börvärdestransport. Panelen kräver att
+            RAPT-profilens HA-status är OFF, men bekräfta alltid att den tidigare
+            profilen verkligen stoppat innan du ändrar några värden. Om RAPT-status
+            är okänd eller saknas visas inga direkta reglage. ABORT gäller alltid.
+            BA:s automatiska börvärdesfält i övriga Manual Brewday-kort styr
+            **inte** bryggverket när BA är read-only.
+        - type: entities
+          title: "Manuella börvärden · direkt på BrewZilla"
+          show_header_toggle: false
+          entities:
+            - entity: number.brewzilla_target_temperature
+              name: Temperaturmål
+            - entity: number.brewzilla_heat_utilization
+              name: Värmeutnyttjande
+            - entity: number.brewzilla_pump_utilization
+              name: Pumputnyttjande
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              entity: switch.brewzilla_heater
+              name: VÄRMARE · DIREKT
+              icon: mdi:fire
+              tap_action:
+                action: toggle
+                confirmation:
+                  text: "Direkt styrning utanför BA: ändra värmarens läge på BrewZilla? Kontrollera mål och vätskenivå fysiskt."
+              styles:
+                card:
+                  - border-radius: 14px
+                  - padding: 12px
+                  - background: rgba(255,152,0,.13)
+            - type: custom:button-card
+              entity: switch.brewzilla_pump
+              name: PUMP · DIREKT
+              icon: mdi:pump
+              tap_action:
+                action: toggle
+                confirmation:
+                  text: "Direkt styrning utanför BA: ändra pumpens läge på BrewZilla? Kontrollera flöde och vätskenivå fysiskt."
+              styles:
+                card:
+                  - border-radius: 14px
+                  - padding: 12px
+                  - background: rgba(33,150,243,.13)

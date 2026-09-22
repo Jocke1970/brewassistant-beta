@@ -124,7 +124,7 @@ def test_brewday_overview_stays_action_free() -> None:
 
 
 def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -> None:
-    """The modular Brewday CONFIRM control must only pulse for a pending plan."""
+    """The modular Brewday CONFIRM control only pulses on an explicitly pending plan."""
     for filename in ("brewday_operator_actions.yaml", "brewday_operator_actions_sv.yaml"):
         source = (CARDS_DIR / filename).read_text(encoding="utf-8")
         assert "sensor.brewassistant_brewzilla_pending_action" in source
@@ -132,29 +132,24 @@ def test_brewday_confirm_attention_is_pending_driven_and_reduced_motion_safe() -
         assert "1.4s ease-in-out infinite" in source
         assert "prefers-reduced-motion: reduce" in source
         assert "animation: none !important" in source
+        assert 'entity: switch.brewassistant_brewzilla_observe_only\n          state: "off"' in source
 
 
 def test_brewday_supervised_action_row_is_only_rendered_for_real_pending_action() -> None:
-    """CONFIRM/REJECT should disappear completely when no operator action is pending."""
-    expected_guard = '''    - type: conditional
-      conditions:
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: "unknown"
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: "unavailable"
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: "none"
-        - entity: sensor.brewassistant_brewzilla_pending_action
-          state_not: "idle"
-      card:
-        type: horizontal-stack
-'''
-
+    """Nested observation wrapper must not weaken four-state pending confirmation guard."""
     for filename in ("brewday_operator_actions.yaml", "brewday_operator_actions_sv.yaml"):
         source = (CARDS_DIR / filename).read_text(encoding="utf-8")
-        assert expected_guard in source
-        assert "button.brewassistant_confirm_supervised_apply" in source
+        pending_start = source.index(
+            "          - type: conditional\n            conditions:\n"
+            "              - entity: sensor.brewassistant_brewzilla_pending_action"
+        )
+        confirm_start = source.index("button.brewassistant_confirm_supervised_apply", pending_start)
+        section = source[pending_start:confirm_start]
+        for inactive in ("unknown", "unavailable", "none", "idle"):
+            assert f'state_not: "{inactive}"' in section
+        assert "card:\n              type: horizontal-stack" in section
         assert "button.brewassistant_cancel_supervised_apply" in source
+        assert "state_not: observe-only" in source
 
 
 def test_legacy_mash_circulation_fallback_is_tightly_scoped() -> None:
