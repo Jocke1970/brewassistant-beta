@@ -1,57 +1,34 @@
-# Brewday backend
+# Brewday backend – källor, processtid och HLT-överlämning
 
-Status: active on shared `dev`  
-Documentation checkpoint: 2026-09-19 (HLT SIM-1 handoff; previous Brewday execution validation remains separately gated)
+**Dokumentationscheckpoint: 2026-09-20, `dev`.** Brewday är den normaliserade processmodellen, **inte** hårdvarubackend för BrewZilla. Fysisk target/heat/pump-aktuation ligger i [`../brewzilla/`](../brewzilla/) och beror på vald kod-/releaseversion. Läs [projektstatus](../../../docs/project-status-2026-09-20_sv.md) och [roadmap](../../../docs/roadmap.md) först: publicerad beta.14 har observe-only, ABORT och separata Manual-direktreglage som fortfarande **saknas i `dev`**. Detta dokument beskriver Brewday-koden på `dev`, inte en uppdaterad HA-installation eller en godkänd fysisk beta.14.
 
-`brewday` owns BrewAssistant's normalized process model. It arbitrates Brewfather Brew Tracker, RAPT profile runtime and the Python-owned Manual Brewday engine into one runtime contract, interprets readable process stages, keeps physical timing and records the Brewday/BrewZilla Flight Recorder. It is **not** a BrewZilla hardware backend; physical target/heat/pump actuation belongs in [`../brewzilla/`](../brewzilla/). Recipe source, runtime/timer owner and physical control policy are distinct; see [`brewday-execution-modes.md`](../../../docs/brewday-execution-modes.md).
+## Ansvar och gränser
 
-## Responsibilities
+`brewday` normaliserar Brewfather Brew Tracker, RAPT BrewZilla-profil och Python-ägd Manual Brewday till ett gemensamt snapshot. Det skiljer receptkälla, runtime-/timerägare och rätt att påverka fysisk utrustning; hanterar steg/tid, operatörens ABORT-latch, refresh-/source-policy, processfaser, additionspåminnelser, Audit/Event Log och Brewday Flight Recorder. Det exponerar läsbar processintention för fristående **read-only-consumers** såsom HLT SIM-1. Brewday ska aldrig bli beroende av att HLT finns, aldrig tyst styra en fysisk HLT och aldrig ge BZ ett effekt-cap för HLT:s skull.
 
-- normalize Brewfather Brew Tracker, active RAPT BrewZilla profiles and Manual Brewday into stable snapshots;
-- arbitrate source ownership from real tracker start/profile evidence, not broad batch/device state alone;
-- keep operator ABORT/rearm above all process sources and preserve recorder continuity;
-- derive operator-facing stages, physical timing, addition alerts and guarded refresh advice;
-- persist the compact Brewday Audit/Event Log and record meaningful transitions;
-- expose normalized runtime facts to independent **read-only consumers** such as HLT SIM-1, without making Brewday depend on or actuate a physical HLT.
-
-## Source priority
-
-The public `brewday_runtime.py` resolver applies:
+### Källprioritet på `dev`
 
 ```text
-operator ABORT latch -> explicit aborted, non-owning runtime
-active/uncertain/stopped-handoff RAPT profile -> RAPT owns process source
-active Brewfather Brew Tracker -> Brewfather owns runtime
-active Manual Brewday -> Python Manual runtime
-otherwise -> normalized idle/core snapshot
+Operator ABORT-latch -> explicit aborted / ingen ägande runtime
+aktiv/osäker/stoppad RAPT-handoff -> RAPT processkälla
+aktiv Brewfather Brew Tracker -> Brewfather runtime
+aktiv Manual Brewday -> Python Manual runtime
+annars -> normaliserad idle/core snapshot
 ```
 
-When RAPT wins, running Manual Brewday is paused for handoff. Genuine RAPT source loss after active observation retains the handoff rather than silently substituting Brewfather; confirmed STOP retains a stop guard until explicit/new handoff. Broad Brewfather phase `Brewing` or `active: true` is not start evidence; positive Brew Tracker start/advance is required. Once legitimately started, the tracker may retain ownership through normal pauses.
+Aktiv RAPT paus-ar aktiv Manual för överlämning. Efter faktiskt RAPT-ägarskap ska signalförlust eller stoppguard inte obemärkt byta till Brewfather. `Brewing` i bred BF-batchfas eller generellt `active: true` bevisar inte BrewTracker-start; positiv tracker-start/progress krävs. När tracker väl startat legitimt kan det behålla ägarskap under vanliga pauser. Se [`brewday-execution-modes.md`](../../../docs/brewday-execution-modes.md).
 
-## Execution ownership and Brewfather PAUS
+### Brewfather PAUS och fysisk target
 
-Keep `recipe/profile source`, `runtime/timer owner`, and `physical BrewZilla control policy` separate. In Brewfather/BrewTracker supervised mode, Brewfather provides recipe/runtime and owns timer progression; BA interprets checkpoints and owns physical target/heat/pump policy. A future BA-owned imported-recipe runtime may use Brewfather only as the recipe source and BA's Python engine for timers, starting rests only after actual temperature reach; that mode remains future work. Runtime ownership does not bypass Supervised Apply or physical guards.
+I historiskt BF/BT supervised-läge äger Brewfather tracker/timer, BA tolkar checkpoint och har fysisk target-/heat-/pump-policy via separat BrewZilla-backend och dess spärrar. En framtida BA-ägd importerad receptplan kan låta BF vara receptkälla men lägga timerägandet på BA; det är ännu framtida arbete. En verifierad PAUS/0-min-kontroll 11/9 visade frusen tracker-status/step/progress/tid tills operatören återupptar. BA ska endast arbeta mot **nuvarande** target under PAUS, aldrig förvärma `next_step`; fältfynd 40→45→55 °C kräver separat fysisk återvalidering. Normaliserad tid/step är inte bevis på uppnådd fysisk temperatur.
 
-A 2026-09-11 water test verified that a zero-minute BrewTracker `PAUS` freezes tracker status, step, progress and timer until operator Resume. While paused, BA must latch the **current** target, continue only the physical work needed for it and never pre-actuate `next_step`; following target becomes eligible only after Resume/advance. The same historical test found premature 40→45 and 45→55 °C requests; verify the corrected combined runtime physically before claiming that regression closed. The tracker path does not automatically Resume Brewfather.
+### Operatörens ABORT och BA observe-only
 
-## Operator ABORT
+`brewday_operator_abort.py` innehåller en persistent, högprioriterad ägarskapslatch som gör runtime icke-ägande och tar bort positiv väntande intention. Fysisk ABORT-väg är en **separat** fråga: varken latch, HA-serviceanrop eller `recovery_required` garanterar faktisk fysisk OFF. Publicerad **beta.14** har separat ABORT-nödlane och `switch.brewassistant_brewzilla_observe_only`, men dessa beta.14-funktioner är **inte återförda till `dev`** av denna doc-sync. Jämför verklig installationsversion/HA-readbacks och [taggade beta.14-instruktioner](https://github.com/Jocke1970/brewassistant-beta/blob/v0.2.0-beta.14/docs/beta14-prerelease-notes_sv.md); gör inga antaganden om switchens existens i äldre kod.
 
-The persistent Brewday ABORT ownership latch yields non-owning runtime and excludes RAPT/Brewfather/Manual reclamation, discards pending positive intent and invokes the authoritative BrewZilla physical safe-down through the integration service layer. Explicit Brewday rearm is required; it does not release separate hardware ABORT lockout.
+## Manual och stage-normalisering
 
-## Manual Brewday
-
-`manual_brewday_runtime.py` is UI-independent with `idle`, `prepared`, `running`, `paused`, `awaiting_confirm`, `completed`. Default BIAB plan: Setup, Mash, Sparge, Boil, Whirlpool and Chill/Transfer, with step duration/target/pause/advance metadata. The adapter maps this internal plan onto the normalized surface.
-
-| File | Purpose |
-| --- | --- |
-| `manual_brewday_runtime.py` | Manual plan, session, timers and transitions |
-| `manual_brewday_store.py` | Session storage and access |
-| `manual_brewday_adapter.py` | Normalized manual snapshot |
-| `rapt_profile_runtime.py` | Normalized active RAPT profile intent |
-
-## Normalization and stage interpretation
-
-`brewday_runtime_core.py` resolves Brewfather/core runtime; `brewday_runtime.py` is the public source arbiter; `brewday_ramp_target_gate.py` guards physical ramp progression. `brewday_stage_engine.py` is read-only, converting normalized runtime and BZ telemetry to presentation stages such as:
+`manual_brewday_runtime.py` är UI-oberoende med `idle`, `prepared`, `running`, `paused`, `awaiting_confirm`, `completed`; store/adapter håller state och normaliserar en Setup → Mash → Sparge → Boil → Whirlpool → Chill/Transfer-plan med steg, mål, tider och bekräftelser. Detta är en riktig Python-runtime, inte YAML-simulering. `brewday_runtime_core.py` normaliserar BF/core, `brewday_runtime.py` arbiterar vald källa, `brewday_ramp_target_gate.py` bevakar fysisk ramp, och `brewday_stage_engine.py` är **read-only** presentation, inte ett HLT- eller Cooling-kommando.
 
 ```text
 Idle -> Prepare -> Heating Strike / Strike Water -> Mash In -> Mash
@@ -59,63 +36,37 @@ Idle -> Prepare -> Heating Strike / Strike Water -> Mash In -> Mash
 -> Wort Cooling -> Pitch Ready / Transfer -> Cleaning -> Completed
 ```
 
-Stage engine output does not control Cooling or BrewZilla hardware and is **not automatically equivalent** to the HLT simulator's preparation-stage contract.
+Stage-enginens namn, runtime-snapshotets `stage` och exakta källsteget `step` är **inte automatiskt ekvivalenta**. En HLT-policy som bara tittar på `stage=Mash` har inte därigenom fått en positiv begäran om lakvattenuppvärmning.
 
-## HLT SIM-1 – new consumer, 2026-09-19
+## HLT SIM-1 – verifierat kontrakt och öppet fynd 20/9
 
-[PR #212](https://github.com/Jocke1970/brewassistant-beta/pull/212) is merged into shared `dev` alongside separate SG-driven fermentation work. HLT is a separate, unloadable **read-only** simulation runner in [`../hlt/`](../hlt/) with its own 30 s timer. It reads `build_brewday_runtime_snapshot(hass)` (`stage`, `step`, `target_temperature`, `runtime_state`, operator ABORT), active Brewday Audit session and effective BrewZilla Batch Context `sparge_water_l`. It never makes Brewday a real HLT controller and issues no BZ caps, HLT writes or supervised-apply requests.
+HLT SIM-1 från [PR #212](https://github.com/Jocke1970/brewassistant-beta/pull/212) kör en egen avlastningsbar **30 s läsande simulator** via [`../hlt/`](../hlt/). Den läser `build_brewday_runtime_snapshot(hass)` (`source`, `stage`, `step`, `target_temperature`, runtime, ABORT), aktiv Brewday Audit och effektiv `sparge_water_l` från BrewZilla Batch Context. Den styr aldrig fysisk HLT, skapar ingen BZ-capping och lägger inte till HLT-hårdvaruservice.
 
-Contract for a virtual HLT opportunity:
+Nuvarande konservativa HLT-policy på `dev` kräver aktiv icke-terminal session, positiv känd sparge-volym, stage ur `Setup`, `Heat strike`, `Heat strike water`, `Mash`, `Mash in`, `Mash out`, `Sparge`, färsk fysisk BZ-watt/temperatur, giltig heat utilization, överensstämmande target, observerad cruise utan explicit ramptext och utrymme för hela virtuella HLT-värmaren i **scenariot**. Noll lakvatten = No Sparge; okänd data fail-closed. `number.*`-setpoints behöver inte uppdateras kontinuerligt för att vara giltiga, men fysisk telemetri måste vara färsk.
 
-```text
-active Audit and non-terminal, non-aborted Brewday
-AND known positive normalized sparge_water_l (0 means No Sparge)
-AND explicitly eligible preparation stage
-AND BZ heat utilization known, physical BZ watt/temperature samples fresh
-AND BZ device and Brewday runtime targets agree, actual temp at target
-AND no explicit ramp-step indication
-AND entire virtual HLT wattage fits the simulation scenario
-```
+**19/9-historik:** fysisk BZ-watt omkring 2,3 kW och 11,38 L sparge-volym verifierades; ett falskt virtuellt grant under `Ramp to 72°C` upptäcktes och parsern kompletterades i `dev`, med kodtester. [Daterad rapport](../../../docs/hlt-sim1-field-validation-2026-09-19.md).
 
-The current conservative eligible stage names are `Setup`, `Heat strike`, `Heat strike water`, `Mash`, `Mash in`, `Mash out`, `Sparge`; an unknown/new/terminal stage fails closed. Explicit step text such as `Ramp to 72°C` vetoes cruise, even if sampled temperature/target appear stable. **Brewday must not silently relabel a new step as HLT-eligible**; coordinate step-intent normalization and regression tests with the HLT backend first. The allowlist/ramp parser is an interim safeguard, not a validated source-independent sparge-intent API.
+**20/9-nytt fältutdrag, ännu ÖPPET:** [44 JSONL-poster](../../../docs/hlt-sim1-field-validation-2026-09-20.md), fem virtuella HLT-värmeprover under `step=Heat Strike`, tre *simulerade* effektkonflikter, ingen fysisk HLT-skrivning i de dokumenterade raderna. Runtime tillåter stage `heat strike` men `_RAMP_STEP_NAMES` fångar **inte** det exakta RAPT-steget `Heat Strike`, och explicit källaoberoende positiv HLT-beredskap saknas. Detta kan ge simulerad HLT-grant när BZ tillfälligt når 40 °C och drar ~14 W. **Ingen kodfix eller accepterad hel fältkörning finns ännu.**
 
-The physical-water test on 2026-09-19 verified BZ watt readings around 2.3 kW and propagation of 11.38 L sparge water to HLT; it exposed target/utilization numeric-setting age misclassification. JSONL also captured a **false virtual HLT grant** during explicit `Ramp to 72°C`, followed by yielding and a hypothetical overlap. These findings were corrected in `dev` and CI-checked, but **the final fixes have not yet been retested in installed HA**. Keep physical HLT disconnected; do not promote to beta/main or use 30 s polling as an electrical interlock. Read [dated field evidence and test handoff](../../../docs/hlt-sim1-field-validation-2026-09-19.md), [HLT sensor contract](../../../docs/hlt-dashboard-backend.md), [test/card instructions](../../../docs/hlt-dashboard-card.md) and [HLT code-local README](../hlt/README.md).
+**Överlämning till nästa Brewday/HLT-kodarbete:** definiera varifrån/vid vilken tidpunkt HLT-behovet kommer, tydlig positiv readiness och ramp-intent för RAPT, BT och Manual; skilj stage/step från verklig target/readback. Besluta semantik för `Heat Strike`, `Heat Strike Water`, Mash In, Mash Out och okänt steg. Därefter inför separat kodfix och regressionsfall i rätt branch, full read-only provkedja ramp → vänta → avsedd virtuell ON → BZ återtar/yield/OFF. BZ har alltid absolut ostrypt prioritet. HLT:s 30 s-policy eller 2 500 W-scenario är **aldrig** elektrisk safety/interlock; fysisk HLT kräver separat oberoende fail-OFF/hårdvarugranskning. Se [HLT README](../hlt/README.md), [sensoravtal](../../../docs/hlt-dashboard-backend.md) och [kortguide](../../../docs/hlt-dashboard-card.md).
 
-## Physical timing
+## Tider, Audit och JSONL
 
-`brewday_physical_timing.py` and `brewday_physical_timing_phase_patch.py` separate physical phase/timer evidence from external schedule time. Source stage/pause does **not** prove physical target reached. Brewfather's zero-minute PAUS can freeze its timer while BA continues the current target approach. A future BA-owned imported-recipe runtime must start its own hold timer only once the selected physical sensor reaches the target band. This layer is read-only and not a HLT/BZ power arbiter.
+`brewday_physical_timing.py` och `brewday_physical_timing_phase_patch.py` skiljer uppmätt fysisk fas-/targettid från externa schema-/PAUS-klockor. En eventuell framtida BA-ägd timer för importerade recept ska starta hold först efter vald fysisk sensors temperaturkriterium. Stage-engine och timing ger inte fysisk energibehörighet.
 
-## Brewday Flight Recorder / Audit
+`brewday_audit.py` lagrar kompakta events via HA Storage `brewassistant_brewday_audit_log` (schema 2, högst 250 events) och följer ownership, status, plan/åtgärd, säkerhet och freshness. `brewday_audit_autostart.py` och session boundary/continuity bevarar sessioner genom BF pre-start och legitima stegbyte. HLT har separat JSONL per Brewday-session under `/config/brewassistant/logs/hlt-sim-<session-hash>.jsonl`, med aktuell serversökväg i `sensor.brewassistant_hlt_trace_path` (HA-suffix möjligt). JSONL har uppmätta kontra virtuella watt, temperatur/källa, stage/step och från 19/9 på dev extra BZ-target/temperatur/ålder och publicerad virtuell mottagare. HLT-tider/Wh i minnet nollställs vid HA-omstart; filer på disk kvarstår. Dashboard kan släpa en coordinator-tick och kan inte ersätta Audit/bevis från fysisk hardware.
 
-`brewday_audit.py` persists through HA Storage using `brewassistant_brewday_audit_log` (schema 2, max 250 events). It records runtime, ownership, BZ plan/action/confirmation, safety and freshness evidence; trust those events over dashboard appearance when diagnosing physical hot-side transitions. Session boundary and continuity code prevents Brewfather pre-start from rotating logs unnecessarily. Audit events remain compact.
+## Nyckelfiler och tjänster
 
-HLT additionally records per-session JSONL under `/config/brewassistant/logs/hlt-sim-<session-hash>.jsonl`; `sensor.brewassistant_hlt_trace_path` supplies its absolute HA-server path. It separates measured and virtual wattage and estimated/measured temperature, and significant virtual transitions enter the Brewday Event Log. HLT time/Wh counters are in-memory and reset on HA/integration restart even when JSONL persists. A 30 s simulator can show *hypothetical* overlaps; it is never physical electrical protection.
-
-## Other important files
-
-| File | Purpose |
+| Fil/grupp | Roll |
 | --- | --- |
-| `brewfather_ownership.py` | Actual-start tracker ownership |
-| `rapt_profile_runtime.py` | RAPT profile ownership/normalization |
-| `brewday_operator_abort.py` | Persistent operator latch |
-| `brewday_refresh.py` / `brewday_refresh_policy.py` | Guarded BF refresh |
-| `brewday_addition_alerts.py` | Additions and step alerts |
-| `brewday_*_sensor.py` | HA presentation |
-| `brewday_audit_autostart.py` | Recorder lifecycle |
-| `brewday_audit_session_boundary.py` | Deterministic new-session boundary |
-| `brewday_audit_session_continuity.py` | Continuity around tracker start |
+| `manual_brewday_runtime.py`, `manual_brewday_store.py`, `manual_brewday_adapter.py` | Manual-plan, state/timer och normalisering |
+| `rapt_profile_runtime.py`, `brewfather_ownership.py` | RAPT-profilkällan och faktisk BT-start/ägarskap |
+| `brewday_operator_abort.py` | Persistent operatörs-ABORT-latch, separat från fysisk off-verifikation |
+| `brewday_refresh.py`, `brewday_refresh_policy.py` | Källsäker BF-refresh |
+| `brewday_addition_alerts.py`, `brewday_*_sensor.py` | Alerts och read-only HA-presentation |
+| `brewday_audit_autostart.py`, `brewday_audit_session_boundary.py`, `brewday_audit_session_continuity.py` | Recorder lifecycle, sessionsgräns och kontinuitet |
 
-## Public service surface
+Integrationens serviceyta omfattar `brewassistant.force_brewfather_refresh`, `brewday_audit_start`, `brewday_audit_stop`, `brewday_audit_clear`, `brewday_audit_snapshot` och Manual Brewday `manual_brewday_prepare`, `start`, `pause`, `next`, `start_mash`, `start_boil`, `start_whirlpool`, `start_cooling`, `finish`, `reset` under `brewassistant.`. HLT SIM-1 lägger **inte** till en offentlig aktuatortjänst. Exakta HA-entiteter registreras i integrationens plattformar, inte i denna dokumentation.
 
-The integration root registers `brewassistant.force_brewfather_refresh`, `brewassistant.brewday_audit_start`, `brewassistant.brewday_audit_stop`, `brewassistant.brewday_audit_clear`, `brewassistant.brewday_audit_snapshot`, and Manual Brewday services `manual_brewday_prepare`, `start`, `pause`, `next`, `start_mash`, `start_boil`, `start_whirlpool`, `start_cooling`, `finish`, `reset` under the `brewassistant.` domain. HLT SIM-1 adds **no public actuator service**. Exact HA entity IDs originate in root platform registration; runtime code should expose snapshots rather than depend on Lovelace helpers.
-
-## Do not change casually
-
-1. Brewday Runtime must stay independent of BrewZilla hardware where possible and never depend on HLT simulation availability.
-2. Ownership uses real source evidence; operator ABORT outranks RAPT/BF/Manual.
-3. Manual Brewday is a real Python engine, not UI/YAML emulation; stage engine stays read-only.
-4. Recipe source, timer owner and physical apply policy remain separate.
-5. Paused BrewTracker never authorizes next-step physical pre-actuation; physical timing is independent from tracker clock.
-6. Recorder continuity is not reset by cosmetic source changes.
-7. HLT's virtual budget, priority, timers and stage policy must never be mistaken for electrical authorization or BZ hardware caps.
-8. Coordinate new Brewday step labels/normalized ramp intent with HLT; unknown intent must fail closed pending explicit contract tests.
+**Ändra inte oavsiktligt:** ägarskapsordning, operatörens separata ABORT, BF PAUS-current-target-gate, Manual Python-runtime, Audit-kontinuitet, HLT:s read-only-gräns, BZ-prioritet eller andra modulers SG/CFC-kod i samma branchstädning. En doc-sync är inte release eller fysisk kontrollacceptans.
