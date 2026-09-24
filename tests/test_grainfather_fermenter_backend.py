@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "custom_components/brewassistant/grainfather_fermenter/adapter.py"
 THERMAL = ROOT / "custom_components/brewassistant/grainfather_fermenter/thermal.py"
 LEARNING = ROOT / "custom_components/brewassistant/grainfather_fermenter/learning.py"
+COOLANT = ROOT / "custom_components/brewassistant/grainfather_fermenter/coolant.py"
 PREFLIGHT_RUNTIME = ROOT / "custom_components/brewassistant/grainfather_fermenter/preflight_runtime.py"
 GF30_SENSORS = ROOT / "custom_components/brewassistant/grainfather_fermenter/sensors.py"
 TOP_SENSOR = ROOT / "custom_components/brewassistant/sensor.py"
@@ -32,6 +33,15 @@ def _load_thermal_module():
 
 def _load_learning_module():
     spec = importlib.util.spec_from_file_location("brewassistant_gf30_learning_test", LEARNING)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_coolant_module():
+    spec = importlib.util.spec_from_file_location("brewassistant_gf30_coolant_test", COOLANT)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -158,7 +168,7 @@ def test_manual_preflight_rejects_implausible_manual_value() -> None:
 
 
 def test_gf30_new_backend_files_are_valid_python() -> None:
-    for path in (THERMAL, LEARNING, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT):
+    for path in (THERMAL, LEARNING, COOLANT, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
@@ -274,3 +284,46 @@ def test_preflight_learning_calculates_passive_cooling_rate() -> None:
     assert summary["mean_cooling_rate_c_per_hour"] == -2.0
     assert summary["automatic_sensor_correction"] is False
     assert summary["automatic_control"] is False
+
+
+
+def test_coolant_monitor_requires_fresh_coolant_before_learning() -> None:
+    module = _load_coolant_module()
+    now = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
+
+    snapshot = module.build_coolant_monitor_snapshot(
+        coolant_temperature_c=5.0,
+        coolant_observed_at=now - timedelta(minutes=6),
+        freezer_air_temperature_c=-2.0,
+        freezer_air_observed_at=now,
+        thermostat_state="cool",
+        thermostat_target_c=4.0,
+        thermostat_hvac_action="cooling",
+        now=now,
+    )
+
+    assert snapshot["status"] == "awaiting_fresh_coolant"
+    assert snapshot["learning_ready"] is False
+    assert snapshot["control_allowed"] is False
+    assert snapshot["direct_freezer_switching"] is False
+
+
+def test_coolant_monitor_keeps_generic_thermostat_as_freezer_owner() -> None:
+    module = _load_coolant_module()
+    now = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
+
+    snapshot = module.build_coolant_monitor_snapshot(
+        coolant_temperature_c=4.5,
+        coolant_observed_at=now,
+        freezer_air_temperature_c=-1.0,
+        freezer_air_observed_at=now,
+        thermostat_state="cool",
+        thermostat_target_c=4.0,
+        thermostat_hvac_action="idle",
+        now=now,
+    )
+
+    assert snapshot["status"] == "monitor_ready"
+    assert snapshot["thermostat"]["expected_owner"] == "home_assistant_generic_thermostat"
+    assert snapshot["safe_setpoint_known"] is False
+    assert snapshot["automatic_setpoint_changes"] is False
