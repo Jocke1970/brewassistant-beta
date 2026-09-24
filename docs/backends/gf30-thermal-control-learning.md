@@ -1,6 +1,6 @@
 # GF30: DIY-kylning, köldmediestyrning och thermal learning – arkitekturkontrakt
 
-Status: **planerad utbyggnad av befintlig `grainfather_fermenter/`, dokumentation endast**. Inga nya sensorer, reglage, kommandon, HA-konfigurationer eller tester är implementerade av detta dokument. Skapad och förtydligad 2026-09-22.
+Status: **delvis implementerad read-only på `dev`**. Thermal preflight, persistent manuell/Pill-historik, passiv rate-learning, dual-sensor safe-point och ett rent coolant-monitor-kontrakt finns 2026-09-24. Ingen frys-, pump-, climate- eller GF30-write är implementerad.
 
 Relaterat: [GF30-fermenterroadmap](grainfather-fermenter.md), [fermentation tracking](../sg-driven-fermentation.md), [`fermentation_chamber/` README](../../custom_components/brewassistant/fermentation_chamber/README.md) och [`grainfather_fermenter/` README](../../custom_components/brewassistant/grainfather_fermenter/README.md).
 
@@ -119,4 +119,4 @@ Visa `learning_status`, `sample_count`, `confidence`, `reason`, `pill_temperatur
 
 ## 8. Dokumentationsregler
 
-Den äldre [GF30-roadmapen](grainfather-fermenter.md) beskriver read-only cloud-discovery och en eventuell framtida supervised GF30-profil-target. Det här kontraktet gäller den av användaren beslutade **DIY-kretsen med GF30-autonom pump och köldmediestyrd frys**. Vid faktisk kodimplementation uppdateras kodlokal README, relevanta testplaner och UI-handbok. Endast dokumentation i detta steg, på `dev`; inga test-/releasepåståenden utan körda tester.
+Den äldre [GF30-roadmapen](grainfather-fermenter.md) beskriver read-only cloud-discovery och en eventuell framtida supervised GF30-profil-target. Det här kontraktet gäller den av användaren beslutade **DIY-kretsen med GF30-autonom pump och köldmediestyrd frys**. Vid faktisk kodimplementation uppdateras kodlokal README, relevanta testplaner och UI-handbok. Read-only-koden ligger nu på `dev`; fysisk sensor-/frys-/GF30-validering återstår och inga releasepåståenden görs innan tester och fältprov är genomförda.
