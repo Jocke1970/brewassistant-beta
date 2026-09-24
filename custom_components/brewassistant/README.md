@@ -1,7 +1,7 @@
 # BrewAssistant Python backend layout
 
 Status: active development  
-Code snapshot documented: 2026-09-10
+Code snapshot documented: 2026-09-24
 
 This directory contains the Home Assistant integration entry points plus the Python-owned BrewAssistant backend domains.
 
@@ -16,7 +16,7 @@ The code-local `README.md` files are the first place to check when changing back
 | [`cooling/`](./cooling/) | Cooling Runtime v2, CFC/immersion/manual cooling and cooling advice | Read/advice today; BrewZilla wort pump is operator-owned |
 | [`fermentation_tracking/`](./fermentation_tracking/) | Independent SG/temperature observations, calculations and readiness | Read/track only |
 | [`fermentation_chamber/`](./fermentation_chamber/) | Chamber-air recommendation and supervised climate target bridge | Recommendation + Supervised Apply |
-| [`grainfather_fermenter/`](./grainfather_fermenter/) | Grainfather fermentation-device discovery/normalization; initial target GF30 | Phase 1 read-only/fail-passive; future Supervised Apply target bridge after live validation |
+| [`grainfather_fermenter/`](./grainfather_fermenter/) | Grainfather fermentation-device discovery plus GF30 thermal/preflight diagnostics, persistent manual/Pill history, dual-sensor safe-point and optional coolant/freezer telemetry | Read-only/fail-passive; no GF30/pump/freezer write; future Supervised Apply target bridge only after live validation |
 | [`fermentation/`](./fermentation/) | Compatibility imports for the separated fermentation backends | Compatibility only |
 | [`carbonation_backend/`](./carbonation_backend/) | Persistent carbonation session and pressure/volume guidance | Read/guidance only |
 | [`climate_backend/`](./climate_backend/) | Kegerator Climate Supervisor | Direct climate-target adjustment when enabled/in scope |
@@ -89,7 +89,7 @@ The BrewZilla internal temperature remains the kettle/safety temperature and mus
  current chamber provider        future GF30 provider
 ```
 
-The GF30 path is currently read-only. A future target write must pass through BrewAssistant Supervised Apply first and must not be enabled until real hardware/service readback has been validated. Both physical providers must never control the same fermentation simultaneously.
+The GF30 path is currently read-only. It may persist manual/Pill preflight observations and expose diagnostic sensors, but it does not actuate GF30, pump, freezer or coolant setpoint. A future target write must pass through BrewAssistant Supervised Apply first and must not be enabled until real hardware/service readback has been validated. Both physical providers must never control the same fermentation simultaneously.
 
 ### Kegerator split
 
