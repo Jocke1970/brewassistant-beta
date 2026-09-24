@@ -3,7 +3,7 @@
 Status: active development / documentation index  
 Last documentation sync: 2026-09-24  
 HLT field baseline: 2026-09-20  
-GF30 DIY thermal/learning and Brewfather export designs captured: 2026-09-22 (planned, not implemented)
+GF30 DIY thermal/learning: read-only backend foundation implemented on dev 2026-09-24; Brewfather export remains planned/documentation-only
 
 Canonical short-form documentation lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the *implemented* ownership/control contract. This `docs/backends/` directory remains useful for deeper architecture notes, roadmaps and field evidence. Historical documents must not be retroactively rewritten to claim later fixes were already physically tested.
 
@@ -39,7 +39,7 @@ Canonical short-form documentation lives beside each backend under `custom_compo
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap; its older implementation-pending sections are historical. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP details/examples. |
 | [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 cloud-adapter preparation, ownership, live-hardware validation gate and future supervised target plan. |
-| **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **Proposed GF30 DIY cooling architecture:** Pill/internal/frysluft/köldmedium, freezer via generic_thermostat, controller ownership, thermal learning, safety and validation gates. Thermal preflight is implemented read-only; coolant/freezer control and GF30 Wi-Fi integration remain pending. |
+| **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **GF30 DIY cooling architecture and current read-only implementation:** Pill/manual preflight, persistent observations, passive learning, Pill/internal safe-point, optional coolant/freezer entity mappings and generic_thermostat ownership. Physical control and live GF30 validation remain pending. |
 | **[`gf30-brewfather-upstream.md`](./gf30-brewfather-upstream.md)** | **New planned outbound Brewfather Custom Stream:** 5-minute GF reads, max one POST per 15 minutes/device, existing BF-fork sender, HTTPS/freshness/duplicate guards and temperature-channel mapping. Documentation only; no new sending. |
 | [`../roadmap.md`](../roadmap.md) | Current integrated status, remaining acceptance criteria and promotion gates. |
 
