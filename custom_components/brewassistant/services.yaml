@@ -346,6 +346,10 @@ gf30_record_manual_temperature:
       name: Observed at
       description: Optional observation datetime. Current time is used when omitted.
       example: "2026-09-24 22:30:00"
+    phase:
+      name: Test phase
+      description: Optional free-text phase label such as baseline, cooling, recovery, or cold_crash.
+      example: cooling
     note:
       name: Note
       description: Optional note describing measurement location or test condition.
