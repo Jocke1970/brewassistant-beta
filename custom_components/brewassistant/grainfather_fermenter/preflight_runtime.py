@@ -18,7 +18,11 @@ from homeassistant.util import dt as dt_util
 from ..configured_entities import configured_entity
 from ..const import CONF_LIQUID_TEMP_ENTITY, DEFAULT_LIQUID_TEMP_ENTITY
 from .learning import summarize_preflight_records
-from .thermal import build_manual_preflight_snapshot
+from .thermal import (
+    DEFAULT_PLAUSIBLE_MAX_C,
+    DEFAULT_PLAUSIBLE_MIN_C,
+    build_manual_preflight_snapshot,
+)
 
 DATA_KEY = "gf30_preflight_runtime"
 STORE_DATA_KEY = "gf30_preflight_runtime_store"
@@ -68,7 +72,7 @@ def _as_datetime(value: Any, *, fallback_now: bool = False) -> datetime | None:
     if parsed is not None:
         return dt_util.as_utc(parsed)
 
-    return datetime.now(timezone.utc) if fallback_now else None
+    return None
 
 
 def _as_float(value: Any) -> float | None:
@@ -212,10 +216,16 @@ def record_gf30_manual_reference(
     manual_temperature = _as_float(temperature_c)
     if manual_temperature is None:
         raise ValueError("temperature_c must be numeric")
+    if not DEFAULT_PLAUSIBLE_MIN_C <= manual_temperature <= DEFAULT_PLAUSIBLE_MAX_C:
+        raise ValueError(
+            f"temperature_c must be between {DEFAULT_PLAUSIBLE_MIN_C} and "
+            f"{DEFAULT_PLAUSIBLE_MAX_C} °C"
+        )
 
-    manual_at = _as_datetime(observed_at, fallback_now=True)
+    observed_missing = observed_at is None or not str(observed_at).strip()
+    manual_at = _as_datetime(observed_at, fallback_now=observed_missing)
     if manual_at is None:
-        manual_at = now
+        raise ValueError("observed_at must be a valid datetime when supplied")
 
     resolved_pill_entity = pill_entity or configured_entity(
         hass,
