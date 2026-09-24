@@ -3,9 +3,9 @@
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.
 
 > [!IMPORTANT]
-> **Aktuellt 2026-09-24:** Läs [24/9-checkpointen inför nästa beta-promotion](docs/doc-sync-2026-09-24_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är fortfarande [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. 24/9-synken innehåller dokumentations- och arkitekturstädning inför nästa `dev → beta`-testcykel; den skapar ingen ny release, flyttar ingen publicerad tagg och uppgraderar inte `main`.
+> **Aktuellt 2026-09-24:** `dev` förbereds som **v0.2.0-beta.15** för `dev → beta`-promotion. Senaste publicerade prerelease före denna releasegrind är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14). Beta.15 tillför främst GF30 read-only thermal/preflight, persistent mätdata, dual-sensor safe-point och valfri coolant/freezer-telemetri — **ingen ny fysisk GF30-, pump- eller frysstyrning**. Läs [24/9-doc-sync](docs/doc-sync-2026-09-24_sv.md), [beta.15 release notes](docs/beta15-prerelease-notes_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md).
 
-## Säker användning av beta.14
+## Säker användning av beta.14 / beta.15-kandidat
 
 - **BA endast observation:** `switch.brewassistant_brewzilla_observe_only` **PÅ** spärrar BA:s ordinarie automatiska BrewZilla-skrivningar. Den stänger **inte** redan aktiv fysisk värme/pump eller externa RCL-/panelkommandon. Switch **AV** genomför kontroll av behörig källa, separat ABORT och sex färska readbacks; misslyckas kontrollen förblir read-only PÅ. HA-start är fail-closed. Avvecklad `switch.brewassistant_brewzilla_orchestration_enabled` får inte ligga kvar i egna kort/automationer.
 - **Känt HA-entitets-ID:** i en riktig beta.14-installation skapade HA `switch.brewassistant_endast_observation_brewzilla_styrs_lokalt` i stället för kanoniska ID:t ovan. Byt ID i HA:s entitetsinställningar eller anpassa lokalt YAML; en automatiserad migrationsfix återstår. Ändra inte `.storage` manuellt.
@@ -49,6 +49,7 @@ CI finns för Python 3.11–3.13, HACS, Hassfest och isolerad HA+RCL-smoke. `dev
 | **HLT SIM-1** | [20/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-20.md), [19/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-19.md), [backend](custom_components/brewassistant/hlt/README.md), [kortguide](docs/hlt-dashboard-card.md) |
 | **Brewday och BrewZilla** | [Brewday README](custom_components/brewassistant/brewday/README.md), [Brewday/BZ](docs/brewday-brewzilla.md), [execution modes](docs/brewday-execution-modes.md) |
 | **Fermentation och planerad SG-styrning** | [Backend](custom_components/brewassistant/fermentation_tracking/README.md), [två lägen och UI-kontrakt](docs/sg-driven-fermentation.md) |
+| **Grainfather GF30 read-only thermal/preflight** | [Backend](custom_components/brewassistant/grainfather_fermenter/README.md), [thermal/learning-kontrakt](docs/backends/gf30-thermal-control-learning.md), [beta.15 release notes](docs/beta15-prerelease-notes_sv.md) |
 | **Tidigare fälthistorik** | [BA-paus och RAPT-handoff](docs/ba-hot-side-pause-and-rapt-handoff-2026-09-19_sv.md), [Mash-testplan](docs/physical-mash-test-plan-2026-09-19_sv.md), [6/9](docs/physical-validation-2026-09-06.md) |
 | **Andra backends och UI** | [Cooling](docs/backends/cooling-backend.md), [Equipment Learning](docs/brewzilla-equipment-learning.md), [dashboard](docs/dashboard-baselines.md), [lokalisering](docs/localization.md) |
 | **Ändringshistorik och utveckling** | [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [Brewday Audit](docs/brewday-audit.md) |
