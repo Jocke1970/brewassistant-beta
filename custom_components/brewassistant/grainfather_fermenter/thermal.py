@@ -202,3 +202,98 @@ def build_manual_preflight_snapshot(
         ),
         "source_selection": "no_automatic_winner",
     }
+
+
+
+def build_dual_sensor_snapshot(
+    *,
+    pill_temperature_c: float | int | None,
+    internal_temperature_c: float | int | None,
+    pill_observed_at: datetime | None,
+    internal_observed_at: datetime | None,
+    now: datetime | None = None,
+    freshness_seconds: int = DEFAULT_FRESHNESS_SECONDS,
+    agreement_tolerance_c: float = DEFAULT_AGREEMENT_TOLERANCE_C,
+    plausible_min_c: float = DEFAULT_PLAUSIBLE_MIN_C,
+    plausible_max_c: float = DEFAULT_PLAUSIBLE_MAX_C,
+) -> dict[str, Any]:
+    """Compare RAPT Pill and GF30 internal/controller temperature.
+
+    Both sensors remain first-class observations.  The result describes
+    redundancy and agreement only; it never selects a control winner.
+    """
+    if freshness_seconds <= 0:
+        raise ValueError("freshness_seconds must be > 0")
+    if agreement_tolerance_c < 0:
+        raise ValueError("agreement_tolerance_c must be >= 0")
+
+    current_time = _as_utc(now) or datetime.now(timezone.utc)
+    pill = _observation_snapshot(
+        source="rapt_pill",
+        temperature_c=pill_temperature_c,
+        observed_at=pill_observed_at,
+        now=current_time,
+        freshness_seconds=freshness_seconds,
+        plausible_min_c=plausible_min_c,
+        plausible_max_c=plausible_max_c,
+    )
+    internal = _observation_snapshot(
+        source="gf30_internal",
+        temperature_c=internal_temperature_c,
+        observed_at=internal_observed_at,
+        now=current_time,
+        freshness_seconds=freshness_seconds,
+        plausible_min_c=plausible_min_c,
+        plausible_max_c=plausible_max_c,
+    )
+
+    pill_fresh = bool(pill["fresh"])
+    internal_fresh = bool(internal["fresh"])
+    redundancy_available = pill_fresh and internal_fresh
+
+    delta_c: float | None = None
+    absolute_delta_c: float | None = None
+    within_tolerance: bool | None = None
+    if redundancy_available:
+        delta_c = float(pill["temperature_c"]) - float(internal["temperature_c"])
+        absolute_delta_c = abs(delta_c)
+        within_tolerance = absolute_delta_c <= agreement_tolerance_c
+
+    if redundancy_available and within_tolerance:
+        status = "dual_sensor_agree"
+        reason = "Pill and GF30 internal temperature are both fresh and agree"
+    elif redundancy_available:
+        status = "dual_sensor_disagree"
+        reason = "Pill and GF30 internal temperature are both fresh but disagree"
+    elif pill_fresh:
+        status = "pill_only"
+        reason = "Pill is fresh; GF30 internal temperature is unavailable or stale"
+    elif internal_fresh:
+        status = "internal_only"
+        reason = "GF30 internal temperature is fresh; Pill is unavailable or stale"
+    else:
+        status = "no_fresh_temperature"
+        reason = "Neither Pill nor GF30 internal temperature is fresh"
+
+    return {
+        "mode": "gf30_dual_sensor_monitor",
+        "control_mode": "read_only",
+        "control_allowed": False,
+        "status": status,
+        "reason": reason,
+        "pill": pill,
+        "internal": internal,
+        "redundancy_available": redundancy_available,
+        "within_tolerance": within_tolerance,
+        "temperature_delta_c": round(delta_c, 3) if delta_c is not None else None,
+        "absolute_temperature_delta_c": (
+            round(absolute_delta_c, 3) if absolute_delta_c is not None else None
+        ),
+        "agreement_tolerance_c": agreement_tolerance_c,
+        "source_selection": "no_automatic_winner",
+        "safe_point": (
+            "dual_fresh_agree"
+            if redundancy_available and within_tolerance
+            else "degraded_or_review_required"
+        ),
+    }
