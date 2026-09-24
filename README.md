@@ -37,7 +37,7 @@ dev (utveckling) -> beta (test och prerelease) -> main (fältvaliderad stabil)
 
 [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden från `beta` till `dev` med merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e` och behöll dev:s HLT-/dokumentationsändringar. Den separata [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) synkade den korrigerade dokumentationen till `beta` med merge-commit `720f14a9724397cc81bced01a708dd284bc3dc54`. Detta var **ingen ny release**: beta.14-taggen flyttades inte, `main` ändrades inte, och HA uppdateras inte av en GitHub-merge. Nya ändringar på `dev`, även dokumentationsändringar, ska granskas separat före promotion. Ny kodrelease kräver egen manifestversion, granskning, CI/HACS/Hassfest på exakt avsedd SHA, ny oflyttad tagg och separat fältacceptans. Se [CONTRIBUTING](CONTRIBUTING.md).
 
-CI finns för Python 3.11–3.13, HACS och Hassfest. Automatiska push-/PR-triggers på `dev` är avsiktligt exkluderade enligt workflow 20/9; releasebrancher, `beta`, `main` och explicita manuella körningar används. Att test inte körts är aldrig ett grönt test. Inga automatiska tester ersätter fysisk kontroll.
+CI finns för Python 3.11–3.13, HACS, Hassfest och isolerad HA+RCL-smoke. `dev` är avsiktligt exkluderad från release-watchdogs; efter `dev → beta` körs valideringen på den faktiska beta-SHA:n. Releasebrancher och explicita manuella körningar kan också användas. Att test inte körts är aldrig ett grönt test. Inga automatiska tester ersätter fysisk kontroll.
 
 ## Dokumentationskarta
 
