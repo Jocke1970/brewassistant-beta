@@ -13,6 +13,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
 from .brewday.brewday_audit import (
     async_clear_brewday_audit_log,
@@ -37,6 +38,12 @@ from .carbonation_backend.carbonation_runtime import (
     reset_carbonation_runtime,
     start_carbonation_runtime,
     update_carbonation_runtime,
+)
+from .grainfather_fermenter.preflight_runtime import (
+    async_load_gf30_preflight_runtime,
+    async_save_gf30_preflight_runtime,
+    clear_gf30_preflight_runtime,
+    record_gf30_manual_reference,
 )
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
@@ -70,6 +77,8 @@ SERVICE_CARBONATION_START = "carbonation_start"
 SERVICE_CARBONATION_UPDATE = "carbonation_update"
 SERVICE_CARBONATION_PAUSE = "carbonation_pause"
 SERVICE_CARBONATION_RESET = "carbonation_reset"
+SERVICE_GF30_RECORD_MANUAL_TEMPERATURE = "gf30_record_manual_temperature"
+SERVICE_GF30_CLEAR_PREFLIGHT = "gf30_clear_preflight"
 
 KEGERATOR_CLIMATE_ENTITY = "climate.kegerator_kylskap"
 KEGERATOR_CLIMATE_TARGET = 4.0
@@ -80,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
     await async_load_brewday_audit_log(hass)
     await async_load_carbonation_runtime(hass)
+    await async_load_gf30_preflight_runtime(hass)
     hass.async_create_task(_ensure_kegerator_climate_on(hass))
     await async_setup_kegerator_guard(hass)
 
@@ -207,6 +217,33 @@ def _register_services(hass: HomeAssistant) -> None:
                 "sensor.brewassistant_carbonation_started_at",
                 "sensor.brewassistant_carbonation_age_days",
                 "sensor.brewassistant_carbonation_summary",
+            ]},
+            blocking=False,
+        )
+
+    async def _refresh_gf30_sensors() -> None:
+        await hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {"entity_id": [
+                "sensor.brewassistant_gf30_preflight_status",
+                "sensor.brewassistant_gf30_preflight_pill_temperature",
+                "sensor.brewassistant_gf30_preflight_manual_temperature",
+                "sensor.brewassistant_gf30_preflight_temperature_delta",
+                "sensor.brewassistant_gf30_preflight_observation_count",
+                "sensor.brewassistant_gf30_preflight_eligible_sample_count",
+                "sensor.brewassistant_gf30_preflight_mean_absolute_delta",
+                "sensor.brewassistant_gf30_preflight_learning_confidence",
+                "sensor.brewassistant_gf30_preflight_pill_rate",
+                "sensor.brewassistant_gf30_preflight_mean_cooling_rate",
+                "sensor.brewassistant_gf30_dual_sensor_status",
+                "sensor.brewassistant_gf30_dual_sensor_temperature_delta",
+                "sensor.brewassistant_gf30_safe_point",
+                "sensor.brewassistant_gf30_coolant_status",
+                "sensor.brewassistant_gf30_coolant_temperature",
+                "sensor.brewassistant_gf30_freezer_air_temperature",
+                "sensor.brewassistant_gf30_freezer_air_minus_coolant",
+                "sensor.brewassistant_gf30_coolant_thermostat_target",
             ]},
             blocking=False,
         )
@@ -362,6 +399,32 @@ def _register_services(hass: HomeAssistant) -> None:
         await async_save_carbonation_runtime(hass)
         await _refresh_carbonation_sensors()
 
+    async def _handle_gf30_record_manual_temperature(call: ServiceCall) -> None:
+        try:
+            record = record_gf30_manual_reference(
+                hass,
+                temperature_c=call.data.get("temperature_c"),
+                observed_at=call.data.get("observed_at"),
+                note=str(call.data.get("note") or ""),
+                phase=str(call.data.get("phase") or "unspecified"),
+            )
+        except (TypeError, ValueError) as err:
+            raise HomeAssistantError(str(err)) from err
+        await async_save_gf30_preflight_runtime(hass)
+        await _refresh_gf30_sensors()
+        _LOGGER.info(
+            "GF30 manual thermal reference recorded: %.2f °C · status=%s · pill=%s",
+            record.manual_temperature_c,
+            record.status,
+            record.pill_temperature_c,
+        )
+
+    async def _handle_gf30_clear_preflight(call: ServiceCall) -> None:
+        clear_gf30_preflight_runtime(hass)
+        await async_save_gf30_preflight_runtime(hass)
+        await _refresh_gf30_sensors()
+        _LOGGER.info("GF30 thermal preflight history cleared")
+
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
@@ -386,6 +449,8 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_CARBONATION_UPDATE, _handle_carbonation_update)
     hass.services.async_register(DOMAIN, SERVICE_CARBONATION_PAUSE, _handle_carbonation_pause)
     hass.services.async_register(DOMAIN, SERVICE_CARBONATION_RESET, _handle_carbonation_reset)
+    hass.services.async_register(DOMAIN, SERVICE_GF30_RECORD_MANUAL_TEMPERATURE, _handle_gf30_record_manual_temperature)
+    hass.services.async_register(DOMAIN, SERVICE_GF30_CLEAR_PREFLIGHT, _handle_gf30_clear_preflight)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

@@ -1,6 +1,6 @@
 # BrewAssistant doc-sync 2026-09-24
 
-Status: promotion preparation / documentation-only delta  
+Status: beta.15 release candidate + doc-sync  
 Branch source: `dev`  
 Intended promotion: `dev -> beta`
 
@@ -8,11 +8,11 @@ Intended promotion: `dev -> beta`
 
 Den här synken fångar BrewAssistants faktiska läge inför nästa promotion till `beta`.
 
-Senaste publicerade prerelease är fortfarande **v0.2.0-beta.14**. Den här synken skapar ingen ny kodversion, flyttar ingen publicerad tagg och innebär ingen promotion till `main`.
+Senaste publicerade prerelease före denna releasegrind är **v0.2.0-beta.14**. `dev` är nu förberedd som **v0.2.0-beta.15**. Beta.15 får publiceras först efter `dev → beta`-merge och gröna release-watchdogs på exakt beta-merge-SHA. `main` berörs inte.
 
-Vid kontroll före synken var `dev` **15 commits före `beta` och 0 commits efter**, men skillnaden bestod endast av dokumentation. Det fanns inga skillnader i runtime-kod, dashboard-YAML eller `custom_components/brewassistant/manifest.json`. Både `dev` och `beta` rapporterade manifestversion `0.2.0-beta.14`.
+Vid beta.15-förberedelsen hade `dev` och `beta` divergerat genom tidigare promotion-mergehistorik. Funktionsdiffen från beta till dev är nu GF30-fokuserad: read-only thermal/preflight-runtime, sensorer, passiv learning, dual-sensor safe-point, coolant-monitor-kontrakt samt integration wiring/tests/docs. Manifestet bumpas till `0.2.0-beta.15`.
 
-## Dokumentationsdelta före denna synk
+## Beta.15-kod och dokumentationsdelta
 
 Skillnaden `beta -> dev` bestod av:
 
@@ -24,7 +24,7 @@ Skillnaden `beta -> dev` bestod av:
 - kompletteringar i 22/9-statusdokumentet;
 - uppdaterad roadmap.
 
-De två nya GF30-dokumenten är **design/planering**, inte implementerad fysisk styrning.
+GF30 thermal/preflight är nu **implementerad read-only**. Brewfather outbound-dokumentet är fortsatt design/planering. Ingen fysisk GF30-, pump-, frys- eller coolant-setpoint-styrning är implementerad.
 
 ## Rättad branch- och testmodell
 
@@ -64,16 +64,15 @@ Promotion guard gäller fortsatt:
 
 `grainfather_fermenter/` finns i den ordinarie branchkedjan och är inte en separat featurebranch.
 
-Nuvarande implementation är fortsatt:
+Beta.15-implementationen är fortsatt fail-passive/read-only men har utökats med:
 
-- read-only;
-- fail-passive;
 - discovery/normalisering av Grainfather fermentation-device/session-data;
-- ingen Grainfather service call;
-- ingen fysisk heater/cooling-pump/compressor/valve-styrning;
-- ingen modellidentitet antas utan live-hårdvarubevis.
-
-De nya 22/9-designnoterna om DIY thermal learning och Brewfather outbound logging ändrar inte detta. De är parkerade framtidskontrakt.
+- persistent manuell/Pill-preflight via Home Assistant Store;
+- read-only diagnostiksensorer och två manuella preflight-tjänster;
+- passiv delta/rate-learning;
+- dual Pill/internal safe-point där upstream `last_heard` prioriteras för intern freshness när möjligt;
+- valfria tomma mappings för köldmedium, frysluft och coolant-`generic_thermostat`;
+- inget Grainfather service call, ingen fysisk pump-/frys-/setpoint-styrning och ingen modellidentitet utan live-hårdvarubevis.
 
 ## Fermentation control ownership
 
@@ -113,7 +112,7 @@ Gröna watchdogs efter promotion till `beta` är nödvändiga men ersätter inte
 4. Kör/läs CI, HACS, Hassfest och den isolerade HA+RCL-smoken på den resulterande beta-SHA:n.
 5. Om automationerna är gröna, installera/testa exakt beta-kandidaten i Home Assistant enligt det aktuella supervised/water-only-kontraktet.
 6. Vid fel: dokumentera fynd, rätta på `dev`, doc-synca vid behov och promota på nytt.
-7. Ingen `beta -> main` eller ny release förrän den avsedda acceptansgrinden är uppfylld.
+7. Efter gröna beta-watchdogs: skapa ny oflyttad tagg `v0.2.0-beta.15` på exakt beta-merge-SHA och publicera GitHub Pre-release. Ingen `beta -> main`.
 
 ## Dokument som synkats i samband med 24/9-checkpointen
 

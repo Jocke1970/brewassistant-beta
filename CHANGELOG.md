@@ -13,6 +13,61 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-09-24 — v0.2.0-beta.15 — GF30 read-only thermal foundation + doc-sync
+
+### Sammanfattning
+
+Den här prerelease-kandidaten gör `grainfather_fermenter/` användbar redan före full GF30-Wi-Fi-/controller-validering, utan att ge BrewAssistant fysisk styrbehörighet. RAPT Pill kan paras med manuella referenstemperaturer i en persistent preflight-runtime. BrewAssistant exponerar read-only diagnostik för temperaturdelta, freshness, passiv kyl-/värmehastighet, dual-sensor safe-point och framtida coolant/freezer-monitorering.
+
+När Grainfather-controllerdata finns används upstream `last_heard` före vanlig HA-`last_updated` för intern GF30-freshness när den går att tolka. Köldmedium, frysluft och coolant-`generic_thermostat` kan mappas genom tre valfria, tomma config/options-fält. Tomma mappings är giltiga; inga entity-ID gissas.
+
+Två nya manuella tjänster finns:
+
+- `brewassistant.gf30_record_manual_temperature`
+- `brewassistant.gf30_clear_preflight`
+
+Den persistenta preflight-historiken lagrar upp till 200 observationer. Fasetiketter som `baseline`, `cooling`, `recovery` och `cold_crash` kan användas för passiv learning. Learning ger statistik och °C/h från redan observerad data men korrigerar inga givare och skickar inga kommandon.
+
+### Säkerhets-/ägarskapsgräns
+
+- GF30:s lokala controller äger fortsatt sin pump och lokala öltemperaturreglering.
+- En framtida Home Assistant `generic_thermostat` är ensam avsedd ägare av frysen.
+- BrewAssistant ändrar inte GF30 target, pump, frys, coolant-setpoint eller climate-läge i denna release.
+- `gf30_safe_point` är diagnostik, inte tillstånd att aktivera hårdvara.
+- Safe coolant-setpoint och faktisk fail-OFF är uttryckligen okända tills verkligt medium och fysisk installation har testats.
+
+### Dashboard/cards att ersätta
+
+- Inga nya dashboardkort krävs för GF30-funktionen. Första mätprovet kan köras via Home Assistant Developer Tools / Actions.
+
+### Nya/ändrade entiteter och konfiguration
+
+Bland de nya read-only sensorerna finns GF30 backend/preflight-status, controller-tempkandidat, Pill/manual-delta, sample counts, learning confidence/rates, dual-sensor-status/safe-point samt coolant/freezer-diagnostik.
+
+Nya valfria entity-mappings:
+
+- `gf30_coolant_temp_entity`
+- `gf30_freezer_air_temp_entity`
+- `gf30_coolant_thermostat_entity`
+
+### Övriga ändrade filer
+
+- `custom_components/brewassistant/grainfather_fermenter/*`
+- `custom_components/brewassistant/__init__.py`
+- `custom_components/brewassistant/sensor.py`
+- `custom_components/brewassistant/coordinator.py`
+- `custom_components/brewassistant/config_flow.py`
+- `custom_components/brewassistant/const.py`
+- `custom_components/brewassistant/services.yaml`
+- `tests/test_grainfather_fermenter_backend.py`
+- GF30/backend/roadmap/release-dokumentation
+
+### HA-åtgärd
+
+**Home Assistant-omstart krävs** efter installation eftersom nya integration-owned sensorer, tjänster och options-fält tillkommer. Ingen fysisk GF30-/frysstyrning ska aktiveras på grund av denna release.
+
+---
+
 ## 2026-08-29 — PR #152 — Slå ihop BrewZilla Advice + Learning till Bryggråd
 
 ### Sammanfattning

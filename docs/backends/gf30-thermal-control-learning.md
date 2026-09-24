@@ -1,8 +1,14 @@
 # GF30: DIY-kylning, köldmediestyrning och thermal learning – arkitekturkontrakt
 
-Status: **planerad utbyggnad av befintlig `grainfather_fermenter/`, dokumentation endast**. Inga nya sensorer, reglage, kommandon, HA-konfigurationer eller tester är implementerade av detta dokument. Skapad och förtydligad 2026-09-22.
+Status: **delvis implementerad read-only på `dev`**. Thermal preflight, persistent manuell/Pill-historik, passiv rate-learning, dual-sensor safe-point och ett rent coolant-monitor-kontrakt finns 2026-09-24. Ingen frys-, pump-, climate- eller GF30-write är implementerad.
 
 Relaterat: [GF30-fermenterroadmap](grainfather-fermenter.md), [fermentation tracking](../sg-driven-fermentation.md), [`fermentation_chamber/` README](../../custom_components/brewassistant/fermentation_chamber/README.md) och [`grainfather_fermenter/` README](../../custom_components/brewassistant/grainfather_fermenter/README.md).
+
+## Implementerat 2026-09-24 – thermal preflight
+
+`custom_components/brewassistant/grainfather_fermenter/thermal.py` kan redan nu jämföra en RAPT Pill-temperatur med en manuellt avläst referenstemperatur. Båda observationerna tidsstämplas, stale/ogiltiga värden underkänns, delta beräknas och resultatet märks som learning-eligible endast när båda är färska och rimliga. Avvikelse väljer aldrig automatiskt en vinnande sensor. Vägen är strikt read-only med `control_allowed: false` och innehåller inga Home Assistant-serviceanrop.
+
+Detta är avsett för de första kyl-/vattentesterna innan GF30:s Wi-Fi/controllerdata finns tillgänglig. Nästa sensorsteg efter Wi-Fi är att lägga till GF30:s interna temperatur som en andra permanent öltemperaturkälla; den manuella referensen förblir test-/kalibreringsunderlag.
 
 ## 1. Beslutad avgränsning
 
@@ -102,15 +108,15 @@ Visa `learning_status`, `sample_count`, `confidence`, `reason`, `pill_temperatur
 
 ## 7. Faser och acceptans
 
-1. **Kartläggning/read-only:** identifiera alla verkliga entity-ID, GF30:s interna givares åtkomst, Pill-uppdateringar, köldmedium, frysluft, `generic_thermostat` och freezer switch; dokumentera att GF30 lokalt sköter pump och att ingen BA-automation konkurrerar.
+1. **Kartläggning/read-only:** valfria BA-mappings för köldmedium, frysluft och `generic_thermostat` är implementerade; identifiera och välj verkliga entity-ID när hårdvaran finns. Verifiera därefter GF30:s interna givares åtkomst, Pill-uppdateringar, thermostat/readback och att GF30 lokalt sköter pump utan konkurrerande BA-automation.
 2. **Dual-sensorprov:** jämför Pill och GF30-intern i tempererat, termiskt utjämnat vatten och därefter kontrollerad kylning; välj tolerans, sampling/timeout och safe-point-logik empiriskt. Dokumentera om HA exponerar pump-/kylbegäransstatus.
 3. **Köldmedieprov:** validera mediets fryspunkt, representativ mätpunkt, kompressorcykler och faktisk freezer-OFF under sensorstale, restart, smartplug- och HA-bortfall; verifiera oberoende failsafe där så krävs.
 4. **Learning read-only:** sensordata + råhistorik, separata trender och modellkonfidens, regressioner för disagreement/stale/omstart/pump-unknown och mode-skiften; inget actuator-API.
 5. **Eventuell supervised setpoint:** ett separat senare beslut efter fysisk bekräftelse och explicit operator-confirmation. GF30-ölbörvärdesbrygga från äldre roadmap blandas inte ihop med DIY-reservoarens börvärde. Ingen BA-pumpstyrning.
 6. **Fullcykeltest:** vatten → riktig batch → normaljäsning → verifierat FG → kvitterad cold crash och bortfallsprov. Automatisk learning-styrning är inte ett v1-krav.
 
-Öppet före implementation: uppmätta entiteter och freshness, kalibrerings-/delta-tolerans, vald köldmedieblandning/fryspunkt, faktisk fail-off, kompressortider och eventuell pumptelemetri. Inga gissade värden eller fabricerade entiteter.
+Öppet före fysisk inkoppling: de verkliga entity-ID:na och deras freshness, kalibrerings-/delta-tolerans, vald köldmedieblandning/fryspunkt, faktisk fail-off, kompressortider och eventuell pumptelemetri. BA-options har nu tomma, valfria mappings för köldmediegivare, frysluftgivare och coolant-`generic_thermostat`; inga entity-ID gissas eller fabriceras.
 
 ## 8. Dokumentationsregler
 
-Den äldre [GF30-roadmapen](grainfather-fermenter.md) beskriver read-only cloud-discovery och en eventuell framtida supervised GF30-profil-target. Det här kontraktet gäller den av användaren beslutade **DIY-kretsen med GF30-autonom pump och köldmediestyrd frys**. Vid faktisk kodimplementation uppdateras kodlokal README, relevanta testplaner och UI-handbok. Endast dokumentation i detta steg, på `dev`; inga test-/releasepåståenden utan körda tester.
+Den äldre [GF30-roadmapen](grainfather-fermenter.md) beskriver read-only cloud-discovery och en eventuell framtida supervised GF30-profil-target. Det här kontraktet gäller den av användaren beslutade **DIY-kretsen med GF30-autonom pump och köldmediestyrd frys**. Vid faktisk kodimplementation uppdateras kodlokal README, relevanta testplaner och UI-handbok. Read-only-koden ligger nu på `dev`; fysisk sensor-/frys-/GF30-validering återstår och inga releasepåståenden görs innan tester och fältprov är genomförda.
