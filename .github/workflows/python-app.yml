@@ -1,9 +1,9 @@
 name: CI
 
-# Development and promotion validation.
+# Development is intentionally excluded. Validate release candidates and promotions.
 on:
   push:
-    branches: [dev, "release/**", beta, main]
+    branches: ["release/**", beta, main]
   pull_request:
     branches: ["release/**", beta, main]
   workflow_dispatch:
@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   quality:
+    if: github.ref_name != 'dev' && github.base_ref != 'dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -43,6 +44,7 @@ jobs:
           python -m json.tool custom_components/brewassistant/translations/sv.json >/dev/null
 
   test:
+    if: github.ref_name != 'dev' && github.base_ref != 'dev'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
