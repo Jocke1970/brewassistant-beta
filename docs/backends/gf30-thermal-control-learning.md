@@ -4,6 +4,12 @@ Status: **planerad utbyggnad av befintlig `grainfather_fermenter/`, dokumentatio
 
 Relaterat: [GF30-fermenterroadmap](grainfather-fermenter.md), [fermentation tracking](../sg-driven-fermentation.md), [`fermentation_chamber/` README](../../custom_components/brewassistant/fermentation_chamber/README.md) och [`grainfather_fermenter/` README](../../custom_components/brewassistant/grainfather_fermenter/README.md).
 
+## Implementerat 2026-09-24 – thermal preflight
+
+`custom_components/brewassistant/grainfather_fermenter/thermal.py` kan redan nu jämföra en RAPT Pill-temperatur med en manuellt avläst referenstemperatur. Båda observationerna tidsstämplas, stale/ogiltiga värden underkänns, delta beräknas och resultatet märks som learning-eligible endast när båda är färska och rimliga. Avvikelse väljer aldrig automatiskt en vinnande sensor. Vägen är strikt read-only med `control_allowed: false` och innehåller inga Home Assistant-serviceanrop.
+
+Detta är avsett för de första kyl-/vattentesterna innan GF30:s Wi-Fi/controllerdata finns tillgänglig. Nästa sensorsteg efter Wi-Fi är att lägga till GF30:s interna temperatur som en andra permanent öltemperaturkälla; den manuella referensen förblir test-/kalibreringsunderlag.
+
 ## 1. Beslutad avgränsning
 
 GF30 Conical Fermenter används med **både RAPT Pill-temperatur och GF30:s interna temperaturgivare samtidigt**. De är två aktiva observationer och en sensoröverenstämmelse-/safe-point-kontroll, inte en ordning där Pill alltid är primär och den interna givaren bara används som reserv. Två givare förbättrar felupptäckt men ger inte automatiskt två oberoende säkra styrkanaler; kalibrering, placeringsskillnader, dataålder och felmoder behöver valideras.
