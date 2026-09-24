@@ -377,6 +377,7 @@ def _register_services(hass: HomeAssistant) -> None:
             temperature_c=float(call.data["temperature_c"]),
             observed_at=call.data.get("observed_at"),
             note=str(call.data.get("note") or ""),
+            phase=str(call.data.get("phase") or "unspecified"),
         )
         await async_save_gf30_preflight_runtime(hass)
         _LOGGER.info(
