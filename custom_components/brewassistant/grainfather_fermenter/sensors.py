@@ -12,9 +12,11 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import UnitOfTemperature
 
+from ..const import CONF_LIQUID_TEMP_ENTITY
 from ..entity import BrewAssistantEntity
 from .adapter import build_grainfather_fermenter_snapshot
 from .preflight_runtime import build_gf30_preflight_runtime_snapshot
+from .thermal import build_dual_sensor_snapshot
 
 if TYPE_CHECKING:
     from ..coordinator import BrewAssistantCoordinator
@@ -102,6 +104,43 @@ SPECS: tuple[GF30SensorSpec, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    GF30SensorSpec(
+        key="gf30_preflight_learning_confidence",
+        snapshot="preflight",
+        field="learning_confidence",
+    ),
+    GF30SensorSpec(
+        key="gf30_preflight_pill_rate",
+        snapshot="preflight",
+        field="latest_pill_rate_c_per_hour",
+        unit="°C/h",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_preflight_mean_cooling_rate",
+        snapshot="preflight",
+        field="mean_cooling_rate_c_per_hour",
+        unit="°C/h",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_dual_sensor_status",
+        snapshot="dual",
+        field="status",
+    ),
+    GF30SensorSpec(
+        key="gf30_dual_sensor_temperature_delta",
+        snapshot="dual",
+        field="temperature_delta_c",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_safe_point",
+        snapshot="dual",
+        field="safe_point",
+    ),
 )
 
 
@@ -113,6 +152,49 @@ def _nested(snapshot: dict[str, Any], field: str) -> Any:
             return None
         value = value.get(part)
     return value
+
+
+def _dual_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    """Build current Pill + Grainfather-controller comparison diagnostics."""
+    cloud = build_grainfather_fermenter_snapshot(coordinator.hass)
+    pill_entity = coordinator.configured_entities.get(CONF_LIQUID_TEMP_ENTITY)
+    pill_state = coordinator.hass.states.get(pill_entity) if pill_entity else None
+    internal_entity = cloud.get("temperature_entity")
+    internal_state = (
+        coordinator.hass.states.get(internal_entity) if internal_entity else None
+    )
+
+    def _float_state(state) -> float | None:
+        if state is None or str(state.state).strip().lower() in {
+            "unknown",
+            "unavailable",
+            "none",
+            "",
+        }:
+            return None
+        try:
+            return float(str(state.state).replace(",", "."))
+        except (TypeError, ValueError):
+            return None
+
+    snapshot = build_dual_sensor_snapshot(
+        pill_temperature_c=_float_state(pill_state),
+        internal_temperature_c=_float_state(internal_state),
+        pill_observed_at=pill_state.last_updated if pill_state is not None else None,
+        internal_observed_at=(
+            internal_state.last_updated if internal_state is not None else None
+        ),
+    )
+    snapshot.update(
+        {
+            "pill_entity": pill_entity,
+            "internal_entity": internal_entity,
+            "grainfather_model_verified": cloud.get("model_verified"),
+            "grainfather_selection_reason": cloud.get("selection_reason"),
+            "grainfather_controller_linked": cloud.get("controller_linked"),
+        }
+    )
+    return snapshot
 
 
 class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
@@ -136,6 +218,8 @@ class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
     def _snapshot(self) -> dict[str, Any]:
         if self._spec.snapshot == "cloud":
             return build_grainfather_fermenter_snapshot(self.coordinator.hass)
+        if self._spec.snapshot == "dual":
+            return _dual_snapshot(self.coordinator)
         return build_gf30_preflight_runtime_snapshot(self.coordinator.hass)
 
     @property
@@ -166,6 +250,8 @@ class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
                 "selected_device": snapshot.get("selected_device"),
                 "linked_session": snapshot.get("linked_session"),
             }
+        if self._spec.snapshot == "dual":
+            return snapshot
         return snapshot
 
 
