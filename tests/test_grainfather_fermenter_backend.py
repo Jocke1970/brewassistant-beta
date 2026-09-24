@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
@@ -10,12 +11,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "custom_components/brewassistant/grainfather_fermenter/adapter.py"
 THERMAL = ROOT / "custom_components/brewassistant/grainfather_fermenter/thermal.py"
+LEARNING = ROOT / "custom_components/brewassistant/grainfather_fermenter/learning.py"
+PREFLIGHT_RUNTIME = ROOT / "custom_components/brewassistant/grainfather_fermenter/preflight_runtime.py"
+GF30_SENSORS = ROOT / "custom_components/brewassistant/grainfather_fermenter/sensors.py"
+TOP_SENSOR = ROOT / "custom_components/brewassistant/sensor.py"
+TOP_INIT = ROOT / "custom_components/brewassistant/__init__.py"
+SERVICES = ROOT / "custom_components/brewassistant/services.yaml"
 README = ROOT / "custom_components/brewassistant/grainfather_fermenter/README.md"
 REGISTRY = ROOT / "custom_components/brewassistant/modules/registry.py"
 
 
 def _load_thermal_module():
     spec = importlib.util.spec_from_file_location("brewassistant_gf30_thermal_test", THERMAL)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_learning_module():
+    spec = importlib.util.spec_from_file_location("brewassistant_gf30_learning_test", LEARNING)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -138,3 +154,123 @@ def test_manual_preflight_rejects_implausible_manual_value() -> None:
     assert snapshot["status"] == "awaiting_manual_reference"
     assert snapshot["manual_reference"]["state"] == "invalid_or_missing"
     assert snapshot["learning_sample_eligible"] is False
+
+
+
+def test_gf30_new_backend_files_are_valid_python() -> None:
+    for path in (THERMAL, LEARNING, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT):
+        ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+def test_gf30_preflight_runtime_is_persistent_and_read_only() -> None:
+    source = PREFLIGHT_RUNTIME.read_text(encoding="utf-8")
+    assert 'STORAGE_KEY = "brewassistant_gf30_preflight_runtime"' in source
+    assert "MAX_OBSERVATIONS = 200" in source
+    assert "async_save_gf30_preflight_runtime" in source
+    assert "record_gf30_manual_reference" in source
+    assert "async_call(" not in source
+
+
+def test_gf30_manual_services_are_registered_without_hardware_writes() -> None:
+    init_source = TOP_INIT.read_text(encoding="utf-8")
+    services_source = SERVICES.read_text(encoding="utf-8")
+    assert 'SERVICE_GF30_RECORD_MANUAL_TEMPERATURE = "gf30_record_manual_temperature"' in init_source
+    assert 'SERVICE_GF30_CLEAR_PREFLIGHT = "gf30_clear_preflight"' in init_source
+    assert "record_gf30_manual_reference(" in init_source
+    assert "async_save_gf30_preflight_runtime(hass)" in init_source
+    assert "gf30_record_manual_temperature:" in services_source
+    assert "gf30_clear_preflight:" in services_source
+
+
+def test_gf30_read_only_sensors_are_registered_in_main_sensor_platform() -> None:
+    source = TOP_SENSOR.read_text(encoding="utf-8")
+    gf30_source = GF30_SENSORS.read_text(encoding="utf-8")
+    assert "create_grainfather_fermenter_sensors" in source
+    assert "+ create_grainfather_fermenter_sensors(coordinator)" in source
+    assert 'key="gf30_backend_status"' in gf30_source
+    assert 'key="gf30_preflight_status"' in gf30_source
+    assert 'key="gf30_dual_sensor_status"' in gf30_source
+    assert 'key="gf30_safe_point"' in gf30_source
+
+
+def test_dual_sensor_safe_point_requires_fresh_agreeing_pair() -> None:
+    module = _load_thermal_module()
+    now = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
+
+    snapshot = module.build_dual_sensor_snapshot(
+        pill_temperature_c=18.2,
+        internal_temperature_c=18.0,
+        pill_observed_at=now - timedelta(minutes=2),
+        internal_observed_at=now - timedelta(minutes=4),
+        now=now,
+    )
+
+    assert snapshot["status"] == "dual_sensor_agree"
+    assert snapshot["redundancy_available"] is True
+    assert snapshot["safe_point"] == "dual_fresh_agree"
+    assert snapshot["source_selection"] == "no_automatic_winner"
+    assert snapshot["control_allowed"] is False
+
+
+def test_dual_sensor_disagreement_never_selects_a_winner() -> None:
+    module = _load_thermal_module()
+    now = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
+
+    snapshot = module.build_dual_sensor_snapshot(
+        pill_temperature_c=19.0,
+        internal_temperature_c=18.0,
+        pill_observed_at=now,
+        internal_observed_at=now,
+        now=now,
+    )
+
+    assert snapshot["status"] == "dual_sensor_disagree"
+    assert snapshot["safe_point"] == "degraded_or_review_required"
+    assert snapshot["source_selection"] == "no_automatic_winner"
+
+
+def test_preflight_learning_calculates_passive_cooling_rate() -> None:
+    module = _load_learning_module()
+    base = datetime(2026, 9, 24, 18, 0, tzinfo=timezone.utc)
+
+    records = [
+        {
+            "manual_temperature_c": 20.0,
+            "manual_observed_at": base.isoformat(),
+            "pill_temperature_c": 20.1,
+            "pill_observed_at": base.isoformat(),
+            "temperature_delta_c": 0.1,
+            "absolute_temperature_delta_c": 0.1,
+            "learning_sample_eligible": True,
+            "phase": "cooling",
+        },
+        {
+            "manual_temperature_c": 19.0,
+            "manual_observed_at": (base + timedelta(minutes=30)).isoformat(),
+            "pill_temperature_c": 19.1,
+            "pill_observed_at": (base + timedelta(minutes=30)).isoformat(),
+            "temperature_delta_c": 0.1,
+            "absolute_temperature_delta_c": 0.1,
+            "learning_sample_eligible": True,
+            "phase": "cooling",
+        },
+        {
+            "manual_temperature_c": 18.0,
+            "manual_observed_at": (base + timedelta(hours=1)).isoformat(),
+            "pill_temperature_c": 18.1,
+            "pill_observed_at": (base + timedelta(hours=1)).isoformat(),
+            "temperature_delta_c": 0.1,
+            "absolute_temperature_delta_c": 0.1,
+            "learning_sample_eligible": True,
+            "phase": "cooling",
+        },
+    ]
+
+    summary = module.summarize_preflight_records(records)
+
+    assert summary["eligible_pair_count"] == 3
+    assert summary["rate_sample_count"] == 2
+    assert summary["latest_pill_rate_c_per_hour"] == -2.0
+    assert summary["mean_cooling_rate_c_per_hour"] == -2.0
+    assert summary["automatic_sensor_correction"] is False
+    assert summary["automatic_control"] is False
