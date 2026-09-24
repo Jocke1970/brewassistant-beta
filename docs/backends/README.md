@@ -39,7 +39,7 @@ Canonical short-form documentation lives beside each backend under `custom_compo
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap; its older implementation-pending sections are historical. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP details/examples. |
 | [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 cloud-adapter preparation, ownership, live-hardware validation gate and future supervised target plan. |
-| **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **Proposed GF30 DIY cooling architecture:** Pill/internal/frysluft/köldmedium, freezer via generic_thermostat, controller ownership, thermal learning, safety and validation gates. Documentation only; no new control code. |
+| **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **Proposed GF30 DIY cooling architecture:** Pill/internal/frysluft/köldmedium, freezer via generic_thermostat, controller ownership, thermal learning, safety and validation gates. Thermal preflight is implemented read-only; coolant/freezer control and GF30 Wi-Fi integration remain pending. |
 | **[`gf30-brewfather-upstream.md`](./gf30-brewfather-upstream.md)** | **New planned outbound Brewfather Custom Stream:** 5-minute GF reads, max one POST per 15 minutes/device, existing BF-fork sender, HTTPS/freshness/duplicate guards and temperature-channel mapping. Documentation only; no new sending. |
 | [`../roadmap.md`](../roadmap.md) | Current integrated status, remaining acceptance criteria and promotion gates. |
 
