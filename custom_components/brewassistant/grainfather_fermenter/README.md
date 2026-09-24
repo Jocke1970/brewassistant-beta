@@ -102,7 +102,41 @@ The safe-point becomes `dual_fresh_agree` only when both observations are fresh 
 
 ### Coolant/freezer contract prepared
 
-`coolant.py` now contains a pure read-only contract for future coolant temperature, freezer-air temperature and `generic_thermostat` telemetry. It explicitly keeps `generic_thermostat` as freezer owner and refuses to claim a safe coolant setpoint before medium/freeze limits are physically verified. No coolant/freezer entities are guessed or wired yet.
+`coolant.py` contains a pure read-only contract for coolant temperature, freezer-air temperature and `generic_thermostat` telemetry. It explicitly keeps `generic_thermostat` as freezer owner and refuses to claim a safe coolant setpoint before medium/freeze limits are physically verified.
+
+### Optional coolant entity mapping
+
+BrewAssistant options now expose three deliberately blank mappings:
+
+```text
+gf30_coolant_temp_entity
+gf30_freezer_air_temp_entity
+gf30_coolant_thermostat_entity
+```
+
+Leaving them blank is valid. When real sensors exist, selecting those entities automatically enables the read-only coolant diagnostics; no guessed entity IDs are embedded in the backend. The coolant snapshot uses source `last_updated` for freshness and reads the thermostat's target temperature / `hvac_action` only as telemetry.
+
+### First cooling-test workflow
+
+Before the first water/cooling run, clear old test observations with:
+
+```text
+brewassistant.gf30_clear_preflight
+```
+
+At each manual checkpoint call:
+
+```yaml
+action: brewassistant.gf30_record_manual_temperature
+data:
+  temperature_c: 18.6
+  phase: cooling
+  note: Manual probe in representative liquid position
+```
+
+`observed_at` may be omitted when the measurement is entered immediately. The service captures the configured RAPT Pill state and its HA update time at the same checkpoint. Suggested phase labels for the first characterization are `baseline`, `cooling` and `recovery`.
+
+The service refreshes GF30 diagnostic sensors immediately after recording. The stored series is intended for characterization, not automatic calibration or control.
 
 ## Why no hard-coded GF30 entity IDs
 
