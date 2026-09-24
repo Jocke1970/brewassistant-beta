@@ -221,6 +221,33 @@ def _register_services(hass: HomeAssistant) -> None:
             blocking=False,
         )
 
+    async def _refresh_gf30_sensors() -> None:
+        await hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {"entity_id": [
+                "sensor.brewassistant_gf30_preflight_status",
+                "sensor.brewassistant_gf30_preflight_pill_temperature",
+                "sensor.brewassistant_gf30_preflight_manual_temperature",
+                "sensor.brewassistant_gf30_preflight_temperature_delta",
+                "sensor.brewassistant_gf30_preflight_observation_count",
+                "sensor.brewassistant_gf30_preflight_eligible_sample_count",
+                "sensor.brewassistant_gf30_preflight_mean_absolute_delta",
+                "sensor.brewassistant_gf30_preflight_learning_confidence",
+                "sensor.brewassistant_gf30_preflight_pill_rate",
+                "sensor.brewassistant_gf30_preflight_mean_cooling_rate",
+                "sensor.brewassistant_gf30_dual_sensor_status",
+                "sensor.brewassistant_gf30_dual_sensor_temperature_delta",
+                "sensor.brewassistant_gf30_safe_point",
+                "sensor.brewassistant_gf30_coolant_status",
+                "sensor.brewassistant_gf30_coolant_temperature",
+                "sensor.brewassistant_gf30_freezer_air_temperature",
+                "sensor.brewassistant_gf30_freezer_air_minus_coolant",
+                "sensor.brewassistant_gf30_coolant_thermostat_target",
+            ]},
+            blocking=False,
+        )
+
     def _jump_to_manual_stage(*, keywords: tuple[str, ...], fallback_index: int | None = None) -> None:
         session = get_manual_brewday_session(hass)
         stage_index = None
@@ -384,6 +411,7 @@ def _register_services(hass: HomeAssistant) -> None:
         except (TypeError, ValueError) as err:
             raise HomeAssistantError(str(err)) from err
         await async_save_gf30_preflight_runtime(hass)
+        await _refresh_gf30_sensors()
         _LOGGER.info(
             "GF30 manual thermal reference recorded: %.2f °C · status=%s · pill=%s",
             record.manual_temperature_c,
@@ -394,6 +422,7 @@ def _register_services(hass: HomeAssistant) -> None:
     async def _handle_gf30_clear_preflight(call: ServiceCall) -> None:
         clear_gf30_preflight_runtime(hass)
         await async_save_gf30_preflight_runtime(hass)
+        await _refresh_gf30_sensors()
         _LOGGER.info("GF30 thermal preflight history cleared")
 
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
