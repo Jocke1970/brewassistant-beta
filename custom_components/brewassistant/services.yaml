@@ -331,3 +331,26 @@ fermentation_record_gravity:
 fermentation_reset:
   name: Fermentation tracking reset
   description: Clear the independent fermentation tracking runtime and all stored observations.
+
+
+gf30_record_manual_temperature:
+  name: GF30 record manual temperature
+  description: Record a manual GF30 reference temperature and pair it with the current configured RAPT Pill temperature for read-only thermal preflight diagnostics.
+  fields:
+    temperature_c:
+      name: Manual temperature
+      description: Manually measured GF30 liquid/reference temperature in Celsius.
+      required: true
+      example: 18.6
+    observed_at:
+      name: Observed at
+      description: Optional observation datetime. Current time is used when omitted.
+      example: "2026-09-24 22:30:00"
+    note:
+      name: Note
+      description: Optional note describing measurement location or test condition.
+      example: Manual probe in center of water volume
+
+gf30_clear_preflight:
+  name: GF30 clear preflight
+  description: Clear the persisted GF30 manual thermal preflight observation history. This does not control or reset any hardware.
