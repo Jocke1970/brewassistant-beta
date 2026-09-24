@@ -1,11 +1,11 @@
 name: HA + RCL observer smoke (isolated)
 
-# Release candidates only. No tests on dev pushes or PRs targeting dev.
+# Release candidates only. Promote dev to beta before this smoke test runs.
 on:
   push:
-    branches: ["release/**"]
-  pull_request:
     branches: ["release/**", beta]
+  pull_request:
+    branches: ["release/**"]
   workflow_dispatch:
 
 permissions:

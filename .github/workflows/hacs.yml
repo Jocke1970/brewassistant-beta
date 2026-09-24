@@ -1,11 +1,11 @@
 name: HACS validation
 
-# Keep dev free from CI; validate release candidates and promoted branches.
+# Keep dev free from release CI; validate promoted beta/main candidates.
 on:
   push:
     branches: ["release/**", beta, main]
   pull_request:
-    branches: ["release/**", beta, main]
+    branches: ["release/**", main]
   workflow_dispatch:
 
 permissions:
