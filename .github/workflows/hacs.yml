@@ -1,9 +1,9 @@
 name: HACS validation
 
-# Keep dev free from CI; validate release candidates and promoted branches.
+# Validate active development, release candidates and promoted branches.
 on:
   push:
-    branches: ["release/**", beta, main]
+    branches: [dev, "release/**", beta, main]
   pull_request:
     branches: ["release/**", beta, main]
   workflow_dispatch:
@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   hacs:
-    if: github.ref_name != 'dev' && github.base_ref != 'dev'
     name: HACS
     runs-on: ubuntu-latest
     steps:
