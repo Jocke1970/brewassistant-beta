@@ -43,7 +43,7 @@ arbete + doc-sync på dev
 promotion dev -> beta
         |
         v
-CI / HACS / Hassfest på beta
+CI / HACS / Hassfest / HA+RCL-smoke på beta
         |
         v
 supervised HA-/vattenprov
@@ -110,7 +110,7 @@ Gröna watchdogs efter promotion till `beta` är nödvändiga men ersätter inte
 1. Synka de här dokumentationsrättningarna på `dev`.
 2. Granska hela `dev -> beta`-diffen.
 3. Promota med PR och **Create a merge commit**.
-4. Kör/läs CI, HACS och Hassfest på den resulterande beta-SHA:n.
+4. Kör/läs CI, HACS, Hassfest och den isolerade HA+RCL-smoken på den resulterande beta-SHA:n.
 5. Om automationerna är gröna, installera/testa exakt beta-kandidaten i Home Assistant enligt det aktuella supervised/water-only-kontraktet.
 6. Vid fel: dokumentera fynd, rätta på `dev`, doc-synca vid behov och promota på nytt.
 7. Ingen `beta -> main` eller ny release förrän den avsedda acceptansgrinden är uppfylld.
@@ -123,5 +123,7 @@ Gröna watchdogs efter promotion till `beta` är nödvändiga men ersätter inte
 - `docs/backend-domain-layout.md`
 - `docs/backends/README.md`
 - `docs/doc-sync-2026-09-24_sv.md`
+
+Workflow-synken 24/9 flyttar dessutom beta-valideringen till den faktiska promotion-SHA:n: vanliga watchdogs körs inte som acceptance-gate på `dev`, och HA+RCL-smoken triggas på `beta`-push efter merge.
 
 Historiska daterade fältrapporter och publicerade releaseanteckningar ändras inte retroaktivt.
