@@ -1,9 +1,9 @@
 name: Hassfest
 
-# Validate active development, release candidates and promoted branches.
+# Do not execute against dev; daily schedule runs only on default branch.
 on:
   push:
-    branches: [dev, "release/**", beta, main]
+    branches: ["release/**", beta, main]
   pull_request:
     branches: ["release/**", beta, main]
   schedule:
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   hassfest:
+    if: github.ref_name != 'dev' && github.base_ref != 'dev'
     name: Hassfest
     runs-on: ubuntu-latest
     steps:
