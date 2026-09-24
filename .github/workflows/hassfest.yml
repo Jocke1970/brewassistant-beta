@@ -1,11 +1,11 @@
 name: Hassfest
 
-# Do not execute against dev; daily schedule runs only on default branch.
+# Validate promoted beta/main candidates; daily schedule runs only on default branch.
 on:
   push:
     branches: ["release/**", beta, main]
   pull_request:
-    branches: ["release/**", beta, main]
+    branches: ["release/**", main]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
