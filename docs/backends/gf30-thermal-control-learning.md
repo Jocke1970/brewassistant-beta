@@ -108,14 +108,14 @@ Visa `learning_status`, `sample_count`, `confidence`, `reason`, `pill_temperatur
 
 ## 7. Faser och acceptans
 
-1. **Kartläggning/read-only:** identifiera alla verkliga entity-ID, GF30:s interna givares åtkomst, Pill-uppdateringar, köldmedium, frysluft, `generic_thermostat` och freezer switch; dokumentera att GF30 lokalt sköter pump och att ingen BA-automation konkurrerar.
+1. **Kartläggning/read-only:** valfria BA-mappings för köldmedium, frysluft och `generic_thermostat` är implementerade; identifiera och välj verkliga entity-ID när hårdvaran finns. Verifiera därefter GF30:s interna givares åtkomst, Pill-uppdateringar, thermostat/readback och att GF30 lokalt sköter pump utan konkurrerande BA-automation.
 2. **Dual-sensorprov:** jämför Pill och GF30-intern i tempererat, termiskt utjämnat vatten och därefter kontrollerad kylning; välj tolerans, sampling/timeout och safe-point-logik empiriskt. Dokumentera om HA exponerar pump-/kylbegäransstatus.
 3. **Köldmedieprov:** validera mediets fryspunkt, representativ mätpunkt, kompressorcykler och faktisk freezer-OFF under sensorstale, restart, smartplug- och HA-bortfall; verifiera oberoende failsafe där så krävs.
 4. **Learning read-only:** sensordata + råhistorik, separata trender och modellkonfidens, regressioner för disagreement/stale/omstart/pump-unknown och mode-skiften; inget actuator-API.
 5. **Eventuell supervised setpoint:** ett separat senare beslut efter fysisk bekräftelse och explicit operator-confirmation. GF30-ölbörvärdesbrygga från äldre roadmap blandas inte ihop med DIY-reservoarens börvärde. Ingen BA-pumpstyrning.
 6. **Fullcykeltest:** vatten → riktig batch → normaljäsning → verifierat FG → kvitterad cold crash och bortfallsprov. Automatisk learning-styrning är inte ett v1-krav.
 
-Öppet före implementation: uppmätta entiteter och freshness, kalibrerings-/delta-tolerans, vald köldmedieblandning/fryspunkt, faktisk fail-off, kompressortider och eventuell pumptelemetri. Inga gissade värden eller fabricerade entiteter.
+Öppet före fysisk inkoppling: de verkliga entity-ID:na och deras freshness, kalibrerings-/delta-tolerans, vald köldmedieblandning/fryspunkt, faktisk fail-off, kompressortider och eventuell pumptelemetri. BA-options har nu tomma, valfria mappings för köldmediegivare, frysluftgivare och coolant-`generic_thermostat`; inga entity-ID gissas eller fabriceras.
 
 ## 8. Dokumentationsregler
 
