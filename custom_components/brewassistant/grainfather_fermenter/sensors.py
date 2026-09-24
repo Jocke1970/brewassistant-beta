@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import UnitOfTemperature
+from homeassistant.util import dt as dt_util
 
 from ..const import (
     CONF_GF30_COOLANT_TEMP_ENTITY,
@@ -206,6 +207,15 @@ def _dual_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     internal_state = (
         coordinator.hass.states.get(internal_entity) if internal_entity else None
     )
+    selected_device = cloud.get("selected_device") or {}
+    internal_observed_at = None
+    last_heard = selected_device.get("last_heard") if isinstance(selected_device, dict) else None
+    if last_heard:
+        parsed_last_heard = dt_util.parse_datetime(str(last_heard))
+        if parsed_last_heard is not None:
+            internal_observed_at = dt_util.as_utc(parsed_last_heard)
+    if internal_observed_at is None and internal_state is not None:
+        internal_observed_at = internal_state.last_updated
 
     def _float_state(state) -> float | None:
         if state is None or str(state.state).strip().lower() in {
@@ -224,9 +234,7 @@ def _dual_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
         pill_temperature_c=_float_state(pill_state),
         internal_temperature_c=_float_state(internal_state),
         pill_observed_at=pill_state.last_updated if pill_state is not None else None,
-        internal_observed_at=(
-            internal_state.last_updated if internal_state is not None else None
-        ),
+        internal_observed_at=internal_observed_at,
     )
     snapshot.update(
         {
