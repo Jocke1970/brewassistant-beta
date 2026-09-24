@@ -1,28 +1,74 @@
 # Grainfather Fermenter backend
 
-Status: phase 1 scaffold / read-only discovery / parked until live hardware  
+Status: phase 1 read-only discovery + thermal preflight / no actuator control  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
 This package is intentionally separate from BrewAssistant's reserved `grainfather` hot-side adapter. The existing `grainfather` module remains available for Grainfather brewing systems such as G30/G40-class hardware. This package is for fermentation hardware.
 
-Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)
+Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)  
+DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)
 
-## Phase 1 goal
+## Ownership boundary
 
-Prepare the BrewAssistant side before a physical GF30 is available, without inventing entities or control behavior.
+`fermentation_tracking` owns the fermentation process: SG/day progression, readiness and the desired beer-temperature target.
 
-The backend currently:
+`grainfather_fermenter` owns GF30-specific hardware adaptation and thermal diagnostics. It may later translate an approved BrewAssistant target to the GF30 controller, but it does not decide fermentation progression itself.
+
+The intended split is:
+
+```text
+fermentation_tracking
+  -> desired beer temperature / process state
+             |
+             v
+grainfather_fermenter
+  -> GF30 telemetry / thermal diagnostics / future supervised target bridge
+             |
+             v
+GF30 controller
+  -> local heater and automatic cooling-pump logic
+
+separate coolant loop:
+HA generic_thermostat -> freezer -> coolant reservoir
+```
+
+## Implemented now
+
+### Grainfather cloud discovery
+
+The backend:
 
 - discovers Grainfather fermentation-device states by the upstream public `grainfather_entity_type` attribute;
 - groups temperature and gravity telemetry by Grainfather `device_id`;
 - reads controller linkage, linked brew session and `last_heard` metadata;
 - matches the device to the Grainfather brew-session anchor;
 - detects whether `grainfather.adjust_current_step_temperature` exists;
-- reports whether the future supervised target bridge has enough prerequisites;
+- reports whether a future supervised target bridge has enough prerequisites;
 - performs **no service calls** and remains fail-passive/read-only.
 
-## Why no hard-coded entity IDs
+### Thermal preflight before GF30 Wi-Fi is available
+
+`thermal.py` contains a pure read-only comparison engine for the first physical tests where only:
+
+- RAPT Pill temperature; and
+- a manually entered reference temperature
+
+are available.
+
+`build_manual_preflight_snapshot()` records both values and timestamps, rejects missing/stale/implausible observations, calculates Pill-minus-manual delta and exposes whether the pair is eligible as one learning sample.
+
+Important invariants:
+
+- both observations participate in the comparison;
+- disagreement never silently selects one sensor as the winner;
+- the manual reference is not converted into an actuator source;
+- the result always exposes `control_allowed: false`;
+- no Home Assistant service call, pump command, freezer command or Grainfather write exists in this path.
+
+The initial diagnostic defaults are 15 minutes maximum observation age and 0.5 °C agreement tolerance. They are explicit function parameters, not physical safety limits or calibration claims.
+
+## Why no hard-coded GF30 entity IDs
 
 The upstream integration creates fermentation devices dynamically and their friendly/entity names depend on the user's Grainfather account and device names. BrewAssistant therefore discovers them from stable attributes instead of assuming an entity such as `sensor.grainfather_gf30_temperature`.
 
@@ -70,40 +116,23 @@ A friendly name containing `GF30` is not considered sufficient proof.
 
 ## Control boundary
 
-Phase 1 never sends a Grainfather command.
+The current backend never sends a Grainfather command.
 
-The upstream integration currently exposes a service that can set the temperature of the active Grainfather fermentation step:
+The upstream integration exposes a service that can set the temperature of the active Grainfather fermentation step:
 
 ```text
 grainfather.adjust_current_step_temperature
 ```
 
-That is a promising future bridge because it can let Grainfather remain the physical temperature controller while BrewAssistant supplies the recommended fermentation target.
+That remains a promising future supervised bridge. The GF30 controller itself owns its local heater and automatic cooling-pump behavior. BrewAssistant must not create a parallel pump-control path.
 
-The intended later ownership is:
-
-```text
-fermentation_tracking
-  owns process observations, target recommendation and readiness
-
-Grainfather Fermenter adapter
-  translates an approved BrewAssistant target into Grainfather profile control
-
-GF30 / Grainfather controller
-  owns physical heating/cooling regulation
-```
-
-The GF30 adapter must use BrewAssistant's generic **Supervised Apply** boundary initially. No direct automatic target writes should be enabled until live readback behavior has been verified.
-
-Direct heater, glycol-pump, compressor or cooling-valve control is **not** inferred from the current cloud integration.
+The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat.
 
 ## Relationship to existing chamber backend
 
-`fermentation_chamber/` remains the adapter for the current Home Assistant climate-controlled fermentation chamber.
+`fermentation_chamber/` remains the adapter for the existing Home Assistant climate-controlled fermentation chamber.
 
-The GF30 must become an alternative/selectable physical fermentation target provider, not a second controller fighting the chamber backend.
-
-Conceptually:
+The GF30 is an alternative/selectable physical fermentation target provider, not a second controller fighting the chamber backend.
 
 ```text
                     fermentation_tracking
@@ -116,27 +145,42 @@ Conceptually:
  climate target bridge           GF30 profile target bridge
 ```
 
-Only the selected physical target provider may propose a temperature change.
+Only the selected physical provider may propose a temperature-target change.
 
-## First live-GF30 validation
+## First physical test before Wi-Fi control
 
-When a GF30 is available, verify before enabling control:
+The first useful test can run without Grainfather cloud/controller access:
+
+1. fill the GF30 with the chosen test load and allow temperatures to settle;
+2. record the RAPT Pill temperature with its observation time;
+3. take a manual reference measurement and record its time;
+4. compare the pair through the thermal preflight engine;
+5. repeat during cooling so later learning can see delta and response over time;
+6. do not infer GF30 internal-sensor behavior until that sensor actually becomes available in Home Assistant.
+
+This is measurement/characterization only. It does not validate the future GF30 controller target bridge, pump behavior, coolant thermostat or freezer fail-safe.
+
+## Live-GF30 validation after Wi-Fi arrives
+
+Before enabling any target write, verify:
 
 1. actual device/entity attributes exposed by `fidley/grainfather_integration`;
 2. whether the GF30 appears as `is_controller_linked: true`;
-3. linkage behavior when a brew session starts/stops fermentation;
-4. temperature polling/update cadence and `last_heard` behavior;
+3. the real internal temperature entity and timestamp/freshness behavior;
+4. linkage behavior when a brew session starts/stops fermentation;
 5. whether `adjust_current_step_temperature` changes the GF30 controller target reliably;
 6. cloud write-to-readback latency;
-7. behavior during ramps, diacetyl rest and cold crash;
-8. behavior with Grainfather cooling accessories versus heating-only operation.
+7. GF30 automatic cooling-pump behavior;
+8. behavior during ramps, diacetyl rest and cold crash;
+9. interaction with the separate coolant/freezer thermostat.
 
-After that validation the next implementation step is a registered Supervised Apply executor plus explicit provider selection between the existing chamber and the GF30.
+After that validation the next implementation step is the selected-provider/supervised target bridge plus read-only coolant learning.
 
-## Current parking point
+## Do not change casually
 
-Phase 1 is intentionally the stopping point until physical hardware is available.
-
-Keep the discovery/normalization scaffold, documentation and regression guards. Do **not** add guessed GF30 entity IDs, model-name heuristics, direct actuator assumptions or automatic target writes while those behaviors cannot be verified against a real controller.
-
-When hardware arrives, resume with live characterization/readback validation first. The detailed milestone sequence is maintained in the roadmap document linked above.
+1. Keep GF30 fermenter support separate from the reserved Grainfather hot-side adapter.
+2. `fermentation_tracking` owns fermentation progression and desired beer temperature.
+3. GF30's local controller owns its heater and automatic cooling-pump logic.
+4. Freezer control belongs to the separate coolant `generic_thermostat`, not direct thermal-learning commands.
+5. Pill and GF30 internal temperature are complementary observations; disagreement is surfaced, not silently resolved.
+6. No physical control is considered verified until real entity/readback/failure behavior has been field-tested.
