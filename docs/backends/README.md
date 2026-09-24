@@ -1,7 +1,8 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last HLT sync: 2026-09-19  
+Last documentation sync: 2026-09-24  
+HLT field baseline: 2026-09-20  
 GF30 DIY thermal/learning and Brewfather export designs captured: 2026-09-22 (planned, not implemented)
 
 Canonical short-form documentation lives beside each backend under `custom_components/brewassistant/<backend>/README.md`. These code-local READMEs describe the *implemented* ownership/control contract. This `docs/backends/` directory remains useful for deeper architecture notes, roadmaps and field evidence. Historical documents must not be retroactively rewritten to claim later fixes were already physically tested.
