@@ -1,7 +1,7 @@
 # Backend Domain Layout
 
 Status: active development  
-Last synced: 2026-09-10
+Last synced: 2026-09-24
 
 BrewAssistant backend/domain logic is grouped by responsibility under `custom_components/brewassistant/`. Home Assistant platform entry files remain at the integration root.
 
@@ -160,7 +160,7 @@ Chill -> Transfer
 
 ## Grainfather GF30 implementation horizon
 
-Current status is deliberately **prepared but parked**: discovery/normalization exists on the feature branch, but no Grainfather command is issued and no model-specific assumptions are made without hardware evidence.
+Current status is deliberately **prepared but parked**: discovery/normalization is present in the normal `dev -> beta -> main` branch line, but no Grainfather command is issued and no model-specific assumptions are made without hardware evidence.
 
 The next milestones are:
 

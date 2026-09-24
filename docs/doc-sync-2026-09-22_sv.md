@@ -4,8 +4,8 @@
 
 - Publicerad, oförändrad prerelease: [`v0.2.0-beta.14`](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), tagg på `1a956c04044df870e005392b6bfe946097b9d440`. Taggen skrivs aldrig om.
 - [`PR #223`](https://github.com/Jocke1970/brewassistant-beta/pull/223) mergade `beta` till `dev` den 22 september med merge-commit `2d8f2c0fdb1d609e39ca71d24c0f581c653c4c7e`. Därmed finns beta.14-koden även i `dev`, och befintliga HLT SIM-1-/dokumentationsändringar behölls. Tidigare dokument från 20 september om att `dev` saknar beta.14 är historiska, inte längre aktuella.
-- Dokumentationssynken förs separat till `dev` och därefter `beta` med PR, utan ny releasetagg, ny hårdvarukod eller promotion till `main`. `main` ska fortsätta vara stabil/fältaccepterad. GitHub-merge uppdaterar inte användarens HA-installation.
-- CI/HACS/Hassfest på ursprunglig beta.14-release och isolerad HA/RCL-smoke är inte fysisk acceptans eller nya testresultat för senare branchcommits.
+- Dokumentationssynken genomfördes separat: [`PR #225`](https://github.com/Jocke1970/brewassistant-beta/pull/225) mergades `dev → beta` den 22 september med merge-commit `720f14a9724397cc81bced01a708dd284bc3dc54`. PR-diffen avsåg endast README/dokumentation, inga Python-, manifest-, dashboard-YAML- eller workflowändringar. Ingen ny releasetagg eller promotion till `main`. Senare dokumentationsstädning på `dev` är nya, ännu inte promoterade ändringar; historiskt synkläge vid #225 ska inte tolkas som att brancherna förblir identiska.
+- GitHub-merge uppdaterar inte användarens HA-installation. CI/HACS/Hassfest på ursprunglig beta.14-release och isolerad HA/RCL-smoke är inte fysisk acceptans eller nya testresultat för senare branchcommits. Ett separat testresultat på #225:s merge-SHA påstås inte här.
 
 ## Fynd från riktig Home Assistant 20–22 september
 
@@ -29,5 +29,13 @@
 - Fixa och regressionstesta stabilt entitets-ID/migrering för observationsswitchen i **en ny kodrelease**, inte genom att ändra beta.14-taggen.
 - Fysisk vattenacceptans, fullständig HA/RCL-end-to-end, fysiskt kvitterat ABORT, loggad frånvaro av oväntade BA-skrivningar och kontroll av dashboards återstår. Ingen malt-/obevakad acceptans.
 - HLT SIM-1 är fortsatt en virtuell läskonsument. Ramp/`Heat Strike`-beredskapskontrakt och fysisk elsäkerhet är separat oavslutat arbete. Se [roadmap](roadmap.md) och [HLT-rapport 20 september](hlt-sim1-field-validation-2026-09-20.md).
+- Efter #225: ny dokumentationsstädning på `dev` är inte automatiskt en del av `beta` eller den publicerade beta.14-taggen. Eventuell senare promotion kräver separat granskning och godkännande.
+
+## Dokumentationssynk – avslut 22 september
+
+- **Genomförd:** [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225), `dev → beta`, merge-commit [`720f14a9724397cc81bced01a708dd284bc3dc54`](https://github.com/Jocke1970/brewassistant-beta/commit/720f14a9724397cc81bced01a708dd284bc3dc54). Vid kontroll efter merge pekade både `dev` och `beta` på samma commit.
+- **Avgränsning:** dokumentation/README enbart; ingen integrationskod, manifest, dashboard YAML, workflow, ny tagg eller `main`-promotion. Ingen fysisk acceptans följer av dokumentsynken.
+- **Efterarbete:** README och roadmap rättas på `dev` för att inte längre kalla #225 återstående. Fermentation-backendens README länkas till det separata SG-/tvålägeskontraktet. Dessa efterföljande `dev`-commits utgör inte en ny synk till `beta`.
+- **Testbevis:** #225:s merge verifieras genom PR/branch/commit; automatiska checks på releasekandidat är historiska och redovisas inte som ett nytt test på efterarbetets commit-SHA.
 
 **Historik:** [projektstatus 20 september](project-status-2026-09-20_sv.md) är ett daterat ögonblick, inte den senaste branchmatrisen. [Issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) hålls öppen tills fysisk acceptans.

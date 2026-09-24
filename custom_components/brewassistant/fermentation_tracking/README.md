@@ -1,11 +1,14 @@
 # Fermentation tracking backend
 
 Status: active development  
-Code snapshot documented: 2026-09-11
+Recipe-schedule code snapshot documented: 2026-09-11  
+SG mode design/status cross-reference: 2026-09-22
 
 `fermentation_tracking` is BrewAssistant's independent fermentation observation, calculation and **recipe temperature-schedule** backend. It normalizes gravity and beer-temperature observations, supports manual and automatic sources independently, persists manual observations/runtime state, derives progress/stability/readiness information, and interprets fermentation steps from read-only recipe data.
 
 It does **not** control a fermentation chamber, heater, cooler or fan. Chamber recommendations/control belong in [`../fermentation_chamber/`](../fermentation_chamber/).
+
+> **Planned SG-control mode:** The current read-only recipe schedule remains the active path. A separate pure SG rule engine (`sg_control_rules.py`) and tests exist on `dev`, but the per-batch mode selector, editable SG thresholds/ramp and stability hours, persistence of Pill history/stage, runtime arbitration, cold-crash confirmation UI and end-to-end tests are **not implemented or connected yet**. The authoritative two-mode specification and implementation checklist are in [SG-driven fermentation contract](../../../docs/sg-driven-fermentation.md). Do not interpret the SG prototype or the manual SG-readiness fallback below as a deployable SG-driven control mode.
 
 ## Responsibilities
 
@@ -74,7 +77,13 @@ temperature_schedule_ramp_ends_at
 temperature_schedule_ramp_progress_percent
 ```
 
-If no usable recipe schedule is available, the existing BrewAssistant tracking rule remains the fallback: primary target until the configured SG rise trigger is reached, then the configured temperature-rise target.
+If no usable recipe schedule is available, the existing BrewAssistant tracking rule remains the fallback: primary target until the configured SG rise trigger is reached, then the configured temperature-rise target. This legacy fallback is **not** the new, explicitly selected, persisted multi-stage SG mode.
+
+## Planned choice: day schedule or SG-based fermentation
+
+See [the SG-driven fermentation contract](../../../docs/sg-driven-fermentation.md) for the full source of truth. In short, the intended modes are `recipe_schedule` (backward-compatible default; Brewfather supplies days/temperatures/ramps) and `sg_control` (per-batch opt-in; BA owns adjustable SG thresholds, per-step ramp hours, expected FG and 48–72 hours of gravity stability). Recipe temperatures/FG may be suggested defaults; Brewfather does not provide SG thresholds or stability hours and must never overwrite BA's explicit profile edits.
+
+The SG prototype requires two distinct credible, fresh readings from the configured Pill for each step, never regresses to an earlier stage, and holds its last confirmed target if the source becomes stale. These rules currently exist only as pure decisions in `sg_control_rules.py`; the hardcoded Julöl values must be parameterized, and the selected mode/stages/Pill observation history persisted before wiring the runtime. Neither mode may start a cold crash automatically. Cold crash needs operator confirmation and separate acknowledgement of protection against suck-back; the existing supervised control boundary stays authoritative. The climate supervisor must not be enabled by mode changes.
 
 ## Persistence
 
@@ -142,7 +151,7 @@ Requires both stable gravity and proximity to target FG within the configured to
 
 ## Automatic-source limitation
 
-Configured automatic SG and temperature entities can supply the live current values. Automatic-only sensor history is not automatically copied into BrewAssistant Storage today, so stable-FG history is strongest when persisted observations exist.
+Configured automatic SG and temperature entities can supply the live current values. Automatic-only sensor history is not automatically copied into BrewAssistant Storage today, so stable-FG history is strongest when persisted observations exist. The planned SG mode requires actual persisted Pill history and must not treat the current reading alone as proof of stable FG.
 
 ## Important files
 
@@ -155,6 +164,7 @@ Configured automatic SG and temperature entities can supply the live current val
 | `recalculation.py` | Recompute refractometer-derived values after config changes |
 | `calculations.py` | SG/Brix/ABV and validation helpers |
 | `recipe_schedule.py` | Pure recipe fermentation-step/ramp interpretation |
+| `sg_control_rules.py` | Isolated SG stage/readiness prototype; not wired into active runtime |
 | `snapshot.py` | Source resolution and normalized fermentation state |
 | `sensor.py` | Home Assistant read-only sensor presentation and adapter lookup |
 
