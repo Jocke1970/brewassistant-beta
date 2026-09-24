@@ -12,9 +12,15 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import UnitOfTemperature
 
-from ..const import CONF_LIQUID_TEMP_ENTITY
+from ..const import (
+    CONF_GF30_COOLANT_TEMP_ENTITY,
+    CONF_GF30_COOLANT_THERMOSTAT_ENTITY,
+    CONF_GF30_FREEZER_AIR_TEMP_ENTITY,
+    CONF_LIQUID_TEMP_ENTITY,
+)
 from ..entity import BrewAssistantEntity
 from .adapter import build_grainfather_fermenter_snapshot
+from .coolant import build_coolant_monitor_snapshot
 from .preflight_runtime import build_gf30_preflight_runtime_snapshot
 from .thermal import build_dual_sensor_snapshot
 
@@ -141,6 +147,43 @@ SPECS: tuple[GF30SensorSpec, ...] = (
         snapshot="dual",
         field="safe_point",
     ),
+    GF30SensorSpec(
+        key="gf30_coolant_status",
+        snapshot="coolant",
+        field="status",
+    ),
+    GF30SensorSpec(
+        key="gf30_coolant_temperature",
+        snapshot="coolant",
+        field="coolant.temperature_c",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_freezer_air_temperature",
+        snapshot="coolant",
+        field="freezer_air.temperature_c",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_freezer_air_minus_coolant",
+        snapshot="coolant",
+        field="freezer_air_minus_coolant_c",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_coolant_thermostat_target",
+        snapshot="coolant",
+        field="thermostat.target_temperature_c",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
 )
 
 
@@ -197,6 +240,58 @@ def _dual_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     return snapshot
 
 
+def _coolant_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
+    """Build current configured coolant/freezer monitoring diagnostics."""
+    hass = coordinator.hass
+    coolant_entity = coordinator.configured_entities.get(CONF_GF30_COOLANT_TEMP_ENTITY)
+    freezer_air_entity = coordinator.configured_entities.get(
+        CONF_GF30_FREEZER_AIR_TEMP_ENTITY
+    )
+    thermostat_entity = coordinator.configured_entities.get(
+        CONF_GF30_COOLANT_THERMOSTAT_ENTITY
+    )
+
+    coolant_state = hass.states.get(coolant_entity) if coolant_entity else None
+    freezer_air_state = (
+        hass.states.get(freezer_air_entity) if freezer_air_entity else None
+    )
+    thermostat_state = (
+        hass.states.get(thermostat_entity) if thermostat_entity else None
+    )
+
+    snapshot = build_coolant_monitor_snapshot(
+        coolant_temperature_c=coolant_state.state if coolant_state is not None else None,
+        coolant_observed_at=(
+            coolant_state.last_updated if coolant_state is not None else None
+        ),
+        freezer_air_temperature_c=(
+            freezer_air_state.state if freezer_air_state is not None else None
+        ),
+        freezer_air_observed_at=(
+            freezer_air_state.last_updated if freezer_air_state is not None else None
+        ),
+        thermostat_state=thermostat_state.state if thermostat_state is not None else None,
+        thermostat_target_c=(
+            thermostat_state.attributes.get("temperature")
+            if thermostat_state is not None
+            else None
+        ),
+        thermostat_hvac_action=(
+            thermostat_state.attributes.get("hvac_action")
+            if thermostat_state is not None
+            else None
+        ),
+    )
+    snapshot.update(
+        {
+            "coolant_entity": coolant_entity or None,
+            "freezer_air_entity": freezer_air_entity or None,
+            "thermostat_entity": thermostat_entity or None,
+        }
+    )
+    return snapshot
+
+
 class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
     """One read-only GF30 backend diagnostic sensor."""
 
@@ -220,6 +315,8 @@ class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
             return build_grainfather_fermenter_snapshot(self.coordinator.hass)
         if self._spec.snapshot == "dual":
             return _dual_snapshot(self.coordinator)
+        if self._spec.snapshot == "coolant":
+            return _coolant_snapshot(self.coordinator)
         return build_gf30_preflight_runtime_snapshot(self.coordinator.hass)
 
     @property
