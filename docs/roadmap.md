@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | Publicerad `v0.2.0-beta.14` | Tagg låst vid `1a956c04044df870e005392b6bfe946097b9d440`, manifest `0.2.0-beta.14`, CI Python 3.11–3.13/HACS/Hassfest och isolerad HA/RCL-smoke för releasekandidat. | Kontrollerat faktiskt vattenprov, inga oväntade BA-skrivningar och fysisk ABORT-verifiering. |
 | `dev` | 24/9-checkpointen synkar aktuell dokumentation och korrigerar branch/test-kontraktet. Före checkpointen var `dev` 15 commits före `beta`, med endast dokumentationsdelta och samma manifestversion `0.2.0-beta.14`. Release-watchdogs är avsiktligt inte `dev`-acceptans. | Granska `dev → beta`, promota med merge commit och validera därefter den faktiska beta-SHA:n. |
-| `beta` | Innehåller beta.14-koden och dokumentationssynken från #225; den publicerade beta.14-taggen är oförändrad. | Ta emot den granskade 24/9-promotionen från `dev`, kör CI/HACS/Hassfest på exakt resulterande beta-SHA och använd först därefter kandidaten för supervised HA-/vattenprov. |
+| `beta` | Innehåller beta.14-koden och dokumentationssynken från #225; den publicerade beta.14-taggen är oförändrad. | Ta emot den granskade 24/9-promotionen från `dev`, kör CI/HACS/Hassfest samt isolerad HA+RCL-smoke på exakt resulterande beta-SHA och använd först därefter kandidaten för supervised HA-/vattenprov. |
 | `main` | Föregående stabil branch, ingen beta.14-promotion. | Separat beslut efter dokumenterad fältacceptans. |
 | HLT SIM-1 | Endast läsande simulator; 19/9 och 20/9-fältutdrag bevarade. | Fastställ källoberoende `Heat Strike`/ramp-startberedskap och omtesta virtuellt; ingen fysisk koppling. |
 
@@ -36,7 +36,7 @@
 
 - Normal releaseväg: `dev → beta → main` med granskad PR och **Create a merge commit**, test på exakt resulterande SHA, separat tagg och prerelease för nästa kodversion. Publicerade taggar flyttas aldrig. En branchmerge uppdaterar inte HA.
 - [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223) återförde beta.14-koden till `dev`; [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) slutförde föregående doc-sync `dev → beta`. 24/9-checkpointen är nästa separata granskade promotionspaket och ska gå `dev → beta` innan watchdog-/fältvalidering.
-- CI, HACS, Hassfest: automatiska dev-triggers exkluderade 20/9; releasebranch, beta, main och manuella körningar gäller. Bekräfta faktisk workflow-körning och SHA – gamla gröna kontroller är inte nya testbevis. Säkerhetskritiska flöden måste ha separat HA-integrations-/regressionstest.
+- CI, HACS, Hassfest och isolerad HA+RCL-smoke: `dev` är exkluderad som release-acceptans; efter promotion körs watchdogs på den faktiska beta-SHA:n. Releasebrancher och manuella körningar kan användas vid behov. Bekräfta faktisk workflow-körning och SHA – gamla gröna kontroller är inte nya testbevis. Säkerhetskritiska flöden måste ha separat HA-integrations-/regressionstest.
 - [Installationsguide](INSTALLATION.md) ska peka på exakt beta.14-tagg, inte `main`. [CHANGELOG](../CHANGELOG.md) dokumenterar UI-migrering och HA-omstart. Äldre daterade fältrapporter och originalreleaseanteckningar skrivs inte om retroaktivt.
 
 ## Prioritet 2 – HLT SIM-1, energi och Brewday-kontrakt
