@@ -1,7 +1,7 @@
 # Grainfather Fermenter / GF30 roadmap
 
-Status: prepared / parked until live hardware is available  
-Last synced: 2026-09-10  
+Status: read-only preparation active; physical control blocked on live hardware  
+Last synced: 2026-09-24  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
@@ -32,7 +32,7 @@ The existing `grainfather` module must not be repurposed for GF30.
 
 ## 2. Current implementation state
 
-Phase 1 exists as a deliberately dormant/read-only scaffold on the GF30 feature branch.
+Phase 1 is now an active read-only foundation on `dev`: cloud discovery remains fail-passive, and thermal preflight can already collect Pill + manual-reference field data before GF30 Wi-Fi is available.
 
 Implemented now:
 
@@ -45,7 +45,12 @@ Implemented now:
 - fail-closed behavior when multiple controller-linked devices are present;
 - explicit `model_verified: false` while no reliable upstream field proves that a discovered controller is specifically a GF30;
 - a readiness calculation for a future supervised temperature-target bridge;
-- regression tests that keep this backend separate from the reserved Grainfather hot-side module.
+- regression tests that keep this backend separate from the reserved Grainfather hot-side module;
+- persistent manual/Pill preflight history through Home Assistant Store;
+- read-only GF30 diagnostic sensors and manual-reference services;
+- passive temperature-rate/delta learning from recorded checkpoints;
+- dual Pill/internal safe-point logic ready for controller telemetry;
+- a pure read-only coolant/freezer monitor contract with `generic_thermostat` ownership preserved.
 
 Not implemented now:
 
@@ -174,7 +179,7 @@ No writable BrewAssistant bridge should be merged merely because the upstream se
 
 ### Phase 1 — Read-only preparation
 
-Status: **implemented on feature branch**.
+Status: **implemented and extended read-only on `dev`**.
 
 Deliverables:
 
@@ -189,7 +194,7 @@ Exit condition: preparation is documented and can remain parked safely without h
 
 ### Phase 2 — Live hardware characterization
 
-Status: **blocked on physical GF30**.
+Status: **partially unblocked for manual/Pill cooling tests; GF30 cloud/controller validation still requires Wi-Fi hardware**.
 
 Deliverables:
 
@@ -288,6 +293,11 @@ Current feature implementation:
 ```text
 custom_components/brewassistant/grainfather_fermenter/__init__.py
 custom_components/brewassistant/grainfather_fermenter/adapter.py
+custom_components/brewassistant/grainfather_fermenter/thermal.py
+custom_components/brewassistant/grainfather_fermenter/preflight_runtime.py
+custom_components/brewassistant/grainfather_fermenter/learning.py
+custom_components/brewassistant/grainfather_fermenter/coolant.py
+custom_components/brewassistant/grainfather_fermenter/sensors.py
 custom_components/brewassistant/grainfather_fermenter/README.md
 tests/test_grainfather_fermenter_backend.py
 ```
