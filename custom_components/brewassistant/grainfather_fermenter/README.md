@@ -1,6 +1,6 @@
 # Grainfather Fermenter backend
 
-Status: phase 1 read-only discovery + thermal preflight / no actuator control  
+Status: active read-only GF30 backend foundation / no actuator control  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
@@ -67,6 +67,42 @@ Important invariants:
 - no Home Assistant service call, pump command, freezer command or Grainfather write exists in this path.
 
 The initial diagnostic defaults are 15 minutes maximum observation age and 0.5 °C agreement tolerance. They are explicit function parameters, not physical safety limits or calibration claims.
+
+
+### Persistent preflight runtime and HA sensors
+
+The first physical cooling test can be recorded directly in Home Assistant.
+
+Implemented services:
+
+```text
+brewassistant.gf30_record_manual_temperature
+brewassistant.gf30_clear_preflight
+```
+
+Each manual observation stores the manual temperature and timestamp plus the current configured Pill temperature and Home Assistant `last_updated` timestamp. Up to 200 observations are persisted through Home Assistant `Store`. An optional free-text phase such as `baseline`, `cooling`, `recovery` or `cold_crash` can be attached.
+
+Implemented read-only sensors include backend/cloud status, Grainfather-controller temperature candidate, preflight status, Pill/manual temperatures, delta, sample counts, passive cooling-rate metrics, dual-sensor status and `gf30_safe_point`.
+
+The preflight learning layer can calculate observed Pill °C/h between recorded checkpoints and basic delta statistics. It does **not** calculate a control correction or send any command.
+
+### Dual Pill + GF30 safe-point
+
+`build_dual_sensor_snapshot()` is ready for the moment the Grainfather integration exposes the controller temperature. It independently checks freshness for Pill and controller temperature and reports:
+
+```text
+dual_sensor_agree
+dual_sensor_disagree
+pill_only
+internal_only
+no_fresh_temperature
+```
+
+The safe-point becomes `dual_fresh_agree` only when both observations are fresh and within the current diagnostic tolerance. This is a diagnostic safe-point, not permission to actuate hardware and not an automatic source-selection rule.
+
+### Coolant/freezer contract prepared
+
+`coolant.py` now contains a pure read-only contract for future coolant temperature, freezer-air temperature and `generic_thermostat` telemetry. It explicitly keeps `generic_thermostat` as freezer owner and refuses to claim a safe coolant setpoint before medium/freeze limits are physically verified. No coolant/freezer entities are guessed or wired yet.
 
 ## Why no hard-coded GF30 entity IDs
 
