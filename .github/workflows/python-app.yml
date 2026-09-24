@@ -1,11 +1,11 @@
 name: CI
 
-# Development is intentionally excluded. Validate release candidates and promotions.
+# Development is intentionally excluded. Validate promoted beta/main candidates.
 on:
   push:
     branches: ["release/**", beta, main]
   pull_request:
-    branches: ["release/**", beta, main]
+    branches: ["release/**", main]
   workflow_dispatch:
 
 permissions:
