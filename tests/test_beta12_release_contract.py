@@ -1,4 +1,4 @@
-"""Preserve published beta evidence and verify the new beta.14 candidate.
+"""Preserve published beta evidence and verify the new beta.15 candidate.
 
 Artifact identity/preservation checks only; not a real HA or hardware test.
 """
@@ -12,12 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED_VERSION = "0.2.0-beta.12"
 PUBLISHED_TAG = "v" + PUBLISHED_VERSION
 PUBLISHED_NAME = "2026_09-01"
-PREVIOUS_VERSION = "0.2.0-beta.13"
+PREVIOUS_VERSION = "0.2.0-beta.14"
 PREVIOUS_TAG = "v" + PREVIOUS_VERSION
-PREVIOUS_NAME = "2026_09-02"
-CANDIDATE_VERSION = "0.2.0-beta.14"
+PREVIOUS_NAME = "2026_09-20"
+CANDIDATE_VERSION = "0.2.0-beta.15"
 CANDIDATE_TAG = "v" + CANDIDATE_VERSION
-CANDIDATE_NAME = "2026_09-20"
+CANDIDATE_NAME = "2026_09-24"
 
 
 def test_published_beta12_release_notes_preserve_historical_identity():
@@ -35,25 +35,25 @@ def test_published_beta12_release_notes_preserve_historical_identity():
     assert (ROOT / "docs/beta11-prerelease-notes_sv.md").is_file()
 
 
-def test_beta13_is_preserved_and_beta14_has_unique_version():
+def test_beta14_is_preserved_and_beta15_has_unique_version():
     manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
-    old = (ROOT / "docs/beta13-prerelease-notes_sv.md").read_text(encoding="utf-8")
-    notes = (ROOT / "docs/beta14-prerelease-notes_sv.md").read_text(encoding="utf-8")
-    assert old.startswith(f"# BrewAssistant {PREVIOUS_NAME} — beta ({PREVIOUS_TAG})")
+    old = (ROOT / "docs/beta14-prerelease-notes_sv.md").read_text(encoding="utf-8")
+    notes = (ROOT / "docs/beta15-prerelease-notes_sv.md").read_text(encoding="utf-8")
+    assert old.startswith(f"# BrewAssistant {PREVIOUS_NAME} — fix-beta ({PREVIOUS_TAG})")
     assert PREVIOUS_TAG in old and PREVIOUS_VERSION in old
     assert "v0.5.0-beta.1" in old
     assert "Create a merge commit" in old
     assert "Pre-release" in old and "HACS" in old
     assert "beta-merge-SHA" in old and "main" in old
-    assert "STOP" in old and "ABORT" in old
-    assert "fysiskt" in old
+    assert "ABORT" in old and "fysiskt" in old
+    assert (ROOT / "docs/beta13-prerelease-notes_sv.md").is_file()
     assert manifest["version"] == CANDIDATE_VERSION
     assert CANDIDATE_VERSION not in (PUBLISHED_VERSION, PREVIOUS_VERSION)
-    assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — fix-beta ({CANDIDATE_TAG})")
+    assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — GF30 read-only beta ({CANDIDATE_TAG})")
     assert CANDIDATE_TAG in notes and CANDIDATE_VERSION in notes
     assert "Pre-release" in notes and "HACS" in notes
     assert "Create a merge commit" in notes and "beta-merge-SHA" in notes
-    assert "observation" in notes.lower() and "fysiskt" in notes.lower()
+    assert "read-only" in notes.lower() and "fysisk" in notes.lower()
 
 
 def test_installer_retains_existing_safety_and_all_new_restrictions():
