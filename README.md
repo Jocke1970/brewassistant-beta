@@ -3,7 +3,7 @@
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.
 
 > [!IMPORTANT]
-> **Aktuellt 2026-09-22:** Läs [status efter branch- och doc-sync](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. `dev` har beta.14-koden efter [PR #223](https://github.com/Jocke1970/brewassistant-beta/pull/223), och [PR #225](https://github.com/Jocke1970/brewassistant-beta/pull/225) slutförde den separata dokumentationssynken `dev → beta` (merge-commit `720f14a9724397cc81bced01a708dd284bc3dc54`). Senare dokumentationsändringar på `dev` kräver separat granskning före eventuell ny synk till `beta`. Ingen ny release eller uppgradering av `main` har följt av dokumentationssynken.
+> **Aktuellt 2026-09-24:** Läs [24/9-checkpointen inför nästa beta-promotion](docs/doc-sync-2026-09-24_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md). Senaste publicerade prerelease är fortfarande [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14), taggad på `1a956c04044df870e005392b6bfe946097b9d440`. Fysisk acceptans saknas; använd endast kontrollerat vattenprov. 24/9-synken innehåller dokumentations- och arkitekturstädning inför nästa `dev → beta`-testcykel; den skapar ingen ny release, flyttar ingen publicerad tagg och uppgraderar inte `main`.
 
 ## Säker användning av beta.14
 
@@ -43,7 +43,7 @@ CI finns för Python 3.11–3.13, HACS och Hassfest. Automatiska push-/PR-trigge
 
 | Fråga | Börja här |
 | --- | --- |
-| **Aktuell status och åtgärder** | [22 september](docs/doc-sync-2026-09-22_sv.md), [roadmap](docs/roadmap.md), [20 september – historisk status](docs/project-status-2026-09-20_sv.md) |
+| **Aktuell status och åtgärder** | [24 september](docs/doc-sync-2026-09-24_sv.md), [roadmap](docs/roadmap.md), [22 september – föregående checkpoint](docs/doc-sync-2026-09-22_sv.md) |
 | **Installation av publicerad beta.14** | [Installationsguide](docs/INSTALLATION.md), [release](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14) |
 | **Read-only, ABORT, Manual, vattenprov** | [Observationskontrakt](docs/brewzilla-observe-only-test_sv.md), [issue #220](https://github.com/Jocke1970/brewassistant-beta/issues/220) |
 | **HLT SIM-1** | [20/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-20.md), [19/9-fältrapport](docs/hlt-sim1-field-validation-2026-09-19.md), [backend](custom_components/brewassistant/hlt/README.md), [kortguide](docs/hlt-dashboard-card.md) |
