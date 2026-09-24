@@ -13,6 +13,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
 from .brewday.brewday_audit import (
     async_clear_brewday_audit_log,
@@ -372,13 +373,16 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_carbonation_sensors()
 
     async def _handle_gf30_record_manual_temperature(call: ServiceCall) -> None:
-        record = record_gf30_manual_reference(
-            hass,
-            temperature_c=float(call.data["temperature_c"]),
-            observed_at=call.data.get("observed_at"),
-            note=str(call.data.get("note") or ""),
-            phase=str(call.data.get("phase") or "unspecified"),
-        )
+        try:
+            record = record_gf30_manual_reference(
+                hass,
+                temperature_c=call.data.get("temperature_c"),
+                observed_at=call.data.get("observed_at"),
+                note=str(call.data.get("note") or ""),
+                phase=str(call.data.get("phase") or "unspecified"),
+            )
+        except (TypeError, ValueError) as err:
+            raise HomeAssistantError(str(err)) from err
         await async_save_gf30_preflight_runtime(hass)
         _LOGGER.info(
             "GF30 manual thermal reference recorded: %.2f °C · status=%s · pill=%s",
