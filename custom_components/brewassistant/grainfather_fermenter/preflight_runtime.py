@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from ..configured_entities import configured_entity
 from ..const import CONF_LIQUID_TEMP_ENTITY, DEFAULT_LIQUID_TEMP_ENTITY
+from .learning import summarize_preflight_records
 from .thermal import build_manual_preflight_snapshot
 
 DATA_KEY = "gf30_preflight_runtime"
@@ -41,6 +42,7 @@ class GF30PreflightRecord:
     absolute_temperature_delta_c: float | None
     within_tolerance: bool | None
     learning_sample_eligible: bool
+    phase: str = "unspecified"
     note: str = ""
     recorded_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -121,6 +123,7 @@ def _record_from_store(payload: Any) -> GF30PreflightRecord | None:
             else None
         ),
         learning_sample_eligible=bool(payload.get("learning_sample_eligible", False)),
+        phase=str(payload.get("phase") or "unspecified"),
         note=str(payload.get("note") or ""),
         recorded_at=recorded_at,
     )
@@ -201,6 +204,7 @@ def record_gf30_manual_reference(
     temperature_c: float,
     observed_at: Any = None,
     note: str = "",
+    phase: str = "unspecified",
     pill_entity: str | None = None,
 ) -> GF30PreflightRecord:
     """Record a manual GF30 reference and pair it with the current Pill state."""
@@ -239,6 +243,7 @@ def record_gf30_manual_reference(
         absolute_temperature_delta_c=snapshot.get("absolute_temperature_delta_c"),
         within_tolerance=snapshot.get("within_tolerance"),
         learning_sample_eligible=bool(snapshot.get("learning_sample_eligible")),
+        phase=str(phase or "unspecified").strip().lower() or "unspecified",
         note=str(note or ""),
         recorded_at=now,
     )
@@ -274,6 +279,7 @@ def _record_dict(record: GF30PreflightRecord) -> dict[str, Any]:
         "absolute_temperature_delta_c": record.absolute_temperature_delta_c,
         "within_tolerance": record.within_tolerance,
         "learning_sample_eligible": record.learning_sample_eligible,
+        "phase": record.phase,
         "note": record.note,
         "recorded_at": record.recorded_at.isoformat(),
     }
@@ -341,6 +347,9 @@ def build_gf30_preflight_runtime_snapshot(
         else None
     )
 
+    record_payloads = [_record_dict(record) for record in runtime.observations]
+    learning = summarize_preflight_records(record_payloads)
+
     return {
         **current,
         "pill_entity": resolved_pill_entity,
@@ -349,6 +358,11 @@ def build_gf30_preflight_runtime_snapshot(
         "mean_temperature_delta_c": mean_delta,
         "mean_absolute_temperature_delta_c": mean_absolute_delta,
         "max_absolute_temperature_delta_c": max_absolute_delta,
+        "learning": learning,
+        "learning_confidence": learning.get("confidence"),
+        "latest_pill_rate_c_per_hour": learning.get("latest_pill_rate_c_per_hour"),
+        "mean_cooling_rate_c_per_hour": learning.get("mean_cooling_rate_c_per_hour"),
+        "mean_warming_rate_c_per_hour": learning.get("mean_warming_rate_c_per_hour"),
         "latest_record": _record_dict(latest) if latest is not None else None,
         "recent_records": [
             _record_dict(record) for record in runtime.observations[-10:]
