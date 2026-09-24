@@ -17,6 +17,9 @@ PREFLIGHT_RUNTIME = ROOT / "custom_components/brewassistant/grainfather_fermente
 GF30_SENSORS = ROOT / "custom_components/brewassistant/grainfather_fermenter/sensors.py"
 TOP_SENSOR = ROOT / "custom_components/brewassistant/sensor.py"
 TOP_INIT = ROOT / "custom_components/brewassistant/__init__.py"
+CONST = ROOT / "custom_components/brewassistant/const.py"
+CONFIG_FLOW = ROOT / "custom_components/brewassistant/config_flow.py"
+COORDINATOR = ROOT / "custom_components/brewassistant/coordinator.py"
 SERVICES = ROOT / "custom_components/brewassistant/services.yaml"
 README = ROOT / "custom_components/brewassistant/grainfather_fermenter/README.md"
 REGISTRY = ROOT / "custom_components/brewassistant/modules/registry.py"
@@ -168,7 +171,7 @@ def test_manual_preflight_rejects_implausible_manual_value() -> None:
 
 
 def test_gf30_new_backend_files_are_valid_python() -> None:
-    for path in (THERMAL, LEARNING, COOLANT, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT):
+    for path in (THERMAL, LEARNING, COOLANT, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT, CONST, CONFIG_FLOW, COORDINATOR):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
@@ -327,3 +330,55 @@ def test_coolant_monitor_keeps_generic_thermostat_as_freezer_owner() -> None:
     assert snapshot["thermostat"]["expected_owner"] == "home_assistant_generic_thermostat"
     assert snapshot["safe_setpoint_known"] is False
     assert snapshot["automatic_setpoint_changes"] is False
+
+
+
+def test_gf30_coolant_entities_are_optional_config_mappings() -> None:
+    const_source = CONST.read_text(encoding="utf-8")
+    config_source = CONFIG_FLOW.read_text(encoding="utf-8")
+    coordinator_source = COORDINATOR.read_text(encoding="utf-8")
+    sensor_source = GF30_SENSORS.read_text(encoding="utf-8")
+
+    for name in (
+        "CONF_GF30_COOLANT_TEMP_ENTITY",
+        "CONF_GF30_FREEZER_AIR_TEMP_ENTITY",
+        "CONF_GF30_COOLANT_THERMOSTAT_ENTITY",
+    ):
+        assert name in const_source
+        assert name in config_source
+        assert name in coordinator_source
+        assert name in sensor_source
+
+    assert 'DEFAULT_GF30_COOLANT_TEMP_ENTITY = ""' in const_source
+    assert 'DEFAULT_GF30_FREEZER_AIR_TEMP_ENTITY = ""' in const_source
+    assert 'DEFAULT_GF30_COOLANT_THERMOSTAT_ENTITY = ""' in const_source
+
+
+def test_gf30_coolant_sensors_remain_read_only_and_thermostat_owned() -> None:
+    sensor_source = GF30_SENSORS.read_text(encoding="utf-8")
+    coolant_source = COOLANT.read_text(encoding="utf-8")
+
+    assert 'key="gf30_coolant_status"' in sensor_source
+    assert 'key="gf30_coolant_temperature"' in sensor_source
+    assert 'key="gf30_freezer_air_temperature"' in sensor_source
+    assert "build_coolant_monitor_snapshot" in sensor_source
+    assert '"expected_owner": "home_assistant_generic_thermostat"' in coolant_source
+    assert '"direct_freezer_switching": False' in coolant_source
+    assert "async_call(" not in coolant_source
+
+
+def test_gf30_dual_sensor_prefers_upstream_last_heard_for_freshness() -> None:
+    sensor_source = GF30_SENSORS.read_text(encoding="utf-8")
+
+    assert 'last_heard = selected_device.get("last_heard")' in sensor_source
+    assert "dt_util.parse_datetime" in sensor_source
+    assert "internal_observed_at=internal_observed_at" in sensor_source
+
+
+def test_gf30_manual_service_refreshes_diagnostics_without_actuator_calls() -> None:
+    init_source = TOP_INIT.read_text(encoding="utf-8")
+
+    assert "async def _refresh_gf30_sensors()" in init_source
+    assert "await _refresh_gf30_sensors()" in init_source
+    assert "sensor.brewassistant_gf30_coolant_status" in init_source
+    assert "sensor.brewassistant_gf30_safe_point" in init_source
