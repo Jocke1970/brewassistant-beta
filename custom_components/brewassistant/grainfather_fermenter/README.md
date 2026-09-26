@@ -30,8 +30,21 @@ GF30 controller
   -> local heater and automatic cooling-pump logic
 
 separate coolant loop:
-HA generic_thermostat -> freezer -> coolant reservoir
+fermentation/GF30 beer target
+  -> future adaptive cooling headroom
+  -> future coolant target (safe min/max clamped)
+  -> HA generic_thermostat
+  -> freezer -> coolant reservoir
 ```
+
+Design decision for the future active coolant path: BrewAssistant should not try to keep the reservoir at one permanently cold temperature. The intended target is the **warmest coolant temperature that still gives the GF30 enough cooling authority** for the current fermentation phase. Conceptually:
+
+```text
+coolant_target = gf30_beer_target - adaptive_cooling_headroom
+coolant_target = clamp(coolant_target, verified_min_safe, verified_max_useful)
+```
+
+The headroom may later differ between stable fermentation, active ramp-down and cold crash, and may be refined from validated thermal-learning data. The GF30 controller still owns cooling demand and its circulation pump; BrewAssistant must not create a competing pump-control path.
 
 ## Implemented now
 
@@ -196,7 +209,7 @@ grainfather.adjust_current_step_temperature
 
 That remains a promising future supervised bridge. The GF30 controller itself owns its local heater and automatic cooling-pump behavior. BrewAssistant must not create a parallel pump-control path.
 
-The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat.
+The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat. A future BrewAssistant coolant-target bridge may adjust only the thermostat target, within physically verified bounds; it must not switch the freezer directly.
 
 ## Relationship to existing chamber backend
 
