@@ -27,6 +27,8 @@ The freezer therefore ran without the intended thermostat control and the water 
 
 This means the overnight freezer/reservoir data must **not** be used as valid coolant-response, thermostat-cycle or thermal-learning evidence.
 
+Because the GF30 was physically separate from the freezer/reservoir loop, its overnight standalone data remains independently useful for temperature-holding characterization and comparison between the GF30 internal sensor, RAPT BLE Thermometer and top-floating RAPT Pill.
+
 ## Useful finding
 
 The incident establishes an explicit preflight requirement for every future coolant/freezer test:
