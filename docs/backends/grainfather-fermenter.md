@@ -96,9 +96,16 @@ fermentation_tracking
   -> grainfather_fermenter
   -> Grainfather profile target
   -> GF30 controller
+
+separate coolant support:
+GF30 beer target / phase
+  -> adaptive cooling headroom
+  -> coolant target within verified bounds
+  -> HA generic_thermostat
+  -> freezer / reservoir
 ```
 
-The two provider paths are alternatives. They must never compete for the same fermentation.
+The two provider paths are alternatives. They must never compete for the same fermentation. The separate coolant loop supports the selected GF30 provider but does not own the GF30 pump or beer-temperature regulation.
 
 ## 4. Expected future control boundary
 
@@ -174,6 +181,17 @@ First live installation should capture and verify:
 12. whether changing the active step target has any unintended profile/session side effects.
 
 No writable BrewAssistant bridge should be merged merely because the upstream service exists. Service semantics and readback must be proven against the real controller.
+
+### Coolant-target design decision
+
+The reservoir is not intended to sit permanently at the coldest achievable temperature. The preferred future policy is:
+
+```text
+coolant_target = gf30_beer_target - adaptive_cooling_headroom
+coolant_target = clamp(coolant_target, verified_min_safe, verified_max_useful)
+```
+
+The target should therefore be as warm as practical while still giving the GF30 sufficient cooling capacity. Normal fermentation, active temperature ramps and cold crash may require different headroom. Those values must come from physical characterization rather than being hard-coded from theory. GF30 continues to own cooling demand and pump cycling; the coolant loop only maintains a suitable cold reserve.
 
 ## 7. Roadmap
 
