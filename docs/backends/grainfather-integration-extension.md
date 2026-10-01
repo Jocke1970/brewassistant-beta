@@ -35,6 +35,22 @@ origin   -> Jocke1970/grainfather_integration
 upstream -> fidley/grainfather_integration
 ```
 
+Naming convention for permanent BrewAssistant integration branches:
+
+```text
+brewassistant-<integration>
+```
+
+Examples:
+
+```text
+brewassistant-raptcloudlink
+brewassistant-grainfather
+brewassistant-brewfather
+```
+
+This convention is reserved for brewing-related integrations that belong to the BrewAssistant ecosystem.
+
 Rules:
 
 1. Do not develop BrewAssistant-specific changes directly on fork `main`.
