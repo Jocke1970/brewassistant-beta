@@ -23,12 +23,12 @@ The intended repository/branch model mirrors the existing BrewAssistant RAPT Clo
 
 ```text
 upstream: fidley/grainfather_integration -> main
-planned fork: Jocke1970/grainfather_integration
+fork: Jocke1970/grainfather_integration
   main                         -> upstream-clean mirror
   brewassistant-grainfather -> BA-oriented integration development
 ```
 
-The Grainfather integration owns Grainfather/controller transport and normalized HA entities. BrewAssistant owns provider selection, thermal diagnostics, process policy and Supervised Apply.
+The Grainfather integration fork now owns the active integration-extension work on `brewassistant-grainfather`: verified history target-temperature support is implemented, and a separate read-only Particle capability probe is available for the next field check. The Grainfather integration owns Grainfather/controller transport and normalized HA entities. BrewAssistant owns provider selection, thermal diagnostics, process policy and Supervised Apply.
 
 ## 1. Architectural decision
 
