@@ -17,7 +17,7 @@ Grainfather integration extension roadmap: [`../../../docs/backends/grainfather-
 
 `grainfather_fermenter` owns GF30-specific hardware adaptation and thermal diagnostics. It may later translate an approved BrewAssistant target to the GF30 controller, but it does not decide fermentation progression itself.
 
-The external Home Assistant Grainfather integration should own Grainfather Cloud/controller transport. Planned BA-oriented development follows the RCL pattern: keep the future fork's `main` close to `fidley/grainfather_integration/main`, and develop richer telemetry/control surfaces on `ba/brewassistant-grainfather`. BrewAssistant should consume normalized HA entities/services rather than duplicate Grainfather or Particle authentication.
+The external Home Assistant Grainfather integration should own Grainfather Cloud/controller transport. Planned BA-oriented development follows the RCL pattern: keep the future fork's `main` close to `fidley/grainfather_integration/main`, and develop richer telemetry/control surfaces on `brewassistant-grainfather`. BrewAssistant should consume normalized HA entities/services rather than duplicate Grainfather or Particle authentication.
 
 The intended split is:
 
