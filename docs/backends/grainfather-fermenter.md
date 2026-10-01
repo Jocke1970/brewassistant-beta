@@ -15,6 +15,21 @@ Field-verified GF30 Wi-Fi/cloud recovery note:
 
 [`gf30-cloud-link-recovery.md`](gf30-cloud-link-recovery.md)
 
+Planned BrewAssistant-oriented extension of the upstream Home Assistant Grainfather integration:
+
+[`grainfather-integration-extension.md`](grainfather-integration-extension.md)
+
+The intended repository/branch model mirrors the existing BrewAssistant RAPT Cloud Link work:
+
+```text
+upstream: fidley/grainfather_integration -> main
+planned fork: Jocke1970/grainfather_integration
+  main                         -> upstream-clean mirror
+  ba/brewassistant-grainfather -> BA-oriented integration development
+```
+
+The Grainfather integration owns Grainfather/controller transport and normalized HA entities. BrewAssistant owns provider selection, thermal diagnostics, process policy and Supervised Apply.
+
 ## 1. Architectural decision
 
 GF30 support is a fermentation-hardware concern, not a hot-side brewing-system concern.
@@ -36,7 +51,7 @@ The existing `grainfather` module must not be repurposed for GF30.
 
 ## 2. Current implementation state
 
-Phase 1 is now an active read-only foundation on `dev`: cloud discovery remains fail-passive, and thermal preflight can already collect Pill + manual-reference field data before GF30 Wi-Fi is available.
+Phase 1 is now an active read-only foundation on `dev`: cloud discovery remains fail-passive, the real GF30 is Wi-Fi/cloud linked, internal temperature reaches Home Assistant, and thermal preflight can compare controller/Pill/manual observations. A separate upstream-integration extension plan now covers richer Grainfather telemetry.
 
 Implemented now:
 
