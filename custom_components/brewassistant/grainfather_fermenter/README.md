@@ -7,7 +7,8 @@ Upstream Home Assistant integration: `fidley/grainfather_integration`
 This package is intentionally separate from BrewAssistant's reserved `grainfather` hot-side adapter. The existing `grainfather` module remains available for Grainfather brewing systems such as G30/G40-class hardware. This package is for fermentation hardware.
 
 Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)  
-DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)
+DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)  
+GF30 Wi-Fi/cloud recovery note: [`../../../docs/backends/gf30-cloud-link-recovery.md`](../../../docs/backends/gf30-cloud-link-recovery.md)
 
 ## Ownership boundary
 
