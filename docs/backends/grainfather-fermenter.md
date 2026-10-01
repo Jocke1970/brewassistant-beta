@@ -1,7 +1,7 @@
 # Grainfather Fermenter / GF30 roadmap
 
-Status: read-only preparation active; physical control blocked on live hardware  
-Last synced: 2026-09-24  
+Status: read-only live-hardware validation active; physical control still blocked pending control/readback validation  
+Last synced: 2026-10-01  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
@@ -10,6 +10,10 @@ This document records where BrewAssistant currently stands and the intended rout
 The code-local contract remains authoritative for current behavior:
 
 [`../../custom_components/brewassistant/grainfather_fermenter/README.md`](../../custom_components/brewassistant/grainfather_fermenter/README.md)
+
+Field-verified GF30 Wi-Fi/cloud recovery note:
+
+[`gf30-cloud-link-recovery.md`](gf30-cloud-link-recovery.md)
 
 ## 1. Architectural decision
 
@@ -212,7 +216,7 @@ Exit condition: preparation is documented and can remain parked safely without h
 
 ### Phase 2 — Live hardware characterization
 
-Status: **partially unblocked for manual/Pill cooling tests; GF30 cloud/controller validation still requires Wi-Fi hardware**.
+Status: **live GF30 connected; Wi-Fi provisioning, Grainfather account link and Home Assistant temperature telemetry are field-verified. Target/control semantics remain unverified.**
 
 Deliverables:
 
@@ -286,7 +290,7 @@ Only consider more automatic control after repeated field evidence shows that:
 
 ## 8. Parking point
 
-Until the GF30 physically exists, the correct development posture is:
+With the GF30 now physically connected, the correct development posture is:
 
 ```text
 KEEP:
@@ -302,7 +306,7 @@ DO NOT ADD YET:
 - direct heater/cooling control
 ```
 
-When hardware arrives, resume from **Phase 2 — Live hardware characterization**, not by redesigning the backend from scratch.
+Continue from **Phase 2 — Live hardware characterization** using the now-linked controller; do not redesign the backend from scratch.
 
 ## 9. Files of interest
 
