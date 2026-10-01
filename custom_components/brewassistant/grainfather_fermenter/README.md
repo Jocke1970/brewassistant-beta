@@ -8,13 +8,16 @@ This package is intentionally separate from BrewAssistant's reserved `grainfathe
 
 Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)  
 DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)  
-GF30 Wi-Fi/cloud recovery note: [`../../../docs/backends/gf30-cloud-link-recovery.md`](../../../docs/backends/gf30-cloud-link-recovery.md)
+GF30 Wi-Fi/cloud recovery note: [`../../../docs/backends/gf30-cloud-link-recovery.md`](../../../docs/backends/gf30-cloud-link-recovery.md)  
+Grainfather integration extension roadmap: [`../../../docs/backends/grainfather-integration-extension.md`](../../../docs/backends/grainfather-integration-extension.md)
 
 ## Ownership boundary
 
 `fermentation_tracking` owns the fermentation process: SG/day progression, readiness and the desired beer-temperature target.
 
 `grainfather_fermenter` owns GF30-specific hardware adaptation and thermal diagnostics. It may later translate an approved BrewAssistant target to the GF30 controller, but it does not decide fermentation progression itself.
+
+The external Home Assistant Grainfather integration should own Grainfather Cloud/controller transport. Planned BA-oriented development follows the RCL pattern: keep the future fork's `main` close to `fidley/grainfather_integration/main`, and develop richer telemetry/control surfaces on `ba/brewassistant-grainfather`. BrewAssistant should consume normalized HA entities/services rather than duplicate Grainfather or Particle authentication.
 
 The intended split is:
 
