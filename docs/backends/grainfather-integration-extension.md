@@ -242,7 +242,7 @@ This phase is read-only and based entirely on live-verified 2026 Grainfather dat
 
 ### Phase 2 — determine whether the current GF30 still has Particle realtime access
 
-Status: read-only field probe implemented; live account result pending.
+Status: field-verified complete. The linked 2026 GF30 account returned zero Particle sessions, so Particle is not the runtime path for this controller.
 
 Read-only test sequence:
 
@@ -261,12 +261,11 @@ Questions to answer:
 - What is the update cadence?
 - Does realtime identity correlate safely with the Grainfather equipment record?
 
-Exit A: Particle realtime confirmed and identity mapping documented.  
-Exit B: Particle path absent/obsolete; switch research to the newer app/backend transport.
+Exit result: Particle path absent for the linked GF30 account. Research is now explicitly on the newer ESP/Grainfather app/backend transport.
 
-### Phase 3 — modern-controller fallback research if Particle is absent
+### Phase 3 — modern ESP/controller backend research
 
-Status: conditional.
+Status: active.
 
 If the current GF30 is not represented through Particle:
 
