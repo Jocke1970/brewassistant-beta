@@ -1,10 +1,10 @@
 # BrewAssistant Grainfather integration extension
 
-Status: **planned / discovery ready**  
+Status: **fork active / Phase 1 implemented / realtime discovery ready**  
 Last synced: **2026-10-01**  
 Primary upstream: `fidley/grainfather_integration`  
-Planned BrewAssistant fork: `Jocke1970/grainfather_integration`  
-Planned development branch: `brewassistant-grainfather`
+BrewAssistant fork: `Jocke1970/grainfather_integration`  
+Development branch: `brewassistant-grainfather`
 
 This document defines the development plan for a BrewAssistant-oriented extension of the Home Assistant Grainfather integration.
 
@@ -60,7 +60,7 @@ Rules:
 5. Do not require BrewAssistant itself to understand Grainfather/Particle transport details.
 6. Do not enable writable controller behavior merely because an old repository demonstrates an endpoint.
 
-The planned fork does not yet exist at the time of this document. The branch names above define the intended setup once it is created.
+The fork and `brewassistant-grainfather` branch now exist. Fork `main` remains aligned with upstream base `f57106cb0f126b387257d47ad6a9d12e7f02b5c7` while BrewAssistant-oriented changes live only on the dedicated branch.
 
 ## 2. Evidence sources
 
@@ -194,7 +194,7 @@ No silent cross-source fallback may turn a stale controller value into a current
 
 ### Phase 0 — fork/branch setup and evidence capture
 
-Status: planned.
+Status: complete.
 
 - create `Jocke1970/grainfather_integration` as a fork of `fidley/grainfather_integration`;
 - keep fork `main` upstream-clean;
@@ -207,7 +207,7 @@ Exit: clean branch topology exists and future diffs remain reviewable.
 
 ### Phase 1 — expose verified REST target temperature
 
-Status: ready for implementation.
+Status: implemented on `Jocke1970/grainfather_integration:brewassistant-grainfather`; live HA validation still pending.
 
 Extend the current history model/parser with `target_temperature`.
 
@@ -232,7 +232,7 @@ This phase is read-only and based entirely on live-verified 2026 Grainfather dat
 
 ### Phase 2 — determine whether the current GF30 still has Particle realtime access
 
-Status: research/test planned.
+Status: read-only field probe implemented; live account result pending.
 
 Read-only test sequence:
 
@@ -432,10 +432,10 @@ The fork must remain usable as a Grainfather Home Assistant integration without 
 When work resumes:
 
 ```text
-1. Create/sync Grainfather fork and brewassistant-grainfather branch
-2. Implement target_temperature read-only support
-3. Validate in HA against the real GF30
-4. Probe Grainfather Particle-token path read-only
+1. Run the read-only Particle capability probe against the linked GF30 account
+2. Validate the new Target Temperature entity in Home Assistant against the real GF30
+3. Record whether Particle exposes the current ESP-linked controller
+4. Choose Particle realtime or modern-backend research based on evidence
 5. Choose Particle realtime or modern-backend research based on evidence
 6. Add normalized heating/cooling/online/status telemetry
 7. Feed verified entities into BrewAssistant grainfather_fermenter
