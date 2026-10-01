@@ -4,7 +4,7 @@ Status: **planned / discovery ready**
 Last synced: **2026-10-01**  
 Primary upstream: `fidley/grainfather_integration`  
 Planned BrewAssistant fork: `Jocke1970/grainfather_integration`  
-Planned development branch: `ba/brewassistant-grainfather`
+Planned development branch: `brewassistant-grainfather`
 
 This document defines the development plan for a BrewAssistant-oriented extension of the Home Assistant Grainfather integration.
 
@@ -24,7 +24,7 @@ Jocke1970/grainfather_integration
 ├── main
 │   └── stays as close as practical to upstream/main
 │
-└── ba/brewassistant-grainfather
+└── brewassistant-grainfather
     └── BrewAssistant-oriented development
 ```
 
@@ -39,7 +39,7 @@ Rules:
 
 1. Do not develop BrewAssistant-specific changes directly on fork `main`.
 2. Periodically sync fork `main` from `upstream/main`.
-3. Rebase or merge the current upstream baseline into `ba/brewassistant-grainfather` deliberately.
+3. Rebase or merge the current upstream baseline into `brewassistant-grainfather` deliberately.
 4. Keep generally useful changes separable enough to propose upstream independently.
 5. Do not require BrewAssistant itself to understand Grainfather/Particle transport details.
 6. Do not enable writable controller behavior merely because an old repository demonstrates an endpoint.
@@ -182,7 +182,7 @@ Status: planned.
 
 - create `Jocke1970/grainfather_integration` as a fork of `fidley/grainfather_integration`;
 - keep fork `main` upstream-clean;
-- create `ba/brewassistant-grainfather`;
+- create `brewassistant-grainfather`;
 - record upstream base SHA before feature development;
 - document external reference repositories/licenses;
 - keep the GF30 cloud-link recovery note in BrewAssistant as field evidence.
@@ -416,7 +416,7 @@ The fork must remain usable as a Grainfather Home Assistant integration without 
 When work resumes:
 
 ```text
-1. Create/sync Grainfather fork and ba/brewassistant-grainfather branch
+1. Create/sync Grainfather fork and brewassistant-grainfather branch
 2. Implement target_temperature read-only support
 3. Validate in HA against the real GF30
 4. Probe Grainfather Particle-token path read-only
