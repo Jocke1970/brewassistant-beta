@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, State
 
 EXTERNAL_DOMAIN = "grainfather"
 ENTITY_TYPE_ATTRIBUTE = "grainfather_entity_type"
+MEASUREMENT_ATTRIBUTE = "grainfather_measurement"
 FERMENTATION_DEVICE_TYPE = "fermentation_device"
 BREW_SESSION_TYPE = "brew_session"
 PROFILE_TARGET_SERVICE = "adjust_current_step_temperature"
@@ -112,6 +113,8 @@ def _device_snapshots(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "is_controller_linked": _optional_bool(attrs.get("is_controller_linked")),
                 "temperature": None,
                 "temperature_entity": None,
+                "target_temperature": None,
+                "target_temperature_entity": None,
                 "gravity": None,
                 "gravity_entity": None,
             },
@@ -124,12 +127,23 @@ def _device_snapshots(hass: HomeAssistant) -> list[dict[str, Any]]:
         if controller_linked is not None:
             device["is_controller_linked"] = controller_linked
 
-        if _is_temperature_state(state):
+        measurement = str(attrs.get(MEASUREMENT_ATTRIBUTE) or "").strip().lower()
+
+        if measurement == "target_temperature":
+            device["target_temperature"] = _state_float(state)
+            device["target_temperature_entity"] = state.entity_id
+        elif measurement == "gravity":
+            device["gravity"] = _state_float(state)
+            device["gravity_entity"] = state.entity_id
+        elif measurement == "temperature":
             device["temperature"] = _state_float(state)
             device["temperature_entity"] = state.entity_id
         elif _is_gravity_state(state):
             device["gravity"] = _state_float(state)
             device["gravity_entity"] = state.entity_id
+        elif _is_temperature_state(state):
+            device["temperature"] = _state_float(state)
+            device["temperature_entity"] = state.entity_id
 
     return sorted(grouped.values(), key=lambda item: str(item.get("device_id")))
 
@@ -218,6 +232,10 @@ def build_grainfather_fermenter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "linked_session": linked_session,
         "temperature": selected.get("temperature") if selected else None,
         "temperature_entity": selected.get("temperature_entity") if selected else None,
+        "target_temperature": selected.get("target_temperature") if selected else None,
+        "target_temperature_entity": (
+            selected.get("target_temperature_entity") if selected else None
+        ),
         "gravity": selected.get("gravity") if selected else None,
         "gravity_entity": selected.get("gravity_entity") if selected else None,
         "controller_linked": selected.get("is_controller_linked") if selected else None,
