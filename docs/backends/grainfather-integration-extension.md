@@ -176,6 +176,16 @@ Home Assistant Grainfather device
 └── session metadata
 ```
 
+Stable Home Assistant measurement metadata is now part of the BA contract:
+
+```text
+grainfather_entity_type = fermentation_device
+grainfather_measurement = temperature | target_temperature | gravity
+device_id = <Grainfather fermentation device id>
+```
+
+BrewAssistant consumes `grainfather_measurement` first and only falls back to legacy entity-name/device-class heuristics when the attribute is absent. This prevents a target-temperature sensor from being mistaken for actual beer temperature.
+
 Fallback policy should be explicit:
 
 ```text
