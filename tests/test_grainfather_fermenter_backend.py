@@ -68,6 +68,17 @@ def test_gf30_backend_discovers_upstream_by_attributes_not_guessed_entity_ids() 
     assert "sensor.grainfather_gf30" not in source
 
 
+def test_gf30_backend_distinguishes_actual_target_and_gravity_measurements() -> None:
+    source = BACKEND.read_text(encoding="utf-8")
+    assert 'MEASUREMENT_ATTRIBUTE = "grainfather_measurement"' in source
+    assert 'measurement == "target_temperature"' in source
+    assert 'device["target_temperature"] = _state_float(state)' in source
+    assert 'device["target_temperature_entity"] = state.entity_id' in source
+    assert 'measurement == "temperature"' in source
+    assert 'measurement == "gravity"' in source
+    assert '"target_temperature": selected.get("target_temperature")' in source
+
+
 def test_phase_1_backend_is_read_only_and_fail_passive() -> None:
     source = BACKEND.read_text(encoding="utf-8")
     thermal = THERMAL.read_text(encoding="utf-8")
