@@ -441,3 +441,24 @@ def test_gf30_module_manifest_declares_confirmed_target_only() -> None:
     assert "CapabilityPolicy.DISABLED" in registry
     assert "BrewAssistantGF30PrepareTargetButton" in button_source
     assert "request_gf30_target_confirmation" in button_source
+
+
+def test_gf30_supervised_target_requires_recipe_profile_source() -> None:
+    source = SUPERVISED_TARGET.read_text(encoding="utf-8")
+    sensors = GF30_SENSORS.read_text(encoding="utf-8")
+
+    assert 'PROFILE_TARGET_SOURCES = {"brewfather_recipe_schedule"}' in source
+    assert '"profile_backed": profile_backed' in source
+    assert '"profile_target_ready": profile_target_ready' in source
+    assert '"waiting_for_profile"' in source
+    assert '"profile_target_required"' in source
+    assert 'requested_source != live_profile_source' in source
+    assert '"profile_source_changed"' in source
+    assert '"profile_target_changed"' in source
+    assert 'key="gf30_profile_target"' in sensors
+
+
+def test_gf30_tracking_rule_fallback_is_not_an_authorized_gf30_target() -> None:
+    source = SUPERVISED_TARGET.read_text(encoding="utf-8")
+    assert "source in PROFILE_TARGET_SOURCES" in source
+    assert '"tracking_rule"' not in source

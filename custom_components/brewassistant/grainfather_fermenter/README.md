@@ -13,7 +13,7 @@ Grainfather integration extension roadmap: [`../../../docs/backends/grainfather-
 
 ## Ownership boundary
 
-`fermentation_tracking` owns the fermentation process: SG/day progression, readiness and the desired beer-temperature target.
+`fermentation_tracking` interprets the fermentation process, but GF30 target authority comes only from the active fermentation recipe/profile schedule. Tracking-rule fallback may inform diagnostics but must never actuate GF30.
 
 `grainfather_fermenter` owns GF30-specific hardware adaptation and thermal diagnostics. It may later translate an approved BrewAssistant target to the GF30 controller, but it does not decide fermentation progression itself.
 
@@ -212,7 +212,8 @@ BrewAssistant consumes that service rather than publishing MQTT itself.
 The adapter flow is deliberately two-stage:
 
 ```text
-fermentation_tracking recommendation
+fermentation recipe/profile schedule
+  -> BrewAssistant profile target
   -> button.brewassistant_gf30_prepare_target
   -> pending generic Supervised Apply action
   -> button.brewassistant_confirm_supervised_apply
@@ -225,19 +226,19 @@ Dedicated diagnostics:
 
 ```text
 sensor.brewassistant_gf30_target_apply_state
-sensor.brewassistant_gf30_recommended_target
+sensor.brewassistant_gf30_profile_target
 sensor.brewassistant_gf30_controller_target
 sensor.brewassistant_gf30_target_delta
 ```
 
 The proposal button never writes hardware. It only creates a pending action.
-The confirmation executor re-reads the current BrewAssistant recommendation
-immediately before execution and refuses the write if the recommendation
-changed. It also refuses to overwrite a pending action owned by another
+The confirmation executor re-reads the current profile-backed target and its source immediately before execution. It refuses the write if the profile target/source changed or if the value fell back to BrewAssistant's internal tracking rule. It also refuses to overwrite a pending action owned by another
 BrewAssistant backend.
 
 A confirmed write is considered consumed only when the Grainfather integration
 reports `target_write_last_result: verified`.
+
+`brewfather_recipe_schedule` is currently the only accepted GF30 profile-target source. `tracking_rule` is explicitly non-authoritative for GF30 and cannot create or execute a pending target write.
 
 ## Control boundary
 

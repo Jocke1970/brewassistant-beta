@@ -76,6 +76,13 @@ SPECS: tuple[GF30SensorSpec, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
     ),
     GF30SensorSpec(
+        key="gf30_profile_target",
+        snapshot="target_adapter",
+        field="profile_target_temperature",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+    ),
+    GF30SensorSpec(
         key="gf30_controller_target",
         snapshot="target_adapter",
         field="controller_target_temperature",
