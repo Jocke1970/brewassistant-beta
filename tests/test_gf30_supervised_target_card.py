@@ -11,7 +11,7 @@ CARDS = (
 )
 
 REQUIRED_ENTITIES = (
-    "sensor.brewassistant_gf30_recommended_target",
+    "sensor.brewassistant_gf30_profile_target",
     "sensor.brewassistant_gf30_controller_target",
     "sensor.brewassistant_gf30_target_delta",
     "sensor.brewassistant_gf30_target_apply_state",
@@ -41,6 +41,7 @@ def test_gf30_supervised_target_cards_use_only_operator_relevant_surface() -> No
             assert entity_id in source
         for forbidden in FORBIDDEN_TECHNICAL_SURFACES:
             assert forbidden not in source
+        assert "brewassistant_gf30_recommended_target" not in source
 
 
 def test_gf30_supervised_target_cards_keep_two_step_confirmation() -> None:
