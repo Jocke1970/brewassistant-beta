@@ -511,7 +511,8 @@ def test_gf30_cooling_state_is_never_treated_as_pump_state() -> None:
 
     assert "Cooling-state vs pump-state boundary" in docs
     assert "binary_sensor.grainfather_gf30_cooling" in docs
-    assert "not proof that the physical GF30 circulation/cooling pump is running" in docs
+    assert "physical GF30 circulation/cooling pump is running" in docs
+    assert "is **not** proof" in docs
     assert "GF30 cooling pump state -> unknown / not verified" in docs
     assert "as a proxy for physical pump operation" in docs
     assert "grainfather_gf30_cooling" not in coolant_source
