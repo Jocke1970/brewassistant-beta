@@ -118,6 +118,7 @@ def build_gf30_target_adapter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "recommendation_entity": RECOMMENDED_TARGET_ENTITY,
         "controller_target_temperature": controller_target,
         "target_temperature_entity": target_entity,
+        "temperature_entity": cloud.get("temperature_entity"),
         "target_delta": delta,
         "device_id": device_id,
         "controller_online": controller_online,
