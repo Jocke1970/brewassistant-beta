@@ -95,6 +95,57 @@ MODULE_MANIFESTS: dict[str, ModuleManifest] = {
         ),
         notes=("BrewZilla is the first hot-side adapter, not the BrewAssistant core.",),
     ),
+    "grainfather_fermenter": ModuleManifest(
+        key="grainfather_fermenter",
+        name="Grainfather Fermenter / GF30",
+        module_type=ModuleType.HARDWARE_ADAPTER,
+        enabled_by_default=False,
+        description="Fermentation-hardware adapter for Grainfather GF30 controllers.",
+        required_sources=("grainfather_integration",),
+        optional_sources=("fermentation_tracking", "rapt_pill"),
+        capabilities=(
+            CapabilityManifest(
+                "read_controller_temperature",
+                "Read GF30 controller temperature",
+                CapabilityType.READ,
+                CapabilityPolicy.READ_ONLY,
+            ),
+            CapabilityManifest(
+                "read_controller_target",
+                "Read GF30 controller target",
+                CapabilityType.READ,
+                CapabilityPolicy.READ_ONLY,
+            ),
+            CapabilityManifest(
+                "read_controller_state",
+                "Read GF30 controller state",
+                CapabilityType.READ,
+                CapabilityPolicy.READ_ONLY,
+            ),
+            CapabilityManifest(
+                "set_fermentation_target",
+                "Set GF30 fermentation target",
+                CapabilityType.CONTROL,
+                CapabilityPolicy.CONFIRM,
+            ),
+            CapabilityManifest(
+                "control_heater",
+                "Control GF30 heater directly",
+                CapabilityType.CONTROL,
+                CapabilityPolicy.DISABLED,
+            ),
+            CapabilityManifest(
+                "control_cooling_pump",
+                "Control GF30 cooling pump directly",
+                CapabilityType.CONTROL,
+                CapabilityPolicy.DISABLED,
+            ),
+        ),
+        notes=(
+            "Fermentation Tracking owns the recommendation; GF30 owns local heat/cool actuation.",
+            "Target writes must pass through generic Supervised Apply and Grainfather MQTT readback.",
+        ),
+    ),
     "grainfather": ModuleManifest(
         key="grainfather",
         name="Grainfather",
