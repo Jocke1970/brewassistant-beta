@@ -138,6 +138,13 @@ def build_gf30_target_adapter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 def request_gf30_target_confirmation(hass: HomeAssistant) -> dict[str, Any]:
     """Create a pending GF30 target action; never execute the write here."""
     snapshot = build_gf30_target_adapter_snapshot(hass)
+    existing = get_pending_action(hass)
+    if existing is not None and existing.get("source") != SOURCE:
+        return {
+            **snapshot,
+            "request_result": "pending_action_conflict",
+            "conflicting_pending_action": existing,
+        }
     if not snapshot["supervised_apply_enabled"]:
         return {**snapshot, "request_result": "supervised_apply_disabled"}
     if not snapshot["ready"]:
