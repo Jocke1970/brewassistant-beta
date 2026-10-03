@@ -39,6 +39,7 @@ from .carbonation_backend.carbonation_runtime import (
     start_carbonation_runtime,
     update_carbonation_runtime,
 )
+from .grainfather_fermenter.supervised_target import setup_gf30_supervised_target_adapter
 from .grainfather_fermenter.preflight_runtime import (
     async_load_gf30_preflight_runtime,
     async_save_gf30_preflight_runtime,
@@ -90,6 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_load_brewday_audit_log(hass)
     await async_load_carbonation_runtime(hass)
     await async_load_gf30_preflight_runtime(hass)
+    setup_gf30_supervised_target_adapter()
     hass.async_create_task(_ensure_kegerator_climate_on(hass))
     await async_setup_kegerator_guard(hass)
 
