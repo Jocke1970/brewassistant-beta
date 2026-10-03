@@ -263,6 +263,19 @@ grainfather.adjust_current_step_temperature
 
 That remains a promising future supervised bridge. The GF30 controller itself owns its local heater and automatic cooling-pump behavior. BrewAssistant must not create a parallel pump-control path.
 
+### Cooling-state vs pump-state boundary
+
+`binary_sensor.grainfather_gf30_cooling` is a **controller cooling-state** signal only. It means the GF30 controller is in cooling state; it is **not** proof that the physical GF30 circulation/cooling pump is running.
+
+Until the Grainfather integration exposes a separately field-verified pump-state signal:
+
+```text
+GF30 cooling state      -> observable
+GF30 cooling pump state -> unknown / not verified
+```
+
+BrewAssistant must never use `binary_sensor.grainfather_gf30_cooling` as a proxy for physical pump operation, flow, or successful heat transfer.
+
 The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat. A future BrewAssistant coolant-target bridge may adjust only the thermostat target, within physically verified bounds; it must not switch the freezer directly.
 
 ## Relationship to existing chamber backend

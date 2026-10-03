@@ -502,3 +502,18 @@ def test_coolant_monitor_observes_power_and_switch_without_compressor_guess() ->
     assert snapshot["coolant_mixture_verified"] is False
     assert snapshot["automatic_setpoint_changes"] is False
     assert snapshot["direct_freezer_switching"] is False
+
+
+def test_gf30_cooling_state_is_never_treated_as_pump_state() -> None:
+    docs = README.read_text(encoding="utf-8")
+    coolant_source = COOLANT.read_text(encoding="utf-8")
+    sensor_source = GF30_SENSORS.read_text(encoding="utf-8")
+
+    assert "Cooling-state vs pump-state boundary" in docs
+    assert "binary_sensor.grainfather_gf30_cooling" in docs
+    assert "not proof that the physical GF30 circulation/cooling pump is running" in docs
+    assert "GF30 cooling pump state -> unknown / not verified" in docs
+    assert "as a proxy for physical pump operation" in docs
+    assert "grainfather_gf30_cooling" not in coolant_source
+    assert "pump_active" not in coolant_source
+    assert 'key="gf30_cooling_pump_active"' not in sensor_source
