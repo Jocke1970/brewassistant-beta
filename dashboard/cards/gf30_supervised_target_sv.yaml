@@ -1,0 +1,195 @@
+type: vertical-stack
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.brewassistant_gf30_target_apply_state
+    primary: BrewAssistant · GF30
+    secondary: >-
+      {% set online = is_state('binary_sensor.grainfather_gf30_controller_online', 'on') %}
+      {% set mode = states('select.brewassistant_apply_mode') %}
+      {% set apply = states('sensor.brewassistant_gf30_target_apply_state') %}
+      {% if not online %}
+        GF30 offline · BA-rekommendationen visas men kan inte verkställas
+      {% elif mode != 'Supervised apply' %}
+        Read only · välj Supervised apply för att kunna förbereda en targetändring
+      {% elif apply == 'awaiting_confirmation' %}
+        Väntar på operatörens kvittens
+      {% elif apply == 'proposed' %}
+        Ny rekommendation kan förberedas
+      {% elif apply == 'no_change' %}
+        GF30 följer redan BrewAssistants rekommendation
+      {% elif apply == 'unavailable' %}
+        GF30-targetadapter inte redo
+      {% else %}
+        {{ apply | replace('_', ' ') }}
+      {% endif %}
+    icon: mdi:thermometer-auto
+    icon_color: >-
+      {% set online = is_state('binary_sensor.grainfather_gf30_controller_online', 'on') %}
+      {% set apply = states('sensor.brewassistant_gf30_target_apply_state') %}
+      {% if not online %}
+        red
+      {% elif apply == 'awaiting_confirmation' %}
+        amber
+      {% elif apply == 'no_change' %}
+        green
+      {% elif apply == 'proposed' %}
+        blue
+      {% else %}
+        grey
+      {% endif %}
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_gf30_recommended_target
+        primary: Rekommenderad
+        secondary: >-
+          {% set v = states('sensor.brewassistant_gf30_recommended_target') %}
+          {{ (v | float(0) | round(1)) ~ ' °C' if v not in ['unknown','unavailable','none',''] else '—' }}
+        icon: mdi:brain
+        icon_color: blue
+        layout: vertical
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_gf30_controller_target
+        primary: GF30 target
+        secondary: >-
+          {% set v = states('sensor.brewassistant_gf30_controller_target') %}
+          {{ (v | float(0) | round(1)) ~ ' °C' if v not in ['unknown','unavailable','none',''] else '—' }}
+        icon: mdi:target
+        icon_color: >-
+          {{ 'green' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'red' }}
+        layout: vertical
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: sensor.brewassistant_gf30_target_delta
+        primary: Delta
+        secondary: >-
+          {% set v = states('sensor.brewassistant_gf30_target_delta') %}
+          {% if v in ['unknown','unavailable','none',''] %}
+            —
+          {% else %}
+            {% set n = v | float(0) %}
+            {{ ('+' if n > 0 else '') ~ (n | round(1)) ~ ' °C' }}
+          {% endif %}
+        icon: mdi:delta
+        icon_color: >-
+          {% set v = states('sensor.brewassistant_gf30_target_delta') %}
+          {% if v in ['unknown','unavailable','none',''] %}
+            grey
+          {% elif (v | float(0) | abs) < 0.25 %}
+            green
+          {% else %}
+            amber
+          {% endif %}
+        layout: vertical
+        tap_action:
+          action: more-info
+
+  - type: custom:mushroom-chips-card
+    alignment: justify
+    chips:
+      - type: template
+        entity: binary_sensor.grainfather_gf30_controller_online
+        icon: >-
+          {{ 'mdi:lan-connect' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'mdi:lan-disconnect' }}
+        content: >-
+          {{ 'GF30 online' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'GF30 offline' }}
+        icon_color: >-
+          {{ 'green' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'red' }}
+        tap_action:
+          action: more-info
+
+      - type: template
+        entity: select.brewassistant_apply_mode
+        icon: mdi:shield-check-outline
+        content: >-
+          {{ states('select.brewassistant_apply_mode') }}
+        icon_color: >-
+          {{ 'green' if is_state('select.brewassistant_apply_mode', 'Supervised apply') else 'grey' }}
+        tap_action:
+          action: more-info
+
+      - type: template
+        entity: sensor.brewassistant_gf30_target_apply_state
+        icon: mdi:progress-check
+        content: >-
+          {% set s = states('sensor.brewassistant_gf30_target_apply_state') %}
+          {% set labels = {
+            'proposed': 'Förslag',
+            'awaiting_confirmation': 'Väntar',
+            'no_change': 'Matchar',
+            'unavailable': 'Ej redo',
+            'waiting_for_recommendation': 'Väntar BA',
+            'waiting_for_controller_target': 'Väntar GF30'
+          } %}
+          {{ labels.get(s, s | replace('_', ' ')) }}
+        icon_color: >-
+          {% set s = states('sensor.brewassistant_gf30_target_apply_state') %}
+          {% if s == 'awaiting_confirmation' %}amber
+          {% elif s == 'proposed' %}blue
+          {% elif s == 'no_change' %}green
+          {% else %}grey{% endif %}
+        tap_action:
+          action: more-info
+
+  - type: conditional
+    conditions:
+      - entity: binary_sensor.grainfather_gf30_controller_online
+        state: "on"
+      - entity: select.brewassistant_apply_mode
+        state: "Supervised apply"
+      - entity: sensor.brewassistant_gf30_target_apply_state
+        state: "proposed"
+    card:
+      type: custom:mushroom-template-card
+      entity: button.brewassistant_gf30_prepare_target
+      primary: Förbered GF30-target
+      secondary: Skapar endast en väntande Supervised Apply-åtgärd
+      icon: mdi:thermometer-check
+      icon_color: blue
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.brewassistant_gf30_prepare_target
+
+  - type: conditional
+    conditions:
+      - entity: sensor.brewassistant_gf30_target_apply_state
+        state: "awaiting_confirmation"
+    card:
+      type: horizontal-stack
+      cards:
+        - type: custom:mushroom-template-card
+          entity: button.brewassistant_cancel_supervised_apply
+          primary: Avvisa
+          secondary: Ingen ändring skickas
+          icon: mdi:close-circle-outline
+          icon_color: red
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.brewassistant_cancel_supervised_apply
+
+        - type: custom:mushroom-template-card
+          entity: button.brewassistant_confirm_supervised_apply
+          primary: Bekräfta
+          secondary: Skicka target och verifiera readback
+          icon: mdi:check-decagram
+          icon_color: green
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.brewassistant_confirm_supervised_apply
