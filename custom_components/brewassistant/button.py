@@ -43,6 +43,10 @@ from .const import DOMAIN
 from .coordinator import BrewAssistantCoordinator
 from .cooling.counterflow_chiller import async_counterflow_chiller_ready, get_counterflow_chiller_snapshot
 from .entity import BrewAssistantEntity
+from .grainfather_fermenter.supervised_target import (
+    build_gf30_target_adapter_snapshot,
+    request_gf30_target_confirmation,
+)
 from .supervised_apply import (
     async_confirm_pending_action,
     build_supervised_apply_snapshot,
