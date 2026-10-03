@@ -15,7 +15,7 @@ PUBLISHED_NAME = "2026_09-01"
 PREVIOUS_VERSION = "0.2.0-beta.14"
 PREVIOUS_TAG = "v" + PREVIOUS_VERSION
 PREVIOUS_NAME = "2026_09-20"
-CANDIDATE_VERSION = "2026.10.0b2"
+CANDIDATE_VERSION = "2026.10.0b3"
 CANDIDATE_TAG = "v" + CANDIDATE_VERSION
 CANDIDATE_NAME = "2026-10"
 
@@ -38,7 +38,7 @@ def test_published_beta12_release_notes_preserve_historical_identity():
 def test_legacy_beta_is_preserved_and_calendar_beta_has_unique_version():
     manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
     old = (ROOT / "docs/beta14-prerelease-notes_sv.md").read_text(encoding="utf-8")
-    notes = (ROOT / "docs/2026.10.0b2-prerelease-notes_sv.md").read_text(encoding="utf-8")
+    notes = (ROOT / "docs/2026.10.0b3-prerelease-notes_sv.md").read_text(encoding="utf-8")
     assert old.startswith(f"# BrewAssistant {PREVIOUS_NAME} — fix-beta ({PREVIOUS_TAG})")
     assert PREVIOUS_TAG in old and PREVIOUS_VERSION in old
     assert "v0.5.0-beta.1" in old
@@ -49,7 +49,7 @@ def test_legacy_beta_is_preserved_and_calendar_beta_has_unique_version():
     assert (ROOT / "docs/beta13-prerelease-notes_sv.md").is_file()
     assert manifest["version"] == CANDIDATE_VERSION
     assert CANDIDATE_VERSION not in (PUBLISHED_VERSION, PREVIOUS_VERSION)
-    assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — GF30 profile-authority beta ({CANDIDATE_TAG})")
+    assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — GF30 Liquid Cooler readiness beta ({CANDIDATE_TAG})")
     assert CANDIDATE_TAG in notes and CANDIDATE_VERSION in notes
     assert "Pre-release" in notes and "HACS" in notes
     assert "Create a merge commit" in notes and "beta-merge-SHA" in notes
