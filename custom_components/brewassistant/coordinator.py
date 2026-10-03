@@ -24,6 +24,8 @@ from .const import (
     CONF_GF30_COOLANT_TEMP_ENTITY,
     CONF_GF30_FREEZER_AIR_TEMP_ENTITY,
     CONF_GF30_COOLANT_THERMOSTAT_ENTITY,
+    CONF_GF30_COOLER_POWER_ENTITY,
+    CONF_GF30_COOLER_SWITCH_ENTITY,
     CONF_KEGERATOR_AIR_TEMP_ENTITY,
     CONF_KEGERATOR_FAN_POWER_ENTITY,
     CONF_KEGERATOR_POWER_ENTITY,
@@ -37,6 +39,8 @@ from .const import (
     DEFAULT_GF30_COOLANT_TEMP_ENTITY,
     DEFAULT_GF30_FREEZER_AIR_TEMP_ENTITY,
     DEFAULT_GF30_COOLANT_THERMOSTAT_ENTITY,
+    DEFAULT_GF30_COOLER_POWER_ENTITY,
+    DEFAULT_GF30_COOLER_SWITCH_ENTITY,
     DEFAULT_KEGERATOR_AIR_TEMP_ENTITY,
     DEFAULT_KEGERATOR_FAN_POWER_ENTITY,
     DEFAULT_KEGERATOR_POWER_ENTITY,
@@ -531,5 +535,15 @@ class BrewAssistantCoordinator(DataUpdateCoordinator[BrewAssistantData]):
                 self.config_entry,
                 CONF_GF30_COOLANT_THERMOSTAT_ENTITY,
                 DEFAULT_GF30_COOLANT_THERMOSTAT_ENTITY,
+            ),
+            CONF_GF30_COOLER_POWER_ENTITY: _entity_from_entry(
+                self.config_entry,
+                CONF_GF30_COOLER_POWER_ENTITY,
+                DEFAULT_GF30_COOLER_POWER_ENTITY,
+            ),
+            CONF_GF30_COOLER_SWITCH_ENTITY: _entity_from_entry(
+                self.config_entry,
+                CONF_GF30_COOLER_SWITCH_ENTITY,
+                DEFAULT_GF30_COOLER_SWITCH_ENTITY,
             ),
         }
