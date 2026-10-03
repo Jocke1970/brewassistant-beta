@@ -13,6 +13,34 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-10-03 — GF30 focused supervised target card
+
+### Sammanfattning
+
+Ett separat BrewAssistant-kort har lagts till för GF30:s supervised target-flöde.
+Kortet är medvetet avgränsat till operatörsrelevant information:
+
+- BrewAssistants rekommenderade target;
+- aktuell GF30-target;
+- target-delta;
+- GF30 online/offline;
+- global Apply Mode;
+- supervised apply-state;
+- Prepare / Reject / Confirm.
+
+Teknisk Grainfather-diagnostik som MQTT subscription, RSSI, firmware, OTA,
+hysteresis, coolant och preflight hör fortsatt hemma i Grainfather/diagnostikytor
+och visas inte i detta BA-kort.
+
+### Nya dashboardkort
+
+- `dashboard/cards/gf30_supervised_target.yaml`
+- `dashboard/cards/gf30_supervised_target_sv.yaml`
+
+Ingen backendändring görs av denna kortändring.
+
+---
+
 ## 2026-10-03 — v2026.10.0b1 — GF30 supervised target adapter
 
 ### Sammanfattning
