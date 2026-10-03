@@ -13,31 +13,63 @@ Varje funktionell ändring ska ange:
 
 ---
 
-## 2026-10-03 — GF30 focused supervised target card
+## 2026-10-03 — v2026.10.0b2 — GF30 profile-authority + focused supervised card
 
 ### Sammanfattning
 
-Ett separat BrewAssistant-kort har lagts till för GF30:s supervised target-flöde.
-Kortet är medvetet avgränsat till operatörsrelevant information:
+GF30:s supervised target-flöde följer nu strikt den aktiva jäsprofilens/receptschemats
+temperaturmål. BrewAssistants interna `tracking_rule` är fortsatt tillgänglig för
+fermentation tracking men är uttryckligen **inte** en auktoritativ GF30-styrkälla.
 
-- BrewAssistants rekommenderade target;
-- aktuell GF30-target;
-- target-delta;
-- GF30 online/offline;
-- global Apply Mode;
-- supervised apply-state;
-- Prepare / Reject / Confirm.
+Tillåten GF30-profilkälla i denna release:
+
+- `brewfather_recipe_schedule`
+
+Saknas en profile-backed target visas `waiting_for_profile` och ingen GF30-write kan
+förberedas eller bekräftas. Vid Confirm återvalideras både targetvärdet och profilkällan.
+
+### Dashboard
+
+Det fokuserade GF30-kortet använder nu BrewAssistant-layouten och visar endast:
+
+- Profilmål
+- GF30 target
+- avvikelse/synkstatus
+- GF30 online/offline
+- Apply Mode
+- supervised apply-state
+- Prepare / Reject / Confirm
 
 Teknisk Grainfather-diagnostik som MQTT subscription, RSSI, firmware, OTA,
-hysteresis, coolant och preflight hör fortsatt hemma i Grainfather/diagnostikytor
-och visas inte i detta BA-kort.
+hysteresis, coolant och preflight hör fortsatt hemma i Grainfather/diagnostikytor.
 
-### Nya dashboardkort
+### Nya/ändrade entiteter
+
+- `sensor.brewassistant_gf30_profile_target`
+- `sensor.brewassistant_gf30_target_apply_state`
+- `sensor.brewassistant_gf30_controller_target`
+- `sensor.brewassistant_gf30_target_delta`
+
+Den äldre `sensor.brewassistant_gf30_recommended_target` behålls endast för
+bakåtkompatibilitet/diagnostik och används inte som GF30-kortets targetyta.
+
+### Säkerhetsgräns
+
+- GF30 äger heater och cooling-pump.
+- BrewAssistant direktstyr inte heater/cooling.
+- Profile-backed target + Supervised Apply + explicit Confirm krävs.
+- Ändrad profilkälla eller profile target mellan Prepare och Confirm stoppar write.
+- Verifierad Grainfather MQTT-readback krävs innan åtgärden räknas som klar.
+
+### Dashboard/cards att ersätta
 
 - `dashboard/cards/gf30_supervised_target.yaml`
 - `dashboard/cards/gf30_supervised_target_sv.yaml`
 
-Ingen backendändring görs av denna kortändring.
+### HA-åtgärd
+
+**Home Assistant-omstart krävs** efter uppdatering eftersom
+`sensor.brewassistant_gf30_profile_target` tillkommer.
 
 ---
 
