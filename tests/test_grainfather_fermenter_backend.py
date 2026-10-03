@@ -426,3 +426,18 @@ def test_gf30_supervised_target_revalidates_recommendation_before_write() -> Non
     assert '"recommendation_changed"' in source
     assert "abs(float(requested) - float(live_recommended)) > 0.01" in source
     assert '"supervised_confirmation_consumed": verified' in source
+
+
+def test_gf30_module_manifest_declares_confirmed_target_only() -> None:
+    registry = REGISTRY.read_text(encoding="utf-8")
+    button_source = (ROOT / "custom_components/brewassistant/button.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"grainfather_fermenter": ModuleManifest(' in registry
+    assert '"set_fermentation_target"' in registry
+    assert "CapabilityPolicy.CONFIRM" in registry
+    assert '"control_heater"' in registry
+    assert '"control_cooling_pump"' in registry
+    assert "CapabilityPolicy.DISABLED" in registry
+    assert "BrewAssistantGF30PrepareTargetButton" in button_source
+    assert "request_gf30_target_confirmation" in button_source
