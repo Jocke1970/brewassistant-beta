@@ -496,5 +496,9 @@ def test_coolant_monitor_observes_power_and_switch_without_compressor_guess() ->
     assert snapshot["cooler"]["switch_on"] is True
     assert snapshot["cooler"]["compressor_running_inferred"] is False
     assert snapshot["control_allowed"] is False
+    assert snapshot["monitoring_ready"] is True
+    assert snapshot["cooling_readiness"] == "not_validated"
+    assert snapshot["safe_setpoint_known"] is False
+    assert snapshot["coolant_mixture_verified"] is False
     assert snapshot["automatic_setpoint_changes"] is False
     assert snapshot["direct_freezer_switching"] is False
