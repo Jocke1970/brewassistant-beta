@@ -15,9 +15,9 @@ PUBLISHED_NAME = "2026_09-01"
 PREVIOUS_VERSION = "0.2.0-beta.14"
 PREVIOUS_TAG = "v" + PREVIOUS_VERSION
 PREVIOUS_NAME = "2026_09-20"
-CANDIDATE_VERSION = "0.2.0-beta.16"
+CANDIDATE_VERSION = "2026.10.0b1"
 CANDIDATE_TAG = "v" + CANDIDATE_VERSION
-CANDIDATE_NAME = "2026_10-03"
+CANDIDATE_NAME = "2026-10"
 
 
 def test_published_beta12_release_notes_preserve_historical_identity():
@@ -35,10 +35,10 @@ def test_published_beta12_release_notes_preserve_historical_identity():
     assert (ROOT / "docs/beta11-prerelease-notes_sv.md").is_file()
 
 
-def test_beta14_is_preserved_and_beta16_has_unique_version():
+def test_legacy_beta_is_preserved_and_calendar_beta_has_unique_version():
     manifest = json.loads((ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8"))
     old = (ROOT / "docs/beta14-prerelease-notes_sv.md").read_text(encoding="utf-8")
-    notes = (ROOT / "docs/beta16-prerelease-notes_sv.md").read_text(encoding="utf-8")
+    notes = (ROOT / "docs/2026.10.0b1-prerelease-notes_sv.md").read_text(encoding="utf-8")
     assert old.startswith(f"# BrewAssistant {PREVIOUS_NAME} — fix-beta ({PREVIOUS_TAG})")
     assert PREVIOUS_TAG in old and PREVIOUS_VERSION in old
     assert "v0.5.0-beta.1" in old
