@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, State
 
 EXTERNAL_DOMAIN = "grainfather"
 ENTITY_TYPE_ATTRIBUTE = "grainfather_entity_type"
+MEASUREMENT_ATTRIBUTE = "grainfather_measurement"
 FERMENTATION_DEVICE_TYPE = "fermentation_device"
 BREW_SESSION_TYPE = "brew_session"
 PROFILE_TARGET_SERVICE = "adjust_current_step_temperature"
@@ -110,26 +111,57 @@ def _device_snapshots(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "linked_brew_session_name": attrs.get("linked_brew_session_name"),
                 "last_heard": attrs.get("last_heard"),
                 "is_controller_linked": _optional_bool(attrs.get("is_controller_linked")),
+                "controller_online": _optional_bool(attrs.get("controller_online")),
+                "controller_transport": attrs.get("controller_transport"),
+                "esp_chip_id": attrs.get("esp_chip_id"),
+                "accessory_device_id": attrs.get("accessory_device_id"),
+                "accessory_device_type_id": attrs.get("accessory_device_type_id"),
+                "accessory_device_name": attrs.get("accessory_device_name"),
                 "temperature": None,
                 "temperature_entity": None,
+                "target_temperature": None,
+                "target_temperature_entity": None,
                 "gravity": None,
                 "gravity_entity": None,
             },
         )
 
-        for attr_key in ("linked_brew_session_id", "linked_brew_session_name", "last_heard"):
+        for attr_key in (
+            "linked_brew_session_id",
+            "linked_brew_session_name",
+            "last_heard",
+            "controller_transport",
+            "esp_chip_id",
+            "accessory_device_id",
+            "accessory_device_type_id",
+            "accessory_device_name",
+        ):
             if attrs.get(attr_key) is not None:
                 device[attr_key] = attrs.get(attr_key)
         controller_linked = _optional_bool(attrs.get("is_controller_linked"))
         if controller_linked is not None:
             device["is_controller_linked"] = controller_linked
+        controller_online = _optional_bool(attrs.get("controller_online"))
+        if controller_online is not None:
+            device["controller_online"] = controller_online
 
-        if _is_temperature_state(state):
+        measurement = str(attrs.get(MEASUREMENT_ATTRIBUTE) or "").strip().lower()
+
+        if measurement == "target_temperature":
+            device["target_temperature"] = _state_float(state)
+            device["target_temperature_entity"] = state.entity_id
+        elif measurement == "gravity":
+            device["gravity"] = _state_float(state)
+            device["gravity_entity"] = state.entity_id
+        elif measurement == "temperature":
             device["temperature"] = _state_float(state)
             device["temperature_entity"] = state.entity_id
         elif _is_gravity_state(state):
             device["gravity"] = _state_float(state)
             device["gravity_entity"] = state.entity_id
+        elif _is_temperature_state(state):
+            device["temperature"] = _state_float(state)
+            device["temperature_entity"] = state.entity_id
 
     return sorted(grouped.values(), key=lambda item: str(item.get("device_id")))
 
@@ -171,6 +203,19 @@ def build_grainfather_fermenter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         linked_session = sessions.get(str(selected["linked_brew_session_id"]))
 
     controller_verified = selected is not None and selected.get("is_controller_linked") is True
+    accessory_name = str(selected.get("accessory_device_name") or "") if selected else ""
+    model_verified = accessory_name.strip().casefold() == "grainfather gf30"
+    direct_target_service_available = hass.services.has_service(
+        EXTERNAL_DOMAIN,
+        "set_controller_target_temperature",
+    )
+    supervised_target_ready = bool(
+        controller_verified
+        and selected
+        and selected.get("controller_online") is True
+        and selected.get("target_temperature_entity")
+        and direct_target_service_available
+    )
     future_supervised_target_ready = bool(
         controller_verified
         and linked_session
@@ -218,14 +263,25 @@ def build_grainfather_fermenter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "linked_session": linked_session,
         "temperature": selected.get("temperature") if selected else None,
         "temperature_entity": selected.get("temperature_entity") if selected else None,
+        "target_temperature": selected.get("target_temperature") if selected else None,
+        "target_temperature_entity": (
+            selected.get("target_temperature_entity") if selected else None
+        ),
         "gravity": selected.get("gravity") if selected else None,
         "gravity_entity": selected.get("gravity_entity") if selected else None,
         "controller_linked": selected.get("is_controller_linked") if selected else None,
         "profile_target_service": f"{EXTERNAL_DOMAIN}.{PROFILE_TARGET_SERVICE}",
         "profile_target_service_available": profile_target_service_available,
+        "direct_target_service": f"{EXTERNAL_DOMAIN}.set_controller_target_temperature",
+        "direct_target_service_available": direct_target_service_available,
+        "supervised_target_ready": supervised_target_ready,
         "future_supervised_target_ready": future_supervised_target_ready,
         "devices": devices,
         "sessions": list(sessions.values()),
-        "model_verified": False,
-        "model_note": "Current upstream Home Assistant attributes do not prove that the selected device is specifically a GF30.",
+        "model_verified": model_verified,
+        "model_note": (
+            "Verified from the Grainfather integration accessory_device_name attribute."
+            if model_verified
+            else "Selected controller is not yet positively identified as a GF30."
+        ),
     }

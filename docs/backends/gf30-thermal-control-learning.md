@@ -80,7 +80,16 @@ Learning ------> read-only rekommendation och osäkerhet; inga writes
 - Starta med frysstyrningen `off` tills givare, medium, fysisk installation, kompressorskydd, eventuell oberoende failsafe och operatörstester är godkända. Exakta entity-ID, börvärden och toleranser väljs först efter att hårdvara och medium är kända.
 - Skydda kompressorn från kortcykling med rekommenderade intervall för den faktiska frysen och verifiera även efter HA-omstart/strömavbrott. Mjukvarutidtagare ensamt är inte oberoende hårdvaruskydd.
 - Mediumets **verkliga** fryspunkt, koncentration och flödes-/pumpgränser måste verifieras; vatten får inte antas fungera vid minusgrader. Köldmediebörvärde och gränser ska vara skilda från öltemperatur och cold-crash-mål.
-- BA v1 har read-only/learning mot `generic_thermostat`; ändrar varken dess setpoint, HVAC-läge eller frysbrytare. En framtida aktiv setpoint-funktion kräver separat explicit kvittering och testad validering inom säkra gränser; inga självjusteringar från learning.
+- BA v1 har read-only/learning mot `generic_thermostat`; ändrar varken dess setpoint, HVAC-läge eller frysbrytare.
+- **Beslutad framtida målmodell:** reservoaren ska inte hållas permanent så kall som möjligt. BA ska i stället beräkna en dynamisk köldmedietarget relativt GF30:s aktuella ölbörvärde och fas:
+
+```text
+coolant_target = gf30_beer_target - adaptive_cooling_headroom
+coolant_target = clamp(coolant_target, verified_min_safe, verified_max_useful)
+```
+
+  Målet är den **varmaste köldmedietemperatur som fortfarande ger GF30 tillräcklig kylkapacitet**. Stabil jäsning, aktiv temperatursänkning och cold crash får ha olika headroom. Learning får senare föreslå/justera headroom endast från validerad fysisk data. GF30 äger fortsatt kylbehov och pump; BA får inte skapa en parallell pumpregulator.
+- En framtida aktiv setpoint-funktion får endast ändra `generic_thermostat`-target inom verifierade medium-/frysgränser. Den kräver separat explicit kvittering och testad validering; inga självjusteringar från learning innan den grinden passerats.
 
 Referens: https://www.home-assistant.io/integrations/generic_thermostat/ . Plattformens konfigurationsmöjligheter är inte bevis för verklig OFF-funktion hos användarens frys.
 
@@ -110,7 +119,7 @@ Visa `learning_status`, `sample_count`, `confidence`, `reason`, `pill_temperatur
 
 1. **Kartläggning/read-only:** valfria BA-mappings för köldmedium, frysluft och `generic_thermostat` är implementerade; identifiera och välj verkliga entity-ID när hårdvaran finns. Verifiera därefter GF30:s interna givares åtkomst, Pill-uppdateringar, thermostat/readback och att GF30 lokalt sköter pump utan konkurrerande BA-automation.
 2. **Dual-sensorprov:** jämför Pill och GF30-intern i tempererat, termiskt utjämnat vatten och därefter kontrollerad kylning; välj tolerans, sampling/timeout och safe-point-logik empiriskt. Dokumentera om HA exponerar pump-/kylbegäransstatus.
-3. **Köldmedieprov:** validera mediets fryspunkt, representativ mätpunkt, kompressorcykler och faktisk freezer-OFF under sensorstale, restart, smartplug- och HA-bortfall; verifiera oberoende failsafe där så krävs.
+3. **Köldmedieprov:** validera mediets fryspunkt, representativ mätpunkt, kompressorcykler och faktisk freezer-OFF under sensorstale, restart, smartplug- och HA-bortfall; verifiera oberoende failsafe där så krävs. Varje prov börjar med explicit kontroll att YAML/integration har lästs om, att `generic_thermostat` faktiskt är aktiv, att rätt target-sensor används och att thermostatens target/HVAC-state/readback är rimliga **innan frysen energiseras**.
 4. **Learning read-only:** sensordata + råhistorik, separata trender och modellkonfidens, regressioner för disagreement/stale/omstart/pump-unknown och mode-skiften; inget actuator-API.
 5. **Eventuell supervised setpoint:** ett separat senare beslut efter fysisk bekräftelse och explicit operator-confirmation. GF30-ölbörvärdesbrygga från äldre roadmap blandas inte ihop med DIY-reservoarens börvärde. Ingen BA-pumpstyrning.
 6. **Fullcykeltest:** vatten → riktig batch → normaljäsning → verifierat FG → kvitterad cold crash och bortfallsprov. Automatisk learning-styrning är inte ett v1-krav.

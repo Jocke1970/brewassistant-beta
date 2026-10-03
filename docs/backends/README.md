@@ -1,7 +1,7 @@
 # BrewAssistant Backend Documentation
 
 Status: active development / documentation index  
-Last documentation sync: 2026-09-24  
+Last documentation sync: 2026-10-01  
 HLT field baseline: 2026-09-20  
 GF30 DIY thermal/learning: read-only backend foundation implemented on dev 2026-09-24; Brewfather export remains planned/documentation-only
 
@@ -39,6 +39,8 @@ Canonical short-form documentation lives beside each backend under `custom_compo
 | [`cooling-backend.md`](./cooling-backend.md) | Cooling v2 architecture/roadmap; its older implementation-pending sections are historical. |
 | [`fermentation-tracking.md`](./fermentation-tracking.md) | Fermentation Tracking MVP details/examples. |
 | [`grainfather-fermenter.md`](./grainfather-fermenter.md) | GF30 cloud-adapter preparation, ownership, live-hardware validation gate and future supervised target plan. |
+| **[`grainfather-integration-extension.md`](./grainfather-integration-extension.md)** | **Planned BrewAssistant-oriented fork/branch strategy for richer Grainfather HA telemetry: verified target-temperature parsing first, then read-only realtime controller discovery, normalized heating/cooling/online/status, and only later supervised target writes.** |
+| [`gf30-cloud-link-recovery.md`](./gf30-cloud-link-recovery.md) | Field-verified record of the GF30 Wi-Fi/cloud/account-link recovery and the separation between Wi-Fi provisioning and Grainfather account linking. |
 | **[`gf30-thermal-control-learning.md`](./gf30-thermal-control-learning.md)** | **GF30 DIY cooling architecture and current read-only implementation:** Pill/manual preflight, persistent observations, passive learning, Pill/internal safe-point, optional coolant/freezer entity mappings and generic_thermostat ownership. Physical control and live GF30 validation remain pending. |
 | **[`gf30-brewfather-upstream.md`](./gf30-brewfather-upstream.md)** | **New planned outbound Brewfather Custom Stream:** 5-minute GF reads, max one POST per 15 minutes/device, existing BF-fork sender, HTTPS/freshness/duplicate guards and temperature-channel mapping. Documentation only; no new sending. |
 | [`../roadmap.md`](../roadmap.md) | Current integrated status, remaining acceptance criteria and promotion gates. |

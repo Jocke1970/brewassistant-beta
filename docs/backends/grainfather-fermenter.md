@@ -1,7 +1,7 @@
 # Grainfather Fermenter / GF30 roadmap
 
-Status: read-only preparation active; physical control blocked on live hardware  
-Last synced: 2026-09-24  
+Status: read-only live-hardware validation active; physical control still blocked pending control/readback validation  
+Last synced: 2026-10-01  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
@@ -10,6 +10,25 @@ This document records where BrewAssistant currently stands and the intended rout
 The code-local contract remains authoritative for current behavior:
 
 [`../../custom_components/brewassistant/grainfather_fermenter/README.md`](../../custom_components/brewassistant/grainfather_fermenter/README.md)
+
+Field-verified GF30 Wi-Fi/cloud recovery note:
+
+[`gf30-cloud-link-recovery.md`](gf30-cloud-link-recovery.md)
+
+Planned BrewAssistant-oriented extension of the upstream Home Assistant Grainfather integration:
+
+[`grainfather-integration-extension.md`](grainfather-integration-extension.md)
+
+The intended repository/branch model mirrors the existing BrewAssistant RAPT Cloud Link work:
+
+```text
+upstream: fidley/grainfather_integration -> main
+fork: Jocke1970/grainfather_integration
+  main                         -> upstream-clean mirror
+  brewassistant-grainfather -> BA-oriented integration development
+```
+
+The Grainfather integration fork now owns the active integration-extension work on `brewassistant-grainfather`: verified history target-temperature support is implemented, and a separate read-only Particle capability probe is available for the next field check. The Grainfather integration owns Grainfather/controller transport and normalized HA entities. BrewAssistant owns provider selection, thermal diagnostics, process policy and Supervised Apply.
 
 ## 1. Architectural decision
 
@@ -32,7 +51,7 @@ The existing `grainfather` module must not be repurposed for GF30.
 
 ## 2. Current implementation state
 
-Phase 1 is now an active read-only foundation on `dev`: cloud discovery remains fail-passive, and thermal preflight can already collect Pill + manual-reference field data before GF30 Wi-Fi is available.
+Phase 1 is now an active read-only foundation on `dev`: cloud discovery remains fail-passive, the real GF30 is Wi-Fi/cloud linked, internal temperature reaches Home Assistant, and thermal preflight can compare controller/Pill/manual observations. A separate upstream-integration extension plan now covers richer Grainfather telemetry.
 
 Implemented now:
 
@@ -96,9 +115,16 @@ fermentation_tracking
   -> grainfather_fermenter
   -> Grainfather profile target
   -> GF30 controller
+
+separate coolant support:
+GF30 beer target / phase
+  -> adaptive cooling headroom
+  -> coolant target within verified bounds
+  -> HA generic_thermostat
+  -> freezer / reservoir
 ```
 
-The two provider paths are alternatives. They must never compete for the same fermentation.
+The two provider paths are alternatives. They must never compete for the same fermentation. The separate coolant loop supports the selected GF30 provider but does not own the GF30 pump or beer-temperature regulation.
 
 ## 4. Expected future control boundary
 
@@ -175,6 +201,17 @@ First live installation should capture and verify:
 
 No writable BrewAssistant bridge should be merged merely because the upstream service exists. Service semantics and readback must be proven against the real controller.
 
+### Coolant-target design decision
+
+The reservoir is not intended to sit permanently at the coldest achievable temperature. The preferred future policy is:
+
+```text
+coolant_target = gf30_beer_target - adaptive_cooling_headroom
+coolant_target = clamp(coolant_target, verified_min_safe, verified_max_useful)
+```
+
+The target should therefore be as warm as practical while still giving the GF30 sufficient cooling capacity. Normal fermentation, active temperature ramps and cold crash may require different headroom. Those values must come from physical characterization rather than being hard-coded from theory. GF30 continues to own cooling demand and pump cycling; the coolant loop only maintains a suitable cold reserve.
+
 ## 7. Roadmap
 
 ### Phase 1 — Read-only preparation
@@ -194,7 +231,7 @@ Exit condition: preparation is documented and can remain parked safely without h
 
 ### Phase 2 — Live hardware characterization
 
-Status: **partially unblocked for manual/Pill cooling tests; GF30 cloud/controller validation still requires Wi-Fi hardware**.
+Status: **live GF30 connected; Wi-Fi provisioning, Grainfather account link and Home Assistant temperature telemetry are field-verified. Target/control semantics remain unverified.**
 
 Deliverables:
 
@@ -268,7 +305,7 @@ Only consider more automatic control after repeated field evidence shows that:
 
 ## 8. Parking point
 
-Until the GF30 physically exists, the correct development posture is:
+With the GF30 now physically connected, the correct development posture is:
 
 ```text
 KEEP:
@@ -284,7 +321,7 @@ DO NOT ADD YET:
 - direct heater/cooling control
 ```
 
-When hardware arrives, resume from **Phase 2 — Live hardware characterization**, not by redesigning the backend from scratch.
+Continue from **Phase 2 — Live hardware characterization** using the now-linked controller; do not redesign the backend from scratch.
 
 ## 9. Files of interest
 

@@ -1,19 +1,23 @@
 # Grainfather Fermenter backend
 
-Status: active read-only GF30 backend foundation / no actuator control  
+Status: active GF30 telemetry + supervised target adapter  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
 This package is intentionally separate from BrewAssistant's reserved `grainfather` hot-side adapter. The existing `grainfather` module remains available for Grainfather brewing systems such as G30/G40-class hardware. This package is for fermentation hardware.
 
 Longer architecture/roadmap: [`../../../docs/backends/grainfather-fermenter.md`](../../../docs/backends/grainfather-fermenter.md)  
-DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)
+DIY cooling/learning contract: [`../../../docs/backends/gf30-thermal-control-learning.md`](../../../docs/backends/gf30-thermal-control-learning.md)  
+GF30 Wi-Fi/cloud recovery note: [`../../../docs/backends/gf30-cloud-link-recovery.md`](../../../docs/backends/gf30-cloud-link-recovery.md)  
+Grainfather integration extension roadmap: [`../../../docs/backends/grainfather-integration-extension.md`](../../../docs/backends/grainfather-integration-extension.md)
 
 ## Ownership boundary
 
 `fermentation_tracking` owns the fermentation process: SG/day progression, readiness and the desired beer-temperature target.
 
 `grainfather_fermenter` owns GF30-specific hardware adaptation and thermal diagnostics. It may later translate an approved BrewAssistant target to the GF30 controller, but it does not decide fermentation progression itself.
+
+The external Home Assistant Grainfather integration should own Grainfather Cloud/controller transport. The BA-oriented fork now publishes stable per-device measurement metadata through `grainfather_measurement` (`temperature`, `target_temperature`, `gravity`); this backend consumes that metadata before legacy heuristics so the controller setpoint can never silently replace the actual-temperature source. Planned BA-oriented development follows the RCL pattern: keep the future fork's `main` close to `fidley/grainfather_integration/main`, and develop richer telemetry/control surfaces on `brewassistant-grainfather`. BrewAssistant should consume normalized HA entities/services rather than duplicate Grainfather or Particle authentication.
 
 The intended split is:
 
@@ -30,8 +34,21 @@ GF30 controller
   -> local heater and automatic cooling-pump logic
 
 separate coolant loop:
-HA generic_thermostat -> freezer -> coolant reservoir
+fermentation/GF30 beer target
+  -> future adaptive cooling headroom
+  -> future coolant target (safe min/max clamped)
+  -> HA generic_thermostat
+  -> freezer -> coolant reservoir
 ```
+
+Design decision for the future active coolant path: BrewAssistant should not try to keep the reservoir at one permanently cold temperature. The intended target is the **warmest coolant temperature that still gives the GF30 enough cooling authority** for the current fermentation phase. Conceptually:
+
+```text
+coolant_target = gf30_beer_target - adaptive_cooling_headroom
+coolant_target = clamp(coolant_target, verified_min_safe, verified_max_useful)
+```
+
+The headroom may later differ between stable fermentation, active ramp-down and cold crash, and may be refined from validated thermal-learning data. The GF30 controller still owns cooling demand and its circulation pump; BrewAssistant must not create a competing pump-control path.
 
 ## Implemented now
 
@@ -184,9 +201,49 @@ model_verified: false
 
 A friendly name containing `GF30` is not considered sufficient proof.
 
+## Supervised GF30 target adapter
+
+The field-verified Grainfather integration now exposes
+`grainfather.set_controller_target_temperature`, which performs the bounded
+GF30 command-0 write and requires fresh MQTT target readback.
+
+BrewAssistant consumes that service rather than publishing MQTT itself.
+
+The adapter flow is deliberately two-stage:
+
+```text
+fermentation_tracking recommendation
+  -> button.brewassistant_gf30_prepare_target
+  -> pending generic Supervised Apply action
+  -> button.brewassistant_confirm_supervised_apply
+  -> grainfather.set_controller_target_temperature(confirm=true)
+  -> Grainfather integration MQTT readback
+  -> verified / not executed
+```
+
+Dedicated diagnostics:
+
+```text
+sensor.brewassistant_gf30_target_apply_state
+sensor.brewassistant_gf30_recommended_target
+sensor.brewassistant_gf30_controller_target
+sensor.brewassistant_gf30_target_delta
+```
+
+The proposal button never writes hardware. It only creates a pending action.
+The confirmation executor re-reads the current BrewAssistant recommendation
+immediately before execution and refuses the write if the recommendation
+changed. It also refuses to overwrite a pending action owned by another
+BrewAssistant backend.
+
+A confirmed write is considered consumed only when the Grainfather integration
+reports `target_write_last_result: verified`.
+
 ## Control boundary
 
-The current backend never sends a Grainfather command.
+The discovery, thermal, coolant and learning paths remain read-only. The only
+GF30 actuator path in this package is the supervised target adapter described
+above.
 
 The upstream integration exposes a service that can set the temperature of the active Grainfather fermentation step:
 
@@ -196,7 +253,7 @@ grainfather.adjust_current_step_temperature
 
 That remains a promising future supervised bridge. The GF30 controller itself owns its local heater and automatic cooling-pump behavior. BrewAssistant must not create a parallel pump-control path.
 
-The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat.
+The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat. A future BrewAssistant coolant-target bridge may adjust only the thermostat target, within physically verified bounds; it must not switch the freezer directly.
 
 ## Relationship to existing chamber backend
 
