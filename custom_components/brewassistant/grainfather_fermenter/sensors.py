@@ -23,6 +23,7 @@ from ..entity import BrewAssistantEntity
 from .adapter import build_grainfather_fermenter_snapshot
 from .coolant import build_coolant_monitor_snapshot
 from .preflight_runtime import build_gf30_preflight_runtime_snapshot
+from .supervised_target import build_gf30_target_adapter_snapshot
 from .thermal import build_dual_sensor_snapshot
 
 if TYPE_CHECKING:
@@ -61,6 +62,32 @@ SPECS: tuple[GF30SensorSpec, ...] = (
         field="gravity",
         unit="SG",
         state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_target_apply_state",
+        snapshot="target_adapter",
+        field="state",
+    ),
+    GF30SensorSpec(
+        key="gf30_recommended_target",
+        snapshot="target_adapter",
+        field="recommended_target_temperature",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+    ),
+    GF30SensorSpec(
+        key="gf30_controller_target",
+        snapshot="target_adapter",
+        field="controller_target_temperature",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+    ),
+    GF30SensorSpec(
+        key="gf30_target_delta",
+        snapshot="target_adapter",
+        field="target_delta",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
     ),
     GF30SensorSpec(
         key="gf30_preflight_status",
@@ -325,6 +352,8 @@ class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
             return _dual_snapshot(self.coordinator)
         if self._spec.snapshot == "coolant":
             return _coolant_snapshot(self.coordinator)
+        if self._spec.snapshot == "target_adapter":
+            return build_gf30_target_adapter_snapshot(self.coordinator.hass)
         return build_gf30_preflight_runtime_snapshot(self.coordinator.hass)
 
     @property
@@ -356,6 +385,8 @@ class BrewAssistantGF30Sensor(BrewAssistantEntity, SensorEntity):
                 "linked_session": snapshot.get("linked_session"),
             }
         if self._spec.snapshot == "dual":
+            return snapshot
+        if self._spec.snapshot == "target_adapter":
             return snapshot
         return snapshot
 
