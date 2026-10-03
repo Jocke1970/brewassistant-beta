@@ -133,6 +133,15 @@ gf30_coolant_thermostat_entity
 
 Leaving them blank is valid. When real sensors exist, selecting those entities automatically enables the read-only coolant diagnostics; no guessed entity IDs are embedded in the backend. The coolant snapshot uses source `last_updated` for freshness and reads the thermostat's target temperature / `hvac_action` only as telemetry.
 
+Two additional optional read-only mappings are available:
+
+```text
+gf30_cooler_power_entity
+gf30_cooler_switch_entity
+```
+
+These observe the physical cooler's power and supply switch. BrewAssistant does **not** infer compressor state from watts and never toggles the switch. A fresh coolant sensor may make the monitor `monitor_ready`, but active-cooling readiness remains `not_validated` until coolant medium and safe operating bounds have been explicitly verified.
+
 ### First cooling-test workflow
 
 Before the first water/cooling run, clear old test observations with:
