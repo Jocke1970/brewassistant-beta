@@ -3,7 +3,7 @@
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.
 
 > [!IMPORTANT]
-> **Aktuellt 2026-10-03:** `dev` förbereds som **v0.2.0-beta.16** för `dev → beta`-promotion. Senaste publicerade prerelease före denna releasegrind är [v0.2.0-beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14). Beta.16 bygger vidare på GF30 read-only thermal/preflight med en **Supervised Apply-targetadapter** mot den fältverifierade Grainfather-servicen. GF30 äger fortsatt heater/cooling-pump och BA gör inga direkta actuator-writes. Läs [24/9-doc-sync](docs/doc-sync-2026-09-24_sv.md), [beta.15 release notes](docs/beta15-prerelease-notes_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md).
+> **Aktuellt 2026-10-03:** `dev` förbereds som **v2026.10.0b1** för `dev → beta`-promotion. Senaste publicerade prerelease i det äldre versionsspåret är `v0.2.0-beta.15`. Från oktober 2026 används kalenderbaserad beta-versionering: `2026.10.0b1`, `2026.10.0b2`, …. 2026.10.0b1 bygger vidare på GF30 read-only thermal/preflight med en **Supervised Apply-targetadapter** mot den fältverifierade Grainfather-servicen. GF30 äger fortsatt heater/cooling-pump och BA gör inga direkta actuator-writes. Läs [24/9-doc-sync](docs/doc-sync-2026-09-24_sv.md), [beta.15 release notes](docs/beta15-prerelease-notes_sv.md), [roadmap](docs/roadmap.md) och [installationsguiden](docs/INSTALLATION.md).
 
 ## Säker användning av beta.14 / beta.15-kandidat
 

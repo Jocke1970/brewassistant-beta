@@ -13,7 +13,7 @@ Varje funktionell ändring ska ange:
 
 ---
 
-## 2026-10-03 — v0.2.0-beta.16 — GF30 supervised target adapter
+## 2026-10-03 — v2026.10.0b1 — GF30 supervised target adapter
 
 ### Sammanfattning
 
