@@ -189,6 +189,11 @@ def build_coolant_monitor_snapshot(
             "switch_on": switch_on,
             "compressor_running_inferred": False,
         },
+        "monitoring_ready": bool(coolant["fresh"]),
+        "cooling_readiness": "not_validated",
+        "cooling_readiness_reason": (
+            "Coolant medium and safe operating bounds are not yet verified"
+        ),
         "learning_ready": bool(coolant["fresh"]),
         "safe_setpoint_known": False,
         "coolant_mixture_verified": False,
