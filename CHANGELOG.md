@@ -13,6 +13,50 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-10-03 — v0.2.0-beta.16 — GF30 supervised target adapter
+
+### Sammanfattning
+
+BrewAssistant kopplas nu till den fältverifierade GF30-targetytan i
+`Jocke1970/grainfather_integration`. `fermentation_tracking` fortsätter äga
+önskad öltemperatur, medan `grainfather_fermenter` endast adapterar den
+rekommendationen till GF30.
+
+Ny operatorväg:
+
+- `button.brewassistant_gf30_prepare_target` skapar endast en pending action;
+- befintlig `button.brewassistant_confirm_supervised_apply` krävs för faktisk write;
+- executorn återvaliderar live-rekommendationen före write;
+- write går endast via
+  `grainfather.set_controller_target_temperature(confirm=true)`;
+- Grainfather-integrationen äger command 0, MQTT och readback;
+- BA betraktar åtgärden som utförd först när extern readback rapporterar
+  `target_write_last_result: verified`.
+
+GF30 får inte skriva över en pending Supervised Apply-action från annan backend.
+
+### Nya sensorer
+
+- `sensor.brewassistant_gf30_target_apply_state`
+- `sensor.brewassistant_gf30_recommended_target`
+- `sensor.brewassistant_gf30_controller_target`
+- `sensor.brewassistant_gf30_target_delta`
+
+### Säkerhets-/ägarskapsgräns
+
+- GF30-controllern äger lokal heater och cooling-pump.
+- Direkt heater/cooling-styrning från BA är fortsatt DISABLED.
+- GF30-target är deklarerad CONFIRM-capability i modulregistret.
+- Coolant/freezer-backenden är oförändrad och fortsatt read-only.
+- Ingen automatiskt verkställd temperaturändring införs.
+
+### HA-åtgärd
+
+**Home Assistant-omstart krävs** efter uppdatering eftersom nya integration-owned
+sensorer/button och supervised executor registreras.
+
+---
+
 ## 2026-09-24 — v0.2.0-beta.15 — GF30 read-only thermal foundation + doc-sync
 
 ### Sammanfattning
