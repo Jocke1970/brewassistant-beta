@@ -48,7 +48,7 @@ Befintlig `button.brewassistant_confirm_supervised_apply` används för kvittens
 
 ## Releasegrind
 
-Promotion sker som merge commit `dev → beta`.
+Promotion sker med GitHubs **Create a merge commit** som `dev → beta`.
 CI, HACS och Hassfest ska vara gröna på exakt beta-merge-SHA före taggning.
 
 **beta-merge-SHA:** fylls med den verifierade beta-SHA:n efter promotion.
