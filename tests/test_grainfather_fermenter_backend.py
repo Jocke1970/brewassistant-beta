@@ -356,6 +356,8 @@ def test_gf30_coolant_entities_are_optional_config_mappings() -> None:
         "CONF_GF30_COOLANT_TEMP_ENTITY",
         "CONF_GF30_FREEZER_AIR_TEMP_ENTITY",
         "CONF_GF30_COOLANT_THERMOSTAT_ENTITY",
+        "CONF_GF30_COOLER_POWER_ENTITY",
+        "CONF_GF30_COOLER_SWITCH_ENTITY",
     ):
         assert name in const_source
         assert name in config_source
@@ -365,6 +367,8 @@ def test_gf30_coolant_entities_are_optional_config_mappings() -> None:
     assert 'DEFAULT_GF30_COOLANT_TEMP_ENTITY = ""' in const_source
     assert 'DEFAULT_GF30_FREEZER_AIR_TEMP_ENTITY = ""' in const_source
     assert 'DEFAULT_GF30_COOLANT_THERMOSTAT_ENTITY = ""' in const_source
+    assert 'DEFAULT_GF30_COOLER_POWER_ENTITY = ""' in const_source
+    assert 'DEFAULT_GF30_COOLER_SWITCH_ENTITY = ""' in const_source
 
 
 def test_gf30_coolant_sensors_remain_read_only_and_thermostat_owned() -> None:
@@ -374,6 +378,8 @@ def test_gf30_coolant_sensors_remain_read_only_and_thermostat_owned() -> None:
     assert 'key="gf30_coolant_status"' in sensor_source
     assert 'key="gf30_coolant_temperature"' in sensor_source
     assert 'key="gf30_freezer_air_temperature"' in sensor_source
+    assert 'key="gf30_cooler_power"' in sensor_source
+    assert 'key="gf30_cooler_switch_state"' in sensor_source
     assert "build_coolant_monitor_snapshot" in sensor_source
     assert '"expected_owner": "home_assistant_generic_thermostat"' in coolant_source
     assert '"direct_freezer_switching": False' in coolant_source
@@ -464,3 +470,35 @@ def test_gf30_tracking_rule_fallback_is_not_an_authorized_gf30_target() -> None:
     source = SUPERVISED_TARGET.read_text(encoding="utf-8")
     assert "source in PROFILE_TARGET_SOURCES" in source
     assert '"tracking_rule"' not in source
+
+
+def test_coolant_monitor_observes_power_and_switch_without_compressor_guess() -> None:
+    module = _load_coolant_module()
+    now = datetime(2026, 10, 3, 19, 0, tzinfo=timezone.utc)
+
+    snapshot = module.build_coolant_monitor_snapshot(
+        coolant_temperature_c=19.8,
+        coolant_observed_at=now,
+        freezer_air_temperature_c=21.8,
+        freezer_air_observed_at=now,
+        thermostat_state="cool",
+        thermostat_target_c=3.9,
+        thermostat_hvac_action="cooling",
+        cooler_power_w=277.0,
+        cooler_switch_state="on",
+        now=now,
+    )
+
+    assert snapshot["thermostat"]["cooling_demand"] is True
+    assert snapshot["cooler"]["power_available"] is True
+    assert snapshot["cooler"]["power_w"] == 277.0
+    assert snapshot["cooler"]["switch_available"] is True
+    assert snapshot["cooler"]["switch_on"] is True
+    assert snapshot["cooler"]["compressor_running_inferred"] is False
+    assert snapshot["control_allowed"] is False
+    assert snapshot["monitoring_ready"] is True
+    assert snapshot["cooling_readiness"] == "not_validated"
+    assert snapshot["safe_setpoint_known"] is False
+    assert snapshot["coolant_mixture_verified"] is False
+    assert snapshot["automatic_setpoint_changes"] is False
+    assert snapshot["direct_freezer_switching"] is False

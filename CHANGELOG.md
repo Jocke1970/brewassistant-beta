@@ -13,6 +13,63 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-10-03 — v2026.10.0b3 — GF30 Liquid Cooler read-only readiness
+
+### Sammanfattning
+
+GF30 coolant-backenden utökas med full read-only observation av den externa
+Liquid Cooler-kedjan utan att BrewAssistant får någon ny fysisk styrbehörighet.
+
+Nya valfria mappings:
+
+- `gf30_cooler_power_entity`
+- `gf30_cooler_switch_entity`
+
+De kompletterar befintliga:
+
+- `gf30_coolant_temp_entity`
+- `gf30_freezer_air_temp_entity`
+- `gf30_coolant_thermostat_entity`
+
+Backenden observerar nu coolant-temperatur, frysluft, termostatens target och
+`hvac_action`, cooler power samt cooler switch state.
+
+### Nya sensorer
+
+- `sensor.brewassistant_gf30_cooler_power`
+- `sensor.brewassistant_gf30_cooler_switch_state`
+
+### Readiness boundary
+
+`monitor_ready` betyder endast att den nödvändiga coolant-telemetrin är färsk.
+Det betyder **inte** att kylsystemet är verifierat säkert för aktiv kylning.
+
+Snapshoten exponerar därför separat:
+
+- `monitoring_ready`
+- `cooling_readiness: not_validated`
+- `safe_setpoint_known: false`
+- `coolant_mixture_verified: false`
+
+BrewAssistant gissar inte kompressordrift från effektvärdet och ändrar varken
+cooler switch eller thermostat setpoint.
+
+### Säkerhetsgräns
+
+- GF30 controller äger fortsatt beer-temperature control och sin cooling pump.
+- Home Assistant climate/thermostat äger Liquid Cooler/frys.
+- BrewAssistant observerar endast.
+- Ingen direkt cooler-switching.
+- Ingen automatisk thermostat-target.
+- Ingen kompressorstatus infereras från watt innan fältdata finns.
+
+### HA-åtgärd
+
+Home Assistant-omstart krävs efter integration update eftersom två nya
+integration-owned sensorer tillkommer.
+
+---
+
 ## 2026-10-03 — v2026.10.0b2 — GF30 profile-authority + focused supervised card
 
 ### Sammanfattning

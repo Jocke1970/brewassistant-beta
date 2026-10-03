@@ -16,6 +16,8 @@ from homeassistant.util import dt as dt_util
 from ..const import (
     CONF_GF30_COOLANT_TEMP_ENTITY,
     CONF_GF30_COOLANT_THERMOSTAT_ENTITY,
+    CONF_GF30_COOLER_POWER_ENTITY,
+    CONF_GF30_COOLER_SWITCH_ENTITY,
     CONF_GF30_FREEZER_AIR_TEMP_ENTITY,
     CONF_LIQUID_TEMP_ENTITY,
 )
@@ -219,6 +221,18 @@ SPECS: tuple[GF30SensorSpec, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    GF30SensorSpec(
+        key="gf30_cooler_power",
+        snapshot="coolant",
+        field="cooler.power_w",
+        unit="W",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    GF30SensorSpec(
+        key="gf30_cooler_switch_state",
+        snapshot="coolant",
+        field="cooler.switch_state",
+    ),
 )
 
 
@@ -292,6 +306,12 @@ def _coolant_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     thermostat_entity = coordinator.configured_entities.get(
         CONF_GF30_COOLANT_THERMOSTAT_ENTITY
     )
+    cooler_power_entity = coordinator.configured_entities.get(
+        CONF_GF30_COOLER_POWER_ENTITY
+    )
+    cooler_switch_entity = coordinator.configured_entities.get(
+        CONF_GF30_COOLER_SWITCH_ENTITY
+    )
 
     coolant_state = hass.states.get(coolant_entity) if coolant_entity else None
     freezer_air_state = (
@@ -299,6 +319,12 @@ def _coolant_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
     )
     thermostat_state = (
         hass.states.get(thermostat_entity) if thermostat_entity else None
+    )
+    cooler_power_state = (
+        hass.states.get(cooler_power_entity) if cooler_power_entity else None
+    )
+    cooler_switch_state = (
+        hass.states.get(cooler_switch_entity) if cooler_switch_entity else None
     )
 
     snapshot = build_coolant_monitor_snapshot(
@@ -323,12 +349,20 @@ def _coolant_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
             if thermostat_state is not None
             else None
         ),
+        cooler_power_w=(
+            cooler_power_state.state if cooler_power_state is not None else None
+        ),
+        cooler_switch_state=(
+            cooler_switch_state.state if cooler_switch_state is not None else None
+        ),
     )
     snapshot.update(
         {
             "coolant_entity": coolant_entity or None,
             "freezer_air_entity": freezer_air_entity or None,
             "thermostat_entity": thermostat_entity or None,
+            "cooler_power_entity": cooler_power_entity or None,
+            "cooler_switch_entity": cooler_switch_entity or None,
         }
     )
     return snapshot
