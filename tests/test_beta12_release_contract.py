@@ -53,7 +53,10 @@ def test_legacy_beta_is_preserved_and_calendar_beta_has_unique_version():
     assert CANDIDATE_TAG in notes and CANDIDATE_VERSION in notes
     assert "Pre-release" in notes and "HACS" in notes
     assert "Create a merge commit" in notes and "beta-merge-SHA" in notes
-    assert "supervised" in notes.lower() and "confirm" in notes.lower()
+    assert "read-only" in notes.lower()
+    assert "cooling_readiness: not_validated" in notes
+    assert "gf30_cooler_power_entity" in notes
+    assert "gf30_cooler_switch_entity" in notes
 
 
 def test_installer_retains_existing_safety_and_all_new_restrictions():
