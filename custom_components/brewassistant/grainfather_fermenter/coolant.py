@@ -88,6 +88,8 @@ def build_coolant_monitor_snapshot(
     thermostat_state: str | None = None,
     thermostat_target_c: Any = None,
     thermostat_hvac_action: str | None = None,
+    cooler_power_w: Any = None,
+    cooler_switch_state: str | None = None,
     now: datetime | None = None,
     freshness_seconds: int = DEFAULT_LOCAL_FRESHNESS_SECONDS,
 ) -> dict[str, Any]:
@@ -137,6 +139,26 @@ def build_coolant_monitor_snapshot(
         thermostat_state is not None
         and str(thermostat_state).strip().lower() not in INVALID_STATES
     )
+    power_w = _float(cooler_power_w)
+    switch_state_normalized = (
+        str(cooler_switch_state).strip().lower()
+        if cooler_switch_state is not None
+        else None
+    )
+    switch_available = bool(
+        switch_state_normalized
+        and switch_state_normalized not in INVALID_STATES
+    )
+    switch_on = (
+        switch_state_normalized == "on"
+        if switch_available
+        else None
+    )
+    cooling_demand = (
+        str(thermostat_hvac_action).strip().lower() == "cooling"
+        if thermostat_hvac_action is not None
+        else None
+    )
 
     return {
         "mode": "gf30_coolant_monitor",
@@ -156,7 +178,16 @@ def build_coolant_monitor_snapshot(
             "state": thermostat_state,
             "target_temperature_c": target_c,
             "hvac_action": thermostat_hvac_action,
+            "cooling_demand": cooling_demand,
             "expected_owner": "home_assistant_generic_thermostat",
+        },
+        "cooler": {
+            "power_available": power_w is not None,
+            "power_w": power_w,
+            "switch_available": switch_available,
+            "switch_state": cooler_switch_state,
+            "switch_on": switch_on,
+            "compressor_running_inferred": False,
         },
         "learning_ready": bool(coolant["fresh"]),
         "safe_setpoint_known": False,
