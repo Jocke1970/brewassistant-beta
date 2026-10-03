@@ -421,10 +421,12 @@ def test_gf30_supervised_target_never_overwrites_other_pending_action() -> None:
     assert '"request_result": "pending_action_conflict"' in source
 
 
-def test_gf30_supervised_target_revalidates_recommendation_before_write() -> None:
+def test_gf30_supervised_target_revalidates_profile_before_write() -> None:
     source = SUPERVISED_TARGET.read_text(encoding="utf-8")
-    assert '"recommendation_changed"' in source
-    assert "abs(float(requested) - float(live_recommended)) > 0.01" in source
+    assert '"profile_source_changed"' in source
+    assert '"profile_target_changed"' in source
+    assert "requested_source != live_profile_source" in source
+    assert "abs(float(requested) - float(live_profile_target)) > 0.01" in source
     assert '"supervised_confirmation_consumed": verified' in source
 
 
