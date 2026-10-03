@@ -15,6 +15,7 @@ LEARNING = ROOT / "custom_components/brewassistant/grainfather_fermenter/learnin
 COOLANT = ROOT / "custom_components/brewassistant/grainfather_fermenter/coolant.py"
 PREFLIGHT_RUNTIME = ROOT / "custom_components/brewassistant/grainfather_fermenter/preflight_runtime.py"
 GF30_SENSORS = ROOT / "custom_components/brewassistant/grainfather_fermenter/sensors.py"
+SUPERVISED_TARGET = ROOT / "custom_components/brewassistant/grainfather_fermenter/supervised_target.py"
 TOP_SENSOR = ROOT / "custom_components/brewassistant/sensor.py"
 TOP_INIT = ROOT / "custom_components/brewassistant/__init__.py"
 CONST = ROOT / "custom_components/brewassistant/const.py"
@@ -87,7 +88,8 @@ def test_phase_1_backend_is_read_only_and_fail_passive() -> None:
     assert "hass.services.async_call" not in source
     assert "async_call(" not in source
     assert "async_call(" not in thermal
-    assert '"model_verified": False' in source
+    assert '"model_verified": model_verified' in source
+    assert '"accessory_device_name"' in source
     assert '"control_allowed": False' in thermal
 
 
@@ -182,7 +184,7 @@ def test_manual_preflight_rejects_implausible_manual_value() -> None:
 
 
 def test_gf30_new_backend_files_are_valid_python() -> None:
-    for path in (THERMAL, LEARNING, COOLANT, PREFLIGHT_RUNTIME, GF30_SENSORS, TOP_SENSOR, TOP_INIT, CONST, CONFIG_FLOW, COORDINATOR):
+    for path in (THERMAL, LEARNING, COOLANT, PREFLIGHT_RUNTIME, GF30_SENSORS, SUPERVISED_TARGET, TOP_SENSOR, TOP_INIT, CONST, CONFIG_FLOW, COORDINATOR):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
@@ -393,3 +395,34 @@ def test_gf30_manual_service_refreshes_diagnostics_without_actuator_calls() -> N
     assert "await _refresh_gf30_sensors()" in init_source
     assert "sensor.brewassistant_gf30_coolant_status" in init_source
     assert "sensor.brewassistant_gf30_safe_point" in init_source
+
+
+def test_gf30_supervised_target_bridge_uses_verified_external_service() -> None:
+    source = SUPERVISED_TARGET.read_text(encoding="utf-8")
+    init_source = TOP_INIT.read_text(encoding="utf-8")
+    sensor_source = GF30_SENSORS.read_text(encoding="utf-8")
+
+    assert 'EXTERNAL_SERVICE = "set_controller_target_temperature"' in source
+    assert '"confirm": True' in source
+    assert "register_supervised_executor" in source
+    assert "setup_gf30_supervised_target_adapter()" in init_source
+    assert "hass.services.async_call(" in source
+    assert 'attrs.get("target_write_last_result")' in source
+    assert 'external_result == "verified"' in source
+    assert 'key="gf30_target_apply_state"' in sensor_source
+    assert 'key="gf30_recommended_target"' in sensor_source
+    assert 'key="gf30_controller_target"' in sensor_source
+    assert 'key="gf30_target_delta"' in sensor_source
+
+
+def test_gf30_supervised_target_never_overwrites_other_pending_action() -> None:
+    source = SUPERVISED_TARGET.read_text(encoding="utf-8")
+    assert 'existing.get("source") != SOURCE' in source
+    assert '"request_result": "pending_action_conflict"' in source
+
+
+def test_gf30_supervised_target_revalidates_recommendation_before_write() -> None:
+    source = SUPERVISED_TARGET.read_text(encoding="utf-8")
+    assert '"recommendation_changed"' in source
+    assert "abs(float(requested) - float(live_recommended)) > 0.01" in source
+    assert '"supervised_confirmation_consumed": verified' in source
