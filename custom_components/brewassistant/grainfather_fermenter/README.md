@@ -1,6 +1,6 @@
 # Grainfather Fermenter backend
 
-Status: active read-only GF30 backend foundation / no actuator control  
+Status: active GF30 telemetry + supervised target adapter  
 Initial hardware target: Grainfather GF30 Conical Fermenter  
 Upstream Home Assistant integration: `fidley/grainfather_integration`
 
@@ -201,9 +201,49 @@ model_verified: false
 
 A friendly name containing `GF30` is not considered sufficient proof.
 
+## Supervised GF30 target adapter
+
+The field-verified Grainfather integration now exposes
+`grainfather.set_controller_target_temperature`, which performs the bounded
+GF30 command-0 write and requires fresh MQTT target readback.
+
+BrewAssistant consumes that service rather than publishing MQTT itself.
+
+The adapter flow is deliberately two-stage:
+
+```text
+fermentation_tracking recommendation
+  -> button.brewassistant_gf30_prepare_target
+  -> pending generic Supervised Apply action
+  -> button.brewassistant_confirm_supervised_apply
+  -> grainfather.set_controller_target_temperature(confirm=true)
+  -> Grainfather integration MQTT readback
+  -> verified / not executed
+```
+
+Dedicated diagnostics:
+
+```text
+sensor.brewassistant_gf30_target_apply_state
+sensor.brewassistant_gf30_recommended_target
+sensor.brewassistant_gf30_controller_target
+sensor.brewassistant_gf30_target_delta
+```
+
+The proposal button never writes hardware. It only creates a pending action.
+The confirmation executor re-reads the current BrewAssistant recommendation
+immediately before execution and refuses the write if the recommendation
+changed. It also refuses to overwrite a pending action owned by another
+BrewAssistant backend.
+
+A confirmed write is considered consumed only when the Grainfather integration
+reports `target_write_last_result: verified`.
+
 ## Control boundary
 
-The current backend never sends a Grainfather command.
+The discovery, thermal, coolant and learning paths remain read-only. The only
+GF30 actuator path in this package is the supervised target adapter described
+above.
 
 The upstream integration exposes a service that can set the temperature of the active Grainfather fermentation step:
 
