@@ -1,146 +1,116 @@
-type: vertical-stack
+type: custom:vertical-stack-in-card
 cards:
-  - type: custom:mushroom-template-card
+  - type: custom:button-card
     entity: sensor.brewassistant_gf30_target_apply_state
-    primary: BrewAssistant · GF30
-    secondary: >-
-      {% set online = is_state('binary_sensor.grainfather_gf30_controller_online', 'on') %}
-      {% set mode = states('select.brewassistant_apply_mode') %}
-      {% set apply = states('sensor.brewassistant_gf30_target_apply_state') %}
-      {% if not online %}
-        GF30 offline · BA recommendation remains visible but cannot be applied
-      {% elif mode != 'Supervised apply' %}
-        Read only · select Supervised apply to prepare a target change
-      {% elif apply == 'awaiting_confirmation' %}
-        Waiting for operator confirmation
-      {% elif apply == 'proposed' %}
-        New recommendation can be prepared
-      {% elif apply == 'no_change' %}
-        GF30 already matches the BrewAssistant recommendation
-      {% elif apply == 'unavailable' %}
-        GF30 target adapter is not ready
-      {% else %}
-        {{ apply | replace('_', ' ') }}
-      {% endif %}
-    icon: mdi:thermometer-auto
-    icon_color: >-
-      {% set online = is_state('binary_sensor.grainfather_gf30_controller_online', 'on') %}
-      {% set apply = states('sensor.brewassistant_gf30_target_apply_state') %}
-      {% if not online %}
-        red
-      {% elif apply == 'awaiting_confirmation' %}
-        amber
-      {% elif apply == 'no_change' %}
-        green
-      {% elif apply == 'proposed' %}
-        blue
-      {% else %}
-        grey
-      {% endif %}
-    multiline_secondary: true
-    tap_action:
-      action: more-info
-
-  - type: grid
-    columns: 3
-    square: false
-    cards:
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_gf30_recommended_target
-        primary: Recommended
-        secondary: >-
-          {% set v = states('sensor.brewassistant_gf30_recommended_target') %}
-          {{ (v | float(0) | round(1)) ~ ' °C' if v not in ['unknown','unavailable','none',''] else '—' }}
-        icon: mdi:brain
-        icon_color: blue
-        layout: vertical
-        tap_action:
-          action: more-info
-
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_gf30_controller_target
-        primary: GF30 target
-        secondary: >-
-          {% set v = states('sensor.brewassistant_gf30_controller_target') %}
-          {{ (v | float(0) | round(1)) ~ ' °C' if v not in ['unknown','unavailable','none',''] else '—' }}
-        icon: mdi:target
-        icon_color: >-
-          {{ 'green' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'red' }}
-        layout: vertical
-        tap_action:
-          action: more-info
-
-      - type: custom:mushroom-template-card
-        entity: sensor.brewassistant_gf30_target_delta
-        primary: Delta
-        secondary: >-
-          {% set v = states('sensor.brewassistant_gf30_target_delta') %}
-          {% if v in ['unknown','unavailable','none',''] %}
-            —
-          {% else %}
-            {% set n = v | float(0) %}
-            {{ ('+' if n > 0 else '') ~ (n | round(1)) ~ ' °C' }}
-          {% endif %}
-        icon: mdi:delta
-        icon_color: >-
-          {% set v = states('sensor.brewassistant_gf30_target_delta') %}
-          {% if v in ['unknown','unavailable','none',''] %}
-            grey
-          {% elif (v | float(0) | abs) < 0.25 %}
-            green
-          {% else %}
-            amber
-          {% endif %}
-        layout: vertical
-        tap_action:
-          action: more-info
-
-  - type: custom:mushroom-chips-card
-    alignment: justify
-    chips:
-      - type: template
-        entity: binary_sensor.grainfather_gf30_controller_online
-        icon: >-
-          {{ 'mdi:lan-connect' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'mdi:lan-disconnect' }}
-        content: >-
-          {{ 'GF30 online' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'GF30 offline' }}
-        icon_color: >-
-          {{ 'green' if is_state('binary_sensor.grainfather_gf30_controller_online', 'on') else 'red' }}
-        tap_action:
-          action: more-info
-
-      - type: template
-        entity: select.brewassistant_apply_mode
-        icon: mdi:shield-check-outline
-        content: >-
-          {{ states('select.brewassistant_apply_mode') }}
-        icon_color: >-
-          {{ 'green' if is_state('select.brewassistant_apply_mode', 'Supervised apply') else 'grey' }}
-        tap_action:
-          action: more-info
-
-      - type: template
-        entity: sensor.brewassistant_gf30_target_apply_state
-        icon: mdi:progress-check
-        content: >-
-          {% set s = states('sensor.brewassistant_gf30_target_apply_state') %}
-          {% set labels = {
-            'proposed': 'Proposed',
-            'awaiting_confirmation': 'Waiting',
-            'no_change': 'Matched',
-            'unavailable': 'Not ready',
-            'waiting_for_recommendation': 'Waiting BA',
-            'waiting_for_controller_target': 'Waiting GF30'
-          } %}
-          {{ labels.get(s, s | replace('_', ' ')) }}
-        icon_color: >-
-          {% set s = states('sensor.brewassistant_gf30_target_apply_state') %}
-          {% if s == 'awaiting_confirmation' %}amber
-          {% elif s == 'proposed' %}blue
-          {% elif s == 'no_change' %}green
-          {% else %}grey{% endif %}
-        tap_action:
-          action: more-info
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    triggers_update:
+      - sensor.brewassistant_gf30_recommended_target
+      - sensor.brewassistant_gf30_controller_target
+      - sensor.brewassistant_gf30_target_delta
+      - sensor.brewassistant_gf30_target_apply_state
+      - binary_sensor.grainfather_gf30_controller_online
+      - select.brewassistant_apply_mode
+    styles:
+      card:
+        - border-radius: 20px 20px 8px 8px
+        - padding: 14px
+        - background: >-
+            linear-gradient(135deg, rgba(33,150,243,.09),
+            rgba(127,127,127,.035))
+        - border: 1px solid rgba(33,150,243,.18)
+        - box-shadow: var(--ha-card-box-shadow)
+      grid:
+        - grid-template-areas: "\"head\" \"summary\" \"metrics\" \"status\""
+        - grid-template-columns: 1fr
+        - row-gap: 10px
+      custom_fields:
+        head:
+          - grid-area: head
+        summary:
+          - grid-area: summary
+        metrics:
+          - grid-area: metrics
+        status:
+          - grid-area: status
+    custom_fields:
+      head: |
+        [[[
+          const online = states['binary_sensor.grainfather_gf30_controller_online']?.state === 'on';
+          const apply = states['sensor.brewassistant_gf30_target_apply_state']?.state ?? 'unknown';
+          let badge = 'Not ready';
+          let icon = 'mdi:alert-circle-outline';
+          let bg = 'rgba(127,127,127,.10)';
+          let border = 'rgba(127,127,127,.18)';
+          if (!online) {
+            badge = 'OFFLINE'; icon = 'mdi:lan-disconnect';
+            bg = 'rgba(244,67,54,.11)'; border = 'rgba(244,67,54,.26)';
+          } else if (apply === 'awaiting_confirmation') {
+            badge = 'WAITING'; icon = 'mdi:clock-alert-outline';
+            bg = 'rgba(255,193,7,.13)'; border = 'rgba(255,193,7,.28)';
+          } else if (apply === 'proposed') {
+            badge = 'PROPOSED'; icon = 'mdi:lightbulb-on-outline';
+            bg = 'rgba(33,150,243,.11)'; border = 'rgba(33,150,243,.25)';
+          } else if (apply === 'no_change') {
+            badge = 'MATCHED'; icon = 'mdi:check-circle-outline';
+            bg = 'rgba(76,175,80,.11)'; border = 'rgba(76,175,80,.25)';
+          }
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <div style="min-width:0;">
+                <div style="font-size:19px;font-weight:950;line-height:1.05;letter-spacing:-.02em;">BrewAssistant · GF30</div>
+                <div style="font-size:11.5px;font-weight:760;opacity:.66;margin-top:3px;">Supervised fermentation target</div>
+              </div>
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:10px;font-weight:950;white-space:nowrap;">
+                <ha-icon icon="${icon}" style="width:13px;height:13px;"></ha-icon>${badge}
+              </div>
+            </div>`;
+        ]]]
+      summary: |
+        [[[
+          const online = states['binary_sensor.grainfather_gf30_controller_online']?.state === 'on';
+          const mode = states['select.brewassistant_apply_mode']?.state ?? 'Read only';
+          const apply = states['sensor.brewassistant_gf30_target_apply_state']?.state ?? 'unknown';
+          let text = 'GF30 target adapter is not ready';
+          if (!online) text = 'GF30 offline · BA recommendation remains visible but cannot be applied';
+          else if (mode !== 'Supervised apply') text = 'Read only · select Supervised apply to prepare a target change';
+          else if (apply === 'awaiting_confirmation') text = 'Waiting for operator confirmation';
+          else if (apply === 'proposed') text = 'A new recommendation can be prepared';
+          else if (apply === 'no_change') text = 'GF30 already matches the BrewAssistant recommendation';
+          return `<div style="font-size:12px;font-weight:800;opacity:.74;line-height:1.3;">${text}</div>`;
+        ]]]
+      metrics: |
+        [[[
+          const num = (id) => {
+            const n = Number(String(states[id]?.state ?? '').replace(',', '.'));
+            return Number.isFinite(n) ? n : null;
+          };
+          const rec = num('sensor.brewassistant_gf30_recommended_target');
+          const target = num('sensor.brewassistant_gf30_controller_target');
+          const delta = num('sensor.brewassistant_gf30_target_delta');
+          const fmt = (n) => Number.isFinite(n) ? `${n.toFixed(1)} °C` : '—';
+          const metric = (title, value, sub, icon, tone) => {
+            const bg = tone === 'blue' ? 'rgba(33,150,243,.09)' : tone === 'green' ? 'rgba(76,175,80,.10)' : tone === 'amber' ? 'rgba(255,193,7,.11)' : 'rgba(127,127,127,.07)';
+            const border = tone === 'blue' ? 'rgba(33,150,243,.20)' : tone === 'green' ? 'rgba(76,175,80,.22)' : tone === 'amber' ? 'rgba(255,193,7,.24)' : 'rgba(127,127,127,.14)';
+            return `<div style="min-width:0;border-radius:13px;padding:8px 7px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.5px;font-weight:950;opacity:.55;letter-spacing:.04em;text-transform:uppercase;">${title}</div><div style="font-size:13px;font-weight:950;line-height:1.05;">${value}</div><div style="font-size:9px;font-weight:780;opacity:.58;margin-top:2px;">${sub}</div></div></div>`;
+          };
+          const deltaTone = Number.isFinite(delta) && Math.abs(delta) < 0.25 ? 'green' : 'amber';
+          return `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;">${metric('Recommended',fmt(rec),'BrewAssistant','mdi:brain','blue')}${metric('GF30 target',fmt(target),'controller','mdi:target','green')}${metric('Delta',Number.isFinite(delta) ? (delta > 0 ? '+' : '') + delta.toFixed(1) + ' °C' : '—','BA − GF30','mdi:delta',deltaTone)}</div>`;
+        ]]]
+      status: |
+        [[[
+          const online = states['binary_sensor.grainfather_gf30_controller_online']?.state === 'on';
+          const mode = states['select.brewassistant_apply_mode']?.state ?? 'Read only';
+          const apply = states['sensor.brewassistant_gf30_target_apply_state']?.state ?? 'unknown';
+          const chip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.5px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
+          const onlineChip = online ? chip('GF30 online','mdi:lan-connect','rgba(76,175,80,.10)','rgba(76,175,80,.22)') : chip('GF30 offline','mdi:lan-disconnect','rgba(244,67,54,.10)','rgba(244,67,54,.22)');
+          const modeChip = mode === 'Supervised apply' ? chip('Supervised apply','mdi:shield-check-outline','rgba(76,175,80,.10)','rgba(76,175,80,.22)') : chip('Read only','mdi:shield-outline','rgba(127,127,127,.08)','rgba(127,127,127,.16)');
+          const labels = {proposed:'Proposed',awaiting_confirmation:'Waiting',no_change:'Matched',unavailable:'Not ready',waiting_for_recommendation:'Waiting BA',waiting_for_controller_target:'Waiting GF30'};
+          const applyChip = chip(labels[apply] || apply.replaceAll('_',' '),'mdi:progress-check','rgba(33,150,243,.08)','rgba(33,150,243,.18)');
+          return `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">${onlineChip}${modeChip}${applyChip}</div>`;
+        ]]]
 
   - type: conditional
     conditions:
@@ -151,45 +121,108 @@ cards:
       - entity: sensor.brewassistant_gf30_target_apply_state
         state: "proposed"
     card:
-      type: custom:mushroom-template-card
+      type: custom:button-card
       entity: button.brewassistant_gf30_prepare_target
-      primary: Prepare GF30 target
-      secondary: Creates a pending Supervised Apply action only
+      name: Prepare GF30 target
       icon: mdi:thermometer-check
-      icon_color: blue
+      show_state: false
+      show_label: true
+      label: Creates a pending Supervised Apply action only
       tap_action:
-        action: perform-action
-        perform_action: button.press
-        target:
+        action: call-service
+        service: button.press
+        service_data:
           entity_id: button.brewassistant_gf30_prepare_target
+      styles: &gf30_action
+        card:
+          - min-height: 58px
+          - padding: 10px 12px
+          - border-radius: 10px 10px 20px 20px
+          - background: rgba(33,150,243,.09)
+          - border: 1px solid rgba(33,150,243,.20)
+        grid:
+          - grid-template-areas: "\"i n\" \"i l\""
+          - grid-template-columns: 30px minmax(0,1fr)
+          - column-gap: 8px
+        icon:
+          - width: 19px
+          - color: rgb(33,150,243)
+        name:
+          - justify-self: start
+          - font-size: 12.5px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 10px
+          - font-weight: 760
+          - opacity: 0.68
 
   - type: conditional
     conditions:
       - entity: sensor.brewassistant_gf30_target_apply_state
         state: "awaiting_confirmation"
     card:
-      type: horizontal-stack
+      type: grid
+      columns: 2
+      square: false
       cards:
-        - type: custom:mushroom-template-card
+        - type: custom:button-card
           entity: button.brewassistant_cancel_supervised_apply
-          primary: Reject
-          secondary: No change is sent
+          name: Reject
           icon: mdi:close-circle-outline
-          icon_color: red
+          show_state: false
+          show_label: true
+          label: No change is sent
           tap_action:
-            action: perform-action
-            perform_action: button.press
-            target:
+            action: call-service
+            service: button.press
+            service_data:
               entity_id: button.brewassistant_cancel_supervised_apply
-
-        - type: custom:mushroom-template-card
+          styles:
+            card:
+              - min-height: 58px
+              - padding: 10px
+              - border-radius: 10px 10px 10px 20px
+              - background: rgba(244,67,54,.08)
+              - border: 1px solid rgba(244,67,54,.18)
+            icon:
+              - width: 18px
+              - color: rgb(244,67,54)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+            label:
+              - font-size: 9.5px
+              - opacity: 0.68
+              - white-space: normal
+        - type: custom:button-card
           entity: button.brewassistant_confirm_supervised_apply
-          primary: Confirm
-          secondary: Send target and verify readback
+          name: Confirm
           icon: mdi:check-decagram
-          icon_color: green
+          show_state: false
+          show_label: true
+          label: Send target and verify readback
           tap_action:
-            action: perform-action
-            perform_action: button.press
-            target:
+            action: call-service
+            service: button.press
+            service_data:
               entity_id: button.brewassistant_confirm_supervised_apply
+          styles:
+            card:
+              - min-height: 58px
+              - padding: 10px
+              - border-radius: 10px 10px 20px 10px
+              - background: rgba(76,175,80,.09)
+              - border: 1px solid rgba(76,175,80,.20)
+            icon:
+              - width: 18px
+              - color: rgb(76,175,80)
+            name:
+              - font-size: 12px
+              - font-weight: 950
+            label:
+              - font-size: 9.5px
+              - opacity: 0.68
+              - white-space: normal
