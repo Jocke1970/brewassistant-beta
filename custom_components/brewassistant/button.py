@@ -62,6 +62,7 @@ async def async_setup_entry(
         [
             BrewAssistantConfirmSupervisedApplyButton(coordinator),
             BrewAssistantCancelSupervisedApplyButton(coordinator),
+            BrewAssistantGF30PrepareTargetButton(coordinator),
             BrewAssistantAbortBrewdayButton(coordinator),
             BrewAssistantRearmBrewdayControlButton(coordinator),
             BrewAssistantCounterflowChillerReadyButton(coordinator),
@@ -122,6 +123,26 @@ class BrewAssistantCancelSupervisedApplyButton(BrewAssistantSupervisedApplyButto
     async def async_press(self) -> None:
         cancel_pending_action(self.coordinator.hass)
         self.async_write_ha_state()
+
+
+class BrewAssistantGF30PrepareTargetButton(BrewAssistantButtonEntity):
+    """Prepare the current BrewAssistant fermentation target for GF30 confirmation."""
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "gf30_prepare_target")
+        self._attr_unique_id = f"{DOMAIN}_button_gf30_prepare_target"
+        self._attr_name = "Prepare GF30 Target"
+        self._attr_icon = "mdi:thermometer-check"
+        self._attr_suggested_object_id = f"{DOMAIN}_gf30_prepare_target"
+
+    async def async_press(self) -> None:
+        request_gf30_target_confirmation(self.coordinator.hass)
+        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return build_gf30_target_adapter_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
