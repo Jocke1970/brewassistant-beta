@@ -265,16 +265,16 @@ That remains a promising future supervised bridge. The GF30 controller itself ow
 
 ### Cooling-state vs pump-state boundary
 
-`binary_sensor.grainfather_gf30_cooling` is a **controller cooling-state** signal only. It means the GF30 controller is in cooling state; it is **not** proof that the physical GF30 circulation/cooling pump is running.
+`binary_sensor.grainfather_gf30_cooling` is the GF30 controller's **cooling-command / cooling-state** signal. When it is `on`, BrewAssistant may treat the pump as **expected active** because the controller is requesting cooling. It is still not proof of physical flow.
 
 Until the Grainfather integration exposes a separately field-verified pump-state signal:
 
 ```text
-GF30 cooling state      -> observable
-GF30 cooling pump state -> unknown / not verified
+GF30 cooling state      -> cooling commanded / pump expected active
+Physical coolant flow   -> not directly verified
 ```
 
-BrewAssistant must never use `binary_sensor.grainfather_gf30_cooling` as a proxy for physical pump operation, flow, or successful heat transfer.
+BrewAssistant may use `binary_sensor.grainfather_gf30_cooling` to start a cooling-response observation window, but must not treat it as proof of physical flow, connected hoses, available coolant, or successful heat transfer. In this installation the earliest expected thermal evidence is normally a rise in `sensor.glycolchiller_liquid`, followed later by a fall in GF30/wort temperature. An initial 5–10 minute response window is a field-test hypothesis, not a hard-coded safety constant.
 
 The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is intended to own freezer on/off using the coolant temperature sensor once the hardware exists and has been validated. The thermal-learning layer must not bypass that thermostat. A future BrewAssistant coolant-target bridge may adjust only the thermostat target, within physically verified bounds; it must not switch the freezer directly.
 
