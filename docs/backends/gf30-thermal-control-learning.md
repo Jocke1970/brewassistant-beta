@@ -131,6 +131,38 @@ Det innebär att `binary_sensor.grainfather_gf30_cooling` **får** användas som
 - vätskan cirkulerar;
 - eller att värmeöverföring faktiskt sker.
 
+### Empirisk GF30-effektsignatur
+
+Fältobservation 2026-10-04 från Home Assistant-effektgrafen för GF30 visar tre tydligt separerade nivåer:
+
+```text
+Tomgång / elektronik: cirka 1 W
+Kylpump aktiv:       cirka 6 W total GF30-effekt
+Värmare aktiv:       cirka 30–31 W total GF30-effekt
+```
+
+Pumpens elektriska signatur motsvarar därmed ungefär **+5 W över tomgång** i den observerade installationen. Grafen visar en längre stabil platå nära 6 W som är tydligt skild från både tomgångsnivån och värmarens cirka 30 W.
+
+Detta gör GF30-effekt till en användbar sekundär observationssignal:
+
+```text
+GF30 cooling = ON
+  -> pump expected active
+
+GF30 power nära observerad pumpplatå (~6 W)
+  -> pump electrical signature observed
+
+coolant temperature stiger efter termisk fördröjning
+  -> heat transfer / circulation strongly indicated
+
+GF30/vörttemperatur sjunker
+  -> process cooling response observed
+```
+
+Effektsignaturen är **inte fysisk flödesmätning**. Den kan ge stark evidens för att pumpens elektriska last är aktiv, men kan inte ensam bevisa att slangar är anslutna, att kylvätska finns eller att vätskan faktiskt cirkulerar.
+
+Värdena cirka 1 W / 6 W / 30–31 W är initiala empiriska observationer från den aktuella GF30-installationen och ska samlas in över flera ON/OFF-cykler innan de används som fasta klassificeringsgränser. Framtida klassificering bör använda intervall/hysteres snarare än exakt likhet med 6 W.
+
 ### Förväntad första termiska respons
 
 I den nuvarande installationen sitter `sensor.glycolchiller_liquid` i reservoaren. När GF30 går till cooling och kylvätska börjar cirkulera genom den varmare GF30-manteln förväntas den första tydliga processresponsen normalt vara att **kylvätskan i reservoaren börjar stiga i temperatur**.
