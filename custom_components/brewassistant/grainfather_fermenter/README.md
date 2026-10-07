@@ -282,7 +282,7 @@ The DIY coolant/freezer path is separate: Home Assistant `generic_thermostat` is
 
 `fermentation_chamber/` remains the adapter for the existing Home Assistant climate-controlled fermentation chamber.
 
-The GF30 is an alternative/selectable physical fermentation target provider, not a second controller fighting the chamber backend.
+The GF30 is an alternative/selectable physical fermentation target provider, not a second controller fighting the chamber backend. The authoritative provider-selection, exclusivity and conditional-UI contract is [`../../../docs/fermentation-provider-selection.md`](../../../docs/fermentation-provider-selection.md).
 
 ```text
                     fermentation_tracking
