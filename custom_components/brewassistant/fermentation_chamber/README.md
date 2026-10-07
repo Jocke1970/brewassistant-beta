@@ -5,6 +5,8 @@ Code snapshot documented: 2026-09-05
 
 `fermentation_chamber` converts normalized fermentation tracking data into a recommended chamber-air target and, when enabled, bridges that recommendation into BrewAssistant's generic Supervised Apply flow for `climate.fermentation_chamber`.
 
+It is one selectable physical fermentation provider. The provider-selection and conditional-UI contract is documented in [`../../../docs/fermentation-provider-selection.md`](../../../docs/fermentation-provider-selection.md). When another provider such as `grainfather_gf30` is selected, this backend may remain observable but must be control-ineligible for that fermentation session.
+
 It is intentionally separate from [`../fermentation_tracking/`](../fermentation_tracking/). Tracking owns the beer/process observations; chamber control consumes them.
 
 ## Responsibilities
