@@ -49,7 +49,7 @@
 
 ## Prioritet 3 – behåll övriga parallella moduler
 
-- **Fermentation:** SG-styrning/Brewfather-jässcheman separat. Jässtrategi och fysisk jäsutrustning är oberoende val. Provider-runtime/select/persistence, exklusiv chamber/GF30-arbitration och normaliserad read-only provider-snapshot är implementerade på `dev`; conditional fermentation-UI återstår. [Provider-kontrakt](fermentation-provider-selection.md). [Tvålägeskontrakt, redigerbara SG-/timparametrar och återstående UI/integration](sg-driven-fermentation.md); den rena SG-regelmotorn är ännu inte inkopplad. Climate Supervisor kräver fullcykeltest.
+- **Fermentation:** SG-styrning/Brewfather-jässcheman separat. Jässtrategi och fysisk jäsutrustning är oberoende val. Provider-runtime/select/persistence, exklusiv chamber/GF30-arbitration, normaliserad read-only provider-snapshot och provider-conditional fermentation-UI är implementerade på `dev`; provider-aware Brewfather Custom Stream-handoff och full acceptance/CI återstår. [Provider-kontrakt](fermentation-provider-selection.md). [Tvålägeskontrakt, redigerbara SG-/timparametrar och återstående UI/integration](sg-driven-fermentation.md); den rena SG-regelmotorn är ännu inte inkopplad. Climate Supervisor kräver fullcykeltest.
 - **Cooling/CFC/kylspiral:** Boil→Chill, sanitering, kylmetod, pump, extern processsensor och vört-ut under Chill/Transfer. Säkerställ observe-only i skrivvägarna.
 - **Equipment Learning:** läsning/råd/historik utan automatiskt APPLY i observe-only; kontrollera energi, temperatur och HA-omstart.
 - **Manual/BF/BT/RAPT:** håll receptkälla, timer och fysisk styrbehörighet åtskilda. Tidigare paus- och Mash-In-incidenter är inte retroaktivt godkända.
