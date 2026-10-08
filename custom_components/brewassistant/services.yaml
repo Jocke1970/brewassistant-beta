@@ -167,6 +167,10 @@ fermentation_start:
       name: Recipe name
       description: Optional recipe or batch name.
       example: American Lite Ale
+    fermentation_provider:
+      name: Jäsutrustning
+      description: Physical fermentation provider. Use fermentation_chamber or grainfather_gf30. This choice is independent of recipe_schedule/SG strategy.
+      example: fermentation_chamber
     original_gravity:
       name: Original gravity
       description: Optional recipe or measured OG in SG. Required for fermented refractometer correction.
@@ -224,6 +228,10 @@ fermentation_update:
       name: Recipe name
       description: Optional recipe or batch name.
       example: American Lite Ale
+    fermentation_provider:
+      name: Jäsutrustning
+      description: Physical fermentation provider. Use fermentation_chamber or grainfather_gf30. This choice is independent of recipe_schedule/SG strategy.
+      example: fermentation_chamber
     original_gravity:
       name: Original gravity
       description: Optional recipe or measured OG in SG.
