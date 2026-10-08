@@ -8,6 +8,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..fermentation_tracking.models import PROVIDER_FERMENTATION_CHAMBER
+from ..fermentation_tracking.storage import get_runtime
 from ..supervised_apply import (
     clear_pending_action_from_source,
     get_pending_action,
@@ -120,6 +122,8 @@ def _build_pending_action(*, snapshot: dict[str, Any], recommended: float) -> di
 def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     """Build current fermentation chamber supervisor snapshot."""
     runtime = _runtime_data(hass)
+    selected_provider = get_runtime(hass).fermentation_provider
+    provider_selected = selected_provider == PROVIDER_FERMENTATION_CHAMBER
     enabled = _enabled(hass)
     runtime[LAST_EVALUATION_KEY] = dt_util.utcnow().isoformat()
 
@@ -155,7 +159,13 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
     pending_action = get_pending_action(hass)
     supervised_enabled = supervised_apply_enabled(hass)
 
-    if enabled:
+    if not provider_selected:
+        status = "provider_inactive"
+        action = "none"
+        reason = f"selected fermentation provider is {selected_provider}"
+        clear_pending_action_from_source(hass, SOURCE)
+        pending_action = get_pending_action(hass)
+    elif enabled:
         if not scope_active:
             status = "standby"
             reason = "no active fermentation or cold-crash scope"
@@ -185,6 +195,9 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
 
     snapshot = {
         "enabled": enabled,
+        "fermentation_provider": selected_provider,
+        "provider_selected": provider_selected,
+        "provider_control_allowed": provider_selected,
         "mode": mode,
         "status": status,
         "action": action,
@@ -218,7 +231,13 @@ def build_fermentation_climate_supervisor_snapshot(hass: HomeAssistant) -> dict[
         "backend": "fermentation_chamber",
     }
 
-    if enabled and supervised_enabled and action == "would_apply_target" and recommended is not None:
+    if (
+        provider_selected
+        and enabled
+        and supervised_enabled
+        and action == "would_apply_target"
+        and recommended is not None
+    ):
         pending_action = set_pending_action(
             hass,
             _build_pending_action(snapshot=snapshot, recommended=recommended),
