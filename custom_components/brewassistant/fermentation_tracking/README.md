@@ -179,3 +179,27 @@ Configured automatic SG and temperature entities can supply the live current val
 5. Tracking recommends readiness/temperature changes but does not actuate chamber hardware.
 6. Storage changes require migration/backward-compatibility consideration.
 7. Do not infer stable FG from a live automatic value without sufficient history evidence.
+
+
+## Provider selection implementation
+
+The provider-selection backend is implemented on `dev`.
+
+Persisted provider IDs:
+
+```text
+fermentation_chamber
+grainfather_gf30
+```
+
+Home Assistant surfaces:
+
+```text
+select.brewassistant_fermentation_provider
+sensor.brewassistant_fermentation_provider
+sensor.brewassistant_fermentation_provider_status
+```
+
+Existing stored sessions without a provider migrate to `fermentation_chamber`. Provider switching does not alter SG/day process logic and clears stale provider-owned pending actions. Chamber and GF30 supervised paths are mutually gated; the GF30 confirmed executor also re-checks the live provider immediately before any external write.
+
+The normalized provider snapshot is side-effect-free and reads already-published provider telemetry rather than invoking proposal builders while a sensor is being read. Conditional dashboard composition remains pending; see [provider selection](../../../docs/fermentation-provider-selection.md).
