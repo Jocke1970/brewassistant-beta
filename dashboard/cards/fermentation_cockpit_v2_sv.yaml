@@ -1,7 +1,8 @@
 # Fermentation Cockpit v2 – preview (read-only observability)
 # Add as a MANUAL dashboard card. Keep v1 cards until v2 is field-validated.
 # Requires custom:button-card and custom:expander-card already used by BrewAssistant.
-# Selecting provider changes the stored fermentation provider; no target writes here.
+# Provider selection changes only the persisted selected provider; no target writes here.
+# No direct switch/climate control rows are exposed in this preview.
 type: conditional
 conditions:
   - entity: switch.brewassistant_show_fermentation
@@ -84,18 +85,12 @@ card:
           - type: entities
             show_header_toggle: false
             entities:
-              - entity: climate.fermentation_chamber
-                name: Jäskammare (visa termostat)
               - entity: sensor.brewassistant_fermentation_chamber_air_temperature_average
                 name: Kammarluft
               - entity: sensor.brewassistant_fermentation_effective_air_target
                 name: Rekommenderat luftmål
               - entity: sensor.brewassistant_liquid_temperature
                 name: Öltemperatur
-              - entity: switch.brewassistant_fermentation_climate_supervisor_enabled
-                name: Klimatsupervisor (styrning)
-              - entity: switch.fermentation_heat_mat
-                name: Värmematta (manuell enhet)
     - type: conditional
       conditions:
         - entity: sensor.brewassistant_fermentation_provider
