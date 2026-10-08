@@ -12,6 +12,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..fermentation_tracking.models import PROVIDER_GRAINFATHER_GF30
+from ..fermentation_tracking.storage import get_runtime
 from ..supervised_apply import (
     get_last_result,
     get_pending_action,
@@ -81,6 +83,8 @@ def _build_pending_action(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def build_gf30_target_adapter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     cloud = build_grainfather_fermenter_snapshot(hass)
+    selected_provider = get_runtime(hass).fermentation_provider
+    provider_selected = selected_provider == PROVIDER_GRAINFATHER_GF30
     selected = cloud.get("selected_device") or {}
     target_info = _target_state_info(hass)
     raw_recommended = target_info["raw_target_temperature"]
@@ -108,9 +112,12 @@ def build_gf30_target_adapter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         and service_available
     )
     profile_target_ready = bool(profile_backed and profile_target is not None)
-    ready = hardware_ready and profile_target_ready
+    ready = provider_selected and hardware_ready and profile_target_ready
 
-    if not hardware_ready:
+    if not provider_selected:
+        state = "provider_inactive"
+        reason = f"selected fermentation provider is {selected_provider}"
+    elif not hardware_ready:
         state = "unavailable"
         reason = "GF30 supervised target prerequisites are incomplete"
     elif not profile_target_ready:
@@ -138,7 +145,10 @@ def build_gf30_target_adapter_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     last_result = get_last_result(hass)
 
     return {
-        "state": "awaiting_confirmation" if has_pending else state,
+        "state": "awaiting_confirmation" if has_pending and provider_selected else state,
+        "fermentation_provider": selected_provider,
+        "provider_selected": provider_selected,
+        "provider_control_allowed": provider_selected,
         "reason": reason,
         "ready": ready,
         "hardware_ready": hardware_ready,
@@ -174,6 +184,8 @@ def request_gf30_target_confirmation(hass: HomeAssistant) -> dict[str, Any]:
     """Create a pending GF30 target action; never execute the write here."""
     snapshot = build_gf30_target_adapter_snapshot(hass)
     existing = get_pending_action(hass)
+    if not snapshot.get("provider_selected"):
+        return {**snapshot, "request_result": "provider_not_selected"}
     if existing is not None and existing.get("source") != SOURCE:
         return {
             **snapshot,
@@ -212,6 +224,12 @@ async def async_execute_confirmed_gf30_target(
     live_profile_target = live.get("profile_target_temperature")
     live_profile_source = live.get("profile_target_source")
 
+    if not live.get("provider_selected"):
+        return {
+            "supervised_confirmation_consumed": False,
+            "apply_result": "provider_not_selected",
+            "live_snapshot": live,
+        }
     if not live.get("hardware_ready"):
         return {
             "supervised_confirmation_consumed": False,
