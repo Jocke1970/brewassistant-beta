@@ -416,11 +416,11 @@ The unselected provider must never become an automatic fallback controller.
 
 Dashboard routing uses `sensor.brewassistant_fermentation_provider` machine IDs rather than translated select labels. The cards remain standalone reusable building blocks according to the dashboard composition policy.
 
-### Phase 5 — outbound telemetry
+### Phase 5 — outbound telemetry — IMPLEMENTED CONTRACT / RUNTIME VERIFICATION PENDING
 
-18. Make Brewfather Custom Stream consume normalized fermentation telemetry/provider context.
-19. Verify provider switch does not produce semantically incorrect `aux_temp` data.
-20. Add end-to-end tests for both providers × both strategy modes.
+18. BrewAssistant now exposes provider-neutral Brewfather stream source entities; the companion `Jocke1970/brewfather:dev` Custom Stream sender consumes configured HA entities and owns HTTPS transport.
+19. Provider-aware `aux_temp` semantics are implemented: chamber air for `fermentation_chamber`, coolant/reservoir for `grainfather_gf30`; GF30 internal beer temperature is not mislabeled as Fridge Temp.
+20. Freshness/rate-limit/privacy regression coverage is added in both repos. Cross-repo runtime verification and release CI remain required before promotion.
 
 ## Acceptance tests
 
