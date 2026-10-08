@@ -162,3 +162,14 @@ def test_services_expose_provider_on_start_and_update() -> None:
 
     assert source.count("fermentation_provider:") >= 2
     assert "fermentation_chamber or grainfather_gf30" in source
+
+
+
+def test_preselected_inactive_provider_is_preserved_on_start() -> None:
+    source = RUNTIME.read_text(encoding="utf-8")
+
+    assert 'explicit_provider = "fermentation_provider" in data' in source
+    assert "not current.active" in source
+    assert '"migration_default"' in source
+    assert "runtime.fermentation_provider = current.fermentation_provider" in source
+    assert "A still-active previous session is never inherited implicitly." in source
