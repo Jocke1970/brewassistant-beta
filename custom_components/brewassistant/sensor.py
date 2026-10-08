@@ -50,6 +50,7 @@ from .const import (
 from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 from .fermentation.fermentation_air_target import create_fermentation_air_target_sensors
+from .fermentation_tracking.brewfather_stream import create_brewfather_stream_sensors
 from .grainfather_fermenter.sensors import create_grainfather_fermenter_sensors
 from .modules.module_summary_sensor import create_module_summary_sensors
 from .next_action import build_next_action
@@ -600,6 +601,7 @@ async def async_setup_entry(
         + create_wort_cooling_sensors(coordinator)
         + create_temperature_stat_sensors(coordinator)
         + create_fermentation_air_target_sensors(coordinator)
+        + create_brewfather_stream_sensors(coordinator)
         + create_grainfather_fermenter_sensors(coordinator)
         + create_module_summary_sensors(coordinator)
         + [BrewAssistantCoreVersionSensor(coordinator)]
