@@ -203,3 +203,6 @@ sensor.brewassistant_fermentation_provider_status
 Existing stored sessions without a provider migrate to `fermentation_chamber`. Provider switching does not alter SG/day process logic and clears stale provider-owned pending actions. Chamber and GF30 supervised paths are mutually gated; the GF30 confirmed executor also re-checks the live provider immediately before any external write.
 
 The normalized provider snapshot is side-effect-free and reads already-published provider telemetry rather than invoking proposal builders while a sensor is being read. Conditional dashboard composition remains pending; see [provider selection](../../../docs/fermentation-provider-selection.md).
+
+
+Preselected provider choices made while inactive are carried into a new session when `fermentation_start` does not explicitly supply a provider. Explicit start-service provider data always wins, and an active previous session is never inherited implicitly.
