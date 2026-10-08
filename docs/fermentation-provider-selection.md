@@ -1,6 +1,6 @@
 # Fermentation equipment/provider selection
 
-Status: **architecture contract / not implemented**  
+Status: **Phase 1–3 backend implemented on `dev`; conditional dashboard UI and outbound provider-aware telemetry remain pending**  
 Created: 2026-10-08  
 Scope: `fermentation_tracking`, `fermentation_chamber`, `grainfather_fermenter`, fermentation UI and outbound fermentation telemetry.
 
@@ -377,34 +377,36 @@ The unselected provider must never become an automatic fallback controller.
 
 ## Implementation plan for next development session
 
-### Phase 1 — runtime/provider selection
+### Phase 1 — runtime/provider selection — IMPLEMENTED ON `dev`
 
-1. Add stable provider constants/model.
-2. Persist provider per fermentation session/batch.
-3. Add provider selector entity/control.
-4. Default migrated sessions to `fermentation_chamber`.
-5. Expose selected provider in fermentation tracking snapshot.
+1. Stable provider constants/model implemented.
+2. Provider is persisted in the fermentation runtime.
+3. `select.brewassistant_fermentation_provider` implemented with human-readable options and stable provider IDs in runtime/attributes.
+4. Existing stored sessions with no provider migrate fail-passive to `fermentation_chamber`.
+5. Tracking snapshot and `sensor.brewassistant_fermentation_provider` expose the selected provider.
 
-### Phase 2 — arbitration
+### Phase 2 — arbitration — IMPLEMENTED ON `dev`
 
-6. Gate chamber supervised proposals on selected provider.
-7. Gate GF30 supervised target proposals on selected provider.
-8. Clear stale provider-owned pending actions on provider change.
-9. Add regression tests proving only one provider can propose/control.
+6. Chamber supervised proposals are gated on `fermentation_chamber`.
+7. GF30 proposal **and confirmed execution** are gated on `grainfather_gf30`.
+8. Provider switch/start/reset clears provider-owned stale pending actions.
+9. Regression contract covers persistence, selector mapping and exclusive arbitration.
 
-### Phase 3 — normalized provider snapshot
+### Phase 3 — normalized provider snapshot — IMPLEMENTED READ-ONLY ON `dev`
 
-10. Build common provider-status snapshot.
-11. Map chamber implementation into it.
-12. Map GF30 implementation into it.
-13. Add stale/unknown/readiness diagnostics.
+10. Common provider-status snapshot implemented.
+11. Chamber is normalized from already-published HA supervisor state.
+12. GF30 is normalized from already-published target-adapter state.
+13. The common snapshot exposes provider status/readiness, process target, physical target/delta and supervised state without creating pending actions as a sensor-read side effect.
 
-### Phase 4 — UI
+### Phase 4 — UI — NEXT
 
-14. Add "Jäsutrustning" selector beside fermentation strategy.
+14. Add "Jäsutrustning" selector beside fermentation strategy in the fermentation card.
 15. Create common header + conditional chamber/GF30 bodies.
 16. Hide non-selected provider controls/details rather than rendering unavailable rows.
 17. Keep common readiness/warning/cold-crash footer.
+
+The backend select already exists; Phase 4 is specifically the dashboard composition/visibility work.
 
 ### Phase 5 — outbound telemetry
 
