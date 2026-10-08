@@ -253,3 +253,44 @@ Install required frontend cards before copying dashboard YAML into Home Assistan
 - Use BrewAssistant dashboard visibility switches for daily dashboard show/hide.
 - Prefer clean BrewAssistant entity IDs without local area/device prefixes.
 ```
+
+
+## Fermentation provider composition
+
+Fermentation equipment is selected independently from the fermentation strategy.
+
+Reusable provider-aware cards:
+
+```text
+dashboard/cards/fermentation_provider.yaml
+dashboard/cards/fermentation_provider_sv.yaml
+dashboard/cards/fermentation.yaml
+dashboard/cards/fermentation_sv.yaml
+dashboard/cards/gf30_supervised_target.yaml
+dashboard/cards/gf30_supervised_target_sv.yaml
+```
+
+Recommended composition:
+
+```text
+Fermentation Provider
+  -> always visible while Show Fermentation is on
+  -> select.brewassistant_fermentation_provider
+
+Fermentation Cockpit
+  -> visible only when sensor.brewassistant_fermentation_provider
+     == fermentation_chamber
+
+GF30 Supervised Target
+  -> visible only when sensor.brewassistant_fermentation_provider
+     == grainfather_gf30
+```
+
+The conditional cards compare the stable machine IDs from
+`sensor.brewassistant_fermentation_provider`; they do not compare translated
+select labels. This lets the Swedish and English presentation files share the
+same routing contract.
+
+The provider card is the common fermentation header/status surface. The chamber
+and GF30 cards are provider-specific bodies. Backend arbitration remains
+authoritative even if a user omits, rearranges or manually edits these cards.
