@@ -173,3 +173,16 @@ def test_preselected_inactive_provider_is_preserved_on_start() -> None:
     assert '"migration_default"' in source
     assert "runtime.fermentation_provider = current.fermentation_provider" in source
     assert "A still-active previous session is never inherited implicitly." in source
+
+
+
+def test_explicit_default_provider_still_records_provenance() -> None:
+    source = RUNTIME.read_text(encoding="utf-8")
+
+    provider_block = source.split('if "fermentation_provider" in data:', 1)[1].split(
+        'if "started_at" in data:', 1
+    )[0]
+    assert "runtime.fermentation_provider = provider" in provider_block
+    assert "runtime.fermentation_provider_selected_at = datetime.now(timezone.utc)" in provider_block
+    assert 'or "service"' in provider_block
+    assert "if provider != runtime.fermentation_provider" not in provider_block
