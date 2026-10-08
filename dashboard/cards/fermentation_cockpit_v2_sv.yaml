@@ -63,10 +63,10 @@ card:
             const unverified = measuredAge === null;
             const stale = !missing && !unverified && measuredAge > 20;
             const warning = !missing && !unverified && measuredAge > 15 && !stale;
-            const color = stale ? '#b3261e' : warning ? '#9b6300' : 'var(--primary-text-color)';
-            const background = stale ? 'rgba(244,67,54,.11)' : warning ? 'rgba(255,152,0,.10)' : 'rgba(127,127,127,.075)';
+            const color = stale ? '#b3261e' : warning || unverified ? '#9b6300' : 'var(--primary-text-color)';
+            const background = stale ? 'rgba(244,67,54,.11)' : warning || unverified ? 'rgba(255,152,0,.10)' : 'rgba(127,127,127,.075)';
             const symbol = stale ? '⚠ ' : warning ? '△ ' : missing ? '? ' : unverified ? '? ' : '';
-            const note = missing ? 'Saknas' : unverified ? 'Tid ej verifierad' : ageText(measuredAge);
+            const note = missing ? 'Saknas' : unverified ? 'Tid ej verifierad' : ageText(measuredAge) + ' · HA-observation';
             return '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:'+background+';border:1px solid rgba(127,127,127,.13);min-width:0">' +
               '<div style="font-size:9px;opacity:.7;font-weight:800">'+name+'</div>' +
               '<div style="font-size:15px;font-weight:900;color:'+color+'">'+symbol+(missing?'—':value+unit)+'</div>' +
