@@ -142,6 +142,12 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
 
 SENSORS: tuple[FermentationTrackingSensorConfig, ...] = (
     FermentationTrackingSensorConfig(
+        key="fermentation_provider",
+        name="BrewAssistant Fermentation Provider",
+        snapshot_key="fermentation_provider",
+        icon="mdi:thermometer-cog",
+    ),
+    FermentationTrackingSensorConfig(
         key="fermentation_tracking_status",
         name="BrewAssistant Fermentation Tracking Status",
         snapshot_key="status",
