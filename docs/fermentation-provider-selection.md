@@ -1,6 +1,6 @@
 # Fermentation equipment/provider selection
 
-Status: **Phase 1–3 backend implemented on `dev`; conditional dashboard UI and outbound provider-aware telemetry remain pending**  
+Status: **Phase 1–3 backend and provider-aware reusable dashboard cards implemented on `dev`; outbound provider-aware telemetry remains pending**  
 Created: 2026-10-08  
 Scope: `fermentation_tracking`, `fermentation_chamber`, `grainfather_fermenter`, fermentation UI and outbound fermentation telemetry.
 
@@ -399,14 +399,14 @@ The unselected provider must never become an automatic fallback controller.
 12. GF30 is normalized from already-published target-adapter state.
 13. The common snapshot exposes provider status/readiness, process target, physical target/delta and supervised state without creating pending actions as a sensor-read side effect.
 
-### Phase 4 — UI — NEXT
+### Phase 4 — UI — IMPLEMENTED AS REUSABLE CARDS ON `dev`
 
-14. Add "Jäsutrustning" selector beside fermentation strategy in the fermentation card.
-15. Create common header + conditional chamber/GF30 bodies.
-16. Hide non-selected provider controls/details rather than rendering unavailable rows.
-17. Keep common readiness/warning/cold-crash footer.
+14. `fermentation_provider*.yaml` provides the common Jäsutrustning selector/status header.
+15. Existing chamber and GF30 cards are provider-conditional bodies.
+16. Chamber controls are hidden for GF30; GF30 controls are hidden for chamber.
+17. Common process status remains available through the provider/tracking surfaces.
 
-The backend select already exists; Phase 4 is specifically the dashboard composition/visibility work.
+Dashboard routing uses `sensor.brewassistant_fermentation_provider` machine IDs rather than translated select labels. The cards remain standalone reusable building blocks according to the dashboard composition policy.
 
 ### Phase 5 — outbound telemetry
 
