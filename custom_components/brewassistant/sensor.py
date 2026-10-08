@@ -51,6 +51,7 @@ from .coordinator import BrewAssistantCoordinator, BrewAssistantData
 from .entity import BrewAssistantEntity
 from .fermentation.fermentation_air_target import create_fermentation_air_target_sensors
 from .fermentation_tracking.brewfather_stream import create_brewfather_stream_sensors
+from .fermentation_tracking.pill_source_resolver import resolve as resolve_pill
 from .grainfather_fermenter.sensors import create_grainfather_fermenter_sensors
 from .modules.module_summary_sensor import create_module_summary_sensors
 from .next_action import build_next_action
@@ -602,6 +603,7 @@ async def async_setup_entry(
         + create_temperature_stat_sensors(coordinator)
         + create_fermentation_air_target_sensors(coordinator)
         + create_brewfather_stream_sensors(coordinator)
+        + [BrewAssistantPillPreviewSensor(coordinator, key) for key in ('pill_active_source', 'pill_status', 'pill_temperature', 'pill_gravity')]
         + create_grainfather_fermenter_sensors(coordinator)
         + create_module_summary_sensors(coordinator)
         + [BrewAssistantCoreVersionSensor(coordinator)]
@@ -890,3 +892,38 @@ class BrewAssistantNextActionSensor(BrewAssistantEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return next action attributes."""
         return _next_action(self.coordinator)
+
+
+class BrewAssistantPillPreviewSensor(BrewAssistantEntity, SensorEntity):
+    """Diagnostic Pill source snapshot, separate from operational fermentation."""
+
+    _attr_has_entity_name = False
+
+    def __init__(self, coordinator: BrewAssistantCoordinator, key: str) -> None:
+        super().__init__(coordinator, key)
+        self._key = key
+        self._attr_name = _display_name_from_key(key)
+        self._attr_suggested_object_id = f"{DOMAIN}_{key}"
+        if key == "pill_temperature":
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        if key == "pill_gravity":
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    def _snapshot(self) -> dict[str, Any]:
+        return resolve_pill(self.coordinator.hass)
+
+    @property
+    def native_value(self) -> Any:
+        snapshot = self._snapshot()
+        return {
+            "pill_active_source": snapshot["active_source"],
+            "pill_status": snapshot["status"],
+            "pill_temperature": snapshot["temperature"],
+            "pill_gravity": snapshot["gravity"],
+        }[self._key]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self._snapshot()
