@@ -129,3 +129,10 @@ Supervisor enable/last-evaluation state is currently held in `hass.data["brewass
 3. Normal chamber target writes must remain behind the generic Supervised Apply boundary unless the architecture is explicitly changed.
 4. A missing/untrusted liquid temperature or target must not produce an invented control target.
 5. Keep fermentation and cold-crash target clamps explicit and diagnosable.
+
+
+## Provider arbitration
+
+The chamber supervisor now reads the persisted fermentation provider. When the selected provider is not `fermentation_chamber`, it reports `provider_inactive`, clears any pending chamber-owned supervised action and cannot create a new one. Observation entities remain available for diagnostics.
+
+This is backend arbitration only; conditional dashboard presentation is tracked separately in the [provider-selection contract](../../../docs/fermentation-provider-selection.md).
