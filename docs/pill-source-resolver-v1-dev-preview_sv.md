@@ -21,7 +21,8 @@ The source indicator in `dashboard/cards/fermentation_cockpit_v2_sv.yaml` shows 
 - Cloud Link may repeatedly publish cached readings; `last_reported` **must not** be treated as a physical sample timestamp.
 - A Cloud Link `Disconnected` state disqualifies its entire pair.
 - Both SG and temperature must be available, within numeric bounds, and updated within 20 minutes. Battery is not an eligibility input yet.
-- Current selection is stateless BLE preference. Recovery hysteresis and physical packet timestamps **not implemented**.
+- Källvalet sparas mellan coordinator-ticks i HA-minne. Vid aktiv Cloud Link krävs två distinkta BLE-observationer innan återgång; samma uppdatering räknas inte flera gånger. Tillståndet återställs vid integrationens omstart.
+- En explicit tidsstämpel i `measurement_time`, `observed_at`, `last_measurement` eller `last_sample` prioriteras om integrationen tillhandahåller den. Annars används fortfarande `last_updated` som proxy. `last_reported` får aldrig användas som nytt mätbevis.
 - Preview entities are **not connected** to fermentation controller, supervisor, runtime tracking or Brewfather stream. `safe_for_control: false` on diagnostics is intentional.
 - `provisional` means the pair passed state-level checks, **not** that a physically new measurement was verified.
 
@@ -31,5 +32,5 @@ The source indicator in `dashboard/cards/fermentation_cockpit_v2_sv.yaml` shows 
 2. Observe BLE temperature updates while SG changes; inspect integration behavior for repeated unchanged values.
 3. Confirm Cloud Link disconnection versus cached/resent data.
 4. Test BLE-only, Cloud-only, both stale, disconnect and reconnect.
-5. Implement integration-specific physical observation timestamp and stable-return hysteresis, then automated tests.
+5. Verifiera att integrationsspecifika tidsstämplar motsvarar fysisk mätning, testa återgångshysteres i HA och lägg till automatiserade tester.
 6. Only after those pass, plan separate approval for connecting runtime, Brewfather and supervised control. Do not promote dev to beta/main yet.
