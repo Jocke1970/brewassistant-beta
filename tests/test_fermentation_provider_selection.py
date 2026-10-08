@@ -13,6 +13,7 @@ MODELS = BASE / "fermentation_tracking/models.py"
 STORAGE = BASE / "fermentation_tracking/storage.py"
 RUNTIME = BASE / "fermentation_tracking/runtime.py"
 SNAPSHOT = BASE / "fermentation_tracking/snapshot.py"
+PROVIDER_SNAPSHOT = BASE / "fermentation_tracking/provider_snapshot.py"
 TRACKING_SENSOR = BASE / "fermentation_tracking/sensor.py"
 SELECT = BASE / "select.py"
 CHAMBER = BASE / "fermentation_chamber/supervisor.py"
@@ -135,9 +136,29 @@ def test_provider_changes_are_syntax_valid() -> None:
         STORAGE,
         RUNTIME,
         SNAPSHOT,
+        PROVIDER_SNAPSHOT,
         TRACKING_SENSOR,
         SELECT,
         CHAMBER,
         GF30,
     ):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+
+def test_provider_snapshot_is_read_only_and_uses_published_states() -> None:
+    source = PROVIDER_SNAPSHOT.read_text(encoding="utf-8")
+
+    assert "CHAMBER_SUPERVISOR_ENTITY" in source
+    assert "GF30_TARGET_STATE_ENTITY" in source
+    assert "hass.states.get" in source
+    assert "set_pending_action(" not in source
+    assert "build_fermentation_climate_supervisor_snapshot(" not in source
+    assert "build_gf30_target_adapter_snapshot(" not in source
+
+
+def test_services_expose_provider_on_start_and_update() -> None:
+    source = (BASE / "services.yaml").read_text(encoding="utf-8")
+
+    assert source.count("fermentation_provider:") >= 2
+    assert "fermentation_chamber or grainfather_gf30" in source
