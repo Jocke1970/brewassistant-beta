@@ -195,9 +195,36 @@ async def async_save_fermentation_runtime(hass: HomeAssistant) -> None:
 
 
 def start_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> FermentationRuntime:
-    """Start a fresh tracking session without requiring recipe metadata."""
+    """Start a fresh tracking session without requiring recipe metadata.
+
+    An explicit provider supplied in the start payload always wins. When the
+    runtime is inactive and the operator has deliberately preselected a
+    provider, preserve that choice into the new session instead of silently
+    resetting it to the chamber default. A still-active previous session is
+    never inherited implicitly.
+    """
     _clear_all_provider_pending_actions(hass)
+    current = get_runtime(hass)
     runtime = FermentationRuntime()
+
+    explicit_provider = "fermentation_provider" in data
+    preselected_provider = (
+        not current.active
+        and current.fermentation_provider in FERMENTATION_PROVIDERS
+        and current.fermentation_provider_selected_by not in {
+            "default",
+            "migration_default",
+        }
+    )
+    if not explicit_provider and preselected_provider:
+        runtime.fermentation_provider = current.fermentation_provider
+        runtime.fermentation_provider_selected_at = (
+            current.fermentation_provider_selected_at
+        )
+        runtime.fermentation_provider_selected_by = (
+            current.fermentation_provider_selected_by
+        )
+
     _update(runtime, data)
     runtime.active = True
     runtime.started_at = runtime.started_at or datetime.now(timezone.utc)
