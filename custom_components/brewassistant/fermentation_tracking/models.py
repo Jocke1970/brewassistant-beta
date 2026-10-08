@@ -39,6 +39,18 @@ DEFAULT_STABILITY_TOLERANCE = 0.001
 DEFAULT_FG_TOLERANCE = 0.002
 MAX_OBSERVATIONS = 1000
 
+PROVIDER_FERMENTATION_CHAMBER = "fermentation_chamber"
+PROVIDER_GRAINFATHER_GF30 = "grainfather_gf30"
+FERMENTATION_PROVIDERS = {
+    PROVIDER_FERMENTATION_CHAMBER,
+    PROVIDER_GRAINFATHER_GF30,
+}
+DEFAULT_FERMENTATION_PROVIDER = PROVIDER_FERMENTATION_CHAMBER
+PROVIDER_LABELS = {
+    PROVIDER_FERMENTATION_CHAMBER: "Temperaturkontrollerat jässkåp",
+    PROVIDER_GRAINFATHER_GF30: "Grainfather GF30",
+}
+
 
 @dataclass(slots=True)
 class FermentationObservation:
@@ -76,6 +88,9 @@ class FermentationRuntime:
     wort_correction_factor: float = DEFAULT_WCF
     gravity_source_mode: str = SOURCE_MODE_HYBRID
     temperature_source_mode: str = SOURCE_MODE_HYBRID
+    fermentation_provider: str = DEFAULT_FERMENTATION_PROVIDER
+    fermentation_provider_selected_at: datetime | None = None
+    fermentation_provider_selected_by: str = "default"
     started_at: datetime | None = None
     updated_at: datetime | None = None
     observations: list[FermentationObservation] = field(default_factory=list)
