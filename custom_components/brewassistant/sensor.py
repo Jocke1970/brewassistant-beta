@@ -912,7 +912,16 @@ class BrewAssistantPillPreviewSensor(BrewAssistantEntity, SensorEntity):
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
     def _snapshot(self) -> dict[str, Any]:
-        return resolve_pill(self.coordinator.hass)
+        """Share one atomic snapshot across all four sensors per coordinator tick."""
+        store = self.coordinator.hass.data.setdefault(DOMAIN, {})
+        cache_key = f"pill_resolver_preview_{self.coordinator.config_entry.entry_id}"
+        cache = store.get(cache_key) or {}
+        epoch = id(self.coordinator.data)
+        if cache.get("epoch") != epoch:
+            snapshot = resolve_pill(self.coordinator.hass, previous=cache.get("snapshot"))
+            cache = {"epoch": epoch, "snapshot": snapshot}
+            store[cache_key] = cache
+        return cache["snapshot"]
 
     @property
     def native_value(self) -> Any:
