@@ -334,3 +334,15 @@ After that validation the next implementation step is the selected-provider/supe
 4. Freezer control belongs to the separate coolant `generic_thermostat`, not direct thermal-learning commands.
 5. Pill and GF30 internal temperature are complementary observations; disagreement is surfaced, not silently resolved.
 6. No physical control is considered verified until real entity/readback/failure behavior has been field-tested.
+
+
+## Provider arbitration
+
+GF30 supervised target control is now eligible only when the persisted provider is `grainfather_gf30`.
+
+The gate is checked twice:
+
+1. before a pending GF30 target proposal can be created;
+2. again inside the confirmed executor immediately before the external Grainfather write.
+
+A provider switch therefore cannot leave a stale GF30 confirmation executable. The GF30 telemetry/learning surfaces may remain visible for diagnostics while the chamber is selected, but they are control-ineligible.
