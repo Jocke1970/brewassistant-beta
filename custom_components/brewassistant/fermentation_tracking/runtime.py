@@ -120,12 +120,11 @@ def _update(runtime: FermentationRuntime, data: dict[str, Any]) -> None:
             raise ValueError(
                 f"fermentation_provider must be one of {sorted(FERMENTATION_PROVIDERS)}"
             )
-        if provider != runtime.fermentation_provider:
-            runtime.fermentation_provider = provider
-            runtime.fermentation_provider_selected_at = datetime.now(timezone.utc)
-            runtime.fermentation_provider_selected_by = str(
-                data.get("fermentation_provider_selected_by") or "service"
-            )
+        runtime.fermentation_provider = provider
+        runtime.fermentation_provider_selected_at = datetime.now(timezone.utc)
+        runtime.fermentation_provider_selected_by = str(
+            data.get("fermentation_provider_selected_by") or "service"
+        )
 
     if "started_at" in data:
         started_at = as_datetime(data.get("started_at"))
