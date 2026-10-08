@@ -79,6 +79,12 @@ Backward-compatible migration:
 - migration must not silently enable any new GF30 write path;
 - changing provider during an active batch requires explicit operator action and must not reset SG-stage latches, recipe schedule position or cold-crash readiness.
 
+### Pre-start selection behavior
+
+The operator may select jäsutrustning before starting a new fermentation session. If the current runtime is inactive and contains an explicit provider choice, `fermentation_start` preserves that choice when the start payload does not contain its own provider. A still-active previous session is never inherited implicitly. An explicit provider in the start payload always wins.
+
+This prevents the UI sequence `select GF30 → start fermentation` from silently reverting to the chamber default.
+
 ## Ownership boundary
 
 `fermentation_tracking` owns the **process**:
@@ -301,14 +307,16 @@ Provider-specific values may still exist as backend entities for diagnostics/his
 
 Changing `fermentation_provider` during an active fermentation must be treated as a significant operator action.
 
-Before accepting the change:
+Implemented change boundary:
 
-1. show current and requested provider;
-2. show whether the old provider has a pending supervised action;
-3. clear/cancel provider-owned pending actions from the old provider;
-4. do **not** alter the fermentation strategy, SG stage latch or process target;
-5. calculate the new provider's readiness from live inputs;
-6. require a fresh operator confirmation before the new provider may propose/apply a physical target.
+1. changing the provider through the selector is itself an explicit operator action;
+2. any provider-owned pending supervised action from the old provider is cleared immediately;
+3. the fermentation strategy, SG stage latch and process target are not changed;
+4. the new provider starts from its live readiness/monitor state;
+5. no physical target is replayed automatically;
+6. a fresh provider-specific Supervised Apply proposal/confirmation is still required before a physical write can occur.
+
+The dashboard may later add an extra confirmation dialog for UX clarity, but safety does not depend on that presentation layer.
 
 Do not replay an old pending target action into the new provider.
 
