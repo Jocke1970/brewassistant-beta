@@ -1,0 +1,143 @@
+# Fermentation Cockpit v2 – preview (read-only observability)
+# Add as a MANUAL dashboard card. Keep v1 cards until v2 is field-validated.
+# Requires custom:button-card and custom:expander-card already used by BrewAssistant.
+# Selecting provider changes the stored fermentation provider; no target writes here.
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_fermentation
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_fermentation_provider
+      name: Fermentation Cockpit
+      icon: mdi:flask-outline
+      show_state: false
+      show_label: true
+      triggers_update:
+        - sensor.brewassistant_fermentation_provider
+        - sensor.brewassistant_fermentation_provider_status
+        - sensor.brewassistant_fermentation_current_temperature
+        - sensor.brewassistant_fermentation_current_sg
+        - sensor.brewassistant_fermentation_recommended_temperature
+        - sensor.brewassistant_brewfather_stream_status
+      label: |
+        [[[
+          const state = id => states[id]?.state;
+          const num = id => {
+            const v = state(id);
+            if (v == null || ['unknown','unavailable','none',''].includes(String(v).toLowerCase())) return null;
+            const n = Number(String(v).replace(',','.'));
+            return Number.isFinite(n) ? n : null;
+          };
+          const p = state('sensor.brewassistant_fermentation_provider');
+          const status = state('sensor.brewassistant_fermentation_provider_status') ?? '—';
+          const provider = p === 'grainfather_gf30' ? 'Grainfather GF30' : p === 'fermentation_chamber' ? 'Temperaturkontrollerat jässkåp' : 'Ingen giltig provider';
+          const temp = num('sensor.brewassistant_fermentation_current_temperature');
+          const sg = num('sensor.brewassistant_fermentation_current_sg');
+          const target = num('sensor.brewassistant_fermentation_recommended_temperature');
+          const f = (v,d=1) => v === null ? '—' : v.toFixed(d);
+          return '<div style="line-height:1.6;text-align:left;white-space:normal">' +
+            '<b>' + provider + '</b> · ' + status +
+            '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px">' +
+            [['ÖL',f(temp)+' °C'],['SG',f(sg,3)],['PROCESSMÅL',f(target)+' °C']].map(x =>
+              '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:rgba(127,127,127,.075);border:1px solid rgba(127,127,127,.13)"><div style="font-size:9px;opacity:.65;font-weight:800">'+x[0]+'</div><div style="font-size:16px;font-weight:900">'+x[1]+'</div></div>').join('') +
+            '</div></div>';
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 16px
+          - background: linear-gradient(125deg, rgba(33,150,243,.10), rgba(255,255,255,.035))
+          - border: 1px solid rgba(33,150,243,.18)
+          - box-shadow: var(--ha-card-box-shadow)
+        grid:
+          - grid-template-areas: '"i n" "l l"'
+          - grid-template-columns: 38px 1fr
+          - column-gap: 10px
+        name:
+          - font-size: 18px
+          - font-weight: 900
+          - justify-self: start
+        icon:
+          - width: 26px
+        label:
+          - justify-self: stretch
+    - type: entities
+      title: Jäsutrustning
+      show_header_toggle: false
+      entities:
+        - entity: select.brewassistant_fermentation_provider
+          name: Aktiv jäsutrustning
+        - entity: sensor.brewassistant_fermentation_provider_status
+          name: Status
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_fermentation_provider
+          state: fermentation_chamber
+      card:
+        type: custom:expander-card
+        title: Jässkåp – temperatur och diagnostik
+        clear: false
+        cards:
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: climate.fermentation_chamber
+                name: Jäskammare (visa termostat)
+              - entity: sensor.brewassistant_fermentation_chamber_air_temperature_average
+                name: Kammarluft
+              - entity: sensor.brewassistant_fermentation_effective_air_target
+                name: Rekommenderat luftmål
+              - entity: sensor.brewassistant_liquid_temperature
+                name: Öltemperatur
+              - entity: switch.brewassistant_fermentation_climate_supervisor_enabled
+                name: Klimatsupervisor (styrning)
+              - entity: switch.fermentation_heat_mat
+                name: Värmematta (manuell enhet)
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_fermentation_provider
+          state: grainfather_gf30
+      card:
+        type: custom:expander-card
+        title: GF30 – mål och status
+        clear: false
+        cards:
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.brewassistant_gf30_target_apply_state
+                name: Apply-status
+              - entity: binary_sensor.grainfather_gf30_controller_online
+                name: Controller online
+              - entity: sensor.brewassistant_gf30_profile_target
+                name: Profilmål
+              - entity: sensor.brewassistant_gf30_controller_target
+                name: GF30 mål
+              - entity: sensor.brewassistant_gf30_target_delta
+                name: Målavvikelse
+              - entity: sensor.brewassistant_gf30_controller_temperature
+                name: GF30 öltemperatur
+              - entity: sensor.glycolchiller_liquid
+                name: Kylvätska
+    - type: custom:expander-card
+      title: Mätningar och Brewfather
+      clear: false
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_fermentation_current_sg
+              name: SG
+            - entity: sensor.brewassistant_fermentation_current_temperature
+              name: Öltemperatur
+            - entity: sensor.brewassistant_brewfather_stream_status
+              name: Exportstatus
+            - entity: sensor.brewassistant_brewfather_stream_temperature
+              name: Brewfather temperatur
+            - entity: sensor.brewassistant_brewfather_stream_gravity
+              name: Brewfather SG
+            - entity: sensor.brewassistant_brewfather_stream_aux_temperature
+              name: Brewfather aux
