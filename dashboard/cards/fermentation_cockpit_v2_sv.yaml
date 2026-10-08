@@ -49,7 +49,7 @@ card:
           const rawStatus = s('sensor.brewassistant_fermentation_provider_status')?.state;
           const status = statusMap[rawStatus] || (invalid(rawStatus) ? 'Status okänd' : rawStatus);
           const pillSource = s('sensor.brewassistant_pill_active_source')?.state;
-          const pillIcon = pillSource === 'ble' ? 'ᛒ' : pillSource === 'cloud' ? '📶' : '⚠';
+          const pillIcon = pillSource === 'ble' ? '<ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>' : pillSource === 'cloud' ? '<ha-icon icon="mdi:wifi" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>' : '<ha-icon icon="mdi:alert-circle-outline" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>';
           const pillLabel = pillSource === 'ble' ? 'Bluetooth' : pillSource === 'cloud' ? 'Wi-Fi / Cloud Link' : 'Ingen verifierad källa';
           const provider = p === 'grainfather_gf30' ? 'Grainfather GF30' : p === 'fermentation_chamber' ? 'Temperaturkontrollerat jässkåp' : 'Ingen giltig provider';
           const observations = {
