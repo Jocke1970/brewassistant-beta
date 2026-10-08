@@ -23,28 +23,61 @@ card:
         - sensor.brewassistant_fermentation_current_sg
         - sensor.brewassistant_fermentation_recommended_temperature
         - sensor.brewassistant_brewfather_stream_status
+        - sensor.brewassistant_fermentation_provider_status
       label: |
         [[[
-          const state = id => states[id]?.state;
+          const s = id => states[id];
+          const invalid = v => v == null || ['unknown','unavailable','none',''].includes(String(v).toLowerCase());
           const num = id => {
-            const v = state(id);
-            if (v == null || ['unknown','unavailable','none',''].includes(String(v).toLowerCase())) return null;
+            const v = s(id)?.state;
+            if (invalid(v)) return null;
             const n = Number(String(v).replace(',','.'));
             return Number.isFinite(n) ? n : null;
           };
-          const p = state('sensor.brewassistant_fermentation_provider');
-          const status = state('sensor.brewassistant_fermentation_provider_status') ?? '—';
+          const attrs = s('sensor.brewassistant_fermentation_provider_status')?.attributes || {};
+          const age = raw => {
+            if (!raw) return null;
+            const ms = Date.parse(raw);
+            if (!Number.isFinite(ms)) return null;
+            return Math.max(0, Math.floor((Date.now() - ms) / 60000));
+          };
+          const ageText = m => m === null ? 'Tid okänd' : m < 1 ? 'Nyss' : m < 60 ? m + ' min sedan' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min sedan';
+          const statusMap = {disabled:'Styrning av',provider_inactive:'Provider spärrad',unavailable:'Otillgänglig',no_change:'Mål matchar',awaiting_confirmation:'Väntar på kvittens',proposed:'Förslag'};
+          const p = s('sensor.brewassistant_fermentation_provider')?.state;
+          const rawStatus = s('sensor.brewassistant_fermentation_provider_status')?.state;
+          const status = statusMap[rawStatus] || (invalid(rawStatus) ? 'Status okänd' : rawStatus);
           const provider = p === 'grainfather_gf30' ? 'Grainfather GF30' : p === 'fermentation_chamber' ? 'Temperaturkontrollerat jässkåp' : 'Ingen giltig provider';
+          const observations = {
+            temp: age(attrs.temperature_observed_at),
+            sg: age(attrs.gravity_observed_at)
+          };
+          // BA export contract: primary beer temperature >20 min must not be treated as fresh.
+          // SG is optional for export; a stale SG remains visible but marked as old.
+          const tile = (name, value, unit, measuredAge) => {
+            const missing = value === null;
+            const unverified = measuredAge === null;
+            const stale = !missing && !unverified && measuredAge > 20;
+            const warning = !missing && !unverified && measuredAge > 15 && !stale;
+            const color = stale ? '#b3261e' : warning ? '#9b6300' : 'var(--primary-text-color)';
+            const background = stale ? 'rgba(244,67,54,.11)' : warning ? 'rgba(255,152,0,.10)' : 'rgba(127,127,127,.075)';
+            const symbol = stale ? '⚠ ' : warning ? '△ ' : missing ? '? ' : unverified ? '? ' : '';
+            const note = missing ? 'Saknas' : unverified ? 'Tid ej verifierad' : ageText(measuredAge);
+            return '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:'+background+';border:1px solid rgba(127,127,127,.13);min-width:0">' +
+              '<div style="font-size:9px;opacity:.7;font-weight:800">'+name+'</div>' +
+              '<div style="font-size:15px;font-weight:900;color:'+color+'">'+symbol+(missing?'—':value+unit)+'</div>' +
+              '<div style="font-size:9px;opacity:.8">'+note+'</div></div>';
+          };
           const temp = num('sensor.brewassistant_fermentation_current_temperature');
           const sg = num('sensor.brewassistant_fermentation_current_sg');
           const target = num('sensor.brewassistant_fermentation_recommended_temperature');
-          const f = (v,d=1) => v === null ? '—' : v.toFixed(d);
-          return '<div style="line-height:1.6;text-align:left;white-space:normal">' +
-            '<b>' + provider + '</b> · ' + status +
+          const show = (n,d) => n === null ? null : n.toFixed(d);
+          const targetTile = '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:rgba(127,127,127,.075);border:1px solid rgba(127,127,127,.13)"><div style="font-size:9px;opacity:.7;font-weight:800">PROCESSMÅL</div><div style="font-size:15px;font-weight:900">'+(target===null?'—':target.toFixed(1)+' °C')+'</div><div style="font-size:9px;opacity:.8">Inställt mål</div></div>';
+          return '<div style="line-height:1.45;text-align:left;white-space:normal">' +
+            '<b>'+provider+'</b> · '+status +
             '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px">' +
-            [['ÖL',f(temp)+' °C'],['SG',f(sg,3)],['PROCESSMÅL',f(target)+' °C']].map(x =>
-              '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:rgba(127,127,127,.075);border:1px solid rgba(127,127,127,.13)"><div style="font-size:9px;opacity:.65;font-weight:800">'+x[0]+'</div><div style="font-size:16px;font-weight:900">'+x[1]+'</div></div>').join('') +
-            '</div></div>';
+            tile('ÖLTEMP',show(temp,1),' °C',observations.temp) +
+            tile('SG',show(sg,3),'',observations.sg) +
+            targetTile + '</div></div>';
         ]]]
       styles:
         card:
