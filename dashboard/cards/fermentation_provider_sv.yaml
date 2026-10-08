@@ -1,0 +1,70 @@
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_fermentation
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_fermentation_provider
+      name: Jäsutrustning
+      icon: mdi:thermometer-cog
+      show_state: false
+      show_label: true
+      triggers_update:
+        - sensor.brewassistant_fermentation_provider
+        - sensor.brewassistant_fermentation_provider_status
+        - sensor.brewassistant_fermentation_current_sg
+        - sensor.brewassistant_fermentation_current_temperature
+        - sensor.brewassistant_fermentation_recommended_temperature
+        - select.brewassistant_fermentation_provider
+      label: |
+        [[[
+          const provider = states['sensor.brewassistant_fermentation_provider']?.state ?? 'fermentation_chamber';
+          const status = states['sensor.brewassistant_fermentation_provider_status']?.state ?? 'unknown';
+          const sgRaw = Number(String(states['sensor.brewassistant_fermentation_current_sg']?.state ?? '').replace(',', '.'));
+          const tempRaw = Number(String(states['sensor.brewassistant_fermentation_current_temperature']?.state ?? '').replace(',', '.'));
+          const targetRaw = Number(String(states['sensor.brewassistant_fermentation_recommended_temperature']?.state ?? '').replace(',', '.'));
+          const label = provider === 'grainfather_gf30' ? 'Grainfather GF30' : 'Temperaturkontrollerat jässkåp';
+          const sg = Number.isFinite(sgRaw) ? sgRaw.toFixed(3) : '—';
+          const temp = Number.isFinite(tempRaw) ? tempRaw.toFixed(1) + ' °C' : '—';
+          const target = Number.isFinite(targetRaw) ? targetRaw.toFixed(1) + ' °C' : '—';
+          return `${label} · ${status}<br>Öl ${temp} · SG ${sg} · processmål ${target}`;
+        ]]]
+      styles:
+        card:
+          - border-radius: 20px
+          - padding: 13px
+          - background: linear-gradient(135deg, rgba(33,150,243,.10), rgba(127,127,127,.035))
+          - border: 1px solid rgba(33,150,243,.18)
+          - box-shadow: var(--ha-card-box-shadow)
+        grid:
+          - grid-template-areas: '"i n" "i l"'
+          - grid-template-columns: 40px minmax(0,1fr)
+          - column-gap: 11px
+        icon:
+          - width: 25px
+          - height: 25px
+        img_cell:
+          - width: 40px
+          - height: 40px
+          - border-radius: 50%
+          - background: rgba(33,150,243,.11)
+        name:
+          - justify-self: start
+          - font-size: 15px
+          - font-weight: 950
+        label:
+          - justify-self: start
+          - text-align: left
+          - white-space: normal
+          - font-size: 11.5px
+          - font-weight: 760
+          - opacity: 0.72
+    - type: entities
+      show_header_toggle: false
+      entities:
+        - entity: select.brewassistant_fermentation_provider
+          name: Jäsutrustning
+        - entity: sensor.brewassistant_fermentation_provider_status
+          name: Providerstatus
