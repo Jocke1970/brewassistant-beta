@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,7 @@ def _load_models():
     spec = importlib.util.spec_from_file_location("brewassistant_provider_models", MODELS)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -172,7 +174,8 @@ def test_preselected_inactive_provider_is_preserved_on_start() -> None:
     assert "not current.active" in source
     assert '"migration_default"' in source
     assert "runtime.fermentation_provider = current.fermentation_provider" in source
-    assert "A still-active previous session is never inherited implicitly." in source
+    assert "A still-active previous session" in source
+    assert "never inherited implicitly." in source
 
 
 
