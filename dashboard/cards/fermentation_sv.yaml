@@ -2,6 +2,8 @@ type: conditional
 conditions:
   - entity: switch.brewassistant_show_fermentation
     state: "on"
+  - entity: sensor.brewassistant_fermentation_provider
+    state: "fermentation_chamber"
 card:
   type: vertical-stack
   cards:

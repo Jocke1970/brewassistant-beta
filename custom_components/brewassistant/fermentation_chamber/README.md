@@ -5,6 +5,8 @@ Code snapshot documented: 2026-09-05
 
 `fermentation_chamber` converts normalized fermentation tracking data into a recommended chamber-air target and, when enabled, bridges that recommendation into BrewAssistant's generic Supervised Apply flow for `climate.fermentation_chamber`.
 
+It is one selectable physical fermentation provider. The provider-selection and conditional-UI contract is documented in [`../../../docs/fermentation-provider-selection.md`](../../../docs/fermentation-provider-selection.md). When another provider such as `grainfather_gf30` is selected, this backend may remain observable but must be control-ineligible for that fermentation session.
+
 It is intentionally separate from [`../fermentation_tracking/`](../fermentation_tracking/). Tracking owns the beer/process observations; chamber control consumes them.
 
 ## Responsibilities
@@ -127,3 +129,10 @@ Supervisor enable/last-evaluation state is currently held in `hass.data["brewass
 3. Normal chamber target writes must remain behind the generic Supervised Apply boundary unless the architecture is explicitly changed.
 4. A missing/untrusted liquid temperature or target must not produce an invented control target.
 5. Keep fermentation and cold-crash target clamps explicit and diagnosable.
+
+
+## Provider arbitration
+
+The chamber supervisor now reads the persisted fermentation provider. When the selected provider is not `fermentation_chamber`, it reports `provider_inactive`, clears any pending chamber-owned supervised action and cannot create a new one. Observation entities remain available for diagnostics.
+
+This is backend arbitration only; conditional dashboard presentation is tracked separately in the [provider-selection contract](../../../docs/fermentation-provider-selection.md).

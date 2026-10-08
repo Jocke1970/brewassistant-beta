@@ -6,7 +6,7 @@ SG mode design/status cross-reference: 2026-09-22
 
 `fermentation_tracking` is BrewAssistant's independent fermentation observation, calculation and **recipe temperature-schedule** backend. It normalizes gravity and beer-temperature observations, supports manual and automatic sources independently, persists manual observations/runtime state, derives progress/stability/readiness information, and interprets fermentation steps from read-only recipe data.
 
-It does **not** control a fermentation chamber, heater, cooler or fan. Chamber recommendations/control belong in [`../fermentation_chamber/`](../fermentation_chamber/).
+It does **not** control a fermentation chamber, heater, cooler or fan. Physical target adaptation belongs to the selected fermentation provider. See the [fermentation provider-selection contract](../../../docs/fermentation-provider-selection.md). Chamber recommendations/control belong in [`../fermentation_chamber/`](../fermentation_chamber/); GF30 adaptation belongs in [`../grainfather_fermenter/`](../grainfather_fermenter/).
 
 > **Planned SG-control mode:** The current read-only recipe schedule remains the active path. A separate pure SG rule engine (`sg_control_rules.py`) and tests exist on `dev`, but the per-batch mode selector, editable SG thresholds/ramp and stability hours, persistence of Pill history/stage, runtime arbitration, cold-crash confirmation UI and end-to-end tests are **not implemented or connected yet**. The authoritative two-mode specification and implementation checklist are in [SG-driven fermentation contract](../../../docs/sg-driven-fermentation.md). Do not interpret the SG prototype or the manual SG-readiness fallback below as a deployable SG-driven control mode.
 
@@ -80,6 +80,8 @@ temperature_schedule_ramp_progress_percent
 If no usable recipe schedule is available, the existing BrewAssistant tracking rule remains the fallback: primary target until the configured SG rise trigger is reached, then the configured temperature-rise target. This legacy fallback is **not** the new, explicitly selected, persisted multi-stage SG mode.
 
 ## Planned choice: day schedule or SG-based fermentation
+
+Fermentation strategy is independent from fermentation equipment. The selected strategy determines the desired beer-temperature target; the separately selected provider (`fermentation_chamber` or `grainfather_gf30`) determines which physical backend may adapt that target. See [provider selection](../../../docs/fermentation-provider-selection.md).
 
 See [the SG-driven fermentation contract](../../../docs/sg-driven-fermentation.md) for the full source of truth. In short, the intended modes are `recipe_schedule` (backward-compatible default; Brewfather supplies days/temperatures/ramps) and `sg_control` (per-batch opt-in; BA owns adjustable SG thresholds, per-step ramp hours, expected FG and 48–72 hours of gravity stability). Recipe temperatures/FG may be suggested defaults; Brewfather does not provide SG thresholds or stability hours and must never overwrite BA's explicit profile edits.
 
@@ -177,3 +179,30 @@ Configured automatic SG and temperature entities can supply the live current val
 5. Tracking recommends readiness/temperature changes but does not actuate chamber hardware.
 6. Storage changes require migration/backward-compatibility consideration.
 7. Do not infer stable FG from a live automatic value without sufficient history evidence.
+
+
+## Provider selection implementation
+
+The provider-selection backend is implemented on `dev`.
+
+Persisted provider IDs:
+
+```text
+fermentation_chamber
+grainfather_gf30
+```
+
+Home Assistant surfaces:
+
+```text
+select.brewassistant_fermentation_provider
+sensor.brewassistant_fermentation_provider
+sensor.brewassistant_fermentation_provider_status
+```
+
+Existing stored sessions without a provider migrate to `fermentation_chamber`. Provider switching does not alter SG/day process logic and clears stale provider-owned pending actions. Chamber and GF30 supervised paths are mutually gated; the GF30 confirmed executor also re-checks the live provider immediately before any external write.
+
+The normalized provider snapshot is side-effect-free and reads already-published provider telemetry rather than invoking proposal builders while a sensor is being read. Conditional dashboard composition remains pending; see [provider selection](../../../docs/fermentation-provider-selection.md).
+
+
+Preselected provider choices made while inactive are carried into a new session when `fermentation_start` does not explicitly supply a provider. Explicit start-service provider data always wins, and an active previous session is never inherited implicitly.

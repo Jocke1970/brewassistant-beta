@@ -2,6 +2,10 @@
 
 Status: **pure SG decision engine and tests only** on `dev`; the two-mode selector, editable controls, persistence, active arbitration, and cold-crash confirmation UI are **not implemented yet**. Keep the installed fermentation test on its existing recipe schedule; do not promote to `beta` or `main` without explicit approval and runtime validation.
 
+## Independent provider choice
+
+The SG/day choice is **not** the same as the physical fermentation equipment choice. `recipe_schedule` and `sg_control` must both be able to target either `fermentation_chamber` or `grainfather_gf30` through the common process-target contract. See [fermentation provider selection](fermentation-provider-selection.md). Changing strategy must not silently change provider, and changing provider must not reset SG stage state.
+
 ## Two explicit, per-batch modes
 
 - `recipe_schedule` (UI: **Dagar / Brewfather-schema**) is the backward-compatible default. Brewfather provides read-only recipe fermentation steps, temperatures, `actualTime`, and ramps. BrewAssistant interprets them; the fork never owns BA-specific control.

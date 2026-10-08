@@ -12,12 +12,14 @@ from homeassistant.util import dt as dt_util
 from ..const import DOMAIN
 from .calculations import valid_sg, valid_temperature
 from .models import (
+    DEFAULT_FERMENTATION_PROVIDER,
     DEFAULT_FG_TOLERANCE,
     DEFAULT_STABILITY_TOLERANCE,
     DEFAULT_STABLE_HOURS,
     DEFAULT_WCF,
     INSTRUMENT_MANUAL,
     INSTRUMENT_REFRACTOMETER,
+    FERMENTATION_PROVIDERS,
     MAX_OBSERVATIONS,
     METRIC_GRAVITY,
     METRIC_TEMPERATURE,
@@ -161,6 +163,13 @@ def runtime_to_dict(runtime: FermentationRuntime) -> dict[str, Any]:
         "wort_correction_factor": runtime.wort_correction_factor,
         "gravity_source_mode": runtime.gravity_source_mode,
         "temperature_source_mode": runtime.temperature_source_mode,
+        "fermentation_provider": runtime.fermentation_provider,
+        "fermentation_provider_selected_at": (
+            runtime.fermentation_provider_selected_at.isoformat()
+            if runtime.fermentation_provider_selected_at
+            else None
+        ),
+        "fermentation_provider_selected_by": runtime.fermentation_provider_selected_by,
         "started_at": runtime.started_at.isoformat() if runtime.started_at else None,
         "updated_at": runtime.updated_at.isoformat() if runtime.updated_at else None,
         "observations": [observation_to_dict(item) for item in runtime.observations[-MAX_OBSERVATIONS:]],
@@ -170,9 +179,19 @@ def runtime_to_dict(runtime: FermentationRuntime) -> dict[str, Any]:
 def runtime_from_dict(data: Any) -> FermentationRuntime:
     if not isinstance(data, dict):
         return FermentationRuntime()
+    provider = str(data.get("fermentation_provider") or DEFAULT_FERMENTATION_PROVIDER).lower().strip()
+    provider_valid = provider in FERMENTATION_PROVIDERS
     runtime = FermentationRuntime(
         active=bool(data.get("active", False)),
         recipe_name=str(data.get("recipe_name") or ""),
+        fermentation_provider=provider if provider_valid else DEFAULT_FERMENTATION_PROVIDER,
+        fermentation_provider_selected_at=as_datetime(
+            data.get("fermentation_provider_selected_at")
+        ),
+        fermentation_provider_selected_by=str(
+            data.get("fermentation_provider_selected_by")
+            or ("migration_default" if "fermentation_provider" not in data else "storage")
+        ),
         started_at=as_datetime(data.get("started_at")),
         updated_at=as_datetime(data.get("updated_at")),
     )

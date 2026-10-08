@@ -47,7 +47,7 @@ Frysluftgivare --> observation, anomalier, kompressor-/learning-diagnostik
 Learning ------> read-only rekommendation och osäkerhet; inga writes
 ```
 
-- **GF30 äger pumpen.** BA skickar inga pumpkommandon, bygger inga pumpautomationer och försöker inte ersätta GF30:s lokala kylningslogik. Pumpstatus kan läsas om verklig HA-telemetri finns; annars rapporteras `unknown`, aldrig antagen `on`.
+- **GF30 äger pumpen.** BA skickar inga pumpkommandon, bygger inga pumpautomationer och försöker inte ersätta GF30:s lokala kylningslogik. `binary_sensor.grainfather_gf30_cooling = on` får användas som **GF30 cooling-command / expected pump activity**: controllern begär kylning och pumpen förväntas vara aktiverad. Det är däremot inte fysisk flödesverifiering. Utan flödesmätare kan BA inte bevisa att pumpen snurrar, att slangar är anslutna eller att kylvätska faktiskt cirkulerar.
 - **`generic_thermostat` äger frysen.** Varken BA eller andra automationer skriver direkt till samma frysbrytare. BA ska först bara läsa temperatur, börvärde, HVAC/status och verifierad aktorfeedback.
 - **Två olika reglerstorheter:** GF30 arbetar mot öltemperaturen; frysen arbetar mot köldmediets temperatur. Köldmediets börvärde får inte härledas som om det vore samma värde som ölets börvärde.
 - Tidigare `fermentation_chamber` får inte samtidigt applicera ett konkurrerande mål på samma fysiska GF30-batch. Provider-/målauktoritet är explicit och fail-passive. Ett eventuellt senare GF30-profilbörvärde hanteras som en *separat* verifierad, kvitterad providerfunktion enligt [GF30-roadmapen](grainfather-fermenter.md), inte som en bieffekt av learning.
@@ -62,7 +62,7 @@ Learning ------> read-only rekommendation och osäkerhet; inga writes
 | Köldmedietemperatur | **Enda planerade processgivaren för frysbörvärdet** | Representativ vätskeplacering, kalibrering, freshness och verifierad användning i `generic_thermostat`. |
 | Fryslufttemperatur | Luft/vätske-delta, diagnostik och learning | Egen givare; får aldrig förväxlas med köldmedietemperatur. |
 | Freezer climate/switch/ev. effekt | Regleringens faktiska status, kompressorcykler och energimodell | Verifiera entity/readback; önskat `on` betyder inte fysisk kompressor ON. |
-| GF30 pump/kylbegäran (om exponerad) | Endast observations-/modellunderlag | Verifiera faktisk signal; saknas den visas `unknown`, ingen gissad pumpstyrning. |
+| GF30 cooling-status | `binary_sensor.grainfather_gf30_cooling`; cooling-command / expected pump activity | `on` betyder att GF30 är i kylstatus och förväntas ha aktiverat pumpen. Det bevisar inte fysiskt flöde eller anslutna slangar. |
 
 **Normalfall:** logga båda öltemperaturerna med egna timestamps, visa Pill, intern GF30, `delta = Pill - GF30` och båda trenderna. Använd båda för plausibilitetskontroll och lärdata; ersätt dem inte tyst med medelvärde eller en påstådd sann temperatur. Temperaturmålets ägare och vilken temperatur GF30-regulatorn *faktiskt* styr på ska framgå separat.
 
@@ -99,13 +99,132 @@ Beräkna endast från tidsstämplade, färska och rimliga observationer, utan at
 
 - Pill–GF30-delta, varaktighet, trend, placerings-/kalibreringsindikation och safe-point-status;
 - separat temperaturändring °C/h för Pill respektive GF30-intern under kyla/vila/värme; uppskatta inte sann temperatur genom okalibrerat medelvärde;
-- tidsfördröjning från verifierad pump-/kylbegäran till respektive temperaturrespons **bara om pump-/begäransstatus faktiskt exponeras**;
+- tidsfördröjning från GF30 cooling-command till termisk respons. `binary_sensor.grainfather_gf30_cooling` får användas som startpunkt för observationsfönstret, men inte som flödesbevis;
 - eftersläpning/overshoot i båda ölkurvorna, reservoarens värmeupptag och återhämtning, frysluft/vätske-delta;
 - verkligt bekräftade frysbrytar-/effektsignaler, kompressorcykler och drifttid; ETA med `unknown` eller låg konfidens vid otillräckliga data.
 
 Logga råa mätvärden och faktiska timestamps/entiteter, freshness, batch och volym om kända, medium och blandning, aktuella börvärden, styrningens/readback-status, läge, modellversion, sampelantal och osäkerhet. Träna inte på stale/unknown, disagreement, manuell override, saknad aktorkvittens, batch-/mediumbyte eller strömavbrott. Vattenkalibrering, jäsning och cold crash är olika experiment/profiler.
 
 Visa `learning_status`, `sample_count`, `confidence`, `reason`, `pill_temperature_c`, `gf30_internal_temperature_c`, `beer_sensor_delta_c`, `safe_point_status`, `coolant_temperature_c`, fryslufttemperatur och verifierat frysstatus. Eventuella förslag gäller i v1 operatören; inga automatiska klimat- eller GF30-åtgärder.
+
+## 5A. Cooling-command, förväntad pumpaktivitet och termisk respons
+
+Beslut 2026-10-04: BrewAssistant ska inte försöka skapa en falsk binär sanning som heter "pump verified" utan flödesmätare. I stället modelleras kylkedjan i separata nivåer:
+
+```text
+GF30 cooling-command
+  -> binary_sensor.grainfather_gf30_cooling = on
+  -> pump förväntas vara aktiverad
+
+Physical flow
+  -> inte direkt verifierbart utan flödesmätare
+
+Thermal response
+  -> observeras via coolant- och GF30/vörttemperatur över tid
+```
+
+Det innebär att `binary_sensor.grainfather_gf30_cooling` **får** användas som signalen "cooling commanded / expected pump active", men aldrig som bevis för att:
+
+- pumpmotorn faktiskt snurrar;
+- slangarna är anslutna;
+- kylvätska finns i kretsen;
+- vätskan cirkulerar;
+- eller att värmeöverföring faktiskt sker.
+
+### Empirisk GF30-effektsignatur
+
+Fältobservation 2026-10-04 från Home Assistant-effektgrafen för GF30 visar tre tydligt separerade nivåer:
+
+```text
+Tomgång / elektronik: cirka 1 W
+Kylpump aktiv:       cirka 6 W total GF30-effekt
+Värmare aktiv:       cirka 30–31 W total GF30-effekt
+```
+
+Pumpens elektriska signatur motsvarar därmed ungefär **+5 W över tomgång** i den observerade installationen. Grafen visar en längre stabil platå nära 6 W som är tydligt skild från både tomgångsnivån och värmarens cirka 30 W.
+
+Detta gör GF30-effekt till en användbar sekundär observationssignal:
+
+```text
+GF30 cooling = ON
+  -> pump expected active
+
+GF30 power nära observerad pumpplatå (~6 W)
+  -> pump electrical signature observed
+
+coolant temperature stiger efter termisk fördröjning
+  -> heat transfer / circulation strongly indicated
+
+GF30/vörttemperatur sjunker
+  -> process cooling response observed
+```
+
+Effektsignaturen är **inte fysisk flödesmätning**. Den kan ge stark evidens för att pumpens elektriska last är aktiv, men kan inte ensam bevisa att slangar är anslutna, att kylvätska finns eller att vätskan faktiskt cirkulerar.
+
+Värdena cirka 1 W / 6 W / 30–31 W är initiala empiriska observationer från den aktuella GF30-installationen och ska samlas in över flera ON/OFF-cykler innan de används som fasta klassificeringsgränser. Framtida klassificering bör använda intervall/hysteres snarare än exakt likhet med 6 W.
+
+### Förväntad första termiska respons
+
+I den nuvarande installationen sitter `sensor.glycolchiller_liquid` i reservoaren. När GF30 går till cooling och kylvätska börjar cirkulera genom den varmare GF30-manteln förväntas den första tydliga processresponsen normalt vara att **kylvätskan i reservoaren börjar stiga i temperatur**.
+
+Den förväntade ordningen är därför:
+
+```text
+1. GF30 cooling = ON
+2. coolant temperature börjar stiga
+3. GF30/vörttemperatur börjar därefter sjunka
+```
+
+Detta är en fysikalisk observationsmodell, inte ett bevis på en enskild komponent. En stigande coolant-temperatur efter cooling-command är dock stark indirekt evidens för att kylkretsen tar upp värme från GF30.
+
+### Observationsfönster
+
+En mätbar coolant-respons förväntas inte nödvändigtvis omedelbart. Som **fält-testhypotes** används initialt cirka **5–10 minuter** efter att GF30 går till cooling innan frånvaro av coolant-respons börjar betraktas som diagnostiskt intressant.
+
+Detta intervall är inte en verifierad konstant och ska inte hårdkodas som säkerhetsgräns innan verklig testdata finns. Påverkande faktorer inkluderar bland annat:
+
+- reservoarvolym;
+- starttemperaturer;
+- temperaturskillnad GF30 ↔ coolant;
+- pumpflöde;
+- slanglängd och isolering;
+- kylmantelns värmeöverföring;
+- fryseffekt;
+- sensorupplösning och uppdateringsintervall.
+
+Framtida read-only diagnostik bör därför kunna uttrycka tillstånd i stil med:
+
+```text
+idle
+cooling_commanded
+waiting_for_thermal_response
+coolant_response_observed
+process_cooling_observed
+cooling_chain_responding
+no_thermal_response_observed
+```
+
+`no_thermal_response_observed` får inte automatiskt översättas till "pumpfel". Möjliga orsaker kan vara pump, slangar, luft i kretsen, saknad kylvätska, otillräcklig temperaturskillnad, sensorplacering eller annan fysisk orsak.
+
+### Tvåfasidé för framtida cold-crash-styrning
+
+Följande är dokumenterad **designhypotes för senare validering**, inte implementerad styrning:
+
+**Fas 1 – snabbnedkylning, ungefär från jäsningstemperatur ner mot +6 °C**
+
+- GF30 cooling-command förväntas innebära kontinuerlig pumpdrift.
+- Liquid Cooler/frys bör kunna förberedas samtidigt som kylningen startar för att möta värmelasten proaktivt.
+- +6 °C behandlas som en initial testparameter, inte som en fysikalisk naturkonstant.
+
+**Fas 2 – lågtemperatur/inversionsområde, ungefär under +6 °C**
+
+- framtida processbedömning kan behöva använda `max(T_top, T_bottom)` för att kräva att hela vätskevolymen når målet;
+- pulserad pumpidé, initial testparameter: cirka 2 min ON / 6 min OFF;
+- lågtemperaturguard, initial testparameter: cirka +1,5 °C på någon relevant öltemperaturgivare.
+
+Dessa värden är **inte verifierade** för GF30-installationen och får inte betraktas som produktionssäkra innan fälttest. Framför allt får +1,5 °C inte beskrivas som att den "eliminerar all risk för isbildning"; sensorplacering, mätfel, lokala kalla zoner och tidsfördröjning gör ett sådant absolut påstående omöjligt.
+
+För framtida dual-sensor-logik måste `T_top` och `T_bottom` först kopplas till **fysiskt verifierade sensorplaceringar**. RAPT Pill flyter och kan vara kandidat för övre vätsketemperatur, men ingen annan befintlig temperaturkälla får automatiskt kallas "bottom" utan fysisk verifiering.
 
 ## 6. Cold crash och säkerhetsansvar
 

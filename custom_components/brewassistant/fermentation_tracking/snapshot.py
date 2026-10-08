@@ -8,7 +8,12 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .calculations import estimated_abv, fermentation_progress
-from .models import METRIC_GRAVITY, METRIC_TEMPERATURE
+from .models import (
+    FERMENTATION_PROVIDERS,
+    METRIC_GRAVITY,
+    METRIC_TEMPERATURE,
+    PROVIDER_LABELS,
+)
 from .observations import automatic_candidate, manual_candidate, resolve_candidate, stability_snapshot
 from .storage import STORAGE_KEY, get_runtime, observation_to_dict
 
@@ -138,6 +143,20 @@ def build_fermentation_snapshot(
         "gravity_calculation_input_brix": gravity["calculation_input_brix"] if gravity else None,
         "current_temperature_c": current_temperature,
         "temperature_source_mode": runtime.temperature_source_mode,
+        "fermentation_provider": runtime.fermentation_provider,
+        "fermentation_provider_label": PROVIDER_LABELS.get(
+            runtime.fermentation_provider,
+            runtime.fermentation_provider,
+        ),
+        "fermentation_provider_valid": (
+            runtime.fermentation_provider in FERMENTATION_PROVIDERS
+        ),
+        "fermentation_provider_selected_at": (
+            runtime.fermentation_provider_selected_at.isoformat()
+            if runtime.fermentation_provider_selected_at
+            else None
+        ),
+        "fermentation_provider_selected_by": runtime.fermentation_provider_selected_by,
         "temperature_source_type": temperature["source_type"] if temperature else None,
         "temperature_source": temperature["source"] if temperature else None,
         "temperature_source_entity": temperature["entity"] if temperature else None,

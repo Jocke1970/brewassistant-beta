@@ -12,6 +12,7 @@ from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from ..const import CONF_GRAVITY_ENTITY, CONF_LIQUID_TEMP_ENTITY, DOMAIN
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
+from .provider_snapshot import build_fermentation_provider_snapshot
 from .recipe_schedule import build_recipe_temperature_schedule
 from .snapshot import build_fermentation_snapshot
 
@@ -125,7 +126,7 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
     external_target, target_entity, target_source, target_schedule = _brewfather_recipe_schedule(
         coordinator
     )
-    return build_fermentation_snapshot(
+    snapshot = build_fermentation_snapshot(
         coordinator.hass,
         external_sg=external_sg,
         external_updated_at=gravity_updated_at,
@@ -138,9 +139,29 @@ def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dic
         external_target_source=target_source,
         external_target_metadata=target_schedule,
     )
+    provider = build_fermentation_provider_snapshot(coordinator.hass, snapshot)
+    snapshot["provider"] = provider
+    snapshot["provider_status"] = provider.get("provider_status")
+    snapshot["provider_ready"] = provider.get("provider_ready")
+    snapshot["provider_safe_to_propose_target"] = provider.get("safe_to_propose_target")
+    snapshot["provider_physical_target_c"] = provider.get("physical_target_c")
+    snapshot["provider_target_delta_c"] = provider.get("target_delta_c")
+    return snapshot
 
 
 SENSORS: tuple[FermentationTrackingSensorConfig, ...] = (
+    FermentationTrackingSensorConfig(
+        key="fermentation_provider",
+        name="BrewAssistant Fermentation Provider",
+        snapshot_key="fermentation_provider",
+        icon="mdi:thermometer-cog",
+    ),
+    FermentationTrackingSensorConfig(
+        key="fermentation_provider_status",
+        name="BrewAssistant Fermentation Provider Status",
+        snapshot_key="provider_status",
+        icon="mdi:state-machine",
+    ),
     FermentationTrackingSensorConfig(
         key="fermentation_tracking_status",
         name="BrewAssistant Fermentation Tracking Status",

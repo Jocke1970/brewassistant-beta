@@ -13,6 +13,71 @@ Varje funktionell ändring ska ange:
 
 ---
 
+## 2026-10-08 — v2026.10.0b4 — fermentation provider + Brewfather Custom Stream handoff
+
+### Sammanfattning
+
+Jässtrategi och fysisk jäsutrustning separeras nu explicit. BrewAssistant lagrar
+per-session provider `fermentation_chamber` eller `grainfather_gf30`, exponerar
+ett nytt provider-select och gate:ar chamber/GF30 så endast vald provider kan
+skapa eller verkställa provider-specifik temperaturintention.
+
+Providerbyte rensar stale pending action utan att ändra processmål, SG-stage eller
+recipe schedule. GF30 återvaliderar provider även precis före confirmed write.
+
+### Dashboard
+
+Nytt gemensamt providerkort:
+
+- `dashboard/cards/fermentation_provider.yaml`
+- `dashboard/cards/fermentation_provider_sv.yaml`
+
+Befintliga chamber- respektive GF30-kort är provider-conditional och använder
+stabila maskin-ID:n, inte översatta labels.
+
+### Brewfather Custom Stream
+
+BrewAssistant exponerar nya read-only, provider-neutrala streamkällor för
+temperatur, SG, processmål, target FG och semantiskt korrekt `aux_temp`.
+
+- chamber -> `aux_temp` = chamber/fridge air;
+- GF30 -> `aux_temp` = coolant/reservoar;
+- GF30 intern beer-temp felmärks aldrig som Fridge Temp;
+- primär temperatur måste vara färsk, max 20 minuter;
+- stale valfria measurements utelämnas;
+- BrewAssistant gör inga HTTP-POST:ar.
+
+Companion `Jocke1970/brewfather` äger fortsatt HTTPS-transport, 15-minuters
+rate-limit och delivery diagnostics.
+
+### Nya entiteter
+
+- `select.brewassistant_fermentation_provider`
+- `sensor.brewassistant_fermentation_provider`
+- `sensor.brewassistant_fermentation_provider_status`
+- `sensor.brewassistant_brewfather_stream_status`
+- `sensor.brewassistant_brewfather_stream_temperature`
+- `sensor.brewassistant_brewfather_stream_gravity`
+- `sensor.brewassistant_brewfather_stream_temp_target`
+- `sensor.brewassistant_brewfather_stream_gravity_target`
+- `sensor.brewassistant_brewfather_stream_aux_temperature`
+
+### Säkerhetsgräns
+
+- exakt en fermentation-provider är control-eligible;
+- ingen automatisk fallback till den andra providern;
+- providerbyte återanvänder inte gammal pending/confirmation;
+- GF30 äger fortsatt heater/cooling-pump;
+- coolant thermostat äger fortsatt frysen;
+- Custom Stream är logging och kan aldrig ge control permission.
+
+### HA-åtgärd
+
+**Home Assistant-omstart krävs** efter HACS-uppdatering eftersom nya
+integration-owned select-/sensor-entiteter tillkommer.
+
+---
+
 ## 2026-10-03 — v2026.10.0b3 — GF30 Liquid Cooler read-only readiness
 
 ### Sammanfattning

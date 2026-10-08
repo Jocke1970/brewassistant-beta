@@ -16,6 +16,15 @@ from .control_policy import POLICY_OPTIONS, SECTION_CONFIG, section_policy
 from .coordinator import BrewAssistantCoordinator
 from .cooling.cooling_runtime import METHOD_OPTIONS as COOLING_METHOD_OPTIONS, get_cooling_runtime_settings, update_cooling_runtime_settings
 from .entity import BrewAssistantEntity
+from .fermentation_tracking.models import (
+    DEFAULT_FERMENTATION_PROVIDER,
+    PROVIDER_LABELS,
+)
+from .fermentation_tracking.runtime import (
+    async_save_fermentation_runtime,
+    get_fermentation_runtime,
+    set_fermentation_provider,
+)
 from .kegerator.fan_control import async_apply_kegerator_fan_auto
 from .kegerator.temperature_preset import (
     DEFAULT_PRESET as DEFAULT_KEGERATOR_TEMPERATURE_PRESET,
@@ -32,6 +41,16 @@ AIR_TARGET_TEST_OPTIONS = ["Off", "Fermentation", "Cold crash"]
 APPLY_MODE_OPTIONS = [READ_ONLY_MODE, SUPERVISED_MODE]
 BREWZILLA_LEARNING_CONTEXT_OPTIONS = ["Unknown", "Water only", "Real mash"]
 KEGERATOR_FAN_MODE_OPTIONS = ["Off", "Cooling only", "Afterrun", "Smart auto", "Always on"]
+FERMENTATION_PROVIDER_OPTIONS = [
+    PROVIDER_LABELS[key]
+    for key in (
+        "fermentation_chamber",
+        "grainfather_gf30",
+    )
+]
+FERMENTATION_PROVIDER_BY_LABEL = {
+    label: provider for provider, label in PROVIDER_LABELS.items()
+}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -42,6 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             BrewAssistantCarbonationMethodSelect(coordinator),
             BrewAssistantCoolingMethodSelect(coordinator),
             BrewAssistantAirTargetTestModeSelect(coordinator),
+            BrewAssistantFermentationProviderSelect(coordinator),
             BrewAssistantApplyModeSelect(coordinator),
             BrewAssistantBrewZillaLearningContextSelect(coordinator),
             BrewAssistantBrewZillaMashTemperatureSourceSelect(coordinator),
@@ -126,6 +146,58 @@ class BrewAssistantCarbonationMethodSelect(BrewAssistantEntity, RestoreEntity, S
     @property
     def extra_state_attributes(self) -> dict[str, str]:
         return {"source": "python_runtime_control", "runtime_key": "method"}
+
+
+class BrewAssistantFermentationProviderSelect(BrewAssistantEntity, SelectEntity):
+    """Persistent per-session fermentation equipment/provider selector."""
+
+    _attr_has_entity_name = False
+    _attr_options = FERMENTATION_PROVIDER_OPTIONS
+    _attr_icon = "mdi:thermometer-cog"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "fermentation_provider")
+        self._attr_unique_id = f"{DOMAIN}_select_fermentation_provider"
+        self._attr_name = "BrewAssistant Jäsutrustning"
+        self._attr_suggested_object_id = f"{DOMAIN}_fermentation_provider"
+
+    @property
+    def current_option(self) -> str | None:
+        runtime = get_fermentation_runtime(self.coordinator.hass)
+        provider = runtime.fermentation_provider or DEFAULT_FERMENTATION_PROVIDER
+        return PROVIDER_LABELS.get(
+            provider,
+            PROVIDER_LABELS[DEFAULT_FERMENTATION_PROVIDER],
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        provider = FERMENTATION_PROVIDER_BY_LABEL.get(option)
+        if provider is None:
+            return
+        set_fermentation_provider(
+            self.coordinator.hass,
+            provider,
+            selected_by="operator_ui",
+        )
+        await async_save_fermentation_runtime(self.coordinator.hass)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        runtime = get_fermentation_runtime(self.coordinator.hass)
+        return {
+            "source": "fermentation_tracking_runtime",
+            "provider_id": runtime.fermentation_provider,
+            "selected_at": (
+                runtime.fermentation_provider_selected_at.isoformat()
+                if runtime.fermentation_provider_selected_at
+                else None
+            ),
+            "selected_by": runtime.fermentation_provider_selected_by,
+            "default_provider": DEFAULT_FERMENTATION_PROVIDER,
+            "control_contract": "exclusive_provider",
+        }
 
 
 class BrewAssistantAirTargetTestModeSelect(BrewAssistantEntity, RestoreEntity, SelectEntity):

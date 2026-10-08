@@ -10,7 +10,15 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from ..const import DOMAIN
 from .calculations import valid_sg, valid_temperature
-from .models import SOURCE_MODE_HYBRID, SOURCE_MODES, FermentationRuntime
+from .models import (
+    DEFAULT_FERMENTATION_PROVIDER,
+    FERMENTATION_PROVIDERS,
+    PROVIDER_FERMENTATION_CHAMBER,
+    PROVIDER_GRAINFATHER_GF30,
+    SOURCE_MODE_HYBRID,
+    SOURCE_MODES,
+    FermentationRuntime,
+)
 from .observations import record_manual_observation
 from .recalculation import recalculate_refractometer_observations
 from .snapshot import build_fermentation_snapshot
@@ -29,6 +37,13 @@ SERVICE_UPDATE = "fermentation_update"
 SERVICE_RECORD_OBSERVATION = "fermentation_record_observation"
 SERVICE_RECORD_GRAVITY = "fermentation_record_gravity"
 SERVICE_RESET = "fermentation_reset"
+
+CHAMBER_SUPERVISOR_SOURCE = "fermentation_chamber_supervisor"
+GF30_SUPERVISOR_SOURCE = "grainfather_fermenter_supervisor"
+PROVIDER_PENDING_SOURCES = {
+    PROVIDER_FERMENTATION_CHAMBER: CHAMBER_SUPERVISOR_SOURCE,
+    PROVIDER_GRAINFATHER_GF30: GF30_SUPERVISOR_SOURCE,
+}
 
 
 def _update(runtime: FermentationRuntime, data: dict[str, Any]) -> None:
@@ -97,12 +112,70 @@ def _update(runtime: FermentationRuntime, data: dict[str, Any]) -> None:
             raise ValueError(f"{key} must be one of {sorted(SOURCE_MODES)}")
         setattr(runtime, key, mode)
 
+    if "fermentation_provider" in data:
+        provider = str(
+            data.get("fermentation_provider") or DEFAULT_FERMENTATION_PROVIDER
+        ).lower().strip()
+        if provider not in FERMENTATION_PROVIDERS:
+            raise ValueError(
+                f"fermentation_provider must be one of {sorted(FERMENTATION_PROVIDERS)}"
+            )
+        runtime.fermentation_provider = provider
+        runtime.fermentation_provider_selected_at = datetime.now(timezone.utc)
+        runtime.fermentation_provider_selected_by = str(
+            data.get("fermentation_provider_selected_by") or "service"
+        )
+
     if "started_at" in data:
         started_at = as_datetime(data.get("started_at"))
         if started_at is None:
             raise ValueError("started_at must be a valid datetime")
         runtime.started_at = started_at
     runtime.updated_at = datetime.now(timezone.utc)
+
+
+def _clear_provider_pending_action(hass: HomeAssistant, provider: str) -> None:
+    """Clear a pending action owned by one fermentation provider."""
+    source = PROVIDER_PENDING_SOURCES.get(provider)
+    if source is None:
+        return
+    from ..supervised_apply import clear_pending_action_from_source
+
+    clear_pending_action_from_source(hass, source)
+
+
+def _clear_all_provider_pending_actions(hass: HomeAssistant) -> None:
+    for provider in FERMENTATION_PROVIDERS:
+        _clear_provider_pending_action(hass, provider)
+
+
+def set_fermentation_provider(
+    hass: HomeAssistant,
+    provider: str,
+    *,
+    selected_by: str = "operator_ui",
+) -> FermentationRuntime:
+    """Persist one explicit provider choice and invalidate old provider intent."""
+    normalized = str(provider or "").lower().strip()
+    if normalized not in FERMENTATION_PROVIDERS:
+        raise ValueError(
+            f"fermentation_provider must be one of {sorted(FERMENTATION_PROVIDERS)}"
+        )
+
+    current = get_runtime(hass)
+    if normalized == current.fermentation_provider:
+        return current
+
+    candidate = deepcopy(current)
+    previous = candidate.fermentation_provider
+    candidate.fermentation_provider = normalized
+    candidate.fermentation_provider_selected_at = datetime.now(timezone.utc)
+    candidate.fermentation_provider_selected_by = selected_by
+    candidate.updated_at = datetime.now(timezone.utc)
+
+    _clear_provider_pending_action(hass, previous)
+    set_runtime(hass, candidate)
+    return candidate
 
 
 def get_fermentation_runtime(hass: HomeAssistant) -> FermentationRuntime:
@@ -121,8 +194,36 @@ async def async_save_fermentation_runtime(hass: HomeAssistant) -> None:
 
 
 def start_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> FermentationRuntime:
-    """Start a fresh tracking session without requiring recipe metadata."""
+    """Start a fresh tracking session without requiring recipe metadata.
+
+    An explicit provider supplied in the start payload always wins. When the
+    runtime is inactive and the operator has deliberately preselected a
+    provider, preserve that choice into the new session instead of silently
+    resetting it to the chamber default. A still-active previous session is
+    never inherited implicitly.
+    """
+    _clear_all_provider_pending_actions(hass)
+    current = get_runtime(hass)
     runtime = FermentationRuntime()
+
+    explicit_provider = "fermentation_provider" in data
+    preselected_provider = (
+        not current.active
+        and current.fermentation_provider in FERMENTATION_PROVIDERS
+        and current.fermentation_provider_selected_by not in {
+            "default",
+            "migration_default",
+        }
+    )
+    if not explicit_provider and preselected_provider:
+        runtime.fermentation_provider = current.fermentation_provider
+        runtime.fermentation_provider_selected_at = (
+            current.fermentation_provider_selected_at
+        )
+        runtime.fermentation_provider_selected_by = (
+            current.fermentation_provider_selected_by
+        )
+
     _update(runtime, data)
     runtime.active = True
     runtime.started_at = runtime.started_at or datetime.now(timezone.utc)
@@ -132,15 +233,19 @@ def start_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> Fer
 
 def update_fermentation_runtime(hass: HomeAssistant, data: dict[str, Any]) -> FermentationRuntime:
     """Update configuration atomically and recalculate derived readings."""
-    candidate = deepcopy(get_runtime(hass))
+    current = get_runtime(hass)
+    candidate = deepcopy(current)
     _update(candidate, data)
     recalculate_refractometer_observations(candidate)
+    if candidate.fermentation_provider != current.fermentation_provider:
+        _clear_provider_pending_action(hass, current.fermentation_provider)
     set_runtime(hass, candidate)
     return candidate
 
 
 def reset_fermentation_runtime(hass: HomeAssistant) -> FermentationRuntime:
     """Clear tracking configuration and observations."""
+    _clear_all_provider_pending_actions(hass)
     runtime = FermentationRuntime()
     set_runtime(hass, runtime)
     return runtime
@@ -222,6 +327,7 @@ __all__ = [
     "record_fermentation_observation",
     "record_gravity_observation",
     "reset_fermentation_runtime",
+    "set_fermentation_provider",
     "start_fermentation_runtime",
     "update_fermentation_runtime",
 ]

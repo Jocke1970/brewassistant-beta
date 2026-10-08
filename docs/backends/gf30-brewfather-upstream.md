@@ -58,3 +58,46 @@ BF:s 15-minutersregel är en **mottagningsgräns**, inte ett krav att GF30 eller
 5. Gör detta som ett separat testat adapterarbete på `dev`; ingen cloud POST eller ändring av befintlig installation genom dokumentationssynk. Publicering, `beta` och `main` kräver egna beslut.
 
 **Öppen designfråga:** om BF-forken eller en framtida fristående BA-exportadapter ska äga transporten. **Tills vidare rekommenderas återanvändning av BF-forkens enda existerande avsändare, efter fix för HTTPS/färskhet/rate limit; inga parallella POST-rutiner.**
+
+## Implemented provider-neutral BrewAssistant export
+
+BrewAssistant now exposes stable Custom Stream source entities independent of the selected fermentation provider:
+
+```text
+sensor.brewassistant_brewfather_stream_status
+sensor.brewassistant_brewfather_stream_temperature
+sensor.brewassistant_brewfather_stream_gravity
+sensor.brewassistant_brewfather_stream_temp_target
+sensor.brewassistant_brewfather_stream_gravity_target
+sensor.brewassistant_brewfather_stream_aux_temperature
+```
+
+The export layer owns **source semantics**, not HTTP transport.
+
+```text
+BrewAssistant
+  -> normalized/fresh telemetry
+  -> no HTTP POST
+
+Jocke1970/brewfather
+  -> Custom Stream configuration
+  -> 15-minute attempt limit
+  -> HTTPS POST
+  -> delivery diagnostics
+```
+
+Primary beer temperature and SG use the normalized fermentation tracking sources. Measurement freshness is capped at 20 minutes. A stale primary temperature blocks the outbound sample; stale optional SG/aux temperature is omitted.
+
+Provider-aware `aux_temp` mapping:
+
+```text
+fermentation_chamber
+  -> chamber/fridge air
+
+grainfather_gf30
+  -> coolant/reservoir
+```
+
+`ext_temp` remains deliberately unmapped unless a true room/ambient sensor is explicitly configured. GF30 internal beer temperature is not exported as Brewfather Fridge Temp.
+
+No logging ID or Custom Stream URL is stored or exposed by BrewAssistant.
