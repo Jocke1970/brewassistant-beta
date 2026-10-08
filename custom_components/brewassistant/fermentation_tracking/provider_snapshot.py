@@ -1,7 +1,8 @@
 """Normalized read-only fermentation provider snapshot.
 
-The process target belongs to fermentation_tracking. This module only normalizes
-the currently selected physical provider for UI and outbound telemetry.
+The process target belongs to fermentation_tracking. This module only reads
+already-published Home Assistant states for the selected physical provider. It
+must never create pending actions or invoke hardware/service paths.
 """
 
 from __future__ import annotations
@@ -18,6 +19,12 @@ from .models import (
 )
 from .storage import get_runtime
 
+CHAMBER_SUPERVISOR_ENTITY = (
+    "switch.brewassistant_fermentation_climate_supervisor_enabled"
+)
+GF30_TARGET_STATE_ENTITY = "sensor.brewassistant_gf30_target_apply_state"
+INVALID_STATES = {"unknown", "unavailable", "none", ""}
+
 
 def _age_seconds(iso_value: Any) -> float | None:
     if not iso_value:
@@ -32,11 +39,29 @@ def _age_seconds(iso_value: Any) -> float | None:
     return round(max(0.0, age), 1)
 
 
+def _state_snapshot(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
+    state = hass.states.get(entity_id)
+    if state is None:
+        return {
+            "entity_id": entity_id,
+            "available": False,
+            "state": None,
+            "attributes": {},
+        }
+    state_value = str(state.state)
+    return {
+        "entity_id": entity_id,
+        "available": state_value.lower() not in INVALID_STATES,
+        "state": state_value,
+        "attributes": dict(state.attributes),
+    }
+
+
 def build_fermentation_provider_snapshot(
     hass: HomeAssistant,
     tracking: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return one normalized snapshot for the selected physical provider."""
+    """Return one normalized, side-effect-free provider snapshot."""
     runtime = get_runtime(hass)
     provider = runtime.fermentation_provider
     label = PROVIDER_LABELS.get(provider, provider)
@@ -60,69 +85,69 @@ def build_fermentation_provider_snapshot(
         "safe_to_propose_target": False,
         "provider_ready": False,
         "provider_status": "unknown",
-        "reason": "provider snapshot unavailable",
+        "reason": "provider telemetry unavailable",
     }
 
     if provider == PROVIDER_FERMENTATION_CHAMBER:
-        from ..fermentation_chamber.supervisor import (
-            build_fermentation_climate_supervisor_snapshot,
+        source = _state_snapshot(hass, CHAMBER_SUPERVISOR_ENTITY)
+        attrs = source["attributes"]
+        provider_selected = attrs.get("provider_selected") is True
+        ready = bool(
+            provider_selected
+            and attrs.get("ready") is True
+            and attrs.get("scope_active") is True
         )
-
-        chamber = build_fermentation_climate_supervisor_snapshot(hass)
-        pending = bool(chamber.get("has_pending_action"))
         return {
             **common,
-            "provider_ready": bool(
-                chamber.get("provider_selected")
-                and chamber.get("ready")
-                and chamber.get("scope_active")
-            ),
-            "provider_status": chamber.get("status"),
-            "physical_target_c": chamber.get("controller_target_temperature"),
-            "physical_target_source": chamber.get("controller_entity"),
-            "target_delta_c": chamber.get("target_delta"),
-            "temperature_control_state": chamber.get("demand"),
+            "provider_selected": provider_selected,
+            "provider_ready": ready,
+            "provider_status": attrs.get("status") or source["state"],
+            "physical_target_c": attrs.get("controller_target_temperature"),
+            "physical_target_source": attrs.get("controller_entity"),
+            "target_delta_c": attrs.get("target_delta"),
+            "temperature_control_state": attrs.get("demand"),
             "supervised_apply_state": (
-                "pending_confirmation" if pending else chamber.get("action")
+                "pending_confirmation"
+                if attrs.get("has_pending_action")
+                else attrs.get("action")
             ),
             "safe_to_propose_target": bool(
-                chamber.get("provider_selected")
-                and chamber.get("enabled")
-                and chamber.get("ready")
-                and chamber.get("scope_active")
-                and chamber.get("supervised_apply_enabled")
+                provider_selected
+                and attrs.get("enabled") is True
+                and attrs.get("ready") is True
+                and attrs.get("scope_active") is True
+                and attrs.get("supervised_apply_enabled") is True
             ),
-            "reason": chamber.get("reason"),
-            "provider_details": chamber,
+            "reason": attrs.get("reason"),
+            "provider_details": source,
         }
 
     if provider == PROVIDER_GRAINFATHER_GF30:
-        from ..grainfather_fermenter.supervised_target import (
-            build_gf30_target_adapter_snapshot,
-        )
-
-        gf30 = build_gf30_target_adapter_snapshot(hass)
+        source = _state_snapshot(hass, GF30_TARGET_STATE_ENTITY)
+        attrs = source["attributes"]
+        provider_selected = attrs.get("provider_selected") is True
         return {
             **common,
-            "provider_ready": bool(gf30.get("ready")),
-            "provider_status": gf30.get("state"),
-            "physical_target_c": gf30.get("controller_target_temperature"),
-            "physical_target_source": gf30.get("target_temperature_entity"),
-            "target_delta_c": gf30.get("target_delta"),
-            "temperature_control_state": gf30.get("controller_state"),
+            "provider_selected": provider_selected,
+            "provider_ready": bool(provider_selected and attrs.get("ready") is True),
+            "provider_status": source["state"],
+            "physical_target_c": attrs.get("controller_target_temperature"),
+            "physical_target_source": attrs.get("target_temperature_entity"),
+            "target_delta_c": attrs.get("target_delta"),
+            "temperature_control_state": attrs.get("controller_state"),
             "supervised_apply_state": (
                 "pending_confirmation"
-                if gf30.get("has_pending_action")
-                else gf30.get("state")
+                if attrs.get("has_pending_action")
+                else source["state"]
             ),
             "safe_to_propose_target": bool(
-                gf30.get("provider_selected")
-                and gf30.get("hardware_ready")
-                and gf30.get("profile_target_ready")
-                and gf30.get("supervised_apply_enabled")
+                provider_selected
+                and attrs.get("hardware_ready") is True
+                and attrs.get("profile_target_ready") is True
+                and attrs.get("supervised_apply_enabled") is True
             ),
-            "reason": gf30.get("reason"),
-            "provider_details": gf30,
+            "reason": attrs.get("reason"),
+            "provider_details": source,
         }
 
     return {
