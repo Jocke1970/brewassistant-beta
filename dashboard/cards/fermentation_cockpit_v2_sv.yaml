@@ -24,6 +24,8 @@ card:
         - sensor.brewassistant_fermentation_recommended_temperature
         - sensor.brewassistant_brewfather_stream_status
         - sensor.brewassistant_fermentation_provider_status
+        - sensor.brewassistant_pill_active_source
+        - sensor.brewassistant_pill_status
       label: |
         [[[
           const s = id => states[id];
@@ -46,6 +48,9 @@ card:
           const p = s('sensor.brewassistant_fermentation_provider')?.state;
           const rawStatus = s('sensor.brewassistant_fermentation_provider_status')?.state;
           const status = statusMap[rawStatus] || (invalid(rawStatus) ? 'Status okänd' : rawStatus);
+          const pillSource = s('sensor.brewassistant_pill_active_source')?.state;
+          const pillIcon = pillSource === 'ble' ? 'ᛒ' : pillSource === 'cloud' ? '📶' : '⚠';
+          const pillLabel = pillSource === 'ble' ? 'Bluetooth' : pillSource === 'cloud' ? 'Wi-Fi / Cloud Link' : 'Ingen verifierad källa';
           const provider = p === 'grainfather_gf30' ? 'Grainfather GF30' : p === 'fermentation_chamber' ? 'Temperaturkontrollerat jässkåp' : 'Ingen giltig provider';
           const observations = {
             temp: age(attrs.temperature_observed_at),
@@ -74,6 +79,7 @@ card:
           const targetTile = '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:rgba(127,127,127,.075);border:1px solid rgba(127,127,127,.13)"><div style="font-size:9px;opacity:.7;font-weight:800">PROCESSMÅL</div><div style="font-size:15px;font-weight:900">'+(target===null?'—':target.toFixed(1)+' °C')+'</div><div style="font-size:9px;opacity:.8">Inställt mål</div></div>';
           return '<div style="line-height:1.45;text-align:left;white-space:normal">' +
             '<b>'+provider+'</b> · '+status +
+            '<div style="margin-top:5px;font-size:12px;opacity:.85">RAPT Pill: '+pillIcon+' '+pillLabel+' <span style="opacity:.7">(diagnostik, ej styrkälla)</span></div>' +
             '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px">' +
             tile('ÖLTEMP',show(temp,1),' °C',observations.temp) +
             tile('SG',show(sg,3),'',observations.sg) +
@@ -150,6 +156,21 @@ card:
                 name: GF30 öltemperatur
               - entity: sensor.glycolchiller_liquid
                 name: Kylvätska
+    - type: custom:expander-card
+      title: RAPT Pill – källval (read-only)
+      clear: false
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_pill_active_source
+              name: Aktiv integrationskälla
+            - entity: sensor.brewassistant_pill_status
+              name: Valideringsstatus
+            - entity: sensor.brewassistant_pill_temperature
+              name: Öltemperatur (diagnostik)
+            - entity: sensor.brewassistant_pill_gravity
+              name: SG (diagnostik)
     - type: custom:expander-card
       title: Mätningar och Brewfather
       clear: false
