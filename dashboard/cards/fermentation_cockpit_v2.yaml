@@ -136,7 +136,7 @@ card:
           state: grainfather_gf30
       card:
         type: custom:expander-card
-        title: GF30 – mål och status
+        title: GF30 – target and status
         clear: false
         cards:
           - type: entities
