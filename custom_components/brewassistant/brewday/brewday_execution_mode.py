@@ -406,13 +406,13 @@ def _owners(mode: str, fallback_from: str | None) -> dict[str, Any]:
     return {
         "recipe_owner": recipe_owner,
         "step_timer_owner": "brewassistant_manual",
-        "target_owner": "brewassistant_manual",
-        "heat_owner": "brewassistant_learning",
-        "pump_owner": "brewassistant_learning",
-        "target_write_allowed_by_mode": True,
-        "heater_switch_write_allowed_by_mode": True,
-        "heat_utilization_write_allowed_by_mode": True,
-        "pump_write_allowed_by_mode": True,
+        "target_owner": "brewassistant_manual" if fallback_from is None else "external_owner_unverified",
+        "heat_owner": "brewassistant_learning" if fallback_from is None else "none_until_resync",
+        "pump_owner": "brewassistant_learning" if fallback_from is None else "none_until_resync",
+        "target_write_allowed_by_mode": fallback_from is None,
+        "heater_switch_write_allowed_by_mode": fallback_from is None,
+        "heat_utilization_write_allowed_by_mode": fallback_from is None,
+        "pump_write_allowed_by_mode": fallback_from is None,
     }
 
 
@@ -555,7 +555,7 @@ def build_manual_fallback_snapshot(
         fallback_active=True,
         fallback_from_mode=from_mode,
         fallback_reason=reason,
-        reconnect_expected=True,
+        reconnect_expected=not bool(store.get("resync_required")),
         manual_fallback_plan_loaded=manual_plan_loaded,
     )
 
@@ -721,6 +721,6 @@ def build_manual_fallback_snapshot(
         hass, cached, MANUAL_BREWING,
         fallback_from=from_mode,
         fallback_reason=reason,
-        reconnect_expected=True,
+        reconnect_expected=not bool(store.get("resync_required")),
         recipe_context_retained=True,
     )
