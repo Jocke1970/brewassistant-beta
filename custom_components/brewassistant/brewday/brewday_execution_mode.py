@@ -242,14 +242,10 @@ def _identity_mismatch(cached: dict[str, Any], live: dict[str, Any], mode: str) 
         if not old_id and old_number is None:
             return "rcl_step_identity_unverified"
     elif mode == BREWFATHER_BREWING:
-        # The legacy Brew Tracker snapshot usually has no stable batch ID.
-        # Match IDs only if BOTH observations genuinely provide one.
-        old = str(cached.get("brewfather_batch_identity") or "").strip()
-        new = str(live.get("brewfather_batch_identity") or "").strip()
-        if not old or not new:
-            return "brewfather_batch_identity_unverified"
-        if old != new:
-            return "brewfather_batch_changed"
+        # Brew Tracker has no attested, same-source immutable batch contract.
+        # An old batch_id from cached HA attributes is NOT sufficient proof.
+        # Always ask for a fresh explicit operator acknowledgement after loss.
+        return "brewfather_reconnect_requires_operator_ack"
     if (
         str(cached.get("stage") or "").strip() != str(live.get("stage") or "").strip()
         or str(cached.get("raw_step_name") or cached.get("step") or "").strip()
@@ -276,10 +272,19 @@ def external_reconnect_allowed(
     store = _store(hass)
     if store.get("resync_required"):
         return False
-    if not (store.get("fallback_active") and store.get("fallback_from_mode") == mode):
-        return True
     record = store.get("external_snapshots", {}).get(mode)
     cached = record.get("snapshot") if isinstance(record, dict) else None
+    if not (store.get("fallback_active") and store.get("fallback_from_mode") == mode):
+        # A short RCL reconnect can happen between BA polls, without an
+        # observed source-loss snapshot. Session changes still need a lockout.
+        if (mode == RCL_BREWING and store.get("last_external_mode") == mode
+                and isinstance(cached, dict)):
+            old_session = str(cached.get("profile_session_id") or "").strip()
+            new_session = str(live.get("profile_session_id") or "").strip()
+            if not old_session or not new_session or old_session != new_session:
+                _block_reconnect(hass, mode, "rcl_session_changed_without_verified_stop")
+                return False
+        return True
     reason = (
         "external_recipe_cache_missing" if not isinstance(cached, dict)
         else "manual_plan_advanced_during_outage"
