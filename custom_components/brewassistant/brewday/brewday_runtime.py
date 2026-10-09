@@ -198,7 +198,9 @@ def brewday_runtime_attrs(snapshot: dict[str, Any]) -> dict[str, Any]:
         "operator_rearmed_at", "brewday_mode", "recipe_owner", "step_timer_owner",
         "target_owner", "heat_owner", "pump_owner", "fallback_active",
         "fallback_from_mode", "fallback_reason", "recipe_context_retained",
-        "reconnect_expected", "fallback_timeline_frozen", "fallback_progression_policy",
+        "reconnect_expected", "manual_fallback_plan_loaded",
+        "manual_fallback_plan_advanced", "fallback_external_timeline_frozen",
+        "fallback_timeline_frozen", "fallback_progression_policy",
     ):
         attrs[key] = snapshot.get(key)
     return attrs
