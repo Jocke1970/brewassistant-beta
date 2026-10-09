@@ -63,6 +63,15 @@ def test_manual_guard_keeps_reconciliation_enabled_for_operator_setpoints() -> N
     assert "base._utilization_action_needed" in source
 
 
+def test_retained_recipe_fallback_keeps_learning_channels_automatic() -> None:
+    source = CONTROL_SOURCE.read_text(encoding="utf-8")
+    assert 'fallback_recipe = bool(' in source
+    assert 'out.get("manual_fallback_recipe_active")' in source
+    assert 'heater_auto = True if fallback_recipe' in source
+    assert 'pump_auto = True if fallback_recipe' in source
+    assert '"Manual Brewing fallback: retained recipe/target context remains active;' in source
+
+
 def test_manual_pause_overrides_operator_ownership_with_safe_down() -> None:
     source = CONTROL_SOURCE.read_text(encoding="utf-8")
     assert 'paused = bool(active and runtime_state == "paused")' in source
@@ -80,6 +89,9 @@ def test_manual_pause_overrides_operator_ownership_with_safe_down() -> None:
 def test_manual_brewfather_handoff_uses_runtime_activity_predicate() -> None:
     source = STORE_SOURCE.read_text(encoding="utf-8")
     assert "brewfather_session_active" in source
+    assert "brewfather_transport_unavailable" in source
+    assert "if brewfather_transport_unavailable(hass):" in source
+    assert "never infer OFF from source loss" in source
     assert "return brewfather_session_active(hass)" in source
     assert "BREWDAY_ACTIVE_STATUS" not in source
     assert "async_track_state_change_event" in source

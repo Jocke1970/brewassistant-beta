@@ -564,8 +564,13 @@ def build_rapt_profile_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any] |
     return None
 
 
+def rapt_profile_runtime_active(hass: HomeAssistant) -> bool:
+    """Return true only for a currently verified active RAPT profile."""
+    return _active_contract(_profile_state(hass))
+
+
 def rapt_profile_runtime_claims_source(hass: HomeAssistant) -> bool:
-    """Return true while RAPT owns, has lost, or guards the runtime handoff."""
+    """Legacy guard predicate for active/lost/stopped RAPT handoff state."""
     return build_rapt_profile_runtime_snapshot(hass) is not None
 
 

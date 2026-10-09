@@ -1,3 +1,5 @@
+> **Brewday checkpoint 2026-10-09:** `dev` har nu tre normala körlägen: **Manual Brewing / Brewfather Brewing / RCL Brewing**. I RCL Brewing äger RAPT/BrewZilla recept, steg, timer och target; BA Learning assisterar endast heat-utilization samt pump ON/OFF/%. Extern source-loss går temporärt till Manual fallback med retained recipe context och återgår automatiskt när källan återkommer. Se [designkontraktet](docs/brewday-three-mode-rcl-assist-2026-10-09_sv.md).
+
 # BrewAssistant Beta
 
 Modulär Home Assistant-integration för bryggdag, BrewZilla/RAPT, Brewfather/BrewTracker, Manual Brewday, jäsning, kylning, servering, mätning, historik och dashboards.

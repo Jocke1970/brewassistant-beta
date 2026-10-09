@@ -1,3 +1,5 @@
+> **Brewday checkpoint 2026-10-09:** `dev` inför **Manual Brewing / Brewfather Brewing / RCL Brewing**. RCL Assist låser target/heater till RAPT/BrewZilla och ger BA Learning endast heat-utilization + pump ON/OFF/%. RCL/BF source-loss går via retained-recipe Manual fallback; reconnect återtar source ownership. Full persistent recipe→ManualPlan över HA-restart återstår. Se [designkontraktet](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
+
 # BrewAssistant – roadmap och acceptansgrindar
 
 **Uppdaterad 2026-10-01.** [Aktuell beta.15 release-/doc-sync-checkpoint](doc-sync-2026-09-24_sv.md), [beta.15 release notes](beta15-prerelease-notes_sv.md), [HA-fynd 22/9](doc-sync-2026-09-22_sv.md), [historisk status 20/9](project-status-2026-09-20_sv.md), [publicerad beta.14](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.14).

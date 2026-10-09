@@ -65,7 +65,7 @@ def _live_authority(hass):
 
 
 def _safe_off_allowed(decision, context):
-    """Brewfather observer must not inherit an older RAPT ABORT exception."""
+    """Brewfather Brewing must not inherit an older RAPT safe-off exception."""
     assert _PREVIOUS_SAFE_OFF is not None
     if context["runtime"].get("source") == "Brewfather Brew Tracker":
         return False

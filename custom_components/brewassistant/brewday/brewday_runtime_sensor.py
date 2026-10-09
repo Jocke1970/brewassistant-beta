@@ -25,6 +25,7 @@ from ..hlt.sensor import create_hlt_sensors
 
 
 BREWDAY_RUNTIME_SENSORS: dict[str, dict[str, Any]] = {
+    "brewday_mode": {"field": "brewday_mode"},
     "brewday_runtime_source": {"field": "source"},
     "brewday_runtime_status": {"field": "status"},
     "brewday_runtime_state": {"field": "runtime_state"},

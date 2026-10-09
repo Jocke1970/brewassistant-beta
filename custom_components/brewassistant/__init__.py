@@ -51,6 +51,10 @@ from .coordinator import BrewAssistantCoordinator
 from .hlt.runtime import async_setup_hlt_simulation
 from .kegerator.guard import async_setup_kegerator_guard
 from .brewday.manual_brewday_runtime import ManualRuntimeState
+from .brewday.brewday_execution_mode import (
+    acknowledge_external_reconnect,
+    async_load_brewday_recipe_context,
+)
 from .brewday.manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,6 +68,7 @@ SERVICE_BREWDAY_AUDIT_START = "brewday_audit_start"
 SERVICE_BREWDAY_AUDIT_STOP = "brewday_audit_stop"
 SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
 SERVICE_BREWDAY_AUDIT_SNAPSHOT = "brewday_audit_snapshot"
+SERVICE_EXTERNAL_RECONNECT_ACK = "brewday_reconnect_ack"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -89,6 +94,7 @@ KEGERATOR_CLIMATE_OFF_STATES = {"off", "unknown", "unavailable", "none", ""}
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
     await async_load_brewday_audit_log(hass)
+    await async_load_brewday_recipe_context(hass)
     await async_load_carbonation_runtime(hass)
     await async_load_gf30_preflight_runtime(hass)
     setup_gf30_supervised_target_adapter()
@@ -336,6 +342,22 @@ def _register_services(hass: HomeAssistant) -> None:
         await async_record_brewday_audit_snapshot(hass, note=str(call.data.get("note") or ""))
         await _refresh_runtime_sensors()
 
+    async def _handle_external_reconnect_ack(call: ServiceCall) -> None:
+        acknowledge_external_reconnect(
+            hass,
+            mode=str(call.data.get("mode") or ""),
+            expected_step=str(call.data.get("expected_step") or ""),
+            expected_session_id=call.data.get("expected_session_id"),
+        )
+        await async_record_brewday_audit_event(
+            hass, "brewday_reconnect_ack", always_record=True,
+            note=(
+                "mode=" + str(call.data.get("mode") or "")
+                + " step=" + str(call.data.get("expected_step") or "")
+            ),
+        )
+        await _refresh_runtime_sensors()
+
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.prepare()
@@ -437,6 +459,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_STOP, _handle_brewday_audit_stop)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_CLEAR, _handle_brewday_audit_clear)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_SNAPSHOT, _handle_brewday_audit_snapshot)
+    hass.services.async_register(DOMAIN, SERVICE_EXTERNAL_RECONNECT_ACK, _handle_external_reconnect_ack)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)

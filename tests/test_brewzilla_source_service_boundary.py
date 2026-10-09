@@ -25,7 +25,7 @@ def _functions(*names):
     return env
 
 
-F = _functions("_safe_off_allowed", "_write_allowed", "_set_number",
+F = _functions("_safe_off_allowed", "_rcl_assist_write_allowed", "_write_allowed", "_set_number",
                "_call_switch", "_policy_execute", "_apply", "_rapt_stop",
                "_observer_snapshot")
 TARGET = "number.brewzilla_target_temperature"
@@ -53,9 +53,12 @@ async def _run_case(mode, *, stop=False, abort=False):
         "operator": {"active": abort,
                      "source": "RAPT BrewZilla Profile" if abort else None},
     }
-    decision = SimpleNamespace(mode=mode, may_write_brewzilla=(
-        True if mode == "rapt_controller" else None if mode == "manual_legacy_unresolved" else False),
-        reason=mode)
+    decision = SimpleNamespace(
+        mode=mode,
+        may_write_brewzilla=(True if mode in {"rapt_controller", "brewfather_observer"} else None if mode == "manual_legacy_unresolved" else False),
+        reason=mode,
+        write_scope=("rcl_assist" if mode == "rapt_controller" else "full" if mode == "brewfather_observer" else "manual_legacy" if mode == "manual_legacy_unresolved" else "none"),
+    )
     env = F["_write_allowed"].__globals__
 
     async def send_number(hass, entity, value):
@@ -80,9 +83,11 @@ async def _run_case(mode, *, stop=False, abort=False):
     denied = []
     env.update(
         BREWZILLA_ENTITIES=ENTITIES, base=BASE, DOMAIN="brewassistant",
+        RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
         _live_authority=lambda hass: (decision, context),
         _safe_off_allowed=F["_safe_off_allowed"],
         _sparge_write_allowed=lambda hass, entity, **kwargs: True,
+        _rcl_assist_write_allowed=F["_rcl_assist_write_allowed"],
         _write_allowed=F["_write_allowed"],
         _observer_snapshot=F["_observer_snapshot"],
         _PREVIOUS_SET=send_number, _PREVIOUS_SWITCH=send_switch,
@@ -117,12 +122,23 @@ async def _run_case(mode, *, stop=False, abort=False):
     return hass, result, denied
 
 
-def test_bt_observer_all_writer_entry_points_are_noop_including_off():
+def test_brewfather_source_bound_control_reaches_existing_writer_path():
     hass, result, denied = asyncio.run(_run_case("brewfather_observer"))
-    assert hass.service_calls == []
-    assert result["applied"] is False and result["actions"] == []
-    assert len(denied) == 3
-    assert all(row["status"] == "source_authority_denied" for row in denied)
+    assert hass.service_calls
+    assert result["applied"] is True
+    assert denied == []
+    assert any(call[0] == "number" and call[2] == TARGET for call in hass.service_calls)
+    assert any(call[0] == "switch" and call[2] == HEATER for call in hass.service_calls)
+
+
+def test_rcl_assist_never_writes_target_or_heater_but_can_write_heat_and_pump():
+    hass, result, denied = asyncio.run(_run_case("rapt_controller"))
+    assert not any(call[0] == "number" and call[2] == TARGET for call in hass.service_calls)
+    assert not any(call[0] == "switch" and call[2] == HEATER for call in hass.service_calls)
+    assert any(call[0] == "number" and call[2] == HEAT for call in hass.service_calls)
+    assert any(call[0] == "number" and call[2] == PUMP_PCT for call in hass.service_calls)
+    assert any(call[0] == "switch" and call[2] == PUMP for call in hass.service_calls)
+    assert len(denied) >= 2
 
 
 def test_unknown_rapt_contract_never_emits_positive_or_off_writes():

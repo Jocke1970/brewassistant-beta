@@ -152,14 +152,17 @@ async def async_rearm(hass: Any) -> None:
     from ..brewday.brewday_operator_abort import brewday_operator_abort_active
     if brewday_operator_abort_active(hass):
         raise HomeAssistantError("ABORT-spärren måste återställas separat efter fysisk kontroll.")
-    verified_rapt = decision.mode == "rapt_controller" and decision.may_write_brewzilla is True
+    verified_external = (
+        decision.mode in {"rapt_controller", "brewfather_observer"}
+        and decision.may_write_brewzilla is True
+    )
     manual = (decision.mode == "manual_legacy_unresolved"
               and (context.get("runtime") or {}).get("source") == "Manual Brewday")
     if manual:
         from ..brewday import rapt_profile_runtime
-        if rapt_profile_runtime.rapt_profile_runtime_claims_source(hass):
-            raise HomeAssistantError("RAPT-överlämning ej verifierad. Avsluta profilen och invänta bekräftad STOP.")
-    if not (verified_rapt or manual):
+        if rapt_profile_runtime.rapt_profile_runtime_active(hass):
+            raise HomeAssistantError("En aktiv RAPT-profil äger fortfarande bryggningen.")
+    if not (verified_external or manual):
         raise HomeAssistantError(f"Bryggkälla och säkerhet är inte verifierade: {decision.reason}")
     readbacks = (base.BREWZILLA_TEMP_SENSOR, base.BREWZILLA_TARGET_NUMBER,
                  base.BREWZILLA_HEATER_SWITCH, base.BREWZILLA_PUMP_SWITCH,

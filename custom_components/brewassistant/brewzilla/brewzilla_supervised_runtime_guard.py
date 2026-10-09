@@ -205,6 +205,13 @@ def _plan_summary(snapshot: dict[str, Any], actions: list[dict[str, Any]]) -> st
 
 def _plan_policy(hass, snapshot: dict[str, Any], actions: list[dict[str, Any]]) -> str:
     """Return read_only, confirm, or direct for the bundled positive plan."""
+    if snapshot.get("rcl_assist_auto_apply"):
+        # Observe-only/source authority already narrowed this to RCL Assist.
+        # Learning would be ineffective if every utilization correction needed
+        # a new confirmation click. Unexpected actions fall back to policy.
+        allowed = {"heat_up", "pump_up", "pump_on"}
+        if actions and all(str(action.get("key")) in allowed for action in actions):
+            return "direct"
     request_source = _request_source(snapshot)
     policies: list[dict[str, Any]] = []
     for section in sorted({str(action["section"]) for action in actions}):

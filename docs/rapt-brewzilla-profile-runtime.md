@@ -1,3 +1,5 @@
+> **Aktuellt 2026-10-09:** den äldre BA-ägda target-arkitekturen nedan är historik. På `dev` gäller nu **RCL Brewing / RCL Assist**: RAPT/BrewZilla äger recept, steg, timer och target; BA Learning får endast styra heat-utilization och pump ON/OFF/%. Se [aktuellt kontrakt](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
+
 # RAPT BrewZilla profile runtime
 
 > [!CAUTION]

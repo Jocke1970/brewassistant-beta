@@ -1,3 +1,5 @@
+> **Aktuellt kontrakt 2026-10-09:** detta dokument har äldre designhistorik längre ned. Den gällande `dev`-modellen är **Manual Brewing / Brewfather Brewing / RCL Brewing**, med retained-recipe Manual fallback vid source-loss och automatisk reconnect. Se [treläges-/RCL Assist-kontraktet](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
+
 # Brewday execution ownership modes
 
 Status: architecture decision + field evidence  

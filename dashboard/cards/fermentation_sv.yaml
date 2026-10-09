@@ -85,6 +85,26 @@ card:
           const chamberAvg = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
           const pillTemp = n('sensor.brewassistant_liquid_temperature');
           const sg = validSg('sensor.brewassistant_gravity');
+          // Observe the actual configured inputs, not a normalized sensor's own update.
+          // last_updated is only an HA proxy; fresh publication is not proof of a fresh Pill sample.
+          const sourceAge = (entity) => {
+            const raw = states[entity]?.last_updated;
+            const ms = raw ? Date.parse(raw) : NaN;
+            return Number.isFinite(ms) ? Math.max(0, (Date.now() - ms) / 60000) : null;
+          };
+          const liquidSource = states['sensor.brewassistant_liquid_temperature']?.attributes?.source_entity || 'sensor.yellow_pill_temperature';
+          const gravitySource = states['sensor.brewassistant_gravity_last_updated']?.attributes?.source_entity || 'sensor.yellow_pill_gravity';
+          const liquidAge = sourceAge(liquidSource);
+          const gravityAge = sourceAge(gravitySource);
+          const ageRisk = (age, value) => !Number.isFinite(value) || age === null ? 'unknown' : age > 20 ? 'stale' : age > 15 ? 'warning' : 'provisional';
+          const tRisk = ageRisk(liquidAge, pillTemp);
+          const gRisk = ageRisk(gravityAge, sg);
+          const ageLabel = (risk, age) => risk === 'stale' ? 'Inaktuell · ' + Math.floor(age) + ' min' : risk === 'warning' ? 'Äldre · ' + Math.floor(age) + ' min' : risk === 'unknown' ? 'Tid okänd' : 'HA-uppd. · ' + Math.floor(age) + ' min';
+          const riskKind = (risk, normal) => risk === 'stale' ? 'red' : risk === 'warning' || risk === 'unknown' ? 'yellow' : normal;
+          const riskIcon = (risk, normal) => risk === 'stale' ? 'mdi:alert-circle' : risk === 'warning' || risk === 'unknown' ? 'mdi:alert-outline' : normal;
+          const activePillSource = states['sensor.brewassistant_pill_active_source']?.state;
+          const pillLink = activePillSource === 'ble' ? 'mdi:bluetooth' : activePillSource === 'cloud' ? 'mdi:wifi' : 'mdi:help-circle-outline';
+          const sourceHint = 'Pill-källa (diagnostik; styrningen använder ännu tidigare sensor-ID)';
           const airTarget = n('sensor.brewassistant_fermentation_effective_air_target');
           const targetDelta = Number.isFinite(chamberAvg) && Number.isFinite(airTarget) ? chamberAvg - airTarget : null;
 
@@ -123,7 +143,7 @@ card:
           const metric = (title, main, sub, icon, kind = 'neutral') => {
             const bg = kind === 'blue' ? 'rgba(33,150,243,.09)' : kind === 'cyan' ? 'rgba(0,188,212,.10)' : kind === 'green' ? 'rgba(76,175,80,.11)' : kind === 'yellow' ? 'rgba(255,193,7,.13)' : kind === 'orange' ? 'rgba(255,152,0,.13)' : kind === 'red' ? 'rgba(244,67,54,.11)' : 'rgba(127,127,127,.08)';
             const border = kind === 'blue' ? 'rgba(33,150,243,.20)' : kind === 'cyan' ? 'rgba(0,188,212,.22)' : kind === 'green' ? 'rgba(76,175,80,.24)' : kind === 'yellow' ? 'rgba(255,193,7,.26)' : kind === 'orange' ? 'rgba(255,152,0,.26)' : kind === 'red' ? 'rgba(244,67,54,.24)' : 'rgba(127,127,127,.14)';
-            return `<div style="min-width:0;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div></div>`;
+            return `<div style="min-width:0;border-radius:13px;padding:7px 6px;background:${bg};border:1px solid ${border};display:grid;grid-template-columns:18px minmax(0,1fr);gap:5px;align-items:center;"><ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon><div style="min-width:0;text-align:center;"><div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div><div style="font-size:12.8px;font-weight:950;line-height:1.05;color:${kind === 'red' ? '#b3261e' : 'var(--primary-text-color)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div><div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div></div>`;
           };
           const deltaKind = Number.isFinite(targetDelta) && Math.abs(targetDelta) > 0.8 ? 'yellow' : 'green';
           const heatKind = heatOn ? 'orange' : 'neutral';
@@ -132,14 +152,14 @@ card:
 
           return `<div style="line-height:1.25;min-width:0;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-              <div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Pill · jäskammare · klimatstyrning</div><div style="font-size:12px;font-weight:850;opacity:.66;">${chamberState} · ${modeLabel(mode)} · ${demandLabel(demand)}</div></div>
+              <div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Pill · jäskammare · klimatstyrning <ha-icon icon="${pillLink}" title="${sourceHint}" style="width:13px;height:13px;vertical-align:middle;"></ha-icon></div><div style="font-size:12px;font-weight:850;opacity:.66;">${chamberState} · ${modeLabel(mode)} · ${demandLabel(demand)}</div></div>
               <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon><span>${badge}</span></div>
             </div>
             <div style="margin-top:8px;text-align:center;"><div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div><div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">${chamberState} · kammare ${fmt(chamberAvg, '°C')} · mål ${fmt(airTarget, '°C')}<br>${short(cardSummary, 78)}</div></div>
             <div style="margin-top:11px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
               ${metric('Kammare', fmt(chamberAvg, '°C'), 'luft medel', 'mdi:fridge-thermometer', 'blue')}
-              ${metric('Pill', fmt(pillTemp, '°C'), pillStatus, 'mdi:thermometer-water', 'cyan')}
-              ${metric('SG', sgText, Number.isFinite(sg) ? 'densitet' : 'saknas', 'mdi:water-percent', Number.isFinite(sg) ? 'green' : 'neutral')}
+              ${metric('Pill', fmt(pillTemp, '°C'), ageLabel(tRisk, liquidAge), riskIcon(tRisk, 'mdi:thermometer-water'), riskKind(tRisk, 'cyan'))}
+              ${metric('SG', sgText, ageLabel(gRisk, gravityAge), riskIcon(gRisk, 'mdi:water-percent'), riskKind(gRisk, 'green'))}
               ${metric('Mål', fmt(airTarget, '°C'), 'luftmål', 'mdi:target', 'neutral')}
             </div>
             <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">

@@ -129,7 +129,8 @@ _supervised_readback_grace.install_supervised_readback_grace()
 _phase_authority.install_phase_authority()
 _brewtracker_pause_checkpoint_guard.install_brewtracker_pause_checkpoint_guard()
 
-# RAPT owns process steps; BA owns physical hot-side regulation through RCL.
+# RAPT/BrewZilla owns profile steps/timer/target; BA supplies RCL Assist
+# heat-utilization and pump intelligence through the guarded writer path.
 _rapt_profile_control_bridge.install_rapt_profile_control_bridge()
 _fail_passive_guard.install_fail_passive_guard()
 _physical_mash_interlock.install_physical_mash_interlock()

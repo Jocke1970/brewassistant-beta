@@ -1,0 +1,192 @@
+# Fermentation Cockpit v2 – preview (read-only observability)
+# Add as a MANUAL dashboard card. Keep v1 cards until v2 is field-validated.
+# Requires custom:button-card and custom:expander-card already used by BrewAssistant.
+# Provider selection changes only the persisted selected provider; no target writes here.
+# No direct switch/climate control rows are exposed in this preview.
+type: conditional
+conditions:
+  - entity: switch.brewassistant_show_fermentation
+    state: "on"
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: sensor.brewassistant_fermentation_provider
+      name: Fermentation Cockpit
+      icon: mdi:flask-outline
+      show_state: false
+      show_label: true
+      triggers_update:
+        - sensor.brewassistant_fermentation_provider
+        - sensor.brewassistant_fermentation_provider_status
+        - sensor.brewassistant_fermentation_current_temperature
+        - sensor.brewassistant_fermentation_current_sg
+        - sensor.brewassistant_fermentation_recommended_temperature
+        - sensor.brewassistant_brewfather_stream_status
+        - sensor.brewassistant_fermentation_provider_status
+        - sensor.brewassistant_pill_active_source
+        - sensor.brewassistant_pill_status
+      label: |
+        [[[
+          const s = id => states[id];
+          const invalid = v => v == null || ['unknown','unavailable','none',''].includes(String(v).toLowerCase());
+          const num = id => {
+            const v = s(id)?.state;
+            if (invalid(v)) return null;
+            const n = Number(String(v).replace(',','.'));
+            return Number.isFinite(n) ? n : null;
+          };
+          const attrs = s('sensor.brewassistant_fermentation_provider_status')?.attributes || {};
+          const age = raw => {
+            if (!raw) return null;
+            const ms = Date.parse(raw);
+            if (!Number.isFinite(ms)) return null;
+            return Math.max(0, Math.floor((Date.now() - ms) / 60000));
+          };
+          const ageText = m => m === null ? 'Time unknown' : m < 1 ? 'Just now' : m < 60 ? m + ' min ago' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min ago';
+          const statusMap = {disabled:'Control disabled',provider_inactive:'Provider locked',unavailable:'Unavailable',no_change:'Target matched',awaiting_confirmation:'Awaiting confirmation',proposed:'Proposal'};
+          const p = s('sensor.brewassistant_fermentation_provider')?.state;
+          const rawStatus = s('sensor.brewassistant_fermentation_provider_status')?.state;
+          const status = statusMap[rawStatus] || (invalid(rawStatus) ? 'Status unknown' : rawStatus);
+          const pillSource = s('sensor.brewassistant_pill_active_source')?.state;
+          const pillIcon = pillSource === 'ble' ? '<ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>' : pillSource === 'cloud' ? '<ha-icon icon="mdi:wifi" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>' : '<ha-icon icon="mdi:alert-circle-outline" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon>';
+          const pillLabel = pillSource === 'ble' ? 'Bluetooth' : pillSource === 'cloud' ? 'Wi-Fi / Cloud Link' : 'No verified source';
+          const provider = p === 'grainfather_gf30' ? 'Grainfather GF30' : p === 'fermentation_chamber' ? 'Temperature-controlled chamber' : 'No valid provider';
+          const observations = {
+            temp: age(attrs.temperature_observed_at),
+            sg: age(attrs.gravity_observed_at)
+          };
+          // BA export contract: primary beer temperature >20 min must not be treated as fresh.
+          // SG is optional for export; a stale SG remains visible but marked as old.
+          const tile = (name, value, unit, measuredAge) => {
+            const missing = value === null;
+            const unverified = measuredAge === null;
+            const stale = !missing && !unverified && measuredAge > 20;
+            const warning = !missing && !unverified && measuredAge > 15 && !stale;
+            const color = stale ? '#b3261e' : warning || unverified ? '#9b6300' : 'var(--primary-text-color)';
+            const background = stale ? 'rgba(244,67,54,.11)' : warning || unverified ? 'rgba(255,152,0,.10)' : 'rgba(127,127,127,.075)';
+            const symbol = stale ? '⚠ ' : warning ? '△ ' : missing ? '? ' : unverified ? '? ' : '';
+            const note = missing ? 'Missing' : unverified ? 'Time not verified' : ageText(measuredAge) + ' · HA observation';
+            return '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:'+background+';border:1px solid rgba(127,127,127,.13);min-width:0">' +
+              '<div style="font-size:9px;opacity:.7;font-weight:800">'+name+'</div>' +
+              '<div style="font-size:15px;font-weight:900;color:'+color+'">'+symbol+(missing?'—':value+unit)+'</div>' +
+              '<div style="font-size:9px;opacity:.8">'+note+'</div></div>';
+          };
+          const temp = num('sensor.brewassistant_fermentation_current_temperature');
+          const sg = num('sensor.brewassistant_fermentation_current_sg');
+          const target = num('sensor.brewassistant_fermentation_recommended_temperature');
+          const show = (n,d) => n === null ? null : n.toFixed(d);
+          const targetTile = '<div style="border-radius:12px;padding:9px 5px;text-align:center;background:rgba(127,127,127,.075);border:1px solid rgba(127,127,127,.13)"><div style="font-size:9px;opacity:.7;font-weight:800">PROCESS TARGET</div><div style="font-size:15px;font-weight:900">'+(target===null?'—':target.toFixed(1)+' °C')+'</div><div style="font-size:9px;opacity:.8">Configured target</div></div>';
+          return '<div style="line-height:1.45;text-align:left;white-space:normal">' +
+            '<b>'+provider+'</b> · '+status +
+            '<div style="margin-top:5px;font-size:12px;opacity:.85">RAPT Pill: '+pillIcon+' '+pillLabel+' <span style="opacity:.7">(diagnostics, not a control source)</span></div>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px">' +
+            tile('BEER TEMP',show(temp,1),' °C',observations.temp) +
+            tile('SG',show(sg,3),'',observations.sg) +
+            targetTile + '</div></div>';
+        ]]]
+      styles:
+        card:
+          - border-radius: 22px
+          - padding: 16px
+          - background: linear-gradient(125deg, rgba(33,150,243,.10), rgba(255,255,255,.035))
+          - border: 1px solid rgba(33,150,243,.18)
+          - box-shadow: var(--ha-card-box-shadow)
+        grid:
+          - grid-template-areas: '"i n" "l l"'
+          - grid-template-columns: 38px 1fr
+          - column-gap: 10px
+        name:
+          - font-size: 18px
+          - font-weight: 900
+          - justify-self: start
+        icon:
+          - width: 26px
+        label:
+          - justify-self: stretch
+    - type: entities
+      title: Fermentation equipment
+      show_header_toggle: false
+      entities:
+        - entity: select.brewassistant_fermentation_provider
+          name: Active fermentation provider
+        - entity: sensor.brewassistant_fermentation_provider_status
+          name: Status
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_fermentation_provider
+          state: fermentation_chamber
+      card:
+        type: custom:expander-card
+        title: Fermentation chamber – temperature and diagnostics
+        clear: false
+        cards:
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.brewassistant_fermentation_chamber_air_temperature_average
+                name: Chamber air
+              - entity: sensor.brewassistant_fermentation_effective_air_target
+                name: Recommended air target
+              - entity: sensor.brewassistant_liquid_temperature
+                name: Beer temperature
+    - type: conditional
+      conditions:
+        - entity: sensor.brewassistant_fermentation_provider
+          state: grainfather_gf30
+      card:
+        type: custom:expander-card
+        title: GF30 – target and status
+        clear: false
+        cards:
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.brewassistant_gf30_target_apply_state
+                name: Apply status
+              - entity: binary_sensor.grainfather_gf30_controller_online
+                name: Controller online
+              - entity: sensor.brewassistant_gf30_profile_target
+                name: Profile target
+              - entity: sensor.brewassistant_gf30_controller_target
+                name: GF30 target
+              - entity: sensor.brewassistant_gf30_target_delta
+                name: Target deviation
+              - entity: sensor.brewassistant_gf30_controller_temperature
+                name: GF30 beer temperature
+              - entity: sensor.glycolchiller_liquid
+                name: Coolant
+    - type: custom:expander-card
+      title: RAPT Pill – source selection (read-only)
+      clear: false
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_pill_active_source
+              name: Active integration source
+            - entity: sensor.brewassistant_pill_status
+              name: Validation status
+            - entity: sensor.brewassistant_pill_temperature
+              name: Beer temperature (diagnostics)
+            - entity: sensor.brewassistant_pill_gravity
+              name: SG (diagnostics)
+    - type: custom:expander-card
+      title: Measurements and Brewfather
+      clear: false
+      cards:
+        - type: entities
+          show_header_toggle: false
+          entities:
+            - entity: sensor.brewassistant_fermentation_current_sg
+              name: SG
+            - entity: sensor.brewassistant_fermentation_current_temperature
+              name: Beer temperature
+            - entity: sensor.brewassistant_brewfather_stream_status
+              name: Export status
+            - entity: sensor.brewassistant_brewfather_stream_temperature
+              name: Brewfather temperature
+            - entity: sensor.brewassistant_brewfather_stream_gravity
+              name: Brewfather SG
+            - entity: sensor.brewassistant_brewfather_stream_aux_temperature
+              name: Brewfather aux

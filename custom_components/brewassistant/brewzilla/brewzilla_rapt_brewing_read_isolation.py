@@ -46,7 +46,11 @@ def _unverified_rapt_profile_on(profile: Any) -> bool:
 
 
 def rapt_owns_brewing(hass: Any) -> bool:
-    """Resolve active, unverified, lost or stopped RAPT ownership without BT."""
+    """Resolve active, unverified or lost RAPT ownership without BT.
+
+    Confirmed profile STOP releases source arbitration. Previously active but
+    unavailable RCL still suppresses BT while Brewday uses Manual fallback.
+    """
     profile = rapt._profile_state(hass)
     store = rapt._store(hass)
     operator = brewday_operator_abort_snapshot(hass)
@@ -54,7 +58,6 @@ def rapt_owns_brewing(hass: Any) -> bool:
         rapt._active_contract(profile)
         or _unverified_rapt_profile_on(profile)
         or store.get("was_active")
-        or store.get("stop_guard_active")
         or (operator.get("active") and operator.get("source") == rapt.RAPT_PROFILE_SOURCE)
     )
 

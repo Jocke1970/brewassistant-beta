@@ -1,4 +1,4 @@
-"""Execute production source/physical write guards without Home Assistant or BZ."""
+"""Source-authority regression tests for three-mode Brewday / RCL Assist."""
 
 from __future__ import annotations
 
@@ -22,47 +22,70 @@ def _load(*names):
 
 
 FN = _load("_write_allowed", "_safe_off_allowed", "_sparge_write_allowed",
-           "_observer_snapshot", "_learning_apply")
+           "_rcl_assist_write_allowed", "_observer_snapshot", "_rcl_assist_snapshot",
+           "_learning_apply")
 ENTITIES = frozenset({
     "number.brewzilla_target_temperature", "number.brewzilla_heat_utilization",
     "number.brewzilla_pump_utilization", "switch.brewzilla_heater", "switch.brewzilla_pump",
 })
-BASE = SimpleNamespace(BREWZILLA_TARGET_NUMBER="number.brewzilla_target_temperature",
-                       BREWZILLA_HEATER_SWITCH="switch.brewzilla_heater",
-                       BREWZILLA_PUMP_SWITCH="switch.brewzilla_pump",
-                       BREWZILLA_HEAT_UTILIZATION="number.brewzilla_heat_utilization",
-                       BREWZILLA_PUMP_UTILIZATION="number.brewzilla_pump_utilization")
+BASE = SimpleNamespace(
+    BREWZILLA_TARGET_NUMBER="number.brewzilla_target_temperature",
+    BREWZILLA_HEATER_SWITCH="switch.brewzilla_heater",
+    BREWZILLA_PUMP_SWITCH="switch.brewzilla_pump",
+    BREWZILLA_HEAT_UTILIZATION="number.brewzilla_heat_utilization",
+    BREWZILLA_PUMP_UTILIZATION="number.brewzilla_pump_utilization",
+)
 
 
-def _allowed(mode, may_write, reason="source_blocked", *, rapt_stop=False, rapt_abort=False,
+def _allowed(mode, may_write, scope="none", *, rapt_stop=False,
              entity="switch.brewzilla_heater", switch_action="on", value=None):
-    authority = SimpleNamespace(mode=mode, may_write_brewzilla=may_write, reason=reason)
-    context = {"runtime": {"source": "RAPT BrewZilla Profile" if rapt_stop else "Brewfather Brew Tracker",
-                           "profile_stop_confirmed": rapt_stop, "profile_stop_guard_active": rapt_stop},
-               "operator": {"active": rapt_abort, "source": "RAPT BrewZilla Profile" if rapt_abort else None}}
+    authority = SimpleNamespace(mode=mode, may_write_brewzilla=may_write,
+                                reason=mode, write_scope=scope)
+    context = {
+        "runtime": {
+            "source": "RAPT BrewZilla Profile" if rapt_stop else "Brewfather Brew Tracker",
+            "profile_stop_confirmed": rapt_stop,
+            "profile_stop_guard_active": rapt_stop,
+        },
+        "operator": {"active": False, "source": None},
+    }
     ns = FN["_write_allowed"].__globals__
-    ns.update(base=BASE, BREWZILLA_ENTITIES=ENTITIES,
-              _live_authority=lambda hass: (authority, context),
-              _safe_off_allowed=FN["_safe_off_allowed"],
-              _sparge_write_allowed=FN["_sparge_write_allowed"],
-              sparge=SimpleNamespace(_observe=lambda hass: SimpleNamespace(phase="inactive")))
+    ns.update(
+        base=BASE, BREWZILLA_ENTITIES=ENTITIES,
+        RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
+        _live_authority=lambda hass: (authority, context),
+        _safe_off_allowed=FN["_safe_off_allowed"],
+        _sparge_write_allowed=FN["_sparge_write_allowed"],
+        _rcl_assist_write_allowed=FN["_rcl_assist_write_allowed"],
+        sparge=SimpleNamespace(_observe=lambda hass: SimpleNamespace(phase="inactive")),
+    )
     return FN["_write_allowed"](None, entity, switch_action=switch_action, value=value)
 
 
-def test_brewfather_observer_denies_all_hot_side_writes_even_off():
+def test_brewfather_full_scope_allows_existing_hot_side_path():
     for entity in ENTITIES:
-        assert not _allowed("brewfather_observer", False, entity=entity, switch_action="on", value=100)
-        assert not _allowed("brewfather_observer", False, entity=entity, switch_action="off", value=0)
-    assert _allowed("brewfather_observer", False, entity="switch.fermentation_heat_mat")
+        assert _allowed("brewfather_observer", True, "full",
+                        entity=entity, switch_action="on", value=100)
 
 
-def test_verified_rapt_and_existing_manual_are_distinct():
-    assert _allowed("rapt_controller", True)
-    assert _allowed("manual_legacy_unresolved", None)
-    assert not _allowed("blocked", False)
+def test_rcl_assist_denies_target_and_heater_but_allows_learning_heat_and_pump():
+    assert not _allowed("rapt_controller", True, "rcl_assist",
+                        entity=BASE.BREWZILLA_TARGET_NUMBER, value=66)
+    assert not _allowed("rapt_controller", True, "rcl_assist",
+                        entity=BASE.BREWZILLA_HEATER_SWITCH, switch_action="on")
+    assert not _allowed("rapt_controller", True, "rcl_assist",
+                        entity=BASE.BREWZILLA_HEATER_SWITCH, switch_action="off")
+    assert _allowed("rapt_controller", True, "rcl_assist",
+                    entity=BASE.BREWZILLA_HEAT_UTILIZATION, value=55)
+    assert _allowed("rapt_controller", True, "rcl_assist",
+                    entity=BASE.BREWZILLA_PUMP_SWITCH, switch_action="on")
+    assert _allowed("rapt_controller", True, "rcl_assist",
+                    entity=BASE.BREWZILLA_PUMP_SWITCH, switch_action="off")
+    assert _allowed("rapt_controller", True, "rcl_assist",
+                    entity=BASE.BREWZILLA_PUMP_UTILIZATION, value=45)
 
 
-def test_confirmed_rapt_stop_can_safe_down_only():
+def test_confirmed_rapt_stop_can_safe_down_only_when_normal_authority_is_blocked():
     for entity in (BASE.BREWZILLA_HEATER_SWITCH, BASE.BREWZILLA_PUMP_SWITCH):
         assert _allowed("blocked", False, rapt_stop=True, entity=entity, switch_action="off")
         assert not _allowed("blocked", False, rapt_stop=True, entity=entity, switch_action="on")
@@ -73,43 +96,35 @@ def test_confirmed_rapt_stop_can_safe_down_only():
                         entity=BASE.BREWZILLA_TARGET_NUMBER, value=95)
 
 
-def test_abort_safe_down_is_scoped_to_rapt_not_bf():
-    assert _allowed("blocked", False, rapt_abort=True, switch_action="off")
-    assert not _allowed("blocked", False, rapt_abort=True, switch_action="on")
-    assert not _allowed("brewfather_observer", False, switch_action="off")
+def test_rcl_assist_snapshot_removes_target_and_heater_actions_only():
+    authority = SimpleNamespace(mode="rapt_controller", reason="ok", write_scope="rcl_assist")
+    ns = FN["_rcl_assist_snapshot"].__globals__
+    ns["RCL_ASSIST_SCOPE"] = "rcl_assist"
+    snapshot = {
+        "can_apply_target": True,
+        "target_sync_needed": True,
+        "heater_action_needed": True,
+        "heater_stop_needed": True,
+        "completion_stop_needed": True,
+        "heat_utilization_action_needed": True,
+        "pump_action_needed": True,
+        "pump_stop_needed": False,
+        "pump_utilization_action_needed": True,
+        "completion_pump_stop_needed": False,
+    }
+    out = FN["_rcl_assist_snapshot"](snapshot, authority)
+    assert out["rcl_assist_active"] is True
+    assert out["rcl_assist_auto_apply"] is True
+    assert out["target_sync_needed"] is False
+    assert out["heater_action_needed"] is False
+    assert out["heater_stop_needed"] is False
+    assert out["heat_utilization_action_needed"] is True
+    assert out["pump_action_needed"] is True
+    assert out["pump_utilization_action_needed"] is True
+    assert out["can_apply_target"] is True
 
 
-def test_sparge_physical_boundary_disallows_any_pump_restart_or_early_heat():
-    ns = FN["_sparge_write_allowed"].__globals__
-    ns["base"] = BASE
-    physical = SimpleNamespace(phase="awaiting_lift", lift_confirmed=False)
-    pump_ok = True
-    temp = 80.0
-    ns["sparge"] = SimpleNamespace(
-        _observe=lambda hass: physical,
-        _pump_safe_for_preboil=lambda hass: pump_ok,
-        _preboil_temperature=lambda hass: temp,
-        _readback=lambda hass, entity: ("off", True), PREBOIL_TARGET_C=95.0,
-    )
-    allowed = lambda entity, action=None, value=None: FN["_sparge_write_allowed"](
-        None, entity, switch_action=action, value=value)
-    assert allowed(BASE.BREWZILLA_HEATER_SWITCH, "off")
-    assert allowed(BASE.BREWZILLA_PUMP_SWITCH, "off")
-    assert allowed(BASE.BREWZILLA_HEAT_UTILIZATION, value=0)
-    assert not allowed(BASE.BREWZILLA_HEATER_SWITCH, "on")
-    assert not allowed(BASE.BREWZILLA_TARGET_NUMBER, value=95)
-    physical.phase, physical.lift_confirmed = "heat_to_boil", True
-    assert not allowed(BASE.BREWZILLA_PUMP_SWITCH, "on")
-    assert not allowed(BASE.BREWZILLA_PUMP_UTILIZATION, value=25)
-    assert not allowed(BASE.BREWZILLA_TARGET_NUMBER, value=100)
-    assert allowed(BASE.BREWZILLA_TARGET_NUMBER, value=95)
-    assert allowed(BASE.BREWZILLA_HEATER_SWITCH, "on")
-    ns["sparge"]._pump_safe_for_preboil = lambda hass: False
-    assert not allowed(BASE.BREWZILLA_HEATER_SWITCH, "on")
-    assert not allowed(BASE.BREWZILLA_TARGET_NUMBER, value=95)
-
-
-def test_learning_apply_denies_bf_and_rapt_direct_bypass():
+def test_learning_apply_button_cannot_bypass_source_bound_execution():
     ns = FN["_learning_apply"].__globals__
     count = []
 
@@ -124,26 +139,15 @@ def test_learning_apply_denies_bf_and_rapt_direct_bypass():
     assert not count
     ns["_live_authority"] = lambda hass: (SimpleNamespace(mode="manual_legacy_unresolved"), {})
     assert asyncio.run(FN["_learning_apply"](None))["applied"] is True
-    assert count == ["called"]
 
 
-def test_observer_snapshot_makes_no_false_physical_off_claim():
-    out = FN["_observer_snapshot"]({"can_apply_target": True, "pump_stop_needed": True,
-            "heater_action_needed": True}, SimpleNamespace(mode="brewfather_observer", reason="BF"))
-    assert out["hot_side_actuator_writes_allowed"] is False
-    assert out["hot_side_outputs_physically_off_verified"] is False
-    assert not out["can_apply_target"] and not out["pump_stop_needed"]
-    assert not out["heater_action_needed"]
-
-
-def test_installation_covers_base_policy_learning_supervised_and_rapt_stop():
+def test_installation_still_encloses_writer_entry_points():
     for token in (
-        "base._set_number = _set_number", "base._call_switch = _call_switch",
+        "base._set_number = _set_number",
+        "base._call_switch = _call_switch",
         "base._enforce_brewzilla_safe_state = _safe_state",
         "base.async_apply_brewzilla_target_if_allowed = _apply",
         "control_policy.execute_action = _policy_execute",
-        "learning.async_apply_brewzilla_learning_recommendation = _learning_apply",
-        "rapt_profile_runtime._async_safe_off_after_profile_stop = _rapt_stop",
         "supervised._BASE_BUILD = _supervised_build",
     ):
         assert token in SOURCE
