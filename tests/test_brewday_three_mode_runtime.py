@@ -7,13 +7,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODE = ROOT / "custom_components/brewassistant/brewday/brewday_execution_mode.py"
+RECIPE_FALLBACK = ROOT / "custom_components/brewassistant/brewday/brewday_recipe_fallback.py"
 RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
 SENSOR = ROOT / "custom_components/brewassistant/brewday/brewday_runtime_sensor.py"
 ABORT = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_emergency_abort.py"
 
 
 def test_contract_files_parse():
-    for path in (MODE, RUNTIME, SENSOR, ABORT):
+    for path in (MODE, RECIPE_FALLBACK, RUNTIME, SENSOR, ABORT):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -27,15 +28,27 @@ def test_exact_three_normal_mode_labels():
 
 def test_recipe_identity_is_retained_across_manual_fallback():
     source = MODE.read_text(encoding="utf-8")
+    recipe = RECIPE_FALLBACK.read_text(encoding="utf-8")
     for token in (
         "external_snapshots", "deepcopy(snapshot)", "build_manual_fallback_snapshot",
         '"recipe_context_retained": recipe_context_retained',
-        '"fallback_timeline_frozen": True',
-        '"fallback_progression_policy": "freeze_external_timeline_until_source_recovers"',
+        '"fallback_external_timeline_frozen": True',
+        '"manual_plan_operator_progression_until_source_recovers"',
         '"runtime_state": "running"',
         '"manual_fallback_recipe_active": True',
+        '"manual_fallback_plan_loaded": manual_plan_loaded',
+        "_prime_manual_fallback_plan",
     ):
         assert token in source
+    for token in (
+        "plan_from_external_snapshot",
+        "active_position_from_snapshot",
+        "ManualPlan",
+        "ManualStage",
+        "ManualStep",
+        "auto_advance=False",
+    ):
+        assert token in recipe
 
 
 def test_runtime_exposes_mode_and_reconnect_contract():
