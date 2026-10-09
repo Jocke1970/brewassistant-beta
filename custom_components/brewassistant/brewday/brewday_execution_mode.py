@@ -17,6 +17,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
@@ -27,6 +28,9 @@ RCL_BREWING = "RCL Brewing"
 BREWDAY_MODES = (MANUAL_BREWING, BREWFATHER_BREWING, RCL_BREWING)
 
 DATA_KEY = "brewday_execution_mode_runtime"
+STORAGE_KEY = "brewassistant_brewday_recipe_context"
+STORAGE_VERSION = 1
+STORAGE_INSTANCE_KEY = "brewday_context_storage_instance"
 BREWZILLA_TARGET = "number.brewzilla_target_temperature"
 BREWZILLA_TEMP = "sensor.brewzilla_temperature"
 MAX_FALLBACK_READBACK_AGE_SECONDS = 90
@@ -49,6 +53,80 @@ def _store(hass: HomeAssistant) -> dict[str, Any]:
             "resync_from_mode": None,
         },
     )
+
+
+def _storage(hass: HomeAssistant) -> Store:
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if STORAGE_INSTANCE_KEY not in domain_data:
+        domain_data[STORAGE_INSTANCE_KEY] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    return domain_data[STORAGE_INSTANCE_KEY]
+
+
+def _persisted_context(hass: HomeAssistant) -> dict[str, Any]:
+    store = _store(hass)
+    return {
+        "external_snapshots": deepcopy(store.get("external_snapshots", {})),
+        "last_external_mode": store.get("last_external_mode"),
+        "manual_fallback_initial_indices": store.get("manual_fallback_initial_indices"),
+        "manual_fallback_progress": store.get("manual_fallback_progress"),
+        "resync_required": bool(store.get("resync_required")),
+        "resync_reason": store.get("resync_reason"),
+    }
+
+
+def _schedule_context_save(hass: HomeAssistant) -> None:
+    """Coalesce context writes; retained snapshots are data, not actuation grants."""
+    _storage(hass).async_delay_save(lambda: _persisted_context(hass), 2)
+
+
+async def async_load_brewday_recipe_context(hass: HomeAssistant) -> None:
+    """Restore recipe only; a restart MUST NOT restore permission to actuate."""
+    state = _store(hass)
+    if state.get("persistent_context_loaded"):
+        return
+    stored = await _storage(hass).async_load()
+    state["persistent_context_loaded"] = True
+    if not isinstance(stored, dict):
+        return
+    mode = stored.get("last_external_mode")
+    records = stored.get("external_snapshots")
+    if mode not in {RCL_BREWING, BREWFATHER_BREWING} or not isinstance(records, dict):
+        return
+    record = records.get(mode)
+    if not isinstance(record, dict) or not isinstance(record.get("snapshot"), dict):
+        return
+    # Reject malformed/cross-source persisted claims. This is fallback context
+    # only, never a fresh external observation or automatic reconnection proof.
+    expected_source = "RAPT BrewZilla Profile" if mode == RCL_BREWING else "Brewfather Brew Tracker"
+    if record["snapshot"].get("source") != expected_source:
+        return
+    state["external_snapshots"] = {mode: deepcopy(record)}
+    state["last_external_mode"] = mode
+    state["fallback_restored_after_restart"] = True
+    state["restored_manual_progress"] = stored.get("manual_fallback_progress")
+    state.update(
+        resync_required=True,
+        resync_reason="ha_restart_requires_external_reconciliation",
+        resync_from_mode=mode,
+        # Normal fallback will import the retained ManualPlan PAUSED.
+        fallback_active=False, reconnect_expected=False,
+    )
+
+
+def persist_manual_fallback_progress(hass: HomeAssistant) -> None:
+    """Remember only local recipe progress, never an authorization token."""
+    store = _store(hass)
+    if not store.get("fallback_active"):
+        return
+    from .manual_brewday_store import get_manual_brewday_session
+    session = get_manual_brewday_session(hass)
+    store["manual_fallback_progress"] = {
+        "stage": session.active_stage_index,
+        "step": session.active_step_index,
+        "state": str(session.state),
+        "remaining": session.remaining_seconds(),
+    }
+    _schedule_context_save(hass)
 
 
 def current_mode(hass: HomeAssistant) -> str:
@@ -80,6 +158,8 @@ def remember_external_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], mo
         "seen_at": now,
     }
     store.update(
+        fallback_restored_after_restart=False,
+        restored_manual_progress=None,
         current_mode=mode,
         last_external_mode=mode,
         fallback_active=False,
@@ -91,6 +171,7 @@ def remember_external_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], mo
         resync_reason=None,
         resync_from_mode=None,
     )
+    _schedule_context_save(hass)
 
 
 def external_ended(hass: HomeAssistant, mode: str, *, reason: str) -> None:
@@ -107,6 +188,7 @@ def external_ended(hass: HomeAssistant, mode: str, *, reason: str) -> None:
         resync_reason=None,
         resync_from_mode=None,
     )
+    _schedule_context_save(hass)
 
 
 def resync_required(hass: HomeAssistant) -> bool:
@@ -175,6 +257,7 @@ def _block_reconnect(hass: HomeAssistant, mode: str, reason: str) -> None:
         current_mode=MANUAL_BREWING, fallback_active=True,
         fallback_from_mode=mode, reconnect_expected=False,
     )
+    _schedule_context_save(hass)
 
 
 def external_reconnect_allowed(
@@ -398,6 +481,8 @@ def _prime_manual_fallback_plan(
         active_stage = plan.stages[session.active_stage_index]
         session.active_step_index = max(0, min(step_index, len(active_stage.steps) - 1))
         previous_state = str(snapshot.get("runtime_state") or "").lower()
+        if _store(hass).get("fallback_restored_after_restart"):
+            previous_state = "paused"  # never revive a timer on a stale restored snapshot
         paused = (previous_state == "paused"
                   or snapshot.get("paused_freeze") is True
                   or snapshot.get("stage_paused") is True)
@@ -482,15 +567,31 @@ def build_manual_fallback_snapshot(
             store["manual_fallback_initial_indices"] = (
                 session.active_stage_index, session.active_step_index
             )
+            restored = store.pop("restored_manual_progress", None)
+            if store.get("fallback_restored_after_restart") and isinstance(restored, dict):
+                try:
+                    si = int(restored["stage"])
+                    ti = int(restored["step"])
+                    if 0 <= si < len(session.plan.stages) and 0 <= ti < len(session.plan.stages[si].steps):
+                        guarded = bool(getattr(session, "_guard_enabled", False))
+                        object.__setattr__(session, "_guard_enabled", False)
+                        try:
+                            session.active_stage_index, session.active_step_index = si, ti
+                            session.state = ManualRuntimeState.PAUSED
+                            session.step_started_at = None
+                            session.paused_at = dt_util.utcnow()
+                            session.remaining_when_paused = None
+                        finally:
+                            object.__setattr__(session, "_guard_enabled", guarded)
+                except (KeyError, TypeError, ValueError, OverflowError):
+                    pass
         store["manual_fallback_initial_position"] = current_position
         store["manual_fallback_anchor_target"] = (
             device_target if device_target is not None else retained_target
         )
     initial_position = tuple(store.get("manual_fallback_initial_position") or ())
     manual_plan_advanced = bool(
-        manual_plan_loaded
-        and len(initial_position) == 2
-        and current_position != initial_position
+        manual_plan_loaded and _manual_fallback_has_advanced(hass)
     )
     anchor_target = store.get("manual_fallback_anchor_target")
     target = (
@@ -553,6 +654,8 @@ def build_manual_fallback_snapshot(
             ),
         }
     )
+    if entering_fallback:
+        persist_manual_fallback_progress(hass)
     if from_mode == RCL_BREWING:
         cached["profile_source_available"] = False
         cached["profile_active"] = None
