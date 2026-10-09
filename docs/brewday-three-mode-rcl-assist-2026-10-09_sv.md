@@ -44,7 +44,12 @@ Källförlust ändrar **exekveringsläge**, inte batch/recept-identitet.
   cached external target;
 - den externa timelinen fryses under denna första implementation; BA hittar
   inte på nästa externa steg när källan saknas;
-- BA fortsätter använda target/stage-kontext för Learning/Advice;
+- **aktuellt steg fortsätter däremot som aktiv Manual Brewing-fallback**:
+  BA använder retained target/stage för Learning/Advice och får fortsätta
+  target/heat/pump-kontroll enligt Manual-regler när transport/readbacks är
+  tillgängliga;
+- om själva RCL/BrewZilla-transporten eller nödvändig temperaturtelemetri är
+  nere vinner befintlig fail-passive: inga blinda nya writes skickas;
 - när samma externa källa åter blir giltig vinner den automatiskt
   source-arbitrationen och Brewday återgår till `RCL Brewing` respektive
   `Brewfather Brewing`.
