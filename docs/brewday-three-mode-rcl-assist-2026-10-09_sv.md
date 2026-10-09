@@ -53,7 +53,7 @@ Källförlust ändrar **exekveringsläge**, inte batch/recept-identitet.
 - BA visar retained target/stage och operator-led ManualPlan. **Alla vanliga BA-hot-side-writes blockeras under source-loss fallback**, även om mål/readbacks finns. Operatören hanterar fysisk BrewZilla-styrning separat tills källägarskapet är verifierat;
 - om själva RCL/BrewZilla-transporten eller nödvändig temperaturtelemetri är
   nere vinner befintlig fail-passive: inga blinda nya writes skickas;
-- automatisk återtagning sker **endast** om RCL-session, profil, steg och lokal ManualPlan-progress är oförändrade, eller om Brewfather har verifierad oförändrad batch-/stegidentitet;
+- automatisk återtagning sker **endast** om RCL-session, profil, steg och lokal ManualPlan-progress är oförändrade, medan Brewfather efter källbortfall alltid kräver operatörskvittens (batchidentitet saknar garanterad attestation);
 - vid ändrad/okänd identitet eller lokalt avancerad plan låses `resync_required` och BA får ingen normal hot-side-write-behörighet. Operatören måste granska fysisk situation, aktuell session och steg och kvittera separat.
 
 Fallback-cache med senaste externa recept/timeline lagras nu via Home Assistants Store. En HA-omstart kan återskapa receptet och ManualPlan **pausat**, men kan aldrig återställa en tidigare styrbehörighet. Aktuell extern källa behöver verifieras/kvitteras innan BA får styra igen. Tidtagning utan verifierad remaining visas som okänd, inte som en påhittad full stegtid.
@@ -70,7 +70,7 @@ expected_session_id: <aktuellt verifierat RCL-session-ID>
 expected_step: <aktuellt raw step-namn>
 ```
 
-För Brewfather: `mode: Brewfather Brewing`, ange `expected_step`; session-ID krävs inte när källan saknar ett stabilt batch-ID. Servern läser färsk källa igen vid kvittens och skickar **inga** fysiska kommandon som del av kvittensen. Vid aktiv ABORT avvisas kvittensen. Om BA fortfarande markerar okänd identitet ska operatören INTE kvittera blint.
+För Brewfather: `mode: Brewfather Brewing`, ange `expected_step`; session-ID krävs inte när källan saknar ett stabilt batch-ID. Servern läser färsk källa igen vid kvittens och skickar **inga** fysiska kommandon som del av kvittensen. Normala RCL Assist heat/pump-korrigeringar kan dock återupptas vid **nästa styrtick**; håll observe-only på tills anläggningen är redo. Vid aktiv ABORT avvisas kvittensen. Om BA fortfarande markerar okänd identitet ska operatören INTE kvittera blint.
 
 ## RCL write-scope
 
