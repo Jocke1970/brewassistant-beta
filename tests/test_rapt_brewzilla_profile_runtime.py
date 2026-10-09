@@ -63,7 +63,8 @@ def test_source_loss_becomes_manual_fallback_with_retained_recipe_context():
     assert 'reason="brewfather_source_unavailable"' in runtime
     assert '"source": "Manual Brewday"' in execution
     assert '"recipe_context_retained": recipe_context_retained' in execution
-    assert '"fallback_timeline_frozen": True' in execution
+    assert '"fallback_external_timeline_frozen": True' in execution
+    assert '"manual_plan_operator_progression_until_source_recovers"' in execution
     assert '"reconnect_expected": reconnect_expected' in execution
     assert '"fresh_brewzilla_readback"' in execution
     assert '"cached_external_recipe"' in execution
