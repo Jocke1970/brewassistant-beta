@@ -93,6 +93,8 @@ def _operator_aborted_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def source(hass: HomeAssistant) -> str:
+    if execution_mode.resync_required(hass):
+        return "None"
     from .rapt_profile_runtime import (
         RAPT_PROFILE_SOURCE,
         rapt_profile_runtime_active,
@@ -127,6 +129,10 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             and rapt_state in {"live", "running", "paused", "awaiting_snapshot"}
         )
         if rapt_live:
+            if not execution_mode.external_reconnect_allowed(hass, rapt_snapshot, execution_mode.RCL_BREWING):
+                return _with_operator_control_state(hass, execution_mode.reconnect_lockout_snapshot(
+                    hass, rapt_snapshot, execution_mode.RCL_BREWING,
+                ))
             _pause_manual_brewday_for_rapt(hass)
             execution_mode.remember_external_snapshot(hass, rapt_snapshot, execution_mode.RCL_BREWING)
             return _with_operator_control_state(
@@ -143,13 +149,31 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
             if fallback is not None:
                 return _with_operator_control_state(hass, fallback)
             return _with_operator_control_state(hass, rapt_snapshot)
-        if rapt_state in {"inactive", "completed"}:
+        if rapt_state in {"inactive", "completed"} and rapt_snapshot.get("profile_stop_confirmed") is True:
             execution_mode.external_ended(hass, execution_mode.RCL_BREWING, reason="rcl_profile_stopped")
 
     runtime_source = core_source(hass)
-    if runtime_source == "Brewfather Brew Tracker":
-        pause_manual_brewday_for_brewfather(hass)
+    if runtime_source == "Brewfather Brew Tracker" and not _brewfather_transport_unavailable(hass):
         snapshot = build_core_snapshot(hass)
+        age = snapshot.get("snapshot_age_seconds")
+        if not isinstance(age, (int, float)) or age < 0 or age > 90:
+            if execution_mode.has_external_snapshot(hass, execution_mode.BREWFATHER_BREWING):
+                fallback = execution_mode.build_manual_fallback_snapshot(
+                    hass, from_mode=execution_mode.BREWFATHER_BREWING,
+                    reason="brewfather_snapshot_stale",
+                )
+                if fallback is not None:
+                    return _with_operator_control_state(hass, fallback)
+            snapshot.update(
+                source="None", runtime_state="source_unverified",
+                target_temperature=None, direct_brewzilla_control_allowed=False,
+            )
+            return _with_operator_control_state(hass, snapshot)
+        if not execution_mode.external_reconnect_allowed(hass, snapshot, execution_mode.BREWFATHER_BREWING):
+            return _with_operator_control_state(hass, execution_mode.reconnect_lockout_snapshot(
+                hass, snapshot, execution_mode.BREWFATHER_BREWING,
+            ))
+        pause_manual_brewday_for_brewfather(hass)
         execution_mode.remember_external_snapshot(hass, snapshot, execution_mode.BREWFATHER_BREWING)
         return _with_operator_control_state(
             hass,
@@ -162,7 +186,7 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     if (
         execution_mode.last_external_mode(hass) == execution_mode.BREWFATHER_BREWING
         and execution_mode.has_external_snapshot(hass, execution_mode.BREWFATHER_BREWING)
-        and _brewfather_transport_unavailable(hass)
+        and (_brewfather_transport_unavailable(hass) or runtime_source != "Brewfather Brew Tracker")
     ):
         fallback = execution_mode.build_manual_fallback_snapshot(
             hass, from_mode=execution_mode.BREWFATHER_BREWING,
@@ -171,7 +195,8 @@ def build_brewday_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         if fallback is not None:
             return _with_operator_control_state(hass, fallback)
 
-    if execution_mode.last_external_mode(hass) == execution_mode.BREWFATHER_BREWING:
+    if (execution_mode.last_external_mode(hass) == execution_mode.BREWFATHER_BREWING
+            and not _brewfather_transport_unavailable(hass)):
         execution_mode.external_ended(
             hass, execution_mode.BREWFATHER_BREWING, reason="brewfather_session_inactive"
         )
@@ -201,6 +226,8 @@ def brewday_runtime_attrs(snapshot: dict[str, Any]) -> dict[str, Any]:
         "reconnect_expected", "manual_fallback_plan_loaded",
         "manual_fallback_plan_advanced", "fallback_external_timeline_frozen",
         "fallback_timeline_frozen", "fallback_progression_policy",
+        "resync_required", "resync_reason", "resync_from_mode",
+        "fallback_actuation_blocked", "fallback_timer_uncertain",
     ):
         attrs[key] = snapshot.get(key)
     return attrs

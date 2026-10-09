@@ -53,6 +53,37 @@ brewday_audit_snapshot:
       description: Optional note stored on the manual snapshot event.
       example: Before next Brewfather step
 
+brewday_reconnect_ack:
+  name: Acknowledge external Brewday reconnection
+  description: >-
+    Manually accept the currently verified external step and resume its ownership
+    after a retained fallback mismatch. Does not send hardware commands.
+    Inspect the physical BrewZilla, recipe and stage before acknowledging.
+  fields:
+    mode:
+      name: External mode
+      description: Exactly RCL Brewing or Brewfather Brewing.
+      required: true
+      example: RCL Brewing
+      selector:
+        select:
+          options:
+            - RCL Brewing
+            - Brewfather Brewing
+    expected_step:
+      name: Confirmed current step
+      description: The exact raw step name shown by the current external source.
+      required: true
+      example: Saccharification rest
+      selector:
+        text:
+    expected_session_id:
+      name: RCL session ID
+      description: Required for RCL Brewing; copy the currently verified session ID.
+      required: false
+      selector:
+        text:
+
 manual_brewday_prepare:
   name: Manual Brewday prepare
   description: Prepare the BrewAssistant manual brewday runtime session.

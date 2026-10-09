@@ -69,6 +69,15 @@ def _live_authority(hass) -> tuple[HotSideAuthority, dict[str, Any]]:
         telemetry_fresh=bool(age is not None and 0 <= age <= FRESH_SECONDS),
         operator_abort=bool(operator.get("active")),
     )
+    # Source-loss fallback is a retained operator plan, never BA permission
+    # to control hardware that may still be owned by the external controller.
+    if runtime.get("fallback_active") or runtime.get("resync_required"):
+        authority = HotSideAuthority(
+            "blocked", False,
+            "external_reconnect_resync_required" if runtime.get("resync_required")
+            else "external_source_lost_manual_plan_observe_only",
+            "none",
+        )
     return authority, {"runtime": runtime, "operator": operator, "age": age}
 
 
