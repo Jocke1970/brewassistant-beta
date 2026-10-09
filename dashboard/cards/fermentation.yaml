@@ -8,6 +8,8 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
+      # Re-evaluate elapsed time even when physical inputs stop publishing.
+      update_timer: 1m
       entity: climate.fermentation_chamber
       name: Fermentation Cockpit
       icon: |
@@ -95,9 +97,19 @@ card:
             : activePillSource === 'cloud' ? 'Wi-Fi / Cloud Link' : 'source unverified';
           const pillTemperatureSource = states['sensor.brewassistant_liquid_temperature']?.attributes?.source_entity || 'sensor.yellow_pill_temperature';
           const pillGravitySource = states['sensor.brewassistant_gravity_last_updated']?.attributes?.source_entity || 'sensor.yellow_pill_gravity';
-          const pillObservedAt = id => states[id]?.last_updated || null;
-          const pillTempObserved = pillObservedAt(pillTemperatureSource);
-          const pillGravityObserved = pillObservedAt(pillGravitySource);
+          // Source timestamps, not freshly republished BrewAssistant sensor states.
+          // HA last_updated is a proxy, not proof of a new physical sample.
+          const sourceAge = id => {
+            const stamp = states[id]?.last_updated;
+            const ms = stamp ? Date.parse(stamp) : NaN;
+            return Number.isFinite(ms) ? Math.max(0,(Date.now()-ms)/60000) : null;
+          };
+          const tempSourceAge = sourceAge(pillTemperatureSource);
+          const gravitySourceAge = sourceAge(pillGravitySource);
+          const risk = (age, val) => !Number.isFinite(val) || age === null ? 'unknown' : age >= 20 ? 'stale' : age >= 15 ? 'warning' : 'fresh';
+          const riskLabel = (kind,age) => kind === 'stale' ? 'STALE · '+Math.floor(age)+' min' : kind === 'unknown' ? 'TIME UNKNOWN' : kind === 'warning' ? 'OLDER · '+Math.floor(age)+' min' : 'HA-observed · '+Math.floor(age)+' min';
+          const riskStyle = (kind, color) => kind === 'stale' || kind === 'unknown' ? 'red' : kind === 'warning' ? 'yellow' : color;
+          const riskIcon = (kind, icon) => kind === 'stale' || kind === 'unknown' ? 'mdi:alert-circle' : kind === 'warning' ? 'mdi:alert-outline' : icon;
 
           const chamberAvg = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
 
@@ -193,7 +205,7 @@ card:
                 <ha-icon icon="${icon}" style="width:15px;height:15px;opacity:.82;"></ha-icon>
                 <div style="min-width:0;text-align:center;">
                   <div style="font-size:8.7px;font-weight:950;opacity:.55;letter-spacing:.045em;text-transform:uppercase;">${title}</div>
-                  <div style="font-size:12.8px;font-weight:950;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
+                  <div style="font-size:12.8px;font-weight:950;line-height:1.05;color:${kind === 'red' ? '#b3261e' : 'var(--primary-text-color)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${main}</div>
                   <div style="font-size:9px;font-weight:800;opacity:.58;line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
                 </div>
               </div>
@@ -204,6 +216,10 @@ card:
           const heatKind = heatOn ? 'orange' : 'neutral';
           const supervisorKind = supervisorOn ? 'green' : 'neutral';
           const sgText = Number.isFinite(sg) ? sg.toFixed(3) : '—';
+          const tempRisk = risk(tempSourceAge, pillTemp);
+          const gravityRisk = risk(gravitySourceAge, sg);
+          const pillAlert = ['stale','unknown'].includes(tempRisk) || ['stale','unknown'].includes(gravityRisk);
+          const alertDescription = [tempRisk !== 'fresh' ? 'Pill temp: '+riskLabel(tempRisk,tempSourceAge) : null,gravityRisk !== 'fresh' ? 'SG: '+riskLabel(gravityRisk,gravitySourceAge) : null].filter(Boolean).join(' · ');
 
           return `
             <div style="line-height:1.25;min-width:0;">
@@ -243,11 +259,12 @@ card:
                 gap:7px;
               ">
                 ${metric('Chamber', fmt(chamberAvg, '°C'), 'air avg', 'mdi:fridge-thermometer', 'blue')}
-                ${metric('Pill', fmt(pillTemp, '°C'), pillTempObserved ? pillStatus : 'source time unknown', 'mdi:thermometer-water', pillTempObserved ? 'cyan' : 'yellow')}
-                ${metric('SG', sgText, Number.isFinite(sg) ? (pillGravityObserved ? 'gravity' : 'time unknown') : 'missing', 'mdi:water-percent', Number.isFinite(sg) ? (pillGravityObserved ? 'green' : 'yellow') : 'neutral')}
+                ${metric('Pill', fmt(pillTemp, '°C'), riskLabel(tempRisk,tempSourceAge), riskIcon(tempRisk,'mdi:thermometer-water'), riskStyle(tempRisk,'cyan'))}
+                ${metric('SG', sgText, riskLabel(gravityRisk,gravitySourceAge), riskIcon(gravityRisk,'mdi:water-percent'), riskStyle(gravityRisk,'green'))}
                 ${metric('Target', fmt(airTarget, '°C'), 'air target', 'mdi:target', 'neutral')}
               </div>
 
+              ${pillAlert ? '<div style="margin-top:10px;padding:10px;border-radius:13px;border:1px solid rgba(244,67,54,.52);background:rgba(244,67,54,.12);color:#b3261e;font-size:11.5px;font-weight:900;line-height:1.35"><ha-icon icon="mdi:alert-circle" style="width:18px;height:18px;vertical-align:middle;color:#b3261e"></ha-icon> PILL READING STALE / NOT VERIFIED · '+alertDescription+' · HA timestamp is not proof of a new physical sample.</div>' : ''}
               <div style="
                 margin-top:7px;
                 display:grid;

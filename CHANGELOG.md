@@ -1,3 +1,12 @@
+## DEV PREVIEW — inför 2026.10.0b6 — premium Brewday UI och stale-varningar (ingen release)
+
+- Nya kompletta Lovelace-paneler `dashboard/cards/brewday_control_status_sv.yaml` och `dashboard/cards/brewday_control_status.yaml`: källägare, läge, timer, target, fallback, `resync_required`, read-only, ABORT, manuell kvittens.
+- Ny read-only-toggle och hårt villkorad `brewday_reconnect_ack`-knapp; backend verifierar alltid källan igen. Inget UI-bevis på fysisk OFF.
+- Varningar för saknade, okända och inaktuella Pill-/SG-observationer återställda i `fermentation*.yaml` och `fermentation_cockpit_v2*.yaml` med röd ikon/text och 1-minuts refresh. Trösklar: 15 min gult, 20 min rött.
+- `tests/test_b6_brewday_control_status_ui.py` och `docs/brewday-control-status-b6-preview_sv.md` tillagda.
+- **Manuell åtgärd:** kopiera hela svenska panel-YAML:n till dashboarden; byt också jäsningskortens hela YAML för att få tillbaka stale-varningarna. Kräver inget HA-backendbyte utöver 0b5, ingen omstart för enbart Lovelace-ändring.
+- **Releasestatus:** endast `dev`, `beta` (0b5) och `main` opåverkade.
+
 ## 2026-10-09 — v2026.10.0b5 — Brewday three-mode / RCL Assist
 
 - Brewday får tre normala exekveringslägen: Manual Brewing, Brewfather Brewing och RCL Brewing.
