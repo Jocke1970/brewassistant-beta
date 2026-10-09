@@ -62,10 +62,25 @@ def _release_stopped_rapt_for_manual(hass: HomeAssistant) -> bool:
 
 
 def _rapt_blocks_manual(hass: HomeAssistant, *, allow_stopped_takeover: bool) -> bool:
-    # Keep this import out of module initialization. rapt_profile_runtime uses
+    # Keep these imports out of module initialization. rapt_profile_runtime uses
     # BrewZilla owned-control helpers, whose package imports orchestration and
     # audit helpers back from Brewday.
-    from .rapt_profile_runtime import rapt_profile_runtime_claims_source
+    from . import brewday_execution_mode as execution_mode
+    from .rapt_profile_runtime import (
+        rapt_profile_runtime_active,
+        rapt_profile_runtime_claims_source,
+    )
+
+    # A verified source-loss handoff is intentionally Manual Brewing while the
+    # retained RAPT recipe remains cached. Allow the existing ManualPlan engine
+    # to progress locally until the same external source becomes active again.
+    # A live RAPT profile always wins immediately and restores this guard.
+    if (
+        execution_mode.fallback_active(hass)
+        and execution_mode.last_external_mode(hass) == execution_mode.RCL_BREWING
+        and not rapt_profile_runtime_active(hass)
+    ):
+        return False
 
     if not rapt_profile_runtime_claims_source(hass):
         return False
