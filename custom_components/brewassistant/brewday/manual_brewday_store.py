@@ -7,7 +7,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import DOMAIN
-from .brewday_runtime_core import BF_STATUS, brewfather_session_active, entity_candidates
+from .brewday_runtime_core import BAD, BF_STATUS, brewfather_session_active, entity_candidates
 from .manual_brewday_runtime import ManualRuntimeSession, ManualRuntimeState
 
 KEY = "manual_brewday_session"
@@ -24,6 +24,16 @@ _ACTIVE_MANUAL_STATES = {
 def brewfather_brew_tracker_active(hass: HomeAssistant) -> bool:
     """Return the same Brewfather ownership decision used by runtime source selection."""
     return brewfather_session_active(hass)
+
+
+def brewfather_transport_unavailable(hass: HomeAssistant) -> bool:
+    """Treat missing/BAD tracker telemetry as source loss, not confirmed completion."""
+    for entity_id in entity_candidates(BF_STATUS):
+        state = hass.states.get(entity_id)
+        if state is None:
+            continue
+        return str(state.state).strip().lower() in BAD
+    return True
 
 
 def _ownership_error() -> HomeAssistantError:
@@ -152,9 +162,14 @@ def _ensure_brewfather_handoff_listener(hass: HomeAssistant) -> None:
             pause_manual_brewday_for_brewfather(hass)
             return
 
-        # Leaving Brewing: Manual must remain paused and physical outputs must
-        # be driven safe immediately rather than waiting for the periodic
-        # coordinator/orchestration tick.
+        # A missing/unavailable tracker is not a confirmed end-of-batch event.
+        # Brewday will use retained-recipe Manual fallback and existing
+        # fail-passive transport checks; never infer OFF from source loss.
+        if brewfather_transport_unavailable(hass):
+            return
+
+        # A confirmed normal exit from Brewfather Brewing keeps the historical
+        # safe-down behavior until the operator deliberately resumes Manual.
         session = data.get(KEY)
         if not isinstance(session, ManualRuntimeSession):
             return
