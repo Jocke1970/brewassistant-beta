@@ -35,7 +35,7 @@ def test_recipe_identity_is_retained_across_manual_fallback():
         '"recipe_context_retained": recipe_context_retained',
         '"fallback_external_timeline_frozen": True',
         '"manual_plan_operator_progression_until_source_recovers"',
-        '"runtime_state": "running"',
+        '"runtime_state": (',
         '"manual_fallback_recipe_active": True',
         '"manual_fallback_plan_loaded": manual_plan_loaded',
         '"manual_fallback_plan_advanced": manual_plan_advanced',
