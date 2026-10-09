@@ -137,13 +137,27 @@ class GuardedManualRuntimeSession(ManualRuntimeSession):
         self._assert_brewfather_inactive()
         super().prepare()
 
-    def start(self, now=None) -> None:
-        self._assert_brewfather_inactive()
-        super().start(now)
-
     def next(self, now=None) -> None:
         self._assert_brewfather_inactive()
         super().next(now)
+        from .brewday_execution_mode import persist_manual_fallback_progress
+        persist_manual_fallback_progress(self._hass)
+
+    def pause(self, now=None) -> None:
+        super().pause(now)
+        from .brewday_execution_mode import persist_manual_fallback_progress
+        persist_manual_fallback_progress(self._hass)
+
+    def start(self, now=None) -> None:
+        self._assert_brewfather_inactive()
+        super().start(now)
+        from .brewday_execution_mode import persist_manual_fallback_progress
+        persist_manual_fallback_progress(self._hass)
+
+    def finish(self) -> None:
+        super().finish()
+        from .brewday_execution_mode import persist_manual_fallback_progress
+        persist_manual_fallback_progress(self._hass)
 
 
 def _upgrade_session(
