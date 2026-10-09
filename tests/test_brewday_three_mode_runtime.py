@@ -32,6 +32,8 @@ def test_recipe_identity_is_retained_across_manual_fallback():
         '"recipe_context_retained": recipe_context_retained',
         '"fallback_timeline_frozen": True',
         '"fallback_progression_policy": "freeze_external_timeline_until_source_recovers"',
+        '"runtime_state": "running"',
+        '"manual_fallback_recipe_active": True',
     ):
         assert token in source
 
