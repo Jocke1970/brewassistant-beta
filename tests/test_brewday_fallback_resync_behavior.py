@@ -39,6 +39,9 @@ F = load_functions(
     "external_reconnect_allowed", "reconnect_lockout_snapshot",
     "_prime_manual_fallback_plan",
 )
+F["_identity_mismatch"].__globals__.update(
+    RCL_BREWING="RCL Brewing", BREWFATHER_BREWING="Brewfather Brewing",
+)
 
 
 def rcl_snapshot(*, session="session-A", step_id="step-1", step="Mash", number=1):
