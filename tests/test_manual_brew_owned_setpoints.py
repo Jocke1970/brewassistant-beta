@@ -89,6 +89,9 @@ def test_manual_pause_overrides_operator_ownership_with_safe_down() -> None:
 def test_manual_brewfather_handoff_uses_runtime_activity_predicate() -> None:
     source = STORE_SOURCE.read_text(encoding="utf-8")
     assert "brewfather_session_active" in source
+    assert "brewfather_transport_unavailable" in source
+    assert "if brewfather_transport_unavailable(hass):" in source
+    assert "never infer OFF from source loss" in source
     assert "return brewfather_session_active(hass)" in source
     assert "BREWDAY_ACTIVE_STATUS" not in source
     assert "async_track_state_change_event" in source
