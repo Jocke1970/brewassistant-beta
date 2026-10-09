@@ -34,6 +34,8 @@ _PREVIOUS_LEARNING_APPLY = None
 _PREVIOUS_STOP = None
 _PREVIOUS_SUPERVISED_BUILD = None
 FRESH_SECONDS = 90
+RCL_ASSIST_SCOPE = "rcl_assist"
+FULL_SCOPE = "full"
 BREWZILLA_ENTITIES = frozenset({
     base.BREWZILLA_TARGET_NUMBER, base.BREWZILLA_HEATER_SWITCH,
     base.BREWZILLA_PUMP_SWITCH, base.BREWZILLA_HEAT_UTILIZATION,
@@ -108,14 +110,36 @@ def _sparge_write_allowed(hass, entity: str, *, switch_action: str | None, value
     return entity == base.BREWZILLA_HEATER_SWITCH and switch_action == "on"
 
 
+def _rcl_assist_write_allowed(hass, entity: str, *, switch_action: str | None = None, value: float | None = None) -> bool:
+    """RCL Brewing: target/heater are profile-owned; BA owns heat-util + pump."""
+    if entity in {base.BREWZILLA_TARGET_NUMBER, base.BREWZILLA_HEATER_SWITCH}:
+        return False
+    if entity not in {
+        base.BREWZILLA_HEAT_UTILIZATION,
+        base.BREWZILLA_PUMP_SWITCH,
+        base.BREWZILLA_PUMP_UTILIZATION,
+    }:
+        return False
+    return _sparge_write_allowed(hass, entity, switch_action=switch_action, value=value)
+
+
 def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value: float | None = None) -> bool:
     if entity not in BREWZILLA_ENTITIES:
         return True
     authority, context = _live_authority(hass)
     if authority.may_write_brewzilla is True:
-        return _sparge_write_allowed(hass, entity, switch_action=switch_action, value=value)
+        scope = getattr(
+            authority,
+            "write_scope",
+            RCL_ASSIST_SCOPE if authority.mode == "rapt_controller" else FULL_SCOPE,
+        )
+        if scope == RCL_ASSIST_SCOPE:
+            return _rcl_assist_write_allowed(
+                hass, entity, switch_action=switch_action, value=value,
+            )
+        return True
     if authority.may_write_brewzilla is None:
-        return True  # Existing Manual mode; separate audit required.
+        return True
     if not _safe_off_allowed(authority, context):
         return False
     if entity in {base.BREWZILLA_HEATER_SWITCH, base.BREWZILLA_PUMP_SWITCH}:
@@ -128,8 +152,10 @@ def _observer_snapshot(snapshot: dict[str, Any], authority: HotSideAuthority) ->
     out.update(
         hot_side_source_authority=authority.mode,
         hot_side_source_authority_reason=authority.reason,
+        hot_side_write_scope=getattr(authority, "write_scope", "none"),
         hot_side_actuator_writes_allowed=False,
         hot_side_outputs_physically_off_verified=False,
+        rcl_assist_active=False,
         target_sync_needed=False, heating_needed=False,
         heater_action_needed=False, heater_stop_needed=False,
         pump_action_needed=False, pump_stop_needed=False,
@@ -143,6 +169,41 @@ def _observer_snapshot(snapshot: dict[str, Any], authority: HotSideAuthority) ->
     return out
 
 
+def _rcl_assist_snapshot(snapshot: dict[str, Any], authority: HotSideAuthority) -> dict[str, Any]:
+    """Narrow verified RCL control to Learning heat-utilization and pump writes."""
+    out = dict(snapshot)
+    assist_needed = bool(
+        out.get("heat_utilization_action_needed")
+        or out.get("pump_utilization_action_needed")
+        or out.get("pump_action_needed")
+        or out.get("pump_stop_needed")
+        or out.get("completion_pump_stop_needed")
+    )
+    out.update(
+        hot_side_source_authority=authority.mode,
+        hot_side_source_authority_reason=authority.reason,
+        hot_side_write_scope=RCL_ASSIST_SCOPE,
+        hot_side_actuator_writes_allowed=True,
+        rcl_assist_active=True,
+        rcl_assist_auto_apply=True,
+        rcl_target_owned_by_profile=True,
+        target_sync_needed=False,
+        heater_action_needed=False,
+        heater_stop_needed=False,
+        completion_stop_needed=False,
+        desired_heater_on=None,
+        ba_owned_reassert_action_needed=False,
+    )
+    out["can_apply_target"] = bool(out.get("can_apply_target") and assist_needed)
+    out["orchestration_mode"] = "rcl-assist" if out["can_apply_target"] else "monitor"
+    out["control_reason"] = (
+        "RCL Brewing: RAPT/BrewZilla owns recipe/step/timer/target; "
+        "BA Learning may adjust heat utilization and pump ON/OFF/utilization only. "
+        + str(out.get("control_reason") or "")
+    ).strip()
+    return out
+
+
 def _build(hass):
     assert _PREVIOUS_BUILD is not None
     out = _PREVIOUS_BUILD(hass)
@@ -150,16 +211,27 @@ def _build(hass):
     if authority.may_write_brewzilla is False:
         clear_pending_action_from_source(hass, supervised.SOURCE)
         return _observer_snapshot(out, authority)
-    return {**out, "hot_side_source_authority": authority.mode,
-            "hot_side_source_authority_reason": authority.reason,
-            "hot_side_actuator_writes_allowed": authority.may_write_brewzilla}
+    if getattr(authority, "write_scope", None) == RCL_ASSIST_SCOPE:
+        return _rcl_assist_snapshot(out, authority)
+    return {
+        **out,
+        "hot_side_source_authority": authority.mode,
+        "hot_side_source_authority_reason": authority.reason,
+        "hot_side_write_scope": getattr(authority, "write_scope", "manual_legacy"),
+        "hot_side_actuator_writes_allowed": authority.may_write_brewzilla,
+        "rcl_assist_active": False,
+    }
 
 
 def _supervised_build(hass):
     assert _PREVIOUS_SUPERVISED_BUILD is not None
     out = _PREVIOUS_SUPERVISED_BUILD(hass)
     authority, _ = _live_authority(hass)
-    return _observer_snapshot(out, authority) if authority.may_write_brewzilla is False else out
+    if authority.may_write_brewzilla is False:
+        return _observer_snapshot(out, authority)
+    if getattr(authority, "write_scope", None) == RCL_ASSIST_SCOPE:
+        return _rcl_assist_snapshot(out, authority)
+    return out
 
 
 async def _apply(hass):
