@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -155,6 +155,7 @@ def test_paused_fallback_preserves_remaining_and_running_preserves_elapsed(monke
     ns = F["_prime_manual_fallback_plan"].__globals__
     ns.update(
         __package__=package,
+        timedelta=timedelta,
         _store=lambda hass: {},
         dt_util=SimpleNamespace(utcnow=lambda: datetime(2026, 10, 9, 12, tzinfo=timezone.utc)),
     )
