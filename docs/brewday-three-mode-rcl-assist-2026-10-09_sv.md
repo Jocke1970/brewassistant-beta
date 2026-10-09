@@ -50,21 +50,27 @@ Källförlust ändrar **exekveringsläge**, inte batch/recept-identitet.
   Manual Brewdays vanliga stegprogression om avbrottet varar;
 - den cachade externa timelinen förblir oförändrad som reconnect-referens,
   medan ManualPlan-kopian är operatörens lokala arbetsplan under avbrottet;
-- BA använder retained target/stage för Learning/Advice och får fortsätta
-  target/heat/pump-kontroll enligt Manual-regler när transport/readbacks är
-  tillgängliga;
+- BA visar retained target/stage och operator-led ManualPlan. **Alla vanliga BA-hot-side-writes blockeras under source-loss fallback**, även om mål/readbacks finns. Operatören hanterar fysisk BrewZilla-styrning separat tills källägarskapet är verifierat;
 - om själva RCL/BrewZilla-transporten eller nödvändig temperaturtelemetri är
   nere vinner befintlig fail-passive: inga blinda nya writes skickas;
-- när samma externa källa åter blir giltig vinner den automatiskt
-  source-arbitrationen och Brewday återgår till `RCL Brewing` respektive
-  `Brewfather Brewing`.
+- automatisk återtagning sker **endast** om RCL-session, profil, steg och lokal ManualPlan-progress är oförändrade, eller om Brewfather har verifierad oförändrad batch-/stegidentitet;
+- vid ändrad/okänd identitet eller lokalt avancerad plan låses `resync_required` och BA får ingen normal hot-side-write-behörighet. Operatören måste granska fysisk situation, aktuell session och steg och kvittera separat.
 
-Fallback-cachen och den importerade ManualPlan-kopian är fortfarande
-runtime-lokala i HA i denna implementation. En full HA-omstart utan frisk extern
-källa återskapar därför ännu inte receptet ur minnet; det läget förblir
-fail-closed. Persistens över HA-omstart är en separat nästa grind. Ett vanligt
-RCL/BF-transportavbrott medan HA fortsätter köra behåller däremot receptet och
-kan fortsätta i Manual Brewing tills källan återkommer.
+Fallback-cache med senaste externa recept/timeline lagras nu via Home Assistants Store. En HA-omstart kan återskapa receptet och ManualPlan **pausat**, men kan aldrig återställa en tidigare styrbehörighet. Aktuell extern källa behöver verifieras/kvitteras innan BA får styra igen. Tidtagning utan verifierad remaining visas som okänd, inte som en påhittad full stegtid.
+
+### Operatörskvittens vid `resync_required`
+
+Använd endast efter fysisk kontroll av BrewZilla, aktivt RAPT-/Brewfather-recept och aktuellt steg.
+
+I **Utvecklarverktyg → Åtgärder** kör `brewassistant.brewday_reconnect_ack`:
+
+```yaml
+mode: RCL Brewing
+expected_session_id: <aktuellt verifierat RCL-session-ID>
+expected_step: <aktuellt raw step-namn>
+```
+
+För Brewfather: `mode: Brewfather Brewing`, ange `expected_step`; session-ID krävs inte när källan saknar ett stabilt batch-ID. Servern läser färsk källa igen vid kvittens och skickar **inga** fysiska kommandon som del av kvittensen. Vid aktiv ABORT avvisas kvittensen. Om BA fortfarande markerar okänd identitet ska operatören INTE kvittera blint.
 
 ## RCL write-scope
 
@@ -90,6 +96,4 @@ source-authority. HA/RCL-ACK räknas aldrig som fysisk OFF-verifikation.
 
 ## Release/status
 
-Ändringen finns endast på `dev` inom 2026.10.0b5-arbetet. Nuvarande
-`beta` 2026.10.0b4 och `main` ändras inte. Backend/regressionstester är inte
-fysisk acceptans; nytt vattenprov krävs före promotion.
+Ändringen förbereds på `dev` för 2026.10.0b5. CI/HACS/Hassfest/RCL-gates ska köras före `dev → beta`. Beta är avsedd för övervakade vattenprov; sådana är **ett krav innan `beta → main`**, inte ett krav för att få installera beta. Bekräftad HA service-ACK är aldrig fysisk OFF-bevisning.
