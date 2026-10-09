@@ -351,8 +351,10 @@ def _register_services(hass: HomeAssistant) -> None:
         )
         await async_record_brewday_audit_event(
             hass, "brewday_reconnect_ack", always_record=True,
-            mode=str(call.data.get("mode") or ""),
-            expected_step=str(call.data.get("expected_step") or ""),
+            note=(
+                "mode=" + str(call.data.get("mode") or "")
+                + " step=" + str(call.data.get("expected_step") or "")
+            ),
         )
         await _refresh_runtime_sensors()
 
