@@ -1,3 +1,13 @@
+## 2026-10-09 — v2026.10.0b5 — Brewday three-mode / RCL Assist
+
+- Brewday får tre normala exekveringslägen: Manual Brewing, Brewfather Brewing och RCL Brewing.
+- RCL/BrewZilla äger recept, steg, timer och target i RCL Brewing; BA skriver inte target eller normal heater-switch.
+- Equipment Learning/Advice får automatiskt assistera heat-utilization samt pump ON/OFF/% när RCL authority är verifierad och observe-only är av.
+- RCL- eller BF/BT-bortfall växlar temporärt till Manual Brewing med retained recipe context; extern reconnect återtar source ownership.
+- Global STOP/ABORT ligger kvar över samtliga källor.
+- Fallback-cache är runtime-lokal och timelinen fryses; persistent recipe→ManualPlan är fortsatt nästa steg.
+- Publicerad beta/main ändras inte av dev-arbetet; fysisk vattenacceptans återstår.
+
 # BrewAssistant Changelog
 
 Den här filen är den praktiska ändringsloggen för BrewAssistant Beta.
