@@ -38,6 +38,9 @@ def test_recipe_identity_is_retained_across_manual_fallback():
         '"runtime_state": "running"',
         '"manual_fallback_recipe_active": True',
         '"manual_fallback_plan_loaded": manual_plan_loaded',
+        '"manual_fallback_plan_advanced": manual_plan_advanced',
+        '"manual_fallback_anchor_target"',
+        '"manual_retained_recipe_progression"',
         "_prime_manual_fallback_plan",
     ):
         assert token in source
