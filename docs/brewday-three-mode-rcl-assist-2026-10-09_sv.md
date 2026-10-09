@@ -42,10 +42,15 @@ Källförlust ändrar **exekveringsläge**, inte batch/recept-identitet.
   BF-runtime kvar;
 - färsk BrewZilla target-readback prioriteras vid fallback, annars används
   cached external target;
-- den externa timelinen fryses under denna första implementation; BA hittar
-  inte på nästa externa steg när källan saknas;
-- **aktuellt steg fortsätter däremot som aktiv Manual Brewing-fallback**:
-  BA använder retained target/stage för Learning/Advice och får fortsätta
+- den senast verifierade externa timelinen/profilen konverteras konservativt
+  till den befintliga Python-`ManualPlan`-motorn; BA hittar inte på steg som
+  saknades i källans recept;
+- **Manual Brewing-fallbacken kan fortsätta samma batch lokalt**: aktivt steg
+  mappas till motsvarande ManualPlan-position och operatören kan använda
+  Manual Brewdays vanliga stegprogression om avbrottet varar;
+- den cachade externa timelinen förblir oförändrad som reconnect-referens,
+  medan ManualPlan-kopian är operatörens lokala arbetsplan under avbrottet;
+- BA använder retained target/stage för Learning/Advice och får fortsätta
   target/heat/pump-kontroll enligt Manual-regler när transport/readbacks är
   tillgängliga;
 - om själva RCL/BrewZilla-transporten eller nödvändig temperaturtelemetri är
@@ -54,10 +59,12 @@ Källförlust ändrar **exekveringsläge**, inte batch/recept-identitet.
   source-arbitrationen och Brewday återgår till `RCL Brewing` respektive
   `Brewfather Brewing`.
 
-Fallback-cachen är runtime-lokal i HA i denna implementation. En full HA-omstart
-utan frisk extern källa återskapar därför inte receptet ur minnet; det läget
-förblir fail-closed. Persistent recipe→ManualPlan-import är ett separat nästa
-steg innan vi kräver autonom progression genom ett längre nät-/HA-avbrott.
+Fallback-cachen och den importerade ManualPlan-kopian är fortfarande
+runtime-lokala i HA i denna implementation. En full HA-omstart utan frisk extern
+källa återskapar därför ännu inte receptet ur minnet; det läget förblir
+fail-closed. Persistens över HA-omstart är en separat nästa grind. Ett vanligt
+RCL/BF-transportavbrott medan HA fortsätter köra behåller däremot receptet och
+kan fortsätta i Manual Brewing tills källan återkommer.
 
 ## RCL write-scope
 
