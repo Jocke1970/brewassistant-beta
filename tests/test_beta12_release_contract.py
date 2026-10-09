@@ -16,6 +16,7 @@ PREVIOUS_VERSION = "0.2.0-beta.14"
 PREVIOUS_TAG = "v" + PREVIOUS_VERSION
 PREVIOUS_NAME = "2026_09-20"
 CANDIDATE_VERSION = "2026.10.0b4"
+ACTIVE_VERSION = "2026.10.0b5"
 CANDIDATE_TAG = "v" + CANDIDATE_VERSION
 CANDIDATE_NAME = "2026-10"
 
@@ -47,7 +48,8 @@ def test_legacy_beta_is_preserved_and_calendar_beta_has_unique_version():
     assert "beta-merge-SHA" in old and "main" in old
     assert "ABORT" in old and "fysiskt" in old
     assert (ROOT / "docs/beta13-prerelease-notes_sv.md").is_file()
-    assert manifest["version"] == CANDIDATE_VERSION
+    assert manifest["version"] == ACTIVE_VERSION
+    assert (ROOT / "docs/2026.10.0b5-prerelease-notes_sv.md").is_file()
     assert CANDIDATE_VERSION not in (PUBLISHED_VERSION, PREVIOUS_VERSION)
     assert notes.startswith(f"# BrewAssistant {CANDIDATE_NAME} — fermentation provider + Brewfather stream beta ({CANDIDATE_TAG})")
     assert CANDIDATE_TAG in notes and CANDIDATE_VERSION in notes
