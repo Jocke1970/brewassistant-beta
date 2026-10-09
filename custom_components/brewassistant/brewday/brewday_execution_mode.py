@@ -280,7 +280,29 @@ def build_manual_fallback_snapshot(
 
     device_target = _fresh_float(hass, BREWZILLA_TARGET)
     retained_target = cached.get("target_temperature")
-    target = device_target if device_target is not None else retained_target
+    current_position = (
+        str(cached.get("stage") or ""),
+        str(cached.get("step") or ""),
+    )
+    if entering_fallback:
+        store["manual_fallback_initial_position"] = current_position
+        store["manual_fallback_anchor_target"] = (
+            device_target if device_target is not None else retained_target
+        )
+    initial_position = tuple(store.get("manual_fallback_initial_position") or ())
+    manual_plan_advanced = bool(
+        manual_plan_loaded
+        and len(initial_position) == 2
+        and current_position != initial_position
+    )
+    anchor_target = store.get("manual_fallback_anchor_target")
+    target = (
+        retained_target
+        if manual_plan_advanced
+        else device_target if device_target is not None
+        else anchor_target if anchor_target is not None
+        else retained_target
+    )
     device_temp = _fresh_float(hass, BREWZILLA_TEMP)
 
     cached.update(
@@ -291,10 +313,13 @@ def build_manual_fallback_snapshot(
             "runtime_state": "running",
             "target_temperature": target,
             "target_temperature_source": (
-                "fresh_brewzilla_readback" if device_target is not None
+                "manual_retained_recipe_progression" if manual_plan_advanced
+                else "fresh_brewzilla_readback" if device_target is not None
+                else "manual_fallback_anchor" if anchor_target is not None
                 else "manual_retained_recipe" if manual_plan_loaded
                 else "cached_external_recipe"
             ),
+            "manual_fallback_plan_advanced": manual_plan_advanced,
             "actual_temperature": device_temp if device_temp is not None else cached.get("actual_temperature"),
             "live_timer_active": False,
             "paused_freeze": False,
