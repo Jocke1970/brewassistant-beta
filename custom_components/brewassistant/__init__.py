@@ -51,7 +51,10 @@ from .coordinator import BrewAssistantCoordinator
 from .hlt.runtime import async_setup_hlt_simulation
 from .kegerator.guard import async_setup_kegerator_guard
 from .brewday.manual_brewday_runtime import ManualRuntimeState
-from .brewday.brewday_execution_mode import acknowledge_external_reconnect
+from .brewday.brewday_execution_mode import (
+    acknowledge_external_reconnect,
+    async_load_brewday_recipe_context,
+)
 from .brewday.manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -91,6 +94,7 @@ KEGERATOR_CLIMATE_OFF_STATES = {"off", "unknown", "unavailable", "none", ""}
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BrewAssistant from a config entry."""
     await async_load_brewday_audit_log(hass)
+    await async_load_brewday_recipe_context(hass)
     await async_load_carbonation_runtime(hass)
     await async_load_gf30_preflight_runtime(hass)
     setup_gf30_supervised_target_adapter()
