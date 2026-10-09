@@ -72,10 +72,10 @@ def test_rcl_reconnect_requires_original_session_and_step_identity():
 def test_brewfather_reconnect_never_infers_session_from_recipe_or_step():
     check = F["_identity_mismatch"]
     cached = {"stage": "Mash", "step": "Rest", "brewfather_batch_identity": None}
-    assert check(cached, deepcopy(cached), "Brewfather Brewing") == "brewfather_batch_identity_unverified"
+    assert check(cached, deepcopy(cached), "Brewfather Brewing") == "brewfather_reconnect_requires_operator_ack"
     old = {**cached, "brewfather_batch_identity": "batch-10"}
-    assert check(old, {**old, "brewfather_batch_identity": "batch-11"}, "Brewfather Brewing") == "brewfather_batch_changed"
-    assert check(old, deepcopy(old), "Brewfather Brewing") is None
+    assert check(old, {**old, "brewfather_batch_identity": "batch-11"}, "Brewfather Brewing") == "brewfather_reconnect_requires_operator_ack"
+    assert check(old, deepcopy(old), "Brewfather Brewing") == "brewfather_reconnect_requires_operator_ack"
 
 
 def test_reconnect_latches_on_local_progress_or_changed_source():
@@ -103,6 +103,24 @@ def test_reconnect_latches_on_local_progress_or_changed_source():
     ns["_manual_fallback_has_advanced"] = lambda hass: False
     assert F["external_reconnect_allowed"](object(), rcl_snapshot(), "RCL Brewing") is False
 
+
+def test_rcl_session_swap_between_polls_also_latches():
+    store = {
+        "fallback_active": False,
+        "last_external_mode": "RCL Brewing",
+        "external_snapshots": {"RCL Brewing": {"snapshot": rcl_snapshot()}},
+    }
+    ns = F["external_reconnect_allowed"].__globals__
+    ns.update(
+        _store=lambda hass: store,
+        _block_reconnect=F["_block_reconnect"],
+        _schedule_context_save=lambda hass: None,
+    )
+    assert F["external_reconnect_allowed"](
+        object(), rcl_snapshot(session="session-B"), "RCL Brewing",
+    ) is False
+    assert store["resync_required"] is True
+    assert store["resync_reason"] == "rcl_session_changed_without_verified_stop"
 
 def test_blocked_reconnect_has_no_source_or_target_ownership():
     store = {"resync_required": True, "resync_reason": "rcl_session_identity_unverified"}
