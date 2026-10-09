@@ -107,18 +107,29 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     manual_heat = _float_state(hass, MANUAL_HEAT_SETPOINT)
     manual_pump = _float_state(hass, MANUAL_PUMP_SETPOINT)
 
+    fallback_recipe = bool(
+        active
+        and out.get("fallback_active")
+        and out.get("recipe_context_retained")
+        and out.get("manual_fallback_recipe_active")
+    )
     target_override = bool(
         active
+        and not fallback_recipe
         and _switch_on(hass, MANUAL_TARGET_OVERRIDE, False)
         and manual_target is not None
     )
-    heater_auto = _switch_on(hass, ALLOW_HEATER_CONTROL, False) if active else True
-    pump_auto = _switch_on(hass, ALLOW_PUMP_CONTROL, False) if active else True
+    # A retained-recipe fallback is automatic BA continuation of the current
+    # step, not an operator-setpoint takeover. Keep Learning/advice channels
+    # available while the external source is temporarily unavailable.
+    heater_auto = True if fallback_recipe else (_switch_on(hass, ALLOW_HEATER_CONTROL, False) if active else True)
+    pump_auto = True if fallback_recipe else (_switch_on(hass, ALLOW_PUMP_CONTROL, False) if active else True)
     blocked = str(out.get("orchestration_mode") or "") == "blocked"
 
     out.update(
         {
             "manual_brew_control_active": active,
+            "manual_fallback_recipe_active": fallback_recipe,
             "manual_target_override_active": target_override,
             "manual_heater_auto_allowed": heater_auto,
             "manual_pump_auto_allowed": pump_auto,
@@ -257,7 +268,13 @@ def _apply_manual_policy(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     action_needed = _remaining_action_needed(out)
     out["can_apply_target"] = action_needed
 
-    if not action_needed:
+    if fallback_recipe:
+        out["orchestration_mode"] = "direct-control" if action_needed else "manual-fallback"
+        out["control_reason"] = (
+            "Manual Brewing fallback: retained recipe/target context remains active; "
+            "BA Learning controls the current step while external source recovery is polled."
+        )
+    elif not action_needed:
         out["orchestration_mode"] = "manual-control"
         out["control_reason"] = (
             "Manual Brew operator setpoints match BrewZilla; BA is observing."
