@@ -89,6 +89,15 @@ card:
           const summary = clean(states['sensor.brewassistant_fermentation_air_target_summary']?.state);
           const smart = clean(states['sensor.brewassistant_smart_recommendation_summary']?.state);
           const pillStatus = clean(states['sensor.brewassistant_smart_pill_status_core']?.state) || '—';
+          // Read-only Pill source metadata; the existing control sensor policy is unchanged.
+          const activePillSource = states['sensor.brewassistant_pill_active_source']?.state;
+          const pillSourceLabel = activePillSource === 'ble' ? 'Bluetooth'
+            : activePillSource === 'cloud' ? 'Wi-Fi / Cloud Link' : 'source unverified';
+          const pillTemperatureSource = states['sensor.brewassistant_liquid_temperature']?.attributes?.source_entity || 'sensor.yellow_pill_temperature';
+          const pillGravitySource = states['sensor.brewassistant_gravity_last_updated']?.attributes?.source_entity || 'sensor.yellow_pill_gravity';
+          const pillObservedAt = id => states[id]?.last_updated || null;
+          const pillTempObserved = pillObservedAt(pillTemperatureSource);
+          const pillGravityObserved = pillObservedAt(pillGravitySource);
 
           const chamberAvg = n('sensor.brewassistant_fermentation_chamber_air_temperature_average');
 
@@ -200,7 +209,7 @@ card:
             <div style="line-height:1.25;min-width:0;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
-                  <div style="font-size:12px;font-weight:850;opacity:.66;">Pill · chamber · climate supervisor</div>
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">Pill: ${pillSourceLabel} · chamber · climate supervisor</div>
                   <div style="font-size:12px;font-weight:850;opacity:.66;">${chamberState} · ${mode} · ${demand}</div>
                 </div>
                 <div style="
@@ -234,8 +243,8 @@ card:
                 gap:7px;
               ">
                 ${metric('Chamber', fmt(chamberAvg, '°C'), 'air avg', 'mdi:fridge-thermometer', 'blue')}
-                ${metric('Pill', fmt(pillTemp, '°C'), pillStatus, 'mdi:thermometer-water', 'cyan')}
-                ${metric('SG', sgText, Number.isFinite(sg) ? 'gravity' : 'missing', 'mdi:water-percent', Number.isFinite(sg) ? 'green' : 'neutral')}
+                ${metric('Pill', fmt(pillTemp, '°C'), pillTempObserved ? pillStatus : 'source time unknown', 'mdi:thermometer-water', pillTempObserved ? 'cyan' : 'yellow')}
+                ${metric('SG', sgText, Number.isFinite(sg) ? (pillGravityObserved ? 'gravity' : 'time unknown') : 'missing', 'mdi:water-percent', Number.isFinite(sg) ? (pillGravityObserved ? 'green' : 'yellow') : 'neutral')}
                 ${metric('Target', fmt(airTarget, '°C'), 'air target', 'mdi:target', 'neutral')}
               </div>
 
