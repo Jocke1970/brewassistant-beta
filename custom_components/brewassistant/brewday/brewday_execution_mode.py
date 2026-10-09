@@ -13,6 +13,7 @@ Assistant restart without a trustworthy external source remains fail-closed.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -43,6 +44,9 @@ def _store(hass: HomeAssistant) -> dict[str, Any]:
             "fallback_reason": None,
             "fallback_started_at": None,
             "reconnect_expected": False,
+            "resync_required": False,
+            "resync_reason": None,
+            "resync_from_mode": None,
         },
     )
 
@@ -83,6 +87,9 @@ def remember_external_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], mo
         fallback_reason=None,
         fallback_started_at=None,
         reconnect_expected=False,
+        resync_required=False,
+        resync_reason=None,
+        resync_from_mode=None,
     )
 
 
@@ -96,7 +103,166 @@ def external_ended(hass: HomeAssistant, mode: str, *, reason: str) -> None:
         fallback_reason=reason,
         fallback_started_at=None,
         reconnect_expected=False,
+        resync_required=False,
+        resync_reason=None,
+        resync_from_mode=None,
     )
+
+
+def resync_required(hass: HomeAssistant) -> bool:
+    """Sticky mismatch latch: never automatically reclaim a changed recipe."""
+    return bool(_store(hass).get("resync_required"))
+
+
+def _manual_fallback_has_advanced(hass: HomeAssistant) -> bool:
+    from .manual_brewday_store import get_manual_brewday_session
+    from .manual_brewday_runtime import ManualRuntimeState
+
+    store = _store(hass)
+    initial = store.get("manual_fallback_initial_indices")
+    if not store.get("manual_fallback_plan_loaded") or not isinstance(initial, tuple):
+        return True  # No verifiable local position: fail closed.
+    session = get_manual_brewday_session(hass)
+    return (
+        (session.active_stage_index, session.active_step_index) != initial
+        or session.state == ManualRuntimeState.COMPLETED
+    )
+
+
+def _identity_mismatch(cached: dict[str, Any], live: dict[str, Any], mode: str) -> str | None:
+    if mode == RCL_BREWING:
+        for key in ("profile_session_id", "profile_id"):
+            previous = str(cached.get(key) or "").strip()
+            current = str(live.get(key) or "").strip()
+            if key == "profile_session_id" and (not previous or not current):
+                return "rcl_session_identity_unverified"
+            if previous and current != previous:
+                return "rcl_profile_or_session_changed"
+        # A matching session does not imply a matching *step*. Do not silently
+        # replace the locally retained recipe or re-enable RCL Assist writes.
+        old_id = str(cached.get("profile_step_id") or "").strip()
+        new_id = str(live.get("profile_step_id") or "").strip()
+        old_number = cached.get("profile_step_number")
+        new_number = live.get("profile_step_number")
+        if old_id and (not new_id or old_id != new_id):
+            return "rcl_step_changed_during_outage"
+        if old_number is not None and (new_number is None or str(old_number) != str(new_number)):
+            return "rcl_step_changed_during_outage"
+        if not old_id and old_number is None:
+            return "rcl_step_identity_unverified"
+    elif mode == BREWFATHER_BREWING:
+        # The legacy Brew Tracker snapshot usually has no stable batch ID.
+        # Match IDs only if BOTH observations genuinely provide one.
+        old = str(cached.get("brewfather_batch_identity") or "").strip()
+        new = str(live.get("brewfather_batch_identity") or "").strip()
+        if not old or not new:
+            return "brewfather_batch_identity_unverified"
+        if old != new:
+            return "brewfather_batch_changed"
+    if (
+        str(cached.get("stage") or "").strip() != str(live.get("stage") or "").strip()
+        or str(cached.get("raw_step_name") or cached.get("step") or "").strip()
+        != str(live.get("raw_step_name") or live.get("step") or "").strip()
+    ):
+        return "external_stage_or_step_changed"
+    return None
+
+
+def _block_reconnect(hass: HomeAssistant, mode: str, reason: str) -> None:
+    _store(hass).update(
+        resync_required=True, resync_reason=reason,
+        resync_from_mode=mode,
+        current_mode=MANUAL_BREWING, fallback_active=True,
+        fallback_from_mode=mode, reconnect_expected=False,
+    )
+
+
+def external_reconnect_allowed(
+    hass: HomeAssistant, live: dict[str, Any], mode: str,
+) -> bool:
+    """Check frozen external identity and local progress before source reclaim."""
+    store = _store(hass)
+    if store.get("resync_required"):
+        return False
+    if not (store.get("fallback_active") and store.get("fallback_from_mode") == mode):
+        return True
+    record = store.get("external_snapshots", {}).get(mode)
+    cached = record.get("snapshot") if isinstance(record, dict) else None
+    reason = (
+        "external_recipe_cache_missing" if not isinstance(cached, dict)
+        else "manual_plan_advanced_during_outage"
+        if _manual_fallback_has_advanced(hass)
+        else _identity_mismatch(cached, live, mode)
+    )
+    if reason:
+        _block_reconnect(hass, mode, reason)
+        return False
+    return True
+
+
+def reconnect_lockout_snapshot(
+    hass: HomeAssistant, live: dict[str, Any], mode: str,
+) -> dict[str, Any]:
+    """Present conflict without granting Manual OR external actuator authority."""
+    store = _store(hass)
+    reason = str(store.get("resync_reason") or "manual_reconciliation_required")
+    snapshot = dict(live)
+    snapshot.update(
+        source="None", status="resync_required", runtime_state="resync_required",
+        target_temperature=None, target_temperature_source=None,
+        direct_brewzilla_control_allowed=False, live_timer_active=False,
+        refresh_recommended=False, reconnect_expected=False,
+        resync_required=True, resync_reason=reason,
+        resync_from_mode=mode,
+        summary=f"RECONNECT BLOCKED · {mode} · {reason} · operator acknowledgement required",
+    )
+    result = decorate_snapshot(
+        hass, snapshot, MANUAL_BREWING, fallback_from=mode,
+        fallback_reason=reason, reconnect_expected=False,
+        recipe_context_retained=True,
+    )
+    result.update(resync_required=True, resync_reason=reason, resync_from_mode=mode)
+    return result
+
+
+def acknowledge_external_reconnect(
+    hass: HomeAssistant, *, mode: str, expected_step: str,
+    expected_session_id: str | None = None,
+) -> None:
+    """Explicit operator reconciliation against the CURRENT fresh external state.
+
+    Never trust a previously displayed session/step without live rechecking.
+    This only lifts the BA resync latch; it sends no hardware command.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+    from .brewday_operator_abort import brewday_operator_abort_active
+
+    store = _store(hass)
+    if brewday_operator_abort_active(hass):
+        raise HomeAssistantError("Global Brewday ABORT is active")
+    if not store.get("resync_required") or store.get("resync_from_mode") != mode:
+        raise HomeAssistantError("No matching external reconnection awaits acknowledgement")
+    if mode == RCL_BREWING:
+        from .rapt_profile_runtime import build_rapt_profile_runtime_snapshot
+        live = build_rapt_profile_runtime_snapshot(hass)
+        if not live or live.get("profile_active") is not True or live.get("profile_source_available") is not True:
+            raise HomeAssistantError("Fresh active RCL profile is required")
+        session = str(live.get("profile_session_id") or "").strip()
+        if not session or session != str(expected_session_id or "").strip():
+            raise HomeAssistantError("RCL session ID changed or was not confirmed")
+    elif mode == BREWFATHER_BREWING:
+        from . import brewday_runtime_core as core
+        if str(core.state(hass, core.BF_STATUS)).lower() != "active":
+            raise HomeAssistantError("Fresh active Brewfather status is required")
+        live = core.brewfather_snapshot(hass)
+        if live.get("source") != "Brewfather Brew Tracker" or live.get("snapshot_age_seconds", 999999) > 90:
+            raise HomeAssistantError("Fresh Brewfather snapshot is required")
+    else:
+        raise HomeAssistantError("Invalid external source mode")
+    current_step = str(live.get("raw_step_name") or live.get("step") or "").strip()
+    if not expected_step or current_step.casefold() != expected_step.strip().casefold():
+        raise HomeAssistantError("External step differs from the operator-confirmed step")
+    remember_external_snapshot(hass, live, mode)
 
 
 def _fresh_float(hass: HomeAssistant, entity_id: str) -> float | None:
@@ -187,6 +353,9 @@ def decorate_snapshot(
             "fallback_reason": fallback_reason,
             "recipe_context_retained": recipe_context_retained,
             "reconnect_expected": reconnect_expected,
+            "resync_required": bool(store.get("resync_required")),
+            "resync_reason": store.get("resync_reason"),
+            "resync_from_mode": store.get("resync_from_mode"),
         }
     )
     return out
@@ -228,10 +397,32 @@ def _prime_manual_fallback_plan(
         session.active_stage_index = max(0, min(stage_index, len(plan.stages) - 1))
         active_stage = plan.stages[session.active_stage_index]
         session.active_step_index = max(0, min(step_index, len(active_stage.steps) - 1))
-        session.state = ManualRuntimeState.RUNNING
+        previous_state = str(snapshot.get("runtime_state") or "").lower()
+        paused = (previous_state == "paused"
+                  or snapshot.get("paused_freeze") is True
+                  or snapshot.get("stage_paused") is True)
+        uncertain = previous_state not in {"live", "running", "paused"}
+        session.state = (
+            ManualRuntimeState.PAUSED if paused or uncertain
+            else ManualRuntimeState.RUNNING
+        )
         session.step_started_at = None
-        session.paused_at = None
+        session.paused_at = dt_util.utcnow() if paused or uncertain else None
         session.remaining_when_paused = None
+        step = session.active_step
+        raw_remaining = snapshot.get("current_step_remaining_seconds")
+        if raw_remaining is None:
+            raw_remaining = snapshot.get("time_remaining_seconds")
+        try:
+            remaining = int(raw_remaining) if raw_remaining is not None else None
+        except (TypeError, ValueError, OverflowError):
+            remaining = None
+        duration = step.duration_seconds if step else None
+        if duration is not None and remaining is not None and 0 <= remaining <= duration:
+            if paused or uncertain:
+                session.remaining_when_paused = remaining
+            else:
+                session.step_started_at = dt_util.utcnow() - timedelta(seconds=duration - remaining)
     finally:
         object.__setattr__(session, "_guard_enabled", guarded)
     return True
@@ -285,6 +476,12 @@ def build_manual_fallback_snapshot(
         str(cached.get("step") or ""),
     )
     if entering_fallback:
+        if manual_plan_loaded:
+            from .manual_brewday_store import get_manual_brewday_session
+            session = get_manual_brewday_session(hass)
+            store["manual_fallback_initial_indices"] = (
+                session.active_stage_index, session.active_step_index
+            )
         store["manual_fallback_initial_position"] = current_position
         store["manual_fallback_anchor_target"] = (
             device_target if device_target is not None else retained_target
@@ -310,7 +507,9 @@ def build_manual_fallback_snapshot(
             "source": "Manual Brewday",
             "status": "fallback",
             "source_status": "manual_fallback",
-            "runtime_state": "running",
+            "runtime_state": (
+                manual_snapshot.get("runtime_state") if manual_snapshot is not None else "paused"
+            ),
             "target_temperature": target,
             "target_temperature_source": (
                 "manual_retained_recipe_progression" if manual_plan_advanced
@@ -322,7 +521,10 @@ def build_manual_fallback_snapshot(
             "manual_fallback_plan_advanced": manual_plan_advanced,
             "actual_temperature": device_temp if device_temp is not None else cached.get("actual_temperature"),
             "live_timer_active": False,
-            "paused_freeze": False,
+            "paused_freeze": (
+                manual_snapshot is None
+                or manual_snapshot.get("runtime_state") in {"paused", "awaiting_confirm"}
+            ),
             "awaiting_snapshot": False,
             "refresh_recommended": True,
             "process_executor": (
@@ -334,7 +536,8 @@ def build_manual_fallback_snapshot(
             "brewassistant_role": "manual_fallback_with_retained_recipe",
             "manual_fallback_recipe_active": True,
             "manual_fallback_plan_loaded": manual_plan_loaded,
-            "direct_brewzilla_control_allowed": True,
+            "direct_brewzilla_control_allowed": False,
+            "fallback_actuation_blocked": True,
             "fallback_external_last_seen_at": record.get("seen_at"),
             "fallback_started_at": store.get("fallback_started_at"),
             "fallback_external_timeline_frozen": True,
