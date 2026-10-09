@@ -1,18 +1,8 @@
-"""Bridge RAPT profile intent into BrewAssistant's existing hot-side controller.
+"""RAPT BrewZilla profile bridge for BrewAssistant RCL Assist.
 
-A RAPT BrewZilla profile is a process/target source, analogous to Brewfather
-Brew Tracker. The profile runner advances process steps locally, while
-BrewAssistant owns target transport and heat/pump regulation. RAPT profile
-heat/pump values are therefore metadata only and are not required for BA control.
-
-The bridge also translates two RAPT-specific process conventions:
-
-* a manual ``Mash In`` step may already advertise the lower mash target after
-  Heatstrike has completed. BA keeps the previous strike target latched until
-  the operator presses Mash-In Started, then releases to the RAPT mash target;
-* a ``ChillOut``/cooling step may use 0 C only as a profile marker. BA must not
-  transport that marker as a BrewZilla hot-side target. It requests heater
-  safe-down and releases pump ownership to the cooling/operator flow instead.
+RAPT/BrewZilla owns recipe, step progression, timers and target. BrewAssistant
+observes process intent and optimizes heat utilization plus pump ON/OFF/%.
+Normal RCL Brewing never lets BA rewrite profile target or heater-switch state.
 """
 
 from __future__ import annotations
@@ -158,17 +148,10 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
     profile_name = str(out.get("profile_name") or "RAPT BrewZilla profile")
     gate_state = str(phase_authority._gate_store(hass).get("state") or "idle").lower()
 
-    strike_hold_target: float | None = None
-    strike_hold_active = False
+    strike_target_reference: float | None = None
     if _manual_mash_in(out) and gate_state not in _MASH_IN_STARTED_STATES:
-        strike_hold_target = _previous_profile_target(known)
-        if strike_hold_target is not None:
-            # RAPT has advanced from Heatstrike to its manual Mash In marker and
-            # now advertises the lower mash target. Keep the physical strike
-            # target until the brewer explicitly starts adding grain.
-            out["target_temperature"] = strike_hold_target
-            out["target_temperature_source"] = "rapt_previous_heatstrike_until_mash_in_started"
-            strike_hold_active = True
+        # Diagnostic only: RAPT/BZ remains the target owner.
+        strike_target_reference = _previous_profile_target(known)
 
     cooling_marker = stage == "Cooling"
     if cooling_marker:
@@ -185,24 +168,33 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
             "process_executor": "rapt_profile_step_runner",
             "process_source": "rapt_cloud_link",
             "directive_source": "rapt_profile",
-            "control_owner": "brewassistant",
+            "control_owner": "split_rapt_brewzilla_ba_assist",
             "transport": "rapt_cloud_link",
             "hardware_executor": "brewzilla",
-            "brewassistant_role": "hot_side_controller",
+            "brewassistant_role": "rcl_heat_pump_assist",
             "direct_brewzilla_control_allowed": not cooling_marker,
-            "rapt_profile_role": "process_and_target_source",
-            "target_intent_owner": "rapt_profile",
-            "heat_pump_owner": "brewassistant" if not cooling_marker else "cooling_handoff",
+            "rapt_profile_role": "recipe_step_target_timer_owner",
+            "target_intent_owner": "rapt_brewzilla_profile",
+            "target_transport_owner": "rapt_brewzilla",
+            "heater_switch_owner": "brewzilla_local_thermostat",
+            "heat_utilization_owner": "brewassistant_learning" if not cooling_marker else "cooling_handoff",
+            "pump_owner": "brewassistant_learning" if not cooling_marker else "cooling_handoff",
+            "heat_pump_owner": "brewassistant_learning" if not cooling_marker else "cooling_handoff",
+            "direct_target_control_allowed": False,
+            "direct_heater_control_allowed": False,
+            "direct_heat_utilization_control_allowed": not cooling_marker,
+            "direct_pump_control_allowed": not cooling_marker,
             "rapt_directive_target_temperature": raw_target,
             "rapt_effective_ba_target_temperature": _num(out.get("target_temperature")),
-            "rapt_mash_in_strike_hold_active": strike_hold_active,
-            "rapt_mash_in_strike_hold_target": strike_hold_target,
-            "rapt_target_control_suppressed": cooling_marker,
+            "rapt_mash_in_strike_hold_active": False,
+            "rapt_mash_in_strike_hold_target": strike_target_reference,
+            "rapt_mash_in_strike_target_reference": strike_target_reference,
+            "rapt_target_control_suppressed": True,
             "cooling_handoff_requested": cooling_marker,
             "summary": (
                 f"BA cooling handoff · RAPT profile · {profile_name} · {step}"
                 if cooling_marker
-                else f"BA control · RAPT profile · {profile_name} · {step}"
+                else f"RCL Assist · RAPT/BrewZilla target · BA heat/pump · {profile_name} · {step}"
             ),
         }
     )
