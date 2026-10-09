@@ -19,7 +19,7 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
-def test_brewfather_hot_side_is_observer_regardless_of_rapt_metadata() -> None:
+def test_brewfather_brewing_keeps_full_ba_control() -> None:
     result = module.resolve_hot_side_authority(
         "Brewfather Brew Tracker",
         rapt_contract_valid=True,
@@ -27,8 +27,9 @@ def test_brewfather_hot_side_is_observer_regardless_of_rapt_metadata() -> None:
         rapt_session_id="old-rapt-session",
         telemetry_fresh=True,
     )
-    assert result.mode == "brewfather_observer"
-    assert result.may_write_brewzilla is False
+    assert result.mode == "brewfather_observer"  # compatibility-only internal name
+    assert result.may_write_brewzilla is True
+    assert result.write_scope == "full"
 
 
 def test_rapt_requires_verified_active_fresh_session() -> None:
@@ -38,7 +39,9 @@ def test_rapt_requires_verified_active_fresh_session() -> None:
         rapt_session_id="session-1",
         telemetry_fresh=True,
     )
-    assert module.resolve_hot_side_authority("RAPT BrewZilla Profile", **valid).may_write_brewzilla is True
+    accepted = module.resolve_hot_side_authority("RAPT BrewZilla Profile", **valid)
+    assert accepted.may_write_brewzilla is True
+    assert accepted.write_scope == "rcl_assist"
     for key, replacement in (
         ("rapt_contract_valid", False),
         ("rapt_profile_active", False),
@@ -68,6 +71,7 @@ def test_manual_is_explicitly_deferred_without_changing_legacy_behavior() -> Non
     result = module.resolve_hot_side_authority("Manual Brewday")
     assert result.mode == "manual_legacy_unresolved"
     assert result.may_write_brewzilla is None
+    assert result.write_scope == "manual_legacy"
 
 
 def test_fermentation_metadata_cannot_implicitly_select_hot_side() -> None:
