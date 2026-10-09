@@ -153,6 +153,14 @@ def remember_external_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], mo
         return
     now = dt_util.utcnow().isoformat()
     store = _store(hass)
+    previous = store.get("external_snapshots", {}).get(mode, {})
+    old_snapshot = previous.get("snapshot") if isinstance(previous, dict) else None
+    stable_fields = ("profile_session_id", "profile_step_id", "profile_step_number",
+                     "brewfather_batch_identity", "stage", "raw_step_name",
+                     "target_temperature", "runtime_state")
+    material_change = not isinstance(old_snapshot, dict) or any(
+        old_snapshot.get(key) != snapshot.get(key) for key in stable_fields
+    )
     store.setdefault("external_snapshots", {})[mode] = {
         "snapshot": deepcopy(snapshot),
         "seen_at": now,
@@ -171,7 +179,8 @@ def remember_external_snapshot(hass: HomeAssistant, snapshot: dict[str, Any], mo
         resync_reason=None,
         resync_from_mode=None,
     )
-    _schedule_context_save(hass)
+    if material_change:
+        _schedule_context_save(hass)
 
 
 def external_ended(hass: HomeAssistant, mode: str, *, reason: str) -> None:
@@ -562,6 +571,7 @@ def build_manual_fallback_snapshot(
     )
     if entering_fallback:
         if manual_plan_loaded:
+            from .manual_brewday_runtime import ManualRuntimeState
             from .manual_brewday_store import get_manual_brewday_session
             session = get_manual_brewday_session(hass)
             store["manual_fallback_initial_indices"] = (
