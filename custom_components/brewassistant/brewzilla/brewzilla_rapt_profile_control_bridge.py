@@ -111,7 +111,7 @@ def _manual_mash_in(snapshot: dict[str, Any]) -> bool:
 
 
 def _previous_profile_target(known: dict[str, Any]) -> float | None:
-    """Return the previous RAPT step target, used as the strike latch fallback."""
+    """Return previous RAPT target as diagnostic strike-reference context."""
     steps = known.get("profile_steps")
     if not isinstance(steps, list):
         return None
@@ -140,7 +140,7 @@ def _previous_profile_target(known: dict[str, Any]) -> float | None:
 
 
 def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -> dict[str, Any]:
-    """Decorate active RAPT runtime as BA-controlled process intent."""
+    """Decorate active RAPT runtime with split RAPT-target / BA-assist ownership."""
     assert _ORIGINAL_ACTIVE_SNAPSHOT is not None
     out = _ORIGINAL_ACTIVE_SNAPSHOT(hass, state, known)
     raw_target = _num(out.get("target_temperature"))
@@ -202,11 +202,12 @@ def _active_snapshot(hass: HomeAssistant, state: State, known: dict[str, Any]) -
 
 
 def _rapt_cooling_handoff(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Convert an active RAPT cooling marker into hot-side heater safe-down.
+    """Convert an active RAPT cooling marker into the cold-side handoff intent.
 
-    Cooling Runtime owns the next physical phase. BrewAssistant therefore stops
-    hot-side heating and ignores the profile's marker target, while leaving the
-    BrewZilla wort-pump state/operator ownership alone for CFC/coil operation.
+    ChillOut target 0 C is never transported as a hot-side target. The legacy
+    orchestration snapshot may request heat safe-down, but final RCL Assist
+    authority suppresses normal heater-switch writes and permits only its
+    narrowed utilization/pump scope. Global ABORT remains separate.
     """
     source = str(snapshot.get("runtime_source") or "")
     stage = str(snapshot.get("runtime_stage") or "").lower()
@@ -291,7 +292,7 @@ def _rapt_pre_mash_in(hass: HomeAssistant) -> bool:
 
 
 def _phase_authority_active(hass: HomeAssistant, snapshot: dict[str, Any]) -> bool:
-    """Extend BT phase authority to RAPT profile-driven BA regulation."""
+    """Reuse physical phase guards for RCL Assist heat/pump decisions."""
     assert _ORIGINAL_PHASE_AUTHORITY_ACTIVE is not None
     if _ORIGINAL_PHASE_AUTHORITY_ACTIVE(hass, snapshot):
         return True
@@ -324,7 +325,7 @@ def _authority_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _request_source(snapshot: dict[str, Any]) -> str:
-    """Use the same supervised control policy for RAPT intent as Brew Tracker."""
+    """Reuse the existing policy namespace; RCL Assist narrows it downstream."""
     assert _ORIGINAL_REQUEST_SOURCE is not None
     if snapshot.get("runtime_source") == RAPT_PROFILE_SOURCE:
         return supervised.SOURCE_BREW_TRACKER
