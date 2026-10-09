@@ -490,7 +490,8 @@ def _prime_manual_fallback_plan(
         active_stage = plan.stages[session.active_stage_index]
         session.active_step_index = max(0, min(step_index, len(active_stage.steps) - 1))
         previous_state = str(snapshot.get("runtime_state") or "").lower()
-        if _store(hass).get("fallback_restored_after_restart"):
+        restored_from_disk = bool(_store(hass).get("fallback_restored_after_restart"))
+        if restored_from_disk:
             previous_state = "paused"  # never revive a timer on a stale restored snapshot
         paused = (previous_state == "paused"
                   or snapshot.get("paused_freeze") is True
@@ -504,8 +505,10 @@ def _prime_manual_fallback_plan(
         session.paused_at = dt_util.utcnow() if paused or uncertain else None
         session.remaining_when_paused = None
         step = session.active_step
-        raw_remaining = snapshot.get("current_step_remaining_seconds")
-        if raw_remaining is None:
+        raw_remaining = (
+            None if restored_from_disk else snapshot.get("current_step_remaining_seconds")
+        )
+        if raw_remaining is None and not restored_from_disk:
             raw_remaining = snapshot.get("time_remaining_seconds")
         try:
             remaining = int(raw_remaining) if raw_remaining is not None else None
@@ -562,6 +565,22 @@ def build_manual_fallback_snapshot(
 
         manual_snapshot = build_manual_engine_snapshot(hass)
         cached.update(manual_snapshot)
+        from .manual_brewday_store import get_manual_brewday_session
+        session = get_manual_brewday_session(hass)
+        active_step = session.active_step
+        fallback_timer_uncertain = bool(
+            active_step and active_step.duration_seconds is not None
+            and session.step_started_at is None
+            and session.remaining_when_paused is None
+        )
+        if fallback_timer_uncertain:
+            cached.update(
+                time_remaining_seconds=None, time_remaining_minutes=None,
+                current_step_remaining_seconds=None,
+                current_step_remaining_minutes=None,
+            )
+    else:
+        fallback_timer_uncertain = True
 
     device_target = _fresh_float(hass, BREWZILLA_TARGET)
     retained_target = cached.get("target_temperature")
@@ -590,7 +609,17 @@ def build_manual_fallback_snapshot(
                             session.state = ManualRuntimeState.PAUSED
                             session.step_started_at = None
                             session.paused_at = dt_util.utcnow()
-                            session.remaining_when_paused = None
+                            duration = (
+                                session.active_step.duration_seconds
+                                if session.active_step else None
+                            )
+                            remaining = restored.get("remaining")
+                            if (str(restored.get("state")) == "paused"
+                                    and isinstance(remaining, int) and not isinstance(remaining, bool)
+                                    and duration is not None and 0 <= remaining <= duration):
+                                session.remaining_when_paused = remaining
+                            else:
+                                session.remaining_when_paused = None
                         finally:
                             object.__setattr__(session, "_guard_enabled", guarded)
                 except (KeyError, TypeError, ValueError, OverflowError):
@@ -649,6 +678,7 @@ def build_manual_fallback_snapshot(
             "manual_fallback_plan_loaded": manual_plan_loaded,
             "direct_brewzilla_control_allowed": False,
             "fallback_actuation_blocked": True,
+            "fallback_timer_uncertain": fallback_timer_uncertain,
             "fallback_external_last_seen_at": record.get("seen_at"),
             "fallback_started_at": store.get("fallback_started_at"),
             "fallback_external_timeline_frozen": True,
