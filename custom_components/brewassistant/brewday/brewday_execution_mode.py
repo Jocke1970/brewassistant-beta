@@ -624,6 +624,23 @@ def build_manual_fallback_snapshot(
                             object.__setattr__(session, "_guard_enabled", guarded)
                 except (KeyError, TypeError, ValueError, OverflowError):
                     pass
+        if manual_plan_loaded and store.get("fallback_restored_after_restart"):
+            # A stored ManualPlan step may differ from the cached external step;
+            # the operator-facing snapshot must reflect the RESTORED position.
+            from .manual_brewday_adapter import build_manual_engine_snapshot
+            from .manual_brewday_store import get_manual_brewday_session
+            manual_snapshot = build_manual_engine_snapshot(hass)
+            cached.update(manual_snapshot)
+            session = get_manual_brewday_session(hass)
+            fallback_timer_uncertain = bool(
+                session.active_step and session.active_step.duration_seconds is not None
+                and session.step_started_at is None and session.remaining_when_paused is None
+            )
+            if fallback_timer_uncertain:
+                cached.update(
+                    time_remaining_seconds=None, time_remaining_minutes=None,
+                    current_step_remaining_seconds=None, current_step_remaining_minutes=None,
+                )
         store["manual_fallback_initial_position"] = current_position
         store["manual_fallback_anchor_target"] = (
             device_target if device_target is not None else retained_target
