@@ -119,14 +119,15 @@ def test_bt_is_brewing_data_bf_fermentation_is_not_bt():
     assert not FN["_bt_entity"]("sensor.brewfather_recipe_name")
 
 
-def test_rapt_source_latch_includes_loss_stop_abort_and_unverified_on_without_bt():
+def test_rapt_source_latch_includes_loss_abort_and_unverified_on_but_releases_confirmed_stop():
     _configure()
     for flags in ({"active": True}, {"active": True, "unverified": True},
                   {"active": True, "restored": True}, {"active": False, "lost": True},
-                  {"active": False, "stopped": True}, {"active": False, "abort": True}):
+                  {"active": False, "abort": True}):
         hass = FakeHass(**flags)
         assert FN["rapt_owns_brewing"](hass)
         assert not any(FN["_bt_entity"](entity) for entity in hass.states.calls)
+    assert not FN["rapt_owns_brewing"](FakeHass(active=False, stopped=True))
     assert not FN["rapt_owns_brewing"](FakeHass(active=False))
 
 
@@ -164,8 +165,7 @@ def test_initial_unverified_on_profile_holds_rapt_without_bt_fallback():
 def test_bt_updates_cannot_change_rapt_process_source_snapshot_or_learning():
     _configure()
     for flags in ({"active": True}, {"active": True, "unverified": True},
-                  {"active": False, "lost": True}, {"active": False, "stopped": True},
-                  {"active": False, "abort": True}):
+                  {"active": False, "lost": True}, {"active": False, "abort": True}):
         hass = FakeHass(**flags)
         for bt_status in ("planning", "brewing", "paused", "fermenting", "unknown"):
             hass.bt_status = bt_status
