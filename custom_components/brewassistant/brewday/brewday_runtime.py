@@ -93,9 +93,18 @@ def _operator_aborted_snapshot(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def source(hass: HomeAssistant) -> str:
-    from .rapt_profile_runtime import RAPT_PROFILE_SOURCE, rapt_profile_runtime_active
+    from .rapt_profile_runtime import (
+        RAPT_PROFILE_SOURCE,
+        rapt_profile_runtime_active,
+        rapt_profile_runtime_claims_source,
+    )
     if rapt_profile_runtime_active(hass):
         return RAPT_PROFILE_SOURCE
+    if (
+        rapt_profile_runtime_claims_source(hass)
+        and execution_mode.has_external_snapshot(hass, execution_mode.RCL_BREWING)
+    ):
+        return "Manual Brewday"
     selected = core_source(hass)
     if selected == "Brewfather Brew Tracker":
         return selected
