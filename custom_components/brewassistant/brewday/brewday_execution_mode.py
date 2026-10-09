@@ -4,8 +4,10 @@ Execution mode may change without changing batch identity. External sources are
 cached while healthy so a transient RCL/BrewTracker outage can fall back to
 Manual Brewing without discarding the recipe context.
 
-The cache is runtime-local in this first implementation. A full Home Assistant
-restart without a trustworthy external source remains fail-closed.
+The cache is runtime-local in this first implementation. While HA remains
+running, retained external context is converted into the existing ManualPlan
+engine so the operator can continue the same batch locally. A full Home
+Assistant restart without a trustworthy external source remains fail-closed.
 """
 
 from __future__ import annotations
@@ -190,6 +192,51 @@ def decorate_snapshot(
     return out
 
 
+def _prime_manual_fallback_plan(
+    hass: HomeAssistant,
+    snapshot: dict[str, Any],
+) -> bool:
+    """Load retained external recipe context into the existing Manual engine.
+
+    This is an internal source-loss handoff, not an operator takeover bypass.
+    It is only called after Brewday has already classified the external source
+    as unavailable. The external timeline itself remains frozen in the cache;
+    Manual Brewday receives a conservative operator-led copy.
+    """
+    from .brewday_recipe_fallback import (
+        active_position_from_snapshot,
+        plan_from_external_snapshot,
+    )
+    from .manual_brewday_runtime import ManualRuntimeState
+    from .manual_brewday_store import get_manual_brewday_session
+
+    plan = plan_from_external_snapshot(snapshot)
+    if plan is None or not plan.stages:
+        return False
+
+    stage_index, step_index = active_position_from_snapshot(snapshot, plan)
+    session = get_manual_brewday_session(hass)
+
+    # GuardedManualRuntimeSession protects ordinary operator takeover while an
+    # external source owns Brewday. Source-loss fallback is a trusted internal
+    # transition, so update the already-existing session atomically without
+    # calling prepare/start/next.
+    guarded = bool(getattr(session, "_guard_enabled", False))
+    object.__setattr__(session, "_guard_enabled", False)
+    try:
+        session.plan = plan
+        session.active_stage_index = max(0, min(stage_index, len(plan.stages) - 1))
+        active_stage = plan.stages[session.active_stage_index]
+        session.active_step_index = max(0, min(step_index, len(active_stage.steps) - 1))
+        session.state = ManualRuntimeState.RUNNING
+        session.step_started_at = None
+        session.paused_at = None
+        session.remaining_when_paused = None
+    finally:
+        object.__setattr__(session, "_guard_enabled", guarded)
+    return True
+
+
 def build_manual_fallback_snapshot(
     hass: HomeAssistant,
     *,
@@ -202,13 +249,18 @@ def build_manual_fallback_snapshot(
         return None
 
     cached = deepcopy(record["snapshot"])
-    device_target = _fresh_float(hass, BREWZILLA_TARGET)
-    cached_target = cached.get("target_temperature")
-    target = device_target if device_target is not None else cached_target
-    device_temp = _fresh_float(hass, BREWZILLA_TEMP)
-
-    if not store.get("fallback_active") or store.get("fallback_from_mode") != from_mode:
+    entering_fallback = (
+        not store.get("fallback_active")
+        or store.get("fallback_from_mode") != from_mode
+    )
+    if entering_fallback:
         store["fallback_started_at"] = dt_util.utcnow().isoformat()
+
+    manual_plan_loaded = bool(
+        _prime_manual_fallback_plan(hass, cached)
+        if entering_fallback
+        else store.get("manual_fallback_plan_loaded")
+    )
     store.update(
         current_mode=MANUAL_BREWING,
         last_external_mode=from_mode,
@@ -216,7 +268,20 @@ def build_manual_fallback_snapshot(
         fallback_from_mode=from_mode,
         fallback_reason=reason,
         reconnect_expected=True,
+        manual_fallback_plan_loaded=manual_plan_loaded,
     )
+
+    manual_snapshot: dict[str, Any] | None = None
+    if manual_plan_loaded:
+        from .manual_brewday_adapter import build_manual_engine_snapshot
+
+        manual_snapshot = build_manual_engine_snapshot(hass)
+        cached.update(manual_snapshot)
+
+    device_target = _fresh_float(hass, BREWZILLA_TARGET)
+    retained_target = cached.get("target_temperature")
+    target = device_target if device_target is not None else retained_target
+    device_temp = _fresh_float(hass, BREWZILLA_TEMP)
 
     cached.update(
         {
@@ -227,6 +292,7 @@ def build_manual_fallback_snapshot(
             "target_temperature": target,
             "target_temperature_source": (
                 "fresh_brewzilla_readback" if device_target is not None
+                else "manual_retained_recipe" if manual_plan_loaded
                 else "cached_external_recipe"
             ),
             "actual_temperature": device_temp if device_temp is not None else cached.get("actual_temperature"),
@@ -234,15 +300,25 @@ def build_manual_fallback_snapshot(
             "paused_freeze": False,
             "awaiting_snapshot": False,
             "refresh_recommended": True,
-            "process_executor": "manual_fallback_cached_recipe",
+            "process_executor": (
+                "manual_fallback_retained_plan"
+                if manual_plan_loaded
+                else "manual_fallback_cached_recipe"
+            ),
             "control_owner": "brewassistant_manual_fallback",
             "brewassistant_role": "manual_fallback_with_retained_recipe",
             "manual_fallback_recipe_active": True,
+            "manual_fallback_plan_loaded": manual_plan_loaded,
             "direct_brewzilla_control_allowed": True,
             "fallback_external_last_seen_at": record.get("seen_at"),
             "fallback_started_at": store.get("fallback_started_at"),
-            "fallback_timeline_frozen": True,
-            "fallback_progression_policy": "freeze_external_timeline_until_source_recovers",
+            "fallback_external_timeline_frozen": True,
+            "fallback_timeline_frozen": not manual_plan_loaded,
+            "fallback_progression_policy": (
+                "manual_plan_operator_progression_until_source_recovers"
+                if manual_plan_loaded
+                else "freeze_external_timeline_until_source_recovers"
+            ),
             "summary": (
                 f"Manual Brewing fallback · {from_mode} unavailable · "
                 f"{cached.get('stage') or 'Unknown'} · {cached.get('step') or 'Unknown'}"
