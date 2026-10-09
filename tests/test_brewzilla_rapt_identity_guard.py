@@ -63,7 +63,7 @@ def test_missing_contract_and_brewfather_not_reinterpreted_as_rapt():
     assert FUNCS["_identity_error"]({"source": "Brewfather Brew Tracker"}, None) is None
 
 
-def test_stale_rapt_abort_does_not_write_into_brewfather_observer():
+def test_stale_rapt_safe_off_exception_does_not_leak_into_brewfather_brewing():
     scope = FUNCS["_safe_off_allowed"].__globals__
     scope["_PREVIOUS_SAFE_OFF"] = lambda decision, context: True
     assert not FUNCS["_safe_off_allowed"](None, {"runtime": {"source": "Brewfather Brew Tracker"}})
@@ -79,4 +79,6 @@ def test_guard_installed_last_and_uses_actual_source_gate():
     assert "authority_runtime._live_authority = _live_authority" in guard
     assert "authority_runtime._safe_off_allowed = _safe_off_allowed" in guard
     assert "authority, context = _live_authority(hass)" in source
-    assert "return _sparge_write_allowed(hass" in source
+    assert "def _rcl_assist_write_allowed" in source
+    assert "return _sparge_write_allowed(" in source
+    assert 'RCL_ASSIST_SCOPE = "rcl_assist"' in source
