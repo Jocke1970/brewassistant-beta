@@ -9,12 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 MODE = ROOT / "custom_components/brewassistant/brewday/brewday_execution_mode.py"
 RECIPE_FALLBACK = ROOT / "custom_components/brewassistant/brewday/brewday_recipe_fallback.py"
 RUNTIME = ROOT / "custom_components/brewassistant/brewday/brewday_runtime.py"
+MANUAL_STORE = ROOT / "custom_components/brewassistant/brewday/manual_brewday_store.py"
 SENSOR = ROOT / "custom_components/brewassistant/brewday/brewday_runtime_sensor.py"
 ABORT = ROOT / "custom_components/brewassistant/brewzilla/brewzilla_emergency_abort.py"
 
 
 def test_contract_files_parse():
-    for path in (MODE, RECIPE_FALLBACK, RUNTIME, SENSOR, ABORT):
+    for path in (MODE, RECIPE_FALLBACK, RUNTIME, MANUAL_STORE, SENSOR, ABORT):
         ast.parse(path.read_text(encoding="utf-8"))
 
 
@@ -50,6 +51,17 @@ def test_recipe_identity_is_retained_across_manual_fallback():
     ):
         assert token in recipe
 
+
+
+def test_rcl_manual_fallback_can_progress_but_live_rapt_reclaims_guard():
+    source = MANUAL_STORE.read_text(encoding="utf-8")
+    for token in (
+        "execution_mode.fallback_active(hass)",
+        "execution_mode.last_external_mode(hass) == execution_mode.RCL_BREWING",
+        "not rapt_profile_runtime_active(hass)",
+        "A live RAPT profile always wins immediately",
+    ):
+        assert token in source
 
 def test_runtime_exposes_mode_and_reconnect_contract():
     runtime = RUNTIME.read_text(encoding="utf-8")
