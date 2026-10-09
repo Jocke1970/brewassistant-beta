@@ -1,9 +1,14 @@
-"""Source-scoped BrewZilla actuator boundary for BA hot-side operation.
+"""Source-scoped BrewZilla actuator boundary for three-mode Brewday.
 
-Brewfather brewing is observer-only. Active RAPT process intent authorizes BA
-control, constrained by Sparge phase and supervised operator confirmation.
-A blocked command never proves outputs are physically OFF. Manual is unchanged
-pending a separate audit; retain draft status until end-to-end hardware tests.
+Brewfather Brewing keeps the existing full BA hot-side path. RCL Brewing uses
+the narrower RCL Assist scope: RAPT/BrewZilla owns recipe/step/timer/target and
+normal heater switching, while BA Learning may write heat utilization and pump
+ON/OFF/utilization. Manual Brewing keeps its existing policy.
+
+Observe-only can revoke every ordinary BA write. Global operator emergency
+ABORT is installed outside this normal authority path and remains source
+independent. A blocked or acknowledged command never proves physical outputs
+are OFF.
 """
 
 from __future__ import annotations
@@ -296,10 +301,11 @@ async def _policy_execute(hass, action):
 
 
 async def _learning_apply(hass):
-    """Disable direct Learning APPLY in BF observer and RAPT supervised mode.
+    """Keep the legacy Learning APPLY button out of external-source control.
 
-    Learning suggestions must be converted to a supervised source-bound plan
-    before RAPT may execute them. Preserve existing Manual-only behavior.
+    Brewfather and RCL Brewing consume Learning through their source-bound
+    orchestration path; the standalone APPLY button remains Manual-only so it
+    cannot bypass RCL Assist scope or source ownership.
     """
     assert _PREVIOUS_LEARNING_APPLY is not None
     authority, _ = _live_authority(hass)
