@@ -222,8 +222,8 @@ def build_manual_fallback_snapshot(
         {
             "source": "Manual Brewday",
             "status": "fallback",
-            "source_status": "unavailable",
-            "runtime_state": "paused",
+            "source_status": "manual_fallback",
+            "runtime_state": "running",
             "target_temperature": target,
             "target_temperature_source": (
                 "fresh_brewzilla_readback" if device_target is not None
@@ -231,12 +231,13 @@ def build_manual_fallback_snapshot(
             ),
             "actual_temperature": device_temp if device_temp is not None else cached.get("actual_temperature"),
             "live_timer_active": False,
-            "paused_freeze": True,
-            "awaiting_snapshot": True,
+            "paused_freeze": False,
+            "awaiting_snapshot": False,
             "refresh_recommended": True,
             "process_executor": "manual_fallback_cached_recipe",
             "control_owner": "brewassistant_manual_fallback",
             "brewassistant_role": "manual_fallback_with_retained_recipe",
+            "manual_fallback_recipe_active": True,
             "direct_brewzilla_control_allowed": True,
             "fallback_external_last_seen_at": record.get("seen_at"),
             "fallback_started_at": store.get("fallback_started_at"),
