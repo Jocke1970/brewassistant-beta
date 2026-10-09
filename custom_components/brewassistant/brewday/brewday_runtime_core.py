@@ -577,6 +577,13 @@ def brewfather_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "current_step_description": step_desc(cur_step),
         "next_step_description": nxt_desc,
         "timeline": timeline(hass, resolved_step_index),
+        # A recipe name is NOT a stable session identity. Missing ID makes
+        # reconnect fail-closed until the operator acknowledges this batch.
+        "brewfather_batch_identity": (
+            clean(live_attr(hass, "brew_tracker_batch_id"))
+            or clean(live_attr(hass, "batch_id"))
+            or clean(live_attr(hass, "batchId"))
+        ),
     }
 
 
