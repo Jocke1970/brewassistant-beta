@@ -59,28 +59,31 @@ async def run() -> None:
             "ABORT must be wired through the emergency lane before button imports"
         )
         result = await base.async_abort_brewzilla(hass)
-        assert brewday_operator_abort_active(hass), "ABORT latch must precede output attempts"
+        assert brewday_operator_abort_active(hass), "ABORT latch must be persisted after output attempts"
         assert observe.observation_required(hass), "ABORT may not turn BA automation back on"
-        assert calls == [
-            ("rapt_cloud_link", "end_brewzilla_profile", {"brewzilla_id": "water-test-device"}),
+        local = [
             ("switch", "turn_off", {"entity_id": base.BREWZILLA_HEATER_SWITCH}),
             ("switch", "turn_off", {"entity_id": base.BREWZILLA_PUMP_SWITCH}),
             ("number", "set_value", {"entity_id": base.BREWZILLA_HEAT_UTILIZATION, "value": 0}),
             ("number", "set_value", {"entity_id": base.BREWZILLA_PUMP_UTILIZATION, "value": 0}),
-            ("switch", "turn_off", {"entity_id": base.BREWZILLA_MAIN_SWITCH}),
-        ], calls
+        ]
+        assert calls == local + [
+            ("rapt_cloud_link", "end_brewzilla_profile", {"brewzilla_id": "water-test-device"}),
+        ] + local, calls
+        assert not any(payload.get("entity_id") == base.BREWZILLA_MAIN_SWITCH for _, _, payload in calls)
+        assert result["main_power_command"] == "preserve_current_state_for_telemetry"
         assert result["readback_safe_after_abort"] is False
         assert result["outputs_physically_off_verified"] is False
         assert result["status"] == "emergency_unverified_check_device"
-        print("PASS ABORT read-only + RAPT: STOP, heater/pump OFF, both zero and main OFF attempted")
+        print("PASS ABORT read-only + RAPT: OFF/0, STOP, OFF/0; controller power retained")
 
         # An explicit repeat is not blocked by the existing ABORT latch.
         previous_count = len(calls)
         fail_pump = True
         second = await base.async_abort_brewzilla(hass)
-        assert len(calls) == previous_count + 6
+        assert len(calls) == previous_count + 9
         assert second["emergency_commands"]["pump_off"] == "failed"
-        assert second["emergency_commands"]["main_power_off"] == "requested_not_physically_verified"
+        assert second["main_power_command"] == "preserve_current_state_for_telemetry"
         assert second["outputs_physically_off_verified"] is False
         assert brewday_operator_abort_active(hass)
         print("PASS repeated ABORT independent of source/latch; one failed OFF does not skip remaining commands")
@@ -94,7 +97,7 @@ async def run() -> None:
         before = len(calls)
         fail_pump = False
         no_owner = await base.async_abort_brewzilla(hass)
-        assert len(calls) == before + 5
+        assert len(calls) == before + 8
         assert no_owner["emergency_commands"]["rapt_profile_end"] == "no_active_profile_verified"
         assert no_owner["outputs_physically_off_verified"] is False
         print("PASS ABORT without verified profile still requests all local outputs OFF/zero")
