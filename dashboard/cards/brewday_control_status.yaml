@@ -139,9 +139,9 @@ cards:
         const status = states['sensor.brewassistant_brewday_start_status']?.state || 'waiting';
         return ({
           waiting: 'WAITING FOR SYSTEM',
-          ready: 'START BREWING',
+          ready: 'ENABLE BA ASSIST',
           starting: 'STARTING / VERIFYING',
-          running: 'BREWING ACTIVE · GO',
+          running: 'BA ASSIST ACTIVE · GO',
           blocked: 'START BLOCKED',
           aborted: 'ABORT ACTIVE – START BLOCKED',
         })[status] || 'CHECK SYSTEM';
@@ -161,8 +161,8 @@ cards:
         const status = s?.state || 'waiting';
         const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const statusText = ({
-          ready: 'GO · confirm START after physical inspection',
-          running: 'Verified RCL session · BA Assist running',
+          ready: 'RAPT profile is already running. Tap to enable BA authorized heat/pump assistance after physical inspection.',
+          running: 'BA assist active. RAPT still owns recipe, temperature target and profile execution.',
           starting: 'START verification in progress – no double press',
           waiting: 'Waiting for passing checks',
           blocked: 'START blocked – restore READ-ONLY',
@@ -213,7 +213,7 @@ cards:
           };
         ]]]
       confirmation:
-        text: "START – inspect actual water level, pump path and BrewZilla. Only attaches BA RCL Assist to the displayed already ACTIVE RAPT session. Backend rechecks step and session. Continue?"
+        text: "ENABLE BA ASSIST – RAPT profile is ALREADY running. Physically verify water level, pump path and BrewZilla. BA may then assist heat utilization and pump via RCL on this verified session; RAPT retains recipe and temperature target. Continue?"
     extra_styles: |
       @keyframes ba-start-yellow {
         0%, 100% { box-shadow: 0 0 0 1px rgba(216,150,17,.24); }
@@ -269,10 +269,10 @@ cards:
             ]]]
   - type: custom:button-card
     entity: switch.brewassistant_brewzilla_observe_only
-    name: "BA READ-ONLY"
+    name: "BA READ-ONLY · SAFETY"
     icon: mdi:shield-eye-outline
     show_label: true
-    label: "Enable BA read-only. Does not stop a running RAPT profile."
+    label: "Do NOT turn off manually. Tap the GREEN ENABLE BA ASSIST above once ready; backend releases read-only only after confirmed START."
     tap_action:
       action: |
         [[[

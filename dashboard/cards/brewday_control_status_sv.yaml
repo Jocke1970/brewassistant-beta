@@ -139,9 +139,9 @@ cards:
         const status = states['sensor.brewassistant_brewday_start_status']?.state || 'waiting';
         return ({
           waiting: 'VÄNTAR PÅ SYSTEM',
-          ready: 'STARTA BRYGGNING',
+          ready: 'AKTIVERA BA-ASSISTANS',
           starting: 'STARTAR / VERIFIERAR',
-          running: 'BRYGGNING PÅGÅR · GO',
+          running: 'BA-ASSISTANS AKTIV · GO',
           blocked: 'START SPÄRRAD',
           aborted: 'ABORT AKTIV – START SPÄRRAD',
         })[status] || 'KONTROLLERA SYSTEM';
@@ -161,8 +161,8 @@ cards:
         const status = s?.state || 'waiting';
         const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const statusText = ({
-          ready: 'GO · bekräfta START efter fysisk kontroll',
-          running: 'RCL-session verifierad · BA Assist pågår',
+          ready: 'RAPT-profilen kör redan. Tryck här för att låta BA ta sin godkända heat/pump-assistans efter fysisk kontroll.',
+          running: 'BA:s assistans aktiv. RAPT äger fortfarande recept, target och profilkörning.',
           starting: 'START verifieras – inga dubbla tryck',
           waiting: 'Väntar på gröna villkor',
           blocked: 'START spärrad – återställ READ-ONLY',
@@ -213,7 +213,7 @@ cards:
           };
         ]]]
       confirmation:
-        text: "START – verifiera fysiskt: vattennivå, cirkulation och BrewZilla. Startar endast BA RCL Assist för den redan AKTIVA RAPT-sessionen som visas. Backend kontrollerar session och steg igen. Fortsätta?"
+        text: "AKTIVERA BA-ASSISTANS – RAPT-profilen kör REDAN. Kontrollera vätskenivå, pumpväg och BrewZilla fysiskt. Bekräftelse låter BA assistera heat-utilization och pump via RCL i samma verifierade session. RAPT fortsätter äga recept och temperaturmål. Fortsätta?"
     extra_styles: |
       @keyframes ba-start-yellow {
         0%, 100% { box-shadow: 0 0 0 1px rgba(216,150,17,.24); }
@@ -269,10 +269,10 @@ cards:
             ]]]
   - type: custom:button-card
     entity: switch.brewassistant_brewzilla_observe_only
-    name: "BA READ-ONLY"
+    name: "BA READ-ONLY · SKYDD"
     icon: mdi:shield-eye-outline
     show_label: true
-    label: "Slår på BA:s read-only. Påverkar inte en körande RAPT-profil."
+    label: "Slå INTE av manuellt. Tryck på den GRÖNA AKTIVERA BA-ASSISTANS ovan när allt är redo; backend släpper read-only efter godkänd START."
     tap_action:
       action: |
         [[[

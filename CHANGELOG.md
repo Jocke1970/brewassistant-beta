@@ -1,3 +1,10 @@
+## DEV PREVIEW — 0b8 Manual entry + RCL BA Assist operator clarity (2026-10-10)
+
+- Grön START i RCL-läget heter nu **AKTIVERA BA-ASSISTANS** / ENABLE BA ASSIST, eftersom RAPT-profilen redan kör. Bekräftelsen och BA READ-ONLY-kortet förklarar korrekt säker handoff i stället för direkt READ-ONLY OFF.
+- Manual Brewday-premiumkortets första **Förbered bryggdag** blir synligt när Brewday är `idle`, källa `None`, manuell session `idle` och bryggdagsmodulen visas. Den befintliga Manual-processpanelen förblir source-gated och visas först efter förberedelse.
+- Ingen ny backend-behörighet eller fysiska kommandon: `manual_brewday_prepare` är sedan tidigare guardad mot extern källa. Fysisk Manual START saknas fortfarande; se issue #258.
+- Full EN/SV YAML, UX-kontraktstester och `docs/brewday-start-manual-entry-ux-0b8_sv.md`. Beta/main oförändrade.
+
 ## DEV PREVIEW — 0b8 RAPT profile temperature + honest step time (2026-10-10)
 
 - EN/SV RAPT Profile Runtime: **BZ aktuell** från färsk `sensor.brewzilla_temperature` separat från RAPT-profilmål/BA-runtime-mål. Ogiltig 0 °C under värmesteg visas som `—` och källa varnas. Aldrig falskt `0/0` steg.
