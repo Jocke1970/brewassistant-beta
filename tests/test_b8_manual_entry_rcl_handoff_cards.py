@@ -40,3 +40,35 @@ def test_rcl_start_is_labeled_as_assist_only_not_profile_start():
         assert "ALREADY running" in text or "kör REDAN" in text
         assert "service: switch.turn_off" not in text
         assert "entity_id: button.brewassistant_abort_brewday" in text
+
+
+def test_brewday_manual_cards_are_valid_yaml_with_two_conditional_cards():
+    """Catch the former 'No type provided' dashboard regression at parse time."""
+    import yaml
+
+    for file in ("brewassistant_manual_brewday_sv.yaml", "brewassistant_manual_brewday.yaml"):
+        doc = yaml.safe_load((CARDS / file).read_text(encoding="utf-8"))
+        assert doc["type"] == "vertical-stack"
+        assert isinstance(doc.get("cards"), list)
+        assert len(doc["cards"]) == 2
+        entry, active = doc["cards"]
+        assert entry["type"] == "conditional"
+        assert active["type"] == "conditional"
+        assert entry["card"]["type"] == "custom:button-card"
+        assert active["card"]["type"] == "vertical-stack"
+        assert any(
+            cond.get("entity") == "sensor.brewassistant_brewday_runtime_state"
+            and cond.get("state") == "idle"
+            for cond in entry["conditions"]
+        )
+        assert any(
+            cond.get("entity") == "sensor.brewassistant_brewday_runtime_source"
+            and cond.get("state") == "None"
+            for cond in entry["conditions"]
+        )
+        assert any(
+            cond.get("entity") == "sensor.brewassistant_brewday_runtime_source"
+            and cond.get("state") == "Manual Brewday"
+            for cond in active["conditions"]
+        )
+        assert all(isinstance(card, dict) and card.get("type") for card in active["card"]["cards"])
