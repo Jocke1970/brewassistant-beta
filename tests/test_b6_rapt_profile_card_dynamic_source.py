@@ -16,7 +16,7 @@ def test_rapt_profile_card_discovers_real_device_sensor_and_preserves_missing_va
         assert "candidates.length === 1" in text
         assert "triggers_update: all" in text
         assert "update_timer: 30s" in text
-        assert "v === null || v === undefined" in text
+        assert ("v === null || v === undefined" in text or "v === undefined || v === null" in text)
         assert "String(v).trim() === ''" in text
         assert "stepCount > 0" in text
         assert "profile_contract_complete === true" in text
