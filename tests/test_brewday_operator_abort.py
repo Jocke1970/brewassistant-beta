@@ -60,14 +60,14 @@ def test_brewday_abort_reuses_physical_abort_and_discards_pending_intent() -> No
         "class BrewAssistantRearmBrewdayControlButton", 1
     )[0]
     for token in (
-        "async_latch_brewday_operator_abort",
-        "cancel_pending_action(hass)",
-        "get_manual_brewday_session(hass).reset()",
         "await async_abort_brewzilla(hass)",
+        "output_off_requests_sent",
+        "abort_latch_persistence",
         '"brewday_abort"',
     ):
         assert token in abort_class
 
+    assert "get_manual_brewday_session(hass).reset()" not in abort_class
     rearm_class = source.split("class BrewAssistantRearmBrewdayControlButton", 1)[1].split(
         "class BrewAssistantCounterflowChillerReadyButton", 1
     )[0]

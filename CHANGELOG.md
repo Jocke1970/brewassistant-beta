@@ -1,3 +1,48 @@
+## 0b6 — RAPT Profile Runtime entity fix
+
+- Uppdaterade fullständiga kort `dashboard/cards/rapt_profile_runtime_sv.yaml` + `rapt_profile_runtime.yaml` läser nu dynamiskt RCL:s faktiska profilsensor via `ba_source: rapt_cloud_link_brewzilla_profile_runtime` i stället för att hårdkoda `binary_sensor.brewzilla_profile_active`.
+- Saknade numeriska attribut ger **—**, inte ett påhittat RAPT-mål `0.0 °C` eller `0/0` steg. En riktig rå `0 °C` (t.ex. ChillOut) visas fortfarande som `0.0 °C`.
+- Okänt/otillräckligt profilkontrakt, saknade stegfält samt RCL-observation/snapshot över 90 sekunder markeras tydligt. Flera möjliga enheter väljs aldrig godtyckligt.
+- `tests/test_b6_rapt_profile_card_dynamic_source.py` kontrollerar UI-kontraktet. Inga backend- eller hårdvaruskrivningar ändrades.
+- **Manuellt byte:** använd hela svenska UI-filen på `dev` i ditt personliga HA-kort. Bara Lovelace YAML uppdateras; ingen HA-omstart krävs. `beta` 0b5 och `main` är opåverkade.
+
+
+## DEV PREVIEW — 0b6 Premium START preflight, RCL Assist attach (2026-10-10)
+
+- Ny `sensor.brewassistant_brewday_start_status` med aktuell `ready/waiting/starting/running/blocked/aborted`, blockeringsorsaker, verifierad session, profil och steg.
+- Ny guardad `brewassistant.brewday_start_verified`-tjänst kräver fysisk operatörsbekräftelse samt överensstämmande `expected_session_id`, `expected_step_id`, `expected_profile_id`. START revaliderar färsk RCL-profil, target och alla nödvändiga BZ-utgångar/readbacks, sedan BA READ-ONLY-växling.
+- Premium START-knappen: **gult pulserande** när inte klar, **grönt pulserande** när preflight godkänd, **blått** vid pågående start, **rött fast** efter verifierad RCL Assist GO. Fysisk STOP/ABORT är alltid separat. Tidigare direkta `AKTIVERA BA-STYRNING` togs bort ur premiumkortet.
+- **Ingen direkt switch OFF längre:** Read-only kan inte hävas utan godkänd START-transaktion. START kräver aktiv, unik och verifierad RAPT-profil; efter godkännande följer BA profilen i begränsat heat/pump-scope. RCL steguppdatering i samma session bibehåller GO.
+- Avsiktlig säkerhetsgräns: RCL rapporterar profil-/session-/steg-ID säkert först för aktiv session. Att starta enbart laddad men inaktiv RAPT-profil, eller Manual/Brewfather, **är ännu inte implementerat** och knappen förblir blockerad. Trådas vidare i issue #258. Inga gissade/historiska profil-ID:n används.
+- Dokumentation `docs/brewday-start-preflight-0b6_sv.md`, isolerade START-kontraktstester, och fullständiga SV/EN-kort. **Endast dev.** Installerad beta 0b5 och stable/main är orörda och kan inte använda START-tjänsten.
+
+## DEV — 0b6 P0: ABORT-överordning, läsbar BZ efter STOP och read-only dry-run (2026-10-10)
+
+- **ABORT:** först omedelbar software lockout, därefter RAPT-oberoende lokala OFF/0-försök (värmare AV, pump AV, heat 0%, pump 0%) **innan** eventuellt långsamt profil-STOP via RAPT Cloud. Efter STOP-försöket upprepas OFF/0 för att reducera risken för sen profilåterställning. ABORT under RCL/BF-BT/Manual/read-only får inte stoppas av recept, ManualPlan-reset, loggning eller ett saknat RAPT-id.
+- **Huvudströmmen till BrewZilla lämnas orörd**, normalt ON, så vi kan få återläsning. Moln-/HA-readback efter begäran kan ange OFF/0 men är **aldrig** fysisk säkerhetsgaranti eller ekvivalent med att dra ur stickproppen. Kräv färska readbacks för varje utgång. Otillgänglig käll-/utgångstelemetri = ej verifierad; fysisk kontroll krävs.
+- **Read-only:** beräkningar för mål, värme och pump bevaras separat i `read_only_decision_preview`, och `read_only_actuation_blocked` är tydlig. Read-only betyder logik från vald källa utan BA-skrivningar till BZ; RAPT-profil kan fortsätta själv.
+- **Återaktivering efter ABORT:** `button.brewassistant_rearm_brewday_control` nekas om BA inte först är i read-only. Återaktivering är INTE start av bryggning; ingen automatisk återstart.
+- **START:** nytt separat styrflöde behövs, se issue #258. Knappen får inte bli en okontrollerad genväg till `switch.turn_off`; kräver verifierat BZ, källa/recept/session, operatörskvittens och backend-gate. Ännu inte implementerat.
+- **Säkerhetsnot:** För att garantera samma fysiska bortkoppling som nätkontakten krävs en oberoende mekanisk brytare/utlösning; varken HA, RCL eller BA kan göra detta över molnet.
+- **Status:** endas `dev`, fysiskt vattenprov och STOP/ABORT-test är releaseblockerare; `beta` 0b5 och `main` oförändrade.
+
+## DEV — prioriterad 0b6 säkerhetsfix: ABORT får aldrig blockeras av ManualPlan
+
+- Fältfynd 2026-10-10 i publicerad 0b5: `button.brewassistant_abort_brewday` aktiverade först ABORT-latch och försökte därefter `get_manual_brewday_session(hass).reset()` **innan** akut BrewZilla OFF. Aktiv/retained RAPT-profil blockerade ManualPlan-reset med `HomeAssistantError`, vilket avbröt knappens nödstoppsekvens trots att ABORT-latch kunde vara aktiv.
+- Korrigering: begär akut fysisk BrewZilla OFF **omedelbart efter latchförsök**. Supervised-planstädning och ManualPlan-reset är best effort i `finally` och får inte hindra avstängningsförsök. ManualPlan återställs endast när Manual Brewday verkligen ägde runtime före ABORT; aldrig under RAPT-ägarskap.
+- Regressionstest kör verkliga knappmetodens AST med aktiva RAPT- respektive Manual-källor, inklusive fel i städning/latch.
+- Avstängningsanrop och HA-readbacks är inte bevis på fysisk OFF. Inga positiva RCL-styrningar tillåts utan ny säker acceptans.
+- **Status:** endast `dev`, inte publicerade `beta` 0b5 eller `main`.
+
+## DEV PREVIEW — inför 2026.10.0b6 — premium Brewday UI och stale-varningar (ingen release)
+
+- Nya kompletta Lovelace-paneler `dashboard/cards/brewday_control_status_sv.yaml` och `dashboard/cards/brewday_control_status.yaml`: källägare, läge, timer, target, fallback, `resync_required`, read-only, ABORT, manuell kvittens.
+- Ny read-only-toggle och hårt villkorad `brewday_reconnect_ack`-knapp; backend verifierar alltid källan igen. Inget UI-bevis på fysisk OFF.
+- Varningar för saknade, okända och inaktuella Pill-/SG-observationer återställda i `fermentation*.yaml` och `fermentation_cockpit_v2*.yaml` med röd ikon/text och 1-minuts refresh. Trösklar: 15 min gult, 20 min rött.
+- `tests/test_b6_brewday_control_status_ui.py` och `docs/brewday-control-status-b6-preview_sv.md` tillagda.
+- **Manuell åtgärd:** kopiera hela svenska panel-YAML:n till dashboarden; byt också jäsningskortens hela YAML för att få tillbaka stale-varningarna. Kräver inget HA-backendbyte utöver 0b5, ingen omstart för enbart Lovelace-ändring.
+- **Releasestatus:** endast `dev`, `beta` (0b5) och `main` opåverkade.
+
 ## 2026-10-09 — v2026.10.0b5 — Brewday three-mode / RCL Assist
 
 - Brewday får tre normala exekveringslägen: Manual Brewing, Brewfather Brewing och RCL Brewing.

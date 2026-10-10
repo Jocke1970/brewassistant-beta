@@ -166,6 +166,7 @@ def test_rearm_denies_missing_source_and_abort():
         asyncio.run(env["async_rearm"](hass))
     env["_store"](hass).update(enabled=False, rearmed=False)
     env["_PREVIOUS_AUTHORITY"] = lambda h: (Authority("blocked", False, "stale"), {})
+    env["_start_store"] = lambda h: {"starting": False}
     env["brewday_operator_abort_active"] = lambda h: False
     with pytest.raises((HomeAssistantError, ImportError)):
         asyncio.run(env["async_rearm"](hass))

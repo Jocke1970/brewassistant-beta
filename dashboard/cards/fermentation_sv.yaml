@@ -8,6 +8,8 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
+      # Re-evaluate elapsed time even when physical inputs stop publishing.
+      update_timer: 1m
       entity: climate.fermentation_chamber
       name: Jäsningscockpit
       icon: |
@@ -96,12 +98,12 @@ card:
           const gravitySource = states['sensor.brewassistant_gravity_last_updated']?.attributes?.source_entity || 'sensor.yellow_pill_gravity';
           const liquidAge = sourceAge(liquidSource);
           const gravityAge = sourceAge(gravitySource);
-          const ageRisk = (age, value) => !Number.isFinite(value) || age === null ? 'unknown' : age > 20 ? 'stale' : age > 15 ? 'warning' : 'provisional';
+          const ageRisk = (age, value) => !Number.isFinite(value) || age === null ? 'unknown' : age >= 20 ? 'stale' : age >= 15 ? 'warning' : 'provisional';
           const tRisk = ageRisk(liquidAge, pillTemp);
           const gRisk = ageRisk(gravityAge, sg);
           const ageLabel = (risk, age) => risk === 'stale' ? 'Inaktuell · ' + Math.floor(age) + ' min' : risk === 'warning' ? 'Äldre · ' + Math.floor(age) + ' min' : risk === 'unknown' ? 'Tid okänd' : 'HA-uppd. · ' + Math.floor(age) + ' min';
-          const riskKind = (risk, normal) => risk === 'stale' ? 'red' : risk === 'warning' || risk === 'unknown' ? 'yellow' : normal;
-          const riskIcon = (risk, normal) => risk === 'stale' ? 'mdi:alert-circle' : risk === 'warning' || risk === 'unknown' ? 'mdi:alert-outline' : normal;
+          const riskKind = (risk, normal) => risk === 'stale' || risk === 'unknown' ? 'red' : risk === 'warning' ? 'yellow' : normal;
+          const riskIcon = (risk, normal) => risk === 'stale' || risk === 'unknown' ? 'mdi:alert-circle' : risk === 'warning' ? 'mdi:alert-outline' : normal;
           const activePillSource = states['sensor.brewassistant_pill_active_source']?.state;
           const pillLink = activePillSource === 'ble' ? 'mdi:bluetooth' : activePillSource === 'cloud' ? 'mdi:wifi' : 'mdi:help-circle-outline';
           const sourceHint = 'Pill-källa (diagnostik; styrningen använder ännu tidigare sensor-ID)';
@@ -149,6 +151,8 @@ card:
           const heatKind = heatOn ? 'orange' : 'neutral';
           const supervisorKind = supervisorOn ? 'green' : 'neutral';
           const sgText = Number.isFinite(sg) ? sg.toFixed(3) : '—';
+          const pillAlert = tRisk === 'stale' || gRisk === 'stale' || tRisk === 'unknown' || gRisk === 'unknown';
+          const alertDescription = [tRisk !== 'provisional' ? 'Pill-temp: ' + ageLabel(tRisk, liquidAge) : null, gRisk !== 'provisional' ? 'SG: ' + ageLabel(gRisk, gravityAge) : null].filter(Boolean).join(' · ');
 
           return `<div style="line-height:1.25;min-width:0;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
@@ -168,6 +172,7 @@ card:
               ${metric('Styrning', supervisorOn ? 'På' : 'Av', 'klimat', 'mdi:thermostat-auto', supervisorKind)}
               ${metric('Värmematta', heatOn ? 'På' : 'Av', Number.isFinite(heatPower) ? `${heatPower.toFixed(1)} W` : '—', 'mdi:heat-wave', heatKind)}
             </div>
+            ${pillAlert ? '<div style="margin-top:10px;padding:10px;border-radius:13px;border:1px solid rgba(244,67,54,.52);background:rgba(244,67,54,.12);color:#b3261e;font-size:11.5px;font-weight:900;line-height:1.35"><ha-icon icon="mdi:alert-circle" style="width:18px;height:18px;vertical-align:middle;color:#b3261e"></ha-icon> INAKTUELL / EJ VERIFIERAD PILL-MÄTNING · '+alertDescription+' · HA-uppdatering är inte bevis på ett nytt fysiskt prov.</div>' : ''}
             <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${cardTone === 'heat' ? 'rgba(255,152,0,.11)' : cardTone === 'cool' ? 'rgba(33,150,243,.10)' : cardTone === 'active' ? 'rgba(76,175,80,.10)' : 'rgba(127,127,127,.08)'};border:1px solid ${cardTone === 'heat' ? 'rgba(255,152,0,.22)' : cardTone === 'cool' ? 'rgba(33,150,243,.20)' : cardTone === 'active' ? 'rgba(76,175,80,.20)' : 'rgba(127,127,127,.14)'};"><ha-icon icon="${chamberState === 'off' ? 'mdi:power' : cardTone === 'heat' ? 'mdi:heat-wave' : cardTone === 'cool' ? 'mdi:snowflake' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${short(cardSummary, 120)}</div></div>
           </div>`;
         ]]]

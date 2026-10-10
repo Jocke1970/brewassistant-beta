@@ -19,6 +19,7 @@ from ..brewzilla.brewzilla_learning_sensor import create_brewzilla_learning_sens
 from ..brewzilla.brewzilla_orchestration_sensor import BrewAssistantBrewZillaOrchestrationSensor, ORCHESTRATION_SENSORS
 from ..brewzilla.brewzilla_sensor import create_brewzilla_sensors
 from ..const import DOMAIN
+from .brewday_start_preflight import preflight_snapshot
 from ..coordinator import BrewAssistantCoordinator
 from ..entity import BrewAssistantEntity
 from ..hlt.sensor import create_hlt_sensors
@@ -88,6 +89,7 @@ def create_brewday_runtime_sensors(
     """Create Brewday Runtime, BrewZilla, HLT, Audit, Learning and Energy sensors."""
     return (
         [BrewAssistantBrewdayRuntimeSensor(coordinator, key) for key in BREWDAY_RUNTIME_SENSORS]
+        + [BrewAssistantBrewdayStartStatusSensor(coordinator)]
         + create_brewday_physical_timing_sensors(coordinator)
         + [BrewAssistantBrewfatherBatchPhaseSensor(coordinator)]
         + [
@@ -137,6 +139,26 @@ class BrewAssistantBrewdayRuntimeSensor(BrewAssistantEntity, SensorEntity):
         if self._key in {"brewday_runtime_summary", "brewday_runtime_state", "brewday_runtime_next_step"}:
             attrs["timeline"] = snapshot.get("timeline")
         return attrs
+
+
+class BrewAssistantBrewdayStartStatusSensor(BrewAssistantEntity, SensorEntity):
+    """UI-facing START preflight, recalculated without physical commands."""
+
+    _attr_has_entity_name = False
+    _attr_name = "BrewAssistant Brewday Start Status"
+    _attr_suggested_object_id = "brewassistant_brewday_start_status"
+    _attr_icon = "mdi:play-circle-outline"
+
+    def __init__(self, coordinator: BrewAssistantCoordinator) -> None:
+        super().__init__(coordinator, "brewday_start_status")
+
+    @property
+    def native_value(self) -> str:
+        return str(preflight_snapshot(self.coordinator.hass)["status"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return preflight_snapshot(self.coordinator.hass)
 
 
 class BrewAssistantBrewfatherBatchPhaseSensor(BrewAssistantEntity, SensorEntity):

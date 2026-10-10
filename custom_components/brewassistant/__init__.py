@@ -56,6 +56,7 @@ from .brewday.brewday_execution_mode import (
     async_load_brewday_recipe_context,
 )
 from .brewday.manual_brewday_store import get_manual_brewday_session, new_manual_brewday_session
+from .brewday.brewday_start_preflight import async_start_verified
 
 _LOGGER = logging.getLogger(__name__)
 SERVICE_FORCE_BREWFATHER_REFRESH = "force_brewfather_refresh"
@@ -69,6 +70,7 @@ SERVICE_BREWDAY_AUDIT_STOP = "brewday_audit_stop"
 SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
 SERVICE_BREWDAY_AUDIT_SNAPSHOT = "brewday_audit_snapshot"
 SERVICE_EXTERNAL_RECONNECT_ACK = "brewday_reconnect_ack"
+SERVICE_BREWDAY_START_VERIFIED = "brewday_start_verified"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -358,6 +360,23 @@ def _register_services(hass: HomeAssistant) -> None:
         )
         await _refresh_runtime_sensors()
 
+    async def _handle_brewday_start_verified(call: ServiceCall) -> None:
+        result = await async_start_verified(
+            hass,
+            confirmed=call.data.get("confirmed") is True,
+            expected_session_id=str(call.data.get("expected_session_id") or ""),
+            expected_step_id=str(call.data.get("expected_step_id") or ""),
+            expected_profile_id=str(call.data.get("expected_profile_id") or ""),
+        )
+        await async_record_brewday_audit_event(
+            hass, "brewday_start_verified", always_record=True,
+            note=(
+                "Operator START accepted for verified RCL session "
+                + str((result.get("identity") or {}).get("session_id") or "unknown")
+            ),
+        )
+        await _refresh_runtime_sensors()
+
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         session = get_manual_brewday_session(hass)
         session.prepare()
@@ -460,6 +479,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_CLEAR, _handle_brewday_audit_clear)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_SNAPSHOT, _handle_brewday_audit_snapshot)
     hass.services.async_register(DOMAIN, SERVICE_EXTERNAL_RECONNECT_ACK, _handle_external_reconnect_ack)
+    hass.services.async_register(DOMAIN, SERVICE_BREWDAY_START_VERIFIED, _handle_brewday_start_verified)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)

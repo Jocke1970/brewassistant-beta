@@ -1,0 +1,414 @@
+# BrewAssistant premium Brewday Control / Status — b6 UI draft (b5+ backend)
+# Paste as ONE manual YAML card. No dashboard auto-install.
+# Requires custom:button-card and custom:expander-card.
+# Standalone: ABORT must remain accessible regardless of source, visibility or read-only.
+# Observe-only does not stop RAPT. ACK does not prove physical OFF.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_runtime_summary
+    name: "Brewday Control / Status"
+    icon: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        const st = states['sensor.brewassistant_brewday_runtime_state']?.state;
+        if (st === 'aborted' || a.operator_abort_active === true) return 'mdi:alert-octagon';
+        if (a.resync_required === true || st === 'resync_required') return 'mdi:shield-alert-outline';
+        if (a.fallback_active === true) return 'mdi:link-off';
+        if (states['switch.brewassistant_brewzilla_observe_only']?.state === 'on') return 'mdi:shield-eye-outline';
+        if (a.brewday_mode === 'RCL Brewing') return 'mdi:cloud-sync-outline';
+        return 'mdi:beer-outline';
+      ]]]
+    show_state: false
+    show_label: true
+    triggers_update:
+      - sensor.brewassistant_brewday_runtime_summary
+      - sensor.brewassistant_brewday_runtime_state
+      - sensor.brewassistant_brewday_runtime_step
+      - sensor.brewassistant_brewday_mode
+      - sensor.brewassistant_brewday_target_temperature
+      - sensor.brewassistant_brewday_live_time_remaining_minutes
+      - sensor.brewassistant_brewzilla_control_reason
+      - sensor.brewassistant_brewday_operator_control_state
+      - switch.brewassistant_brewzilla_observe_only
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        const T = {"title":"Brewday Control / Status","mode":"BREW MODE","source":"SOURCE","step":"CURRENT STEP","target":"TARGET TEMPERATURE","remaining":"TIME LEFT","owner":"OWNER","authority":"CONTROL MODE","abort":"ABORT · EMERGENCY STOP","rearm":"REARM AFTER ABORT","observe":"BA READ-ONLY","enable":"ENABLE BA CONTROL","ack":"ACKNOWLEDGE RECONNECTION","diag":"Source, fallback & safety diagnostics","idle":"Waiting for brewday","aborted":"EMERGENCY STOP ACTIVE","resync":"RECONNECTION BLOCKED","fallback":"SOURCE LOST · MANUAL FALLBACK","observing":"BA IS OBSERVING","running":"Brewday active","status":"STATUS","reason":"Reason","lost":"Previous external source","raw":"Exact raw step","session":"RCL session","age":"Snapshot age","noTime":"Time unverified","none":"No verified source","unknown":"Unverified","noWrite":"BA WRITES BLOCKED","warnAbort":"ABORT needs physical inspection. A UI acknowledgement is not proof that heater and pump are OFF.","warnResync":"Check RAPT/Brewfather session and active step physically. BA abstains from ordinary control.","warnFallback":"Recipe context is retained, but heater/pump authority must not be taken automatically from external control.","warnObserve":"BA continues calculating source target and heat/pump demand but writes nothing. The RAPT profile may still run independently.","warnActive":"RAPT owns target and heater in RCL mode; BA may assist heat/pump only within its allowed scope.","noOff":"UI status or service acknowledgement is NOT proof of physical OFF.","observeInfo":"Enable BA read-only. Does not stop a running RAPT profile.","enableInfo":"Allows BA actuation only for an already active verified source. Starting a RAPT profile needs a separate START flow (#258).","enableConfirm":"Check equipment, water level and external controller. Leaving read-only may restart allowed BA heat/pump commands on the next tick. Continue?","ackInfo":"Only after checking current external session, raw step and BrewZilla. Keep read-only ON.","ackDisabled":"No verified active reconnection to acknowledge.","ackConfirm":"You acknowledge the current external session/step. Backend re-checks the source; ACK itself sends no hardware command. A future tick may resume allowed writes after leaving read-only. Have you physically inspected the equipment?","abortInfo":"Requests profile STOP, heater/pump OFF and both utilizations 0%. Leaves BZ main power ON for telemetry; verify locally.","rearmInfo":"Requires BA READ-ONLY ON and physical inspection. Clears ABORT only; never starts brewing.","rearmConfirm":"Have you physically inspected heater, pump and BrewZilla? Rearming does NOT prove outputs OFF.","diagnosticsInfo":"An HA timestamp is not necessarily proof of a physical sample. ACK is independently verified by the backend.","next":"Next","controller":"Orchestration","lockReason":"Lockout reason","scope":"Authority"};
+        const st = id => states[id];
+        const a = st('sensor.brewassistant_brewday_runtime_summary')?.attributes || {};
+        const bz = st('sensor.brewassistant_brewzilla_control_reason')?.attributes || {};
+        const escape = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const clean = v => !v || ['none','unknown','unavailable'].includes(String(v).toLowerCase()) ? T.unknown : String(v);
+        const n = v => (v == null || v === '' || ['unknown','unavailable'].includes(String(v).toLowerCase())) ? null : Number.isFinite(Number(v)) ? Number(v) : null;
+        const mode = clean(a.brewday_mode || st('sensor.brewassistant_brewday_mode')?.state);
+        const source = clean(a.source || st('sensor.brewassistant_brewday_runtime_source')?.state);
+        const state = st('sensor.brewassistant_brewday_runtime_state')?.state;
+        const aborted = state === 'aborted' || a.operator_abort_active === true || st('sensor.brewassistant_brewday_operator_control_state')?.state === 'aborted';
+        const resync = state === 'resync_required' || a.resync_required === true;
+        const fallback = a.fallback_active === true;
+        const observe = st('switch.brewassistant_brewzilla_observe_only')?.state === 'on';
+        const headline = aborted ? T.aborted : resync ? T.resync : fallback ? T.fallback : observe ? T.observing : state === 'idle' ? T.idle : T.running;
+        const note = aborted ? T.warnAbort : resync ? T.warnResync : fallback ? T.warnFallback : observe ? T.warnObserve : T.warnActive;
+        const tint = aborted || resync ? '#b3261e' : fallback ? '#946200' : observe ? '#116f9e' : '#248262';
+        const bg = aborted || resync ? 'rgba(244,67,54,.09)' : fallback ? 'rgba(255,193,7,.1)' : observe ? 'rgba(33,150,243,.08)' : 'rgba(76,175,80,.08)';
+        const blocking = aborted || resync || fallback || observe;
+        const reason = a.resync_reason || a.fallback_reason || bz.control_reason || T.unknown;
+        const proposal = bz.read_only_decision_preview || {};
+        const pct = v => n(v) === null ? '—' : n(v).toFixed(0) + ' %';
+        const target = n(st('sensor.brewassistant_brewday_target_temperature')?.state);
+        const left = n(st('sensor.brewassistant_brewday_live_time_remaining_minutes')?.state);
+        const tile = (title,value,sub) =>
+          '<div style="border:1px solid rgba(127,127,127,.18);background:rgba(127,127,127,.05);border-radius:14px;padding:10px 7px;min-width:0;text-align:center">' +
+            '<div style="font-size:9px;opacity:.67;font-weight:850">'+escape(title)+'</div>' +
+            '<div style="font-size:13px;font-weight:950;margin:4px 0;overflow-wrap:anywhere">'+escape(value)+'</div>' +
+            '<div style="font-size:10px;opacity:.65;overflow-wrap:anywhere">'+escape(sub)+'</div></div>';
+        const chip = (key,val) => '<span style="border:1px solid rgba(127,127,127,.2);border-radius:99px;padding:5px 9px;font-size:10px;font-weight:850;background:rgba(127,127,127,.04)">'+escape(key)+' · '+escape(val)+'</span>';
+        return '<div style="text-align:left;min-width:0;line-height:1.35">' +
+          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><b style="letter-spacing:.08em;font-size:10px;opacity:.65">BREWASSISTANT · 0b6 UI</b><b style="color:'+tint+';font-size:10px">'+escape(state)+'</b></div>' +
+          '<div style="font-size:21px;font-weight:950;letter-spacing:-.035em;color:'+tint+';margin-top:9px">'+escape(headline)+'</div>' +
+          '<div style="font-size:11.5px;margin-top:6px;opacity:.83">'+escape(note)+'</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+chip(T.mode,mode)+chip(T.source,source)+chip(T.owner,clean(a.recipe_owner))+'</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:11px">' +
+             tile(T.step,clean(a.step || st('sensor.brewassistant_brewday_runtime_step')?.state),T.next+': '+clean(a.next_step)) +
+             tile(T.target,target===null?'—':target.toFixed(1)+' °C',clean(a.target_owner)) +
+             tile(T.remaining,a.fallback_timer_uncertain===true||left===null?'—':left.toFixed(0)+' min',a.fallback_timer_uncertain===true?T.noTime:clean(state)) +
+             tile(T.authority,blocking?T.noWrite:clean(bz.hot_side_write_scope || bz.orchestration_mode),clean(a.heat_owner)) +
+          '</div>' +
+          (observe ? '<div style="margin-top:10px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.2);border-radius:12px;padding:9px;font-size:11px;font-weight:850">'+
+            escape('READ-ONLY • COMPUTED, NOT EXECUTED') +
+            ' · heat '+escape(pct(proposal.heat_utilization_pct)) +
+            ' · pump '+escape(pct(proposal.pump_utilization_pct)) +
+            '</div>' : '') +
+          (resync || fallback ? '<div style="margin-top:11px;padding:10px;border:1px solid '+tint+';border-radius:14px;color:'+tint+';background:'+bg+';font-size:11px;font-weight:850"><ha-icon icon="mdi:alert-circle" style="width:15px;height:15px;vertical-align:middle"></ha-icon> '+escape(T.lockReason)+': '+escape(reason)+'</div>' : '') +
+          '<div style="margin-top:9px;font-size:10px;opacity:.72;text-align:center">'+escape(T.noOff)+'</div></div>';
+      ]]]
+    styles:
+      card:
+        - border-radius: 24px
+        - padding: 16px
+        - background: linear-gradient(135deg,rgba(255,255,255,.96),rgba(33,150,243,.045))
+        - border: 1px solid rgba(33,150,243,.22)
+        - box-shadow: 0 5px 16px rgba(0,0,0,.08)
+      grid:
+        - grid-template-areas: '"i n" "l l"'
+        - grid-template-columns: 40px minmax(0,1fr)
+        - column-gap: 10px
+      name:
+        - font-size: 16px
+        - font-weight: 950
+        - justify-self: start
+      icon:
+        - width: 27px
+        - color: "#1578ad"
+      label:
+        - white-space: normal
+        - text-align: left
+        - justify-self: stretch
+  # START is source-specific and backend-guarded; green is NOT authority.
+  # Yellow tap opens preflight reasons; only green can call START service.
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_start_status
+    show_state: false
+    show_label: true
+    update_timer: 5s
+    triggers_update:
+      - sensor.brewassistant_brewday_start_status
+      - sensor.brewassistant_brewday_runtime_summary
+      - sensor.brewassistant_brewday_operator_control_state
+      - switch.brewassistant_brewzilla_observe_only
+    name: |
+      [[[
+        const status = states['sensor.brewassistant_brewday_start_status']?.state || 'waiting';
+        return ({
+          waiting: 'WAITING FOR SYSTEM',
+          ready: 'START BREWING',
+          starting: 'STARTING / VERIFYING',
+          running: 'BREWING ACTIVE · GO',
+          blocked: 'START BLOCKED',
+          aborted: 'ABORT ACTIVE – START BLOCKED',
+        })[status] || 'CHECK SYSTEM';
+      ]]]
+    icon: |
+      [[[
+        const status = states['sensor.brewassistant_brewday_start_status']?.state;
+        return status === 'running' ? 'mdi:fire' :
+          status === 'ready' ? 'mdi:play-circle' :
+          status === 'starting' ? 'mdi:progress-clock' :
+          status === 'aborted' ? 'mdi:alert-octagon' : 'mdi:connection';
+      ]]]
+    label: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_start_status']?.attributes || {};
+        const status = states['sensor.brewassistant_brewday_start_status']?.state;
+        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        if (status === 'ready') return 'GO · tap for physical inspection and confirmed RCL Assist start';
+        if (status === 'running') return 'Same RAPT session verified · BA assistance enabled';
+        if (status === 'starting') return 'Verifying session, step and readbacks';
+        const reasons = Array.isArray(a.reasons) ? a.reasons : [];
+        return safe(reasons.slice(0,3).join(' · ') || 'No preflight available. Update HA.');
+      ]]]
+    tap_action:
+      action: |
+        [[[
+          return states['sensor.brewassistant_brewday_start_status']?.state === 'ready' ?
+            'call-service' : 'more-info';
+        ]]]
+      service: brewassistant.brewday_start_verified
+      data: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_start_status']?.attributes || {};
+          const i = a.identity || {};
+          return {
+            confirmed: true,
+            expected_session_id: String(i.session_id || ''),
+            expected_step_id: String(i.step_id || ''),
+            expected_profile_id: String(i.profile_id || ''),
+          };
+        ]]]
+      confirmation:
+        text: "START – inspect actual water level, pump path and BrewZilla. Only attaches BA RCL Assist to the displayed already ACTIVE RAPT session. Backend rechecks step and session. Continue?"
+    extra_styles: |
+      @keyframes ba-start-yellow {
+        0%, 100% { box-shadow: 0 0 0 1px rgba(216,150,17,.24); }
+        50% { box-shadow: 0 0 0 6px rgba(216,150,17,.22); }
+      }
+      @keyframes ba-start-green {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(38,166,91,.14); }
+        50% { box-shadow: 0 0 0 7px rgba(38,166,91,.28); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #card { animation: none !important; }
+      }
+    styles:
+      card:
+        - border-radius: 20px
+        - min-height: 108px
+        - padding: 14px
+        - border: |
+            [[[
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return '2px solid ' + (s === 'running' ? '#d34540' :
+                s === 'ready' ? '#2ea85e' : s === 'starting' ? '#4189c7' : '#d8a22f');
+            ]]]
+        - background: |
+            [[[
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return s === 'running' ? 'rgba(220,58,54,.15)' :
+                s === 'ready' ? 'rgba(30,176,86,.14)' :
+                s === 'starting' ? 'rgba(34,124,210,.11)' : 'rgba(250,182,36,.13)';
+            ]]]
+        - animation: |
+            [[[
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return s === 'ready' ? 'ba-start-green 1.6s ease-in-out infinite' :
+                s === 'waiting' || s === 'blocked' ? 'ba-start-yellow 1.8s ease-in-out infinite' : 'none';
+            ]]]
+      name:
+        - font-size: 17px
+        - font-weight: 950
+        - white-space: normal
+      label:
+        - font-size: 11px
+        - font-weight: 650
+        - white-space: normal
+        - text-align: center
+      icon:
+        - width: 32px
+        - color: |
+            [[[
+              return states['sensor.brewassistant_brewday_start_status']?.state === 'running' ?
+                '#b02a27' : states['sensor.brewassistant_brewday_start_status']?.state === 'ready' ?
+                '#198448' : '#94650d';
+            ]]]
+  - type: custom:button-card
+    entity: switch.brewassistant_brewzilla_observe_only
+    name: "BA READ-ONLY"
+    icon: mdi:shield-eye-outline
+    show_label: true
+    label: "Enable BA read-only. Does not stop a running RAPT profile."
+    tap_action:
+      action: |
+        [[[
+          return states['switch.brewassistant_brewzilla_observe_only']?.state === 'off' ? 'call-service' : 'none';
+        ]]]
+      service: switch.turn_on
+      target:
+        entity_id: switch.brewassistant_brewzilla_observe_only
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 13px
+        - min-height: 92px
+        - background: rgba(33,150,243,.09)
+        - border: 1px solid rgba(33,150,243,.28)
+      name:
+        - font-weight: 900
+        - font-size: 11px
+      label:
+        - font-size: 10px
+        - white-space: normal
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_runtime_summary
+    name: "ACKNOWLEDGE RECONNECTION"
+    icon: mdi:link-variant-plus
+    show_label: true
+    label: |
+      [[[
+        const T = {"title":"Brewday Control / Status","mode":"BREW MODE","source":"SOURCE","step":"CURRENT STEP","target":"TARGET TEMPERATURE","remaining":"TIME LEFT","owner":"OWNER","authority":"CONTROL MODE","abort":"ABORT · EMERGENCY STOP","rearm":"REARM AFTER ABORT","observe":"BA READ-ONLY","enable":"ENABLE BA CONTROL","ack":"ACKNOWLEDGE RECONNECTION","diag":"Source, fallback & safety diagnostics","idle":"Waiting for brewday","aborted":"EMERGENCY STOP ACTIVE","resync":"RECONNECTION BLOCKED","fallback":"SOURCE LOST · MANUAL FALLBACK","observing":"BA IS OBSERVING","running":"Brewday active","status":"STATUS","reason":"Reason","lost":"Previous external source","raw":"Exact raw step","session":"RCL session","age":"Snapshot age","noTime":"Time unverified","none":"No verified source","unknown":"Unverified","noWrite":"BA WRITES BLOCKED","warnAbort":"ABORT needs physical inspection. A UI acknowledgement is not proof that heater and pump are OFF.","warnResync":"Check RAPT/Brewfather session and active step physically. BA abstains from ordinary control.","warnFallback":"Recipe context is retained, but heater/pump authority must not be taken automatically from external control.","warnObserve":"BA continues calculating source target and heat/pump demand but writes nothing. The RAPT profile may still run independently.","warnActive":"RAPT owns target and heater in RCL mode; BA may assist heat/pump only within its allowed scope.","noOff":"UI status or service acknowledgement is NOT proof of physical OFF.","observeInfo":"Enable BA read-only. Does not stop a running RAPT profile.","enableInfo":"Allows BA actuation only for an already active verified source. Starting a RAPT profile needs a separate START flow (#258).","enableConfirm":"Check equipment, water level and external controller. Leaving read-only may restart allowed BA heat/pump commands on the next tick. Continue?","ackInfo":"Only after checking current external session, raw step and BrewZilla. Keep read-only ON.","ackDisabled":"No verified active reconnection to acknowledge.","ackConfirm":"You acknowledge the current external session/step. Backend re-checks the source; ACK itself sends no hardware command. A future tick may resume allowed writes after leaving read-only. Have you physically inspected the equipment?","abortInfo":"Requests profile STOP, heater/pump OFF and both utilizations 0%. Leaves BZ main power ON for telemetry; verify locally.","rearmInfo":"Requires BA READ-ONLY ON and physical inspection. Clears ABORT only; never starts brewing.","rearmConfirm":"Have you physically inspected heater, pump and BrewZilla? Rearming does NOT prove outputs OFF.","diagnosticsInfo":"An HA timestamp is not necessarily proof of a physical sample. ACK is independently verified by the backend.","next":"Next","controller":"Orchestration","lockReason":"Lockout reason","scope":"Authority"};
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        if (a.resync_required !== true) return T.ackDisabled;
+        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        return safe(T.ackInfo) + ' · ' + safe(a.resync_from_mode || T.unknown) +
+          ' · ' + safe(a.raw_step_name || a.step || T.unknown);
+      ]]]
+    tap_action:
+      action: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
+          const mode = a.resync_from_mode;
+          const step = String(a.raw_step_name || a.step || '').trim();
+          const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
+          const age = a.snapshot_age_seconds;
+          const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
+            a.profile_source_available === true && String(a.profile_session_id || '').trim().length > 0;
+          const bf = mode === 'Brewfather Brewing';
+          const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          return observer && a.resync_required === true && state === 'resync_required' &&
+            hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
+            (rcl || bf) && !aborted ? 'call-service' : 'none';
+        ]]]
+      service: brewassistant.brewday_reconnect_ack
+      data: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const out = {mode: a.resync_from_mode, expected_step: String(a.raw_step_name || a.step || '')};
+          if (a.resync_from_mode === 'RCL Brewing') out.expected_session_id = String(a.profile_session_id || '');
+          return out;
+        ]]]
+      confirmation:
+        text: "You acknowledge the current external session/step. Backend re-checks the source; ACK itself sends no hardware command. A future tick may resume allowed writes after leaving read-only. Have you physically inspected the equipment?"
+    styles:
+      card:
+        - border-radius: 17px
+        - padding: 14px
+        - background: rgba(255,193,7,.09)
+        - border: 2px solid rgba(255,193,7,.4)
+      name:
+        - font-size: 13px
+        - font-weight: 950
+      label:
+        - font-size: 11px
+        - white-space: normal
+        - text-align: left
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        entity: button.brewassistant_abort_brewday
+        name: "ABORT · EMERGENCY STOP"
+        icon: mdi:alert-octagon
+        show_label: true
+        label: "Requests profile STOP, heater/pump OFF and both utilizations 0%. Leaves BZ main power ON for telemetry; verify locally."
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.brewassistant_abort_brewday
+        styles:
+          card:
+            - border-radius: 17px
+            - padding: 13px
+            - min-height: 96px
+            - background: rgba(244,67,54,.18)
+            - border: 2px solid rgba(244,67,54,.7)
+          name:
+            - font-size: 11px
+            - font-weight: 950
+          label:
+            - font-size: 10px
+            - white-space: normal
+      - type: custom:button-card
+        entity: button.brewassistant_rearm_brewday_control
+        name: "REARM AFTER ABORT"
+        icon: mdi:shield-check
+        show_label: true
+        label: "Requires BA READ-ONLY ON and physical inspection. Clears ABORT only; never starts brewing."
+        tap_action:
+          action: |
+            [[[
+              return states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted' ? 'call-service' : 'none';
+            ]]]
+          service: button.press
+          target:
+            entity_id: button.brewassistant_rearm_brewday_control
+          confirmation:
+            text: "Have you physically inspected heater, pump and BrewZilla? Rearming does NOT prove outputs OFF."
+        styles:
+          card:
+            - border-radius: 17px
+            - padding: 13px
+            - min-height: 96px
+            - background: rgba(127,127,127,.065)
+            - border: 1px solid rgba(127,127,127,.3)
+          name:
+            - font-size: 11px
+            - font-weight: 950
+          label:
+            - font-size: 10px
+            - white-space: normal
+  - type: custom:expander-card
+    title: "Source, fallback & safety diagnostics"
+    clear: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewday_runtime_summary
+        name: "Source, fallback & safety diagnostics"
+        icon: mdi:clipboard-text-search-outline
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            const T = {"title":"Brewday Control / Status","mode":"BREW MODE","source":"SOURCE","step":"CURRENT STEP","target":"TARGET TEMPERATURE","remaining":"TIME LEFT","owner":"OWNER","authority":"CONTROL MODE","abort":"ABORT · EMERGENCY STOP","rearm":"REARM AFTER ABORT","observe":"BA READ-ONLY","enable":"ENABLE BA CONTROL","ack":"ACKNOWLEDGE RECONNECTION","diag":"Source, fallback & safety diagnostics","idle":"Waiting for brewday","aborted":"EMERGENCY STOP ACTIVE","resync":"RECONNECTION BLOCKED","fallback":"SOURCE LOST · MANUAL FALLBACK","observing":"BA IS OBSERVING","running":"Brewday active","status":"STATUS","reason":"Reason","lost":"Previous external source","raw":"Exact raw step","session":"RCL session","age":"Snapshot age","noTime":"Time unverified","none":"No verified source","unknown":"Unverified","noWrite":"BA WRITES BLOCKED","warnAbort":"ABORT needs physical inspection. A UI acknowledgement is not proof that heater and pump are OFF.","warnResync":"Check RAPT/Brewfather session and active step physically. BA abstains from ordinary control.","warnFallback":"Recipe context is retained, but heater/pump authority must not be taken automatically from external control.","warnObserve":"BA continues calculating source target and heat/pump demand but writes nothing. The RAPT profile may still run independently.","warnActive":"RAPT owns target and heater in RCL mode; BA may assist heat/pump only within its allowed scope.","noOff":"UI status or service acknowledgement is NOT proof of physical OFF.","observeInfo":"Enable BA read-only. Does not stop a running RAPT profile.","enableInfo":"Allows BA actuation only for an already active verified source. Starting a RAPT profile needs a separate START flow (#258).","enableConfirm":"Check equipment, water level and external controller. Leaving read-only may restart allowed BA heat/pump commands on the next tick. Continue?","ackInfo":"Only after checking current external session, raw step and BrewZilla. Keep read-only ON.","ackDisabled":"No verified active reconnection to acknowledge.","ackConfirm":"You acknowledge the current external session/step. Backend re-checks the source; ACK itself sends no hardware command. A future tick may resume allowed writes after leaving read-only. Have you physically inspected the equipment?","abortInfo":"Requests profile STOP, heater/pump OFF and both utilizations 0%. Leaves BZ main power ON for telemetry; verify locally.","rearmInfo":"Requires BA READ-ONLY ON and physical inspection. Clears ABORT only; never starts brewing.","rearmConfirm":"Have you physically inspected heater, pump and BrewZilla? Rearming does NOT prove outputs OFF.","diagnosticsInfo":"An HA timestamp is not necessarily proof of a physical sample. ACK is independently verified by the backend.","next":"Next","controller":"Orchestration","lockReason":"Lockout reason","scope":"Authority"};
+            const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+            const safe = v => String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const row = (n,v) => '<div style="display:flex;justify-content:space-between;gap:9px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.12)"><span style="opacity:.65">'+safe(n)+'</span><b style="text-align:right;overflow-wrap:anywhere">'+safe(v)+'</b></div>';
+            const age = a.snapshot_age_seconds;
+            return '<div style="text-align:left;font-size:11px;line-height:1.45">'+
+              row(T.mode,a.brewday_mode)+row(T.source,a.source)+
+              row(T.lost,a.resync_from_mode || a.fallback_from_mode)+
+              row(T.raw,a.raw_step_name || a.step)+row(T.session,a.profile_session_id)+
+              row(T.age,typeof age==='number'?age.toFixed(0)+' s':'—')+
+              row(T.reason,a.resync_reason || a.fallback_reason)+
+              '<div style="margin-top:10px;opacity:.75">'+safe(T.diagnosticsInfo)+'</div></div>';
+          ]]]
+        styles:
+          card:
+            - border-radius: 17px
+            - padding: 12px
+            - background: rgba(127,127,127,.045)
+          name:
+            - font-size: 13px
+            - font-weight: 950
+          label:
+            - white-space: normal
+            - text-align: left
+      - type: entities
+        title: "Source, fallback & safety diagnostics"
+        show_header_toggle: false
+        entities:
+          - entity: sensor.brewassistant_brewday_mode
+            name: "BREW MODE"
+          - entity: sensor.brewassistant_brewday_runtime_source
+            name: "SOURCE"
+          - entity: sensor.brewassistant_brewday_runtime_state
+            name: "STATUS"
+          - entity: sensor.brewassistant_brewzilla_control_reason
+            name: "Reason"
+          - entity: sensor.brewassistant_brewzilla_orchestration_mode
+            name: "Orchestration"
+          - entity: switch.brewassistant_brewzilla_observe_only
+            name: "BA READ-ONLY"

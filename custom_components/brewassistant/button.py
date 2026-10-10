@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .brewday.brewday_audit import async_record_brewday_audit_event
@@ -52,6 +54,8 @@ from .supervised_apply import (
     build_supervised_apply_snapshot,
     cancel_pending_action,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -160,31 +164,39 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_abort_brewday"
 
     async def async_press(self) -> None:
-        """Latch ABORT and request safe-down only when source authority allows."""
+        """Emergency OFF is the first awaited action, under EVERY runtime owner.
+
+        The emergency adapter immediately raises an in-memory lockout, requests
+        heater/pump OFF and both utilizations zero, then attempts RAPT STOP.
+        It persists the ABORT latch without waiting on any ManualPlan mutation.
+        """
         hass = self.coordinator.hass
-        runtime = build_brewday_runtime_snapshot(hass)
-        await async_latch_brewday_operator_abort(
-            hass,
-            source=str(runtime.get("source") or "None"),
-            stage=str(runtime.get("stage") or "Idle"),
-            step=str(runtime.get("step") or "Idle"),
-        )
-        cancel_pending_action(hass)
-        get_manual_brewday_session(hass).reset()
         result = await async_abort_brewzilla(hass)
         note = (
-            "Operator ABORT latched; BA safe-down commands requested. "
-            "Verify actual BrewZilla outputs on the device."
-            if result.get("safe_state_enforced")
-            else "Operator ABORT latched; source authority blocked BA BrewZilla writes. "
-                 "Physical outputs NOT verified OFF; check the device."
+            "Emergency OFF/zero requests sent; main controller power kept for "
+            "readback. Confirm physical outputs locally. No cloud ACK is OFF proof."
+            if result.get("output_off_requests_sent")
+            else "Emergency OFF/zero attempted, but one or more requests failed; "
+                 "physical outputs and ABORT persistence must be verified locally."
         )
-        await async_record_brewday_audit_event(
-            hass, "brewday_abort", note=note,
-            brewzilla_result=result, always_record=True,
-        )
-        await self.coordinator.async_request_refresh()
+        try:
+            await async_record_brewday_audit_event(
+                hass, "brewday_abort", note=note,
+                brewzilla_result=result, always_record=True,
+            )
+        except Exception:
+            _LOGGER.exception("Could not audit Brewday emergency event after OFF request")
+        try:
+            await self.coordinator.async_request_refresh()
+        except Exception:
+            _LOGGER.exception("Could not refresh Brewday sensors after emergency request")
         self.async_write_ha_state()
+        if any("abort_latch_persistence" in err for err in result.get("errors", [])):
+            raise HomeAssistantError(
+                "ABORT hardware OFF/zero was attempted, but durable ABORT latch "
+                "could not be stored. Do not assume physical OFF or lockout; "
+                "check the BrewZilla locally."
+            )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -203,6 +215,15 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
 
     async def async_press(self) -> None:
         hass = self.coordinator.hass
+        # Re-arming is never START. Require the operator to switch BA back to
+        # read-only before removing the persistent ABORT lockout, otherwise an
+        # RCL Assist tick could immediately resume positive output commands.
+        from .brewzilla.brewzilla_observe_only import observation_required
+        if not observation_required(hass):
+            raise HomeAssistantError(
+                "Slå PÅ BA READ-ONLY innan ABORT kan återaktiveras. "
+                "Återaktivering startar inte bryggningen."
+            )
         previous = brewday_operator_abort_snapshot(hass)
         await async_clear_brewday_operator_abort(hass)
         await async_record_brewday_audit_event(

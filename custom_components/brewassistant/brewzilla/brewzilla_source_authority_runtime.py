@@ -163,6 +163,23 @@ def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value
 
 def _observer_snapshot(snapshot: dict[str, Any], authority: HotSideAuthority) -> dict[str, Any]:
     out = dict(snapshot)
+    # BA read-only is an execution boundary, NOT a different controller.
+    # Preserve the source-derived regulation proposal before zeroing action
+    # flags. In particular, "heating_needed=False" below only means that BA
+    # must not ACTUATE; it must not erase a positive dry-run heat decision.
+    out["read_only_decision_preview"] = {
+        "source": snapshot.get("runtime_source"),
+        "target_c": snapshot.get("requested_target"),
+        "heat_utilization_pct": snapshot.get("desired_heat_utilization"),
+        "pump_utilization_pct": snapshot.get("desired_pump_utilization"),
+        "heater_on_recommended": snapshot.get("desired_heater_on"),
+        "pump_on_recommended": snapshot.get("desired_pump_on"),
+        "control_reason": snapshot.get("control_reason"),
+        "decision_derived_only": True,
+        "executed": False,
+    }
+    out["read_only_logic_evaluated"] = True
+    out["read_only_actuation_blocked"] = True
     out.update(
         hot_side_source_authority=authority.mode,
         hot_side_source_authority_reason=authority.reason,
@@ -178,7 +195,11 @@ def _observer_snapshot(snapshot: dict[str, Any], authority: HotSideAuthority) ->
         ba_owned_reassert_action_needed=False, can_apply_target=False,
         orchestration_mode="source-observer",
         has_pending_action=False, pending_action=None, pending_summary=None,
-        control_reason=f"No BA BrewZilla commands: {authority.reason}. Device outputs are not certified OFF.",
+        control_reason=(
+            f"BA read-only: source regulation proposal is available under "
+            f"read_only_decision_preview, but all ordinary BA writes remain blocked. "
+            f"Source authority: {authority.reason}. Device outputs are not certified OFF."
+        ),
     )
     return out
 

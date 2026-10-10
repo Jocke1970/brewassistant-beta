@@ -4,23 +4,15 @@ conditions:
     state: RAPT BrewZilla Profile
 card:
   type: custom:button-card
-  entity: binary_sensor.brewzilla_profile_active
+  entity: sensor.brewassistant_brewday_runtime_source
+  update_timer: 30s
   name: RAPT Profile Runtime
   icon: mdi:playlist-play
   show_state: false
   show_label: true
   tap_action:
     action: more-info
-  triggers_update:
-    - binary_sensor.brewzilla_profile_active
-    - sensor.brewassistant_brewday_runtime_source
-    - sensor.brewassistant_brewday_runtime_state
-    - sensor.brewassistant_brewday_runtime_stage
-    - sensor.brewassistant_brewday_runtime_step
-    - sensor.brewassistant_brewday_runtime_next_step
-    - sensor.brewassistant_brewday_target_temperature
-    - sensor.brewassistant_brewday_snapshot_age_minutes
-    - sensor.brewassistant_brewzilla_control_reason
+  triggers_update: all
   label: |
     [[[
       const clean = (v) => {
@@ -29,7 +21,8 @@ card:
         return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
       };
       const num = (v) => {
-        const n = Number(String(v ?? '').replace(',', '.'));
+        if (v === null || v === undefined || String(v).trim() === '' || ['unknown','unavailable','none','null'].includes(String(v).trim().toLowerCase())) return null;
+        const n = Number(String(v).replace(',', '.'));
         return Number.isFinite(n) ? n : null;
       };
       const fmtTemp = (v) => {
@@ -41,7 +34,16 @@ card:
         return s.length > m ? `${s.slice(0, m - 1)}…` : s;
       };
 
-      const a = states['binary_sensor.brewzilla_profile_active']?.attributes || {};
+      const marker = 'rapt_cloud_link_brewzilla_profile_runtime';
+      const candidates = Object.values(states).filter(s => s?.entity_id?.startsWith('binary_sensor.') && s?.attributes?.ba_source === marker);
+      const rt = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+      const expectedId = rt.snapshot_entity || rt.source_entity || null;
+      const profileSensor = candidates.length === 1 ? candidates[0] : candidates.find(s => s.entity_id === expectedId) || null;
+      const a = profileSensor?.attributes || {};
+      const verified = profileSensor?.state === 'on' && a.profile_contract_complete === true && a.restored !== true;
+      const reported = profileSensor?.last_reported || profileSensor?.last_updated;
+      const reportedMs = reported ? Date.parse(reported) : NaN;
+      const stale = !Number.isFinite(reportedMs) || (Date.now() - reportedMs) > 90000;
       const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
       const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
       const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
@@ -88,7 +90,21 @@ card:
       }
 
       const duration = length !== null ? `${length.toFixed(0)} min` : '—';
-      const stepIndex = stepNo !== null && stepCount !== null ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const stepIndex = stepNo !== null && stepNo > 0 && stepCount !== null && stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const caution = !verified || stale || rawTarget === null || stepIndex === '—' || (age !== null && age > 1.5);
+      const diagnostics = [
+        !profileSensor ? 'Profile sensor absent or ambiguous' : null,
+        profileSensor && !verified ? 'Profile contract unverified' : null,
+        rawTarget === null ? 'RAPT target missing' : null,
+        stepIndex === '—' ? 'Profile steps missing' : null,
+        stale ? 'Profile observation missing or older than 90 s' : null,
+        age !== null && age > 1.5 ? 'BA snapshot older than 90 s' : null
+      ].filter(Boolean).join(' · ');
+      if (caution && runtimeState !== 'source_unavailable') {
+        badge = 'CHECK SOURCE';
+        badgeBg = 'rgba(244,67,54,.13)';
+        badgeBorder = 'rgba(244,67,54,.38)';
+      }
       const timerText = String(endType).toLowerCase() === 'duration'
         ? `${duration} · timer ${String(durationType).toLowerCase() === 'target' ? 'from target' : durationType}`
         : endType;
@@ -110,6 +126,7 @@ card:
 
         <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">ACTIVE DIRECTIVE</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${short(stepName, 54)}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
 
+        ${caution ? `<div style="margin-top:10px;border-radius:12px;padding:9px 10px;background:rgba(244,67,54,.11);border:1px solid rgba(244,67,54,.4);font-size:11px;font-weight:850;color:#b3261e"><ha-icon icon="mdi:alert-circle" style="width:16px;height:16px;vertical-align:middle"></ha-icon> RAPT DATA NOT VERIFIED · ${diagnostics}. Unknown targets are shown as —, not 0 °C.</div>` : ''}
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
           <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(rawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT target</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTarget)}</b><br><span style="font-size:9px;opacity:.62;">runtime target</span></div>
