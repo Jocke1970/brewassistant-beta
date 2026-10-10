@@ -120,7 +120,7 @@ cards:
           const ready = enabled && !aborted && !resync && !external &&
             ['None','Manual Brewday'].includes(source) && runtime === 'idle' && manual === 'idle';
         return ready ? 'call-service' : 'more-info';
-      ]]]
+        ]]]
       service: brewassistant.manual_brewday_prepare
       confirmation:
         text: "Prepare Manual Brewday? First verify RAPT/Brewfather no longer owns this brew and the hardware is safe. This prepares the process ONLY; no heater or pump is started."
