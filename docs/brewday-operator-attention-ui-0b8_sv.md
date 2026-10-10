@@ -18,8 +18,12 @@ Dessa tillstånd kan lämna hela vyn tom.
 
 ### Återanslutning – överst på Brewday Control
 
-När `sensor.brewassistant_brewday_runtime_state=resync_required` visas
+När `sensor.brewassistant_brewday_runtime_state=resync_required` **eller** attributet
+`resync_required: true` finns på `sensor.brewassistant_brewday_runtime_summary` visas
 en **stor pulserande gul operatörspanel** överst, före övriga statuskort.
+Det täcker HA-omstart där runtime fortfarande är `idle` men den persistenta
+reconnect-spärren väntar på kvittens. Vid utgången spärr försvinner panelen
+först när båda villkoren är falska. Åtgärdsknappen förblir separat guardad.
 Den visar:
 
 - **BA VÄNTAR PÅ DIG** när aktuella villkor för ACK ser klara ut.
