@@ -1,3 +1,11 @@
+## DEV — prioriterad 0b6 säkerhetsfix: ABORT får aldrig blockeras av ManualPlan
+
+- Fältfynd 2026-10-10 i publicerad 0b5: `button.brewassistant_abort_brewday` aktiverade först ABORT-latch och försökte därefter `get_manual_brewday_session(hass).reset()` **innan** akut BrewZilla OFF. Aktiv/retained RAPT-profil blockerade ManualPlan-reset med `HomeAssistantError`, vilket avbröt knappens nödstoppsekvens trots att ABORT-latch kunde vara aktiv.
+- Korrigering: begär akut fysisk BrewZilla OFF **omedelbart efter latchförsök**. Supervised-planstädning och ManualPlan-reset är best effort i `finally` och får inte hindra avstängningsförsök. ManualPlan återställs endast när Manual Brewday verkligen ägde runtime före ABORT; aldrig under RAPT-ägarskap.
+- Regressionstest kör verkliga knappmetodens AST med aktiva RAPT- respektive Manual-källor, inklusive fel i städning/latch.
+- Avstängningsanrop och HA-readbacks är inte bevis på fysisk OFF. Inga positiva RCL-styrningar tillåts utan ny säker acceptans.
+- **Status:** endast `dev`, inte publicerade `beta` 0b5 eller `main`.
+
 ## DEV PREVIEW — inför 2026.10.0b6 — premium Brewday UI och stale-varningar (ingen release)
 
 - Nya kompletta Lovelace-paneler `dashboard/cards/brewday_control_status_sv.yaml` och `dashboard/cards/brewday_control_status.yaml`: källägare, läge, timer, target, fallback, `resync_required`, read-only, ABORT, manuell kvittens.
