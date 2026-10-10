@@ -1,3 +1,13 @@
+## DEV — 0b6 P0: ABORT-överordning, läsbar BZ efter STOP och read-only dry-run (2026-10-10)
+
+- **ABORT:** först omedelbar software lockout, därefter RAPT-oberoende lokala OFF/0-försök (värmare AV, pump AV, heat 0%, pump 0%) **innan** eventuellt långsamt profil-STOP via RAPT Cloud. Efter STOP-försöket upprepas OFF/0 för att reducera risken för sen profilåterställning. ABORT under RCL/BF-BT/Manual/read-only får inte stoppas av recept, ManualPlan-reset, loggning eller ett saknat RAPT-id.
+- **Huvudströmmen till BrewZilla lämnas orörd**, normalt ON, så vi kan få återläsning. Moln-/HA-readback efter begäran kan ange OFF/0 men är **aldrig** fysisk säkerhetsgaranti eller ekvivalent med att dra ur stickproppen. Kräv färska readbacks för varje utgång. Otillgänglig käll-/utgångstelemetri = ej verifierad; fysisk kontroll krävs.
+- **Read-only:** beräkningar för mål, värme och pump bevaras separat i `read_only_decision_preview`, och `read_only_actuation_blocked` är tydlig. Read-only betyder logik från vald källa utan BA-skrivningar till BZ; RAPT-profil kan fortsätta själv.
+- **Återaktivering efter ABORT:** `button.brewassistant_rearm_brewday_control` nekas om BA inte först är i read-only. Återaktivering är INTE start av bryggning; ingen automatisk återstart.
+- **START:** nytt separat styrflöde behövs, se issue #258. Knappen får inte bli en okontrollerad genväg till `switch.turn_off`; kräver verifierat BZ, källa/recept/session, operatörskvittens och backend-gate. Ännu inte implementerat.
+- **Säkerhetsnot:** För att garantera samma fysiska bortkoppling som nätkontakten krävs en oberoende mekanisk brytare/utlösning; varken HA, RCL eller BA kan göra detta över molnet.
+- **Status:** endas `dev`, fysiskt vattenprov och STOP/ABORT-test är releaseblockerare; `beta` 0b5 och `main` oförändrade.
+
 ## DEV — prioriterad 0b6 säkerhetsfix: ABORT får aldrig blockeras av ManualPlan
 
 - Fältfynd 2026-10-10 i publicerad 0b5: `button.brewassistant_abort_brewday` aktiverade först ABORT-latch och försökte därefter `get_manual_brewday_session(hass).reset()` **innan** akut BrewZilla OFF. Aktiv/retained RAPT-profil blockerade ManualPlan-reset med `HomeAssistantError`, vilket avbröt knappens nödstoppsekvens trots att ABORT-latch kunde vara aktiv.
