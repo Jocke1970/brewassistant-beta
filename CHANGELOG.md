@@ -1,3 +1,12 @@
+## DEV PREVIEW — 0b6 Premium START preflight, RCL Assist attach (2026-10-10)
+
+- Ny `sensor.brewassistant_brewday_start_status` med aktuell `ready/waiting/starting/running/blocked/aborted`, blockeringsorsaker, verifierad session, profil och steg.
+- Ny guardad `brewassistant.brewday_start_verified`-tjänst kräver fysisk operatörsbekräftelse samt överensstämmande `expected_session_id`, `expected_step_id`, `expected_profile_id`. START revaliderar färsk RCL-profil, target och alla nödvändiga BZ-utgångar/readbacks, sedan BA READ-ONLY-växling.
+- Premium START-knappen: **gult pulserande** när inte klar, **grönt pulserande** när preflight godkänd, **blått** vid pågående start, **rött fast** efter verifierad RCL Assist GO. Fysisk STOP/ABORT är alltid separat. Tidigare direkta `AKTIVERA BA-STYRNING` togs bort ur premiumkortet.
+- **Ingen direkt switch OFF längre:** Read-only kan inte hävas utan godkänd START-transaktion. START kräver aktiv, unik och verifierad RAPT-profil; efter godkännande följer BA profilen i begränsat heat/pump-scope. RCL steguppdatering i samma session bibehåller GO.
+- Avsiktlig säkerhetsgräns: RCL rapporterar profil-/session-/steg-ID säkert först för aktiv session. Att starta enbart laddad men inaktiv RAPT-profil, eller Manual/Brewfather, **är ännu inte implementerat** och knappen förblir blockerad. Trådas vidare i issue #258. Inga gissade/historiska profil-ID:n används.
+- Dokumentation `docs/brewday-start-preflight-0b6_sv.md`, isolerade START-kontraktstester, och fullständiga SV/EN-kort. **Endast dev.** Installerad beta 0b5 och stable/main är orörda och kan inte använda START-tjänsten.
+
 ## DEV — 0b6 P0: ABORT-överordning, läsbar BZ efter STOP och read-only dry-run (2026-10-10)
 
 - **ABORT:** först omedelbar software lockout, därefter RAPT-oberoende lokala OFF/0-försök (värmare AV, pump AV, heat 0%, pump 0%) **innan** eventuellt långsamt profil-STOP via RAPT Cloud. Efter STOP-försöket upprepas OFF/0 för att reducera risken för sen profilåterställning. ABORT under RCL/BF-BT/Manual/read-only får inte stoppas av recept, ManualPlan-reset, loggning eller ett saknat RAPT-id.
