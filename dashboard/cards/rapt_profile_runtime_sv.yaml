@@ -83,11 +83,6 @@ card:
       let badge = runtimeState === 'source_unavailable' ? 'KÄLLA SAKNAS' : runtimeState === 'inactive' ? 'STOPPAD' : 'RAPT → BA';
       let badgeBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.16)' : 'rgba(156,39,176,.13)';
       let badgeBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.38)' : 'rgba(156,39,176,.30)';
-      if (caution && runtimeState !== 'source_unavailable') {
-        badge = 'KONTROLLERA KÄLLAN';
-        badgeBg = 'rgba(244,67,54,.13)';
-        badgeBorder = 'rgba(244,67,54,.38)';
-      }
 
       if (String(stepName).toLowerCase().includes('mash in')) {
         if (gate === 'ready_for_mash_in') {
@@ -118,6 +113,11 @@ card:
         sourceStale ? 'Profilsensorns mättid saknas eller är över 90 s' : null,
         oldSnapshot ? 'BA-snapshot äldre än 90 s' : null,
       ].filter(Boolean).join(' · ');
+      if (caution && runtimeState !== 'source_unavailable') {
+        badge = 'KONTROLLERA KÄLLAN';
+        badgeBg = 'rgba(244,67,54,.13)';
+        badgeBorder = 'rgba(244,67,54,.38)';
+      }
       const timerText = String(endType).toLowerCase() === 'duration'
         ? `${duration} · timer ${String(durationType).toLowerCase() === 'target' ? 'från target' : durationType}`
         : endType;
