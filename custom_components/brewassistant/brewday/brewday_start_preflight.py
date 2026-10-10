@@ -75,7 +75,7 @@ def _validated_profile(hass: Any, runtime: dict[str, Any]) -> Any | None:
 
 
 def preflight_snapshot(hass: Any) -> dict[str, Any]:
-    """Read-only evaluation; it makes NO HA service or physical calls."""
+    """Read-only, itemized safety preflight. Green chips NEVER authorize writes."""
     from .brewday_runtime import build_brewday_runtime_snapshot
     from .brewday_operator_abort import brewday_operator_abort_active
     from ..brewzilla import brewzilla_orchestration as bz
@@ -84,43 +84,128 @@ def preflight_snapshot(hass: Any) -> dict[str, Any]:
     runtime = build_brewday_runtime_snapshot(hass)
     store = _store(hass)
     reasons: list[str] = []
+    checks: list[dict[str, Any]] = []
+
+    def check(
+        key: str, label: str, status: str, detail: str,
+        *, blocking: bool = True,
+    ) -> None:
+        """Emit one UI diagnostic AND its matching backend-blocking reason."""
+        checks.append({
+            "id": key, "label": label, "status": status,
+            "detail": detail, "blocking": blocking,
+        })
+        if blocking and status != "passed":
+            reasons.append(detail)
+
     abort = brewday_operator_abort_active(hass)
-    if abort:
-        reasons.append("ABORT är aktiv – kräver separat fysisk kontroll och återaktivering")
-    if runtime.get("fallback_active") or runtime.get("resync_required"):
-        reasons.append("Fallback eller återanslutningsspärr är aktiv")
+    check(
+        "abort", "ABORT", "failed" if abort else "passed",
+        "ABORT är aktiv – fysisk kontroll och separat återaktivering krävs"
+        if abort else "Ingen aktiv ABORT-spärr",
+    )
+
+    fallback = bool(runtime.get("fallback_active"))
+    resync = bool(runtime.get("resync_required"))
+    check(
+        "fallback", "Återanslutning", "failed" if fallback or resync else "passed",
+        "Fallback eller återanslutningsspärr är aktiv – kontrollera källans session/steg"
+        if fallback or resync else "Ingen aktiv fallback/resync-spärr",
+    )
+
     mode = str(runtime.get("brewday_mode") or "")
     source = str(runtime.get("source") or "")
-    if mode != RCL_MODE or source != RCL_SOURCE:
-        reasons.append(
-            "START-preflight stöder ännu endast verifierad, redan aktiv RCL-profil; "
-            "Manual/Brewfather och start av laddad RAPT-profil behöver separat källflöde"
-        )
-    profile = _validated_profile(hass, runtime) if source == RCL_SOURCE else None
+    source_ok = mode == RCL_MODE and source == RCL_SOURCE
+    check(
+        "source", "RCL-källa", "passed" if source_ok else "pending",
+        f"Källa: {source or 'saknas'} / läge: {mode or 'saknas'}"
+        if source_ok else
+        "START stöder endast en redan aktiv RCL-profil – "
+        f"nuvarande källa: {source or 'saknas'}, läge: {mode or 'saknas'}",
+    )
+
+    profile = _validated_profile(hass, runtime) if source_ok else None
     pa = profile.attributes if profile is not None else {}
-    profile_id = str(pa.get("profile_id") or "")
-    session_id = str(pa.get("profile_session_id") or "")
-    step_id = str(pa.get("step_id") or "")
-    step_name = str(pa.get("step_name") or "")
-    device_id = str(pa.get("raw_device_id") or "")
-    if (
-        profile is None or profile.state != "on" or
-        pa.get("profile_contract_complete") is not True or
-        not all((profile_id, session_id, step_id, step_name, device_id))
-    ):
-        reasons.append("Ingen unik aktiv RAPT-profil med verifierat recept, session, steg och BZ-id")
-    if profile is not None and not _fresh(profile):
-        reasons.append("RAPT-profilens status är för gammal eller otillgänglig")
+    profile_id = str(pa.get("profile_id") or "").strip()
+    session_id = str(pa.get("profile_session_id") or "").strip()
+    step_id = str(pa.get("step_id") or "").strip()
+    step_name = str(pa.get("step_name") or "").strip()
+    device_id = str(pa.get("raw_device_id") or "").strip()
+    active = (
+        profile is not None and profile.state == "on"
+        and pa.get("profile_contract_complete") is True
+    )
+    check(
+        "profile", "RAPT-profil", "passed" if active else "pending",
+        f"Aktiv profil: {pa.get('profile_name') or profile_id}"
+        if active else "Ingen unik aktiv RAPT-profil med komplett verifierat profilkontrakt",
+    )
+    check(
+        "profile_fresh", "RAPT-status", "passed" if _fresh(profile) else "pending",
+        f"RAPT-data uppdaterad inom {FRESH_SECONDS} s"
+        if _fresh(profile) else f"RAPT-profilens status saknas eller är äldre än {FRESH_SECONDS} s",
+    )
+
+    identity_complete = bool(active and all((profile_id, session_id, step_id, step_name, device_id)))
+    runtime_session = str(runtime.get("profile_session_id") or "").strip()
+    runtime_profile = str(runtime.get("profile_id") or "").strip()
+    ids_match = (
+        identity_complete
+        and runtime_session == session_id
+        and runtime_profile == profile_id
+    )
+    check(
+        "session", "Session", (
+            "passed" if ids_match else "failed" if identity_complete else "pending"
+        ),
+        f"Profil och session matchar RCL ({session_id[:8]}…)"
+        if ids_match else
+        "Profil-/sessions-ID i Brewday matchar inte aktiv RAPT-session"
+        if identity_complete else
+        "Väntar på verifierat profil-ID, session-ID och BrewZilla-enhet",
+    )
+
+    # The RCL adapter exports an immutable profile_step_id. A pretty display
+    # label may legitimately differ (e.g. Heat Strike vs Heatstrike). Never
+    # let a label alone authorize actuation or hide a real step-ID mismatch.
+    runtime_step_id = str(runtime.get("profile_step_id") or "").strip()
+    runtime_step_name = str(runtime.get("step") or "").strip()
+    step_match = bool(ids_match and step_id and runtime_step_id == step_id)
+    if step_match:
+        name_differs = runtime_step_name != step_name
+        check(
+            "step", "Bryggsteg", "passed",
+            f"Steg-ID verifierat ({step_id[:8]}…); "
+            f"visningsnamn: {runtime_step_name!r} / RAPT: {step_name!r}"
+            if name_differs else f"Steg-ID och RAPT-steg matchar: {step_name}",
+        )
+        if name_differs:
+            check(
+                "step_label", "Stegnamn", "warning",
+                f"Olika visningsnamn ({runtime_step_name!r} / {step_name!r}); "
+                "samma verifierade steg-ID – ingen styrspärr",
+                blocking=False,
+            )
+    else:
+        check(
+            "step", "Bryggsteg", "failed" if identity_complete else "pending",
+            f"Steg-ID skiljer: Brewday {runtime_step_id or 'saknas'} / "
+            f"RAPT {step_id or 'saknas'} – STOPPA BA START"
+            if identity_complete else "Steg-ID kan inte verifieras mot RAPT",
+        )
+
     target = runtime.get("target_temperature")
     p_target = pa.get("step_target_temperature")
-    if (
-        not _finite(target, 1, 105)
-        or not _finite(p_target, 1, 105)
-        or abs(float(target) - float(p_target)) > 0.3
-    ):
-        reasons.append("RAPT-mål och Brewday-mål är inte verifierat synkroniserade")
-    if str(runtime.get("step") or "") != step_name:
-        reasons.append("Brewday-steg stämmer inte med verifierat RAPT-steg")
+    target_valid = _finite(target, 1, 105) and _finite(p_target, 1, 105)
+    target_ok = target_valid and abs(float(target) - float(p_target)) <= 0.3
+    check(
+        "target", "Temperaturmål",
+        "passed" if target_ok else "failed" if target_valid else "pending",
+        f"RAPT och Brewday: {float(target):.1f} °C"
+        if target_ok else
+        f"Temperaturmål skiljer: BA {target} °C / RAPT {p_target} °C"
+        if target_valid else "RAPT-/Brewday-mål saknas eller är ogiltigt",
+    )
 
     ids = (
         bz.BREWZILLA_TEMP_SENSOR,
@@ -132,60 +217,108 @@ def preflight_snapshot(hass: Any) -> dict[str, Any]:
         bz.BREWZILLA_MAIN_SWITCH,
     )
     states = {entity: hass.states.get(entity) for entity in ids}
-    for entity in ids:
-        if not _fresh(states[entity]):
-            reasons.append(f"BrewZilla-telemetri saknas/är äldre än {FRESH_SECONDS}s: {entity}")
-    if not _finite(states[bz.BREWZILLA_TEMP_SENSOR].state if states[bz.BREWZILLA_TEMP_SENSOR] else None, 0, 105):
-        reasons.append("BrewZilla-temperaturen kan inte verifieras")
-    for entity in (bz.BREWZILLA_HEAT_UTILIZATION, bz.BREWZILLA_PUMP_UTILIZATION):
-        state = states[entity]
-        if not _finite(state.state if state else None, 0, 100):
-            reasons.append(f"Utilization okänd/ogiltig: {entity}")
-    for entity in (bz.BREWZILLA_HEATER_SWITCH, bz.BREWZILLA_PUMP_SWITCH):
-        state = states[entity]
-        if state is None or state.state not in {"on", "off"}:
-            reasons.append(f"Utgångsstatus okänd: {entity}")
+    stale = [entity for entity in ids if not _fresh(states[entity])]
+    check(
+        "telemetry", "BZ-telemetri", "pending" if stale else "passed",
+        "Saknas/är för gammal (>90 s): " + ", ".join(stale)
+        if stale else "Alla sju BZ-värden är färska",
+    )
     main = states[bz.BREWZILLA_MAIN_SWITCH]
-    if main is None or main.state != "on":
-        reasons.append("BrewZilla huvudström är inte verifierat PÅ")
+    check(
+        "bz_power", "BZ-ström",
+        "passed" if main is not None and main.state == "on" and _fresh(main)
+        else "failed" if main is not None and main.state == "off" else "pending",
+        "BZ huvudström rapporteras PÅ med färsk status"
+        if main is not None and main.state == "on" and _fresh(main)
+        else "BrewZilla huvudström är AV – START spärrad"
+        if main is not None and main.state == "off"
+        else "BrewZilla huvudström saknar färsk PÅ-kvittens",
+    )
+
+    temp = states[bz.BREWZILLA_TEMP_SENSOR]
+    number_target = states[bz.BREWZILLA_TARGET_NUMBER]
+    bzm_ok = (
+        _finite(temp.state if temp else None, 0, 105)
+        and _finite(number_target.state if number_target else None, 0, 105)
+        and _fresh(temp) and _fresh(number_target)
+    )
+    check(
+        "sensors", "BZ-temperatur", "passed" if bzm_ok else "pending",
+        "BZ temperatur och device-target kan läsas och är färska"
+        if bzm_ok else "BZ temperatur/device-target saknas, är ogiltiga eller för gamla",
+    )
+
+    for key, label, switch_id, util_id in (
+        ("heater", "Värmare", bz.BREWZILLA_HEATER_SWITCH, bz.BREWZILLA_HEAT_UTILIZATION),
+        ("pump", "Pump", bz.BREWZILLA_PUMP_SWITCH, bz.BREWZILLA_PUMP_UTILIZATION),
+    ):
+        sw = states[switch_id]
+        utilization = states[util_id]
+        output_ok = (
+            sw is not None and sw.state in {"on", "off"} and _fresh(sw)
+            and _finite(utilization.state if utilization else None, 0, 100)
+            and _fresh(utilization)
+        )
+        check(
+            key, label, "passed" if output_ok else "pending",
+            f"{label}: status {sw.state}, utilization {utilization.state} %; färsk återläsning"
+            if output_ok else
+            f"{label}: status/utilization kan inte verifieras – "
+            f"{switch_id}, {util_id}",
+        )
 
     identity = {
-        "mode": RCL_MODE,
-        "source": RCL_SOURCE,
-        "profile_id": profile_id,
-        "session_id": session_id,
-        "step_id": step_id,
-        "step_name": step_name,
-        "device_id": device_id,
+        "mode": RCL_MODE, "source": RCL_SOURCE,
+        "profile_id": profile_id, "session_id": session_id,
+        "step_id": step_id, "step_name": step_name, "device_id": device_id,
     }
     current = store.get("started_identity")
-    # A confirmed brew session stays RUNNING as RAPT advances profile steps.
-    # Session/profile/device identity is sticky; step identity is revalidated
-    # only during the START transaction, not at every legitimate new step.
     stable_keys = ("mode", "source", "profile_id", "session_id", "device_id")
     same = isinstance(current, dict) and all(
         current.get(key) == identity.get(key) for key in stable_keys
     )
     readonly = observe.observation_required(hass)
-    if store["starting"]:
+    start_in_flight = bool(store["starting"])
+    # During a verified START the switch is intentionally released after
+    # preflight and before returning GO. An ordinary manual release is blocked.
+    readonly_ok = readonly or start_in_flight or same
+    check(
+        "read_only", "BA READ-ONLY",
+        "passed" if readonly_ok else "failed",
+        "READ-ONLY PÅ – BA skriver inte till BrewZilla"
+        if readonly else
+        "READ-ONLY släppt under verifierad START eller samma session"
+        if readonly_ok else
+        "BA READ-ONLY är AV utan verifierad START – återställ READ-ONLY",
+    )
+
+    if start_in_flight:
         status = "starting"
     elif abort:
         status = "aborted"
     elif same and not readonly and not reasons:
         status = "running"
-    elif not readonly:
-        if not store["starting"]:
-            reasons.append("BA styr redan utan verifierad START för denna session – aktivera READ-ONLY")
+    elif not readonly and not same:
         status = "blocked"
     elif reasons:
         status = "waiting"
     else:
         status = "ready"
 
+    check(
+        "operator", "Startkvittens", "passed" if status == "running" else "pending",
+        "START är operatörsbekräftad för denna session"
+        if status == "running" else
+        "Fysisk kontroll och uttrycklig START-kvittens återstår; "
+        "ingen mjukvarukvittens bevisar fysisk säkerhet",
+        blocking=False,
+    )
+
     return {
         "status": status,
         "ready": status == "ready",
         "reasons": reasons,
+        "checks": checks,
         "mode": mode,
         "source": source,
         "identity": identity if profile is not None else None,
