@@ -1,3 +1,9 @@
+## DEV PREVIEW — 0b8 Operator attention and Manual visibility (2026-10-10)
+
+- Reconnect med `resync_required` visas som **stor pulserande gul operatörspanel överst** med operatörskvittens, källa, session, steg, ålder och blockeringschips. Den befintliga backend-guardade `brewday_reconnect_ack` och operatörsbekräftelsen är oförändrade; ingen auto-återaktivering, ABORT/read-only fortsatt separata.
+- **Manual Brewday alltid synlig:** lös `Manual Brewday + idle`-glappet. Permanent source-aware portal med *Förbered*, *Pågår*, *Spärrad* eller *Kontrollera källa*. PREPARE är endast klickbart efter verifierat inaktivt/ledigt processläge utan upptäckt RCL/BF/resync/ABORT; backend avgör slutligt behörighet.
+- Kompletta EN/SV-kort, parser-/kontraktstester och `docs/brewday-operator-attention-ui-0b8_sv.md`. `beta`/`main` orörda.
+
 ## DEV PREVIEW — 0b8 Manual entry + RCL BA Assist operator clarity (2026-10-10)
 
 - Grön START i RCL-läget heter nu **AKTIVERA BA-ASSISTANS** / ENABLE BA ASSIST, eftersom RAPT-profilen redan kör. Bekräftelsen och BA READ-ONLY-kortet förklarar korrekt säker handoff i stället för direkt READ-ONLY OFF.
