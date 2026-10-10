@@ -168,7 +168,8 @@ def preflight_snapshot(hass: Any) -> dict[str, Any]:
     elif same and not readonly and not reasons:
         status = "running"
     elif not readonly:
-        reasons.append("BA styr redan utan verifierad START för denna session – aktivera READ-ONLY")
+        if not store["starting"]:
+            reasons.append("BA styr redan utan verifierad START för denna session – aktivera READ-ONLY")
         status = "blocked"
     elif reasons:
         status = "waiting"
