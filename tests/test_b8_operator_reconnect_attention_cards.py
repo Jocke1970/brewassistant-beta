@@ -16,55 +16,60 @@ def test_operator_reconnect_hero_precedes_status_and_remains_ack_only():
         text = (CARDS / name).read_text(encoding="utf-8")
         cards = yaml.safe_load(text)["cards"]
         hero, status = cards[0], cards[1]
-        assert hero["type"] == "conditional"
-        assert hero["conditions"] == [
-            {
-                "condition": "or",
-                "conditions": [
-                    {
-                        "condition": "state",
-                        "entity": "sensor.brewassistant_brewday_runtime_state",
-                        "state": "resync_required",
-                    },
-                    {
-                        "condition": "state",
-                        "entity": "sensor.brewassistant_brewday_runtime_summary",
-                        "attribute": "resync_required",
-                        "state": True,
-                    },
-                ],
-            }
-        ]
-        # Field regression: HA may restore a sticky resync latch while the
-        # process sensor still reports idle. Neither path may hide the hero.
-        def visible(runtime_state, summary_latched):
-            alternatives = hero["conditions"][0]["conditions"]
-            return any(
-                (item.get("attribute") == "resync_required" and
-                 summary_latched is item["state"])
-                or (item["entity"] == "sensor.brewassistant_brewday_runtime_state"
-                    and runtime_state == item["state"])
-                for item in alternatives
-            )
+        assert hero["type"] == "custom:button-card"
+        assert hero["triggers_update"] == "all"
+        assert "conditions" not in hero  # no HA frontend attribute condition
+        display = next(style["display"] for style in hero["styles"]["card"]
+                       if "display" in style)
+        assert "sensor.brewassistant_brewday_runtime_summary" in display
+        assert "sensor.brewassistant_brewday_runtime_state" in display
+        assert ("return a.resync_required === true || "
+                "runtime === 'resync_required' ? 'grid' : 'none';") in display
+        # Regression: evaluate the actual JS, not just its presence.
+        # No controller, HA service, cloud or hardware is invoked here.
+        import json
+        import shutil
+        import subprocess
 
-        assert visible("resync_required", False)
-        assert visible("idle", True)
-        assert visible("paused", True)
-        assert not visible("idle", False)
-        assert not visible("running", False)
-        assert hero["card"]["type"] == "custom:button-card"
+        if shutil.which("node"):
+            snippet = display.strip().removeprefix("[[[").removesuffix("]]]").strip()
+            for runtime, latched, expected in (
+                ("resync_required", False, "grid"),
+                ("idle", True, "grid"),
+                ("paused", True, "grid"),
+                ("idle", False, "none"),
+                ("running", False, "none"),
+            ):
+                mock = {
+                    "sensor.brewassistant_brewday_runtime_summary": {
+                        "attributes": {"resync_required": latched}
+                    },
+                    "sensor.brewassistant_brewday_runtime_state": {
+                        "state": runtime
+                    },
+                }
+                script = (
+                    "const states = " + json.dumps(mock) + ";\n"
+                    "function evaluate() {\n" + snippet + "\n}\n"
+                    "process.stdout.write(evaluate());\n"
+                )
+                result = subprocess.run(
+                    ["node", "-e", script], capture_output=True,
+                    text=True, check=True,
+                )
+                assert result.stdout == expected, (runtime, latched)
         assert status["name"] == "Brewday Control / Status"
-        assert hero["card"]["tap_action"]["service"] == "brewassistant.brewday_reconnect_ack"
-        assert "expected_step" in hero["card"]["tap_action"]["data"]
-        assert "expected_session_id" in hero["card"]["tap_action"]["data"]
-        assert "confirmation" in hero["card"]["tap_action"]
-        assert "resync_required === true" in hero["card"]["tap_action"]["action"]
-        assert "snapshot_age_seconds" in hero["card"]["tap_action"]["action"]
-        assert "a.profile_source_available === true" in hero["card"]["tap_action"]["action"]
-        assert "switch.brewassistant_brewzilla_observe_only" in hero["card"]["tap_action"]["action"]
-        assert "operator_abort_active" in hero["card"]["tap_action"]["action"]
-        assert "ba-operator-reconnect-pulse" in hero["card"]["extra_styles"]
-        assert "prefers-reduced-motion" in hero["card"]["extra_styles"]
+        assert hero["tap_action"]["service"] == "brewassistant.brewday_reconnect_ack"
+        assert "expected_step" in hero["tap_action"]["data"]
+        assert "expected_session_id" in hero["tap_action"]["data"]
+        assert "confirmation" in hero["tap_action"]
+        assert "resync_required === true" in hero["tap_action"]["action"]
+        assert "snapshot_age_seconds" in hero["tap_action"]["action"]
+        assert "a.profile_source_available === true" in hero["tap_action"]["action"]
+        assert "switch.brewassistant_brewzilla_observe_only" in hero["tap_action"]["action"]
+        assert "operator_abort_active" in hero["tap_action"]["action"]
+        assert "ba-operator-reconnect-pulse" in hero["extra_styles"]
+        assert "prefers-reduced-motion" in hero["extra_styles"]
         assert text.count("service: brewassistant.brewday_reconnect_ack") == 1
         # Outside the reconnect banner the emergency STOP stays unconditional.
         assert any(
