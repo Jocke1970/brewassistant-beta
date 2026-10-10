@@ -164,60 +164,38 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
         self._attr_suggested_object_id = f"{DOMAIN}_abort_brewday"
 
     async def async_press(self) -> None:
-        """Latch ABORT and request safe-down only when source authority allows."""
+        """Emergency OFF is the first awaited action, under EVERY runtime owner.
+
+        The emergency adapter immediately raises an in-memory lockout, requests
+        heater/pump OFF and both utilizations zero, then attempts RAPT STOP.
+        It persists the ABORT latch without waiting on any ManualPlan mutation.
+        """
         hass = self.coordinator.hass
-        runtime = build_brewday_runtime_snapshot(hass)
-        # Safety invariant: neither the optional Manual session nor supervised
-        # cleanup may delay/deny explicit physical emergency requests. A live
-        # RAPT profile deliberately blocks Manual session mutations.
-        latch_failed = False
+        result = await async_abort_brewzilla(hass)
+        note = (
+            "Emergency OFF/zero requests sent; main controller power kept for "
+            "readback. Confirm physical outputs locally. No cloud ACK is OFF proof."
+            if result.get("output_off_requests_sent")
+            else "Emergency OFF/zero attempted, but one or more requests failed; "
+                 "physical outputs and ABORT persistence must be verified locally."
+        )
         try:
-            await async_latch_brewday_operator_abort(
-                hass,
-                source=str(runtime.get("source") or "None"),
-                stage=str(runtime.get("stage") or "Idle"),
-                step=str(runtime.get("step") or "Idle"),
+            await async_record_brewday_audit_event(
+                hass, "brewday_abort", note=note,
+                brewzilla_result=result, always_record=True,
             )
         except Exception:
-            latch_failed = True
-            # Persistence can fail. Still try the physical emergency lane;
-            # report both failures instead of leaving actuators untouched.
-            _LOGGER.exception("Failed to persist Brewday ABORT latch; issuing emergency OFF anyway")
+            _LOGGER.exception("Could not audit Brewday emergency event after OFF request")
         try:
-            result = await async_abort_brewzilla(hass)
-        finally:
-            # These are best-effort housekeeping, never safety prerequisites.
-            try:
-                cancel_pending_action(hass)
-            except Exception:
-                _LOGGER.exception("Could not clear pending supervised action after emergency request")
-            # A ManualPlan reset is only meaningful when Manual Brewday owns
-            # this runtime. Never mutate the guarded Manual session under RAPT.
-            if runtime.get("source") == "Manual Brewday":
-                try:
-                    get_manual_brewday_session(hass).reset()
-                except Exception:
-                    _LOGGER.exception("Could not reset Manual Brewday after emergency request")
-        note = (
-            "Operator ABORT latched; BA safe-down commands requested. "
-            "Verify actual BrewZilla outputs on the device."
-            if result.get("safe_state_enforced")
-            else "Operator ABORT latched; source authority blocked BA BrewZilla writes. "
-                 "Physical outputs NOT verified OFF; check the device."
-        )
-        await async_record_brewday_audit_event(
-            hass, "brewday_abort", note=note,
-            brewzilla_result=result, always_record=True,
-        )
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
+        except Exception:
+            _LOGGER.exception("Could not refresh Brewday sensors after emergency request")
         self.async_write_ha_state()
-        if latch_failed:
-            # Do not report a successful operator lockout when durable ABORT
-            # state was not saved, even if the emergency request was sent.
+        if any("abort_latch_persistence" in err for err in result.get("errors", [])):
             raise HomeAssistantError(
-                "Brewday ABORT lockout could not be stored. Emergency OFF was "
-                "requested, but neither ongoing lockout nor physical OFF is "
-                "verified. Inspect BrewZilla locally and keep controls stopped."
+                "ABORT hardware OFF/zero was attempted, but durable ABORT latch "
+                "could not be stored. Do not assume physical OFF or lockout; "
+                "check the BrewZilla locally."
             )
 
     @property
