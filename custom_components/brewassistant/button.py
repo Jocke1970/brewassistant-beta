@@ -215,6 +215,15 @@ class BrewAssistantRearmBrewdayControlButton(BrewAssistantButtonEntity):
 
     async def async_press(self) -> None:
         hass = self.coordinator.hass
+        # Re-arming is never START. Require the operator to switch BA back to
+        # read-only before removing the persistent ABORT lockout, otherwise an
+        # RCL Assist tick could immediately resume positive output commands.
+        from .brewzilla.brewzilla_observe_only import observation_required
+        if not observation_required(hass):
+            raise HomeAssistantError(
+                "Slå PÅ BA READ-ONLY innan ABORT kan återaktiveras. "
+                "Återaktivering startar inte bryggningen."
+            )
         previous = brewday_operator_abort_snapshot(hass)
         await async_clear_brewday_operator_abort(hass)
         await async_record_brewday_audit_event(
