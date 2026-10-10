@@ -51,6 +51,7 @@ from .coordinator import BrewAssistantCoordinator
 from .hlt.runtime import async_setup_hlt_simulation
 from .kegerator.guard import async_setup_kegerator_guard
 from .brewday.manual_brewday_runtime import ManualRuntimeState
+from .brewday.manual_brewday_access import assert_manual_brewday_mutation_allowed
 from .brewday.brewday_execution_mode import (
     acknowledge_external_reconnect,
     async_load_brewday_recipe_context,
@@ -378,47 +379,57 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_runtime_sensors()
 
     async def _handle_manual_prepare(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="prepare")
         session = get_manual_brewday_session(hass)
         session.prepare()
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="start")
         session = get_manual_brewday_session(hass)
         session.start()
         await _refresh_runtime_sensors()
 
     async def _handle_manual_pause(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="pause")
         session = get_manual_brewday_session(hass)
         session.pause()
         await _refresh_runtime_sensors()
 
     async def _handle_manual_next(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="next")
         session = get_manual_brewday_session(hass)
         session.next()
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start_mash(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="start_mash")
         _jump_to_manual_stage(keywords=("mash", "mäsk"), fallback_index=1)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start_boil(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="start_boil")
         _jump_to_manual_stage(keywords=("boil", "kok"), fallback_index=3)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start_whirlpool(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="start_whirlpool")
         _jump_to_manual_stage(keywords=("whirlpool", "hop stand", "hopstand"), fallback_index=4)
         await _refresh_runtime_sensors()
 
     async def _handle_manual_start_cooling(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="start_cooling")
         _jump_to_manual_stage(keywords=("chill", "cool", "kyl"), fallback_index=max(0, len(get_manual_brewday_session(hass).plan.stages) - 1))
         await _refresh_runtime_sensors()
 
     async def _handle_manual_finish(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="finish")
         session = get_manual_brewday_session(hass)
         session.finish()
         await _refresh_runtime_sensors()
 
     async def _handle_manual_reset(call: ServiceCall) -> None:
+        assert_manual_brewday_mutation_allowed(hass, action="reset")
         new_manual_brewday_session(hass)
         await _refresh_runtime_sensors()
 

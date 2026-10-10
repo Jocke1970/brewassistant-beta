@@ -434,7 +434,10 @@ def decorate_snapshot(
     out = dict(snapshot)
     store = _store(hass)
     store["current_mode"] = mode
-    if fallback_from is None:
+    resync = bool(store.get("resync_required"))
+    # A snapshot assembled from idle Manual data during source loss must
+    # never release the retained external owner's fallback state.
+    if fallback_from is None and not resync:
         store.update(
             fallback_active=False,
             fallback_from_mode=None,
@@ -445,16 +448,52 @@ def decorate_snapshot(
         {
             "brewday_mode": mode,
             **_owners(mode, fallback_from),
-            "fallback_active": fallback_from is not None,
-            "fallback_from_mode": fallback_from,
-            "fallback_reason": fallback_reason,
+            "fallback_active": fallback_from is not None or resync,
+            "fallback_from_mode": fallback_from or (store.get("resync_from_mode") if resync else None),
+            "fallback_reason": fallback_reason or (store.get("resync_reason") if resync else None),
             "recipe_context_retained": recipe_context_retained,
-            "reconnect_expected": reconnect_expected,
-            "resync_required": bool(store.get("resync_required")),
+            "reconnect_expected": reconnect_expected and not resync,
+            "resync_required": resync,
             "resync_reason": store.get("resync_reason"),
             "resync_from_mode": store.get("resync_from_mode"),
         }
     )
+    if resync and str(out.get("runtime_state") or "").lower() != "aborted":
+        # Reconciliation is a *different* state from active Manual Brewing.
+        # Cached external source information remains in resync_from_mode;
+        # it is neither a verified STOP nor a permission to actuate.
+        out.update(
+            source="None",
+            status="resync_required",
+            runtime_state="resync_required",
+            target_temperature=None,
+            target_temperature_source=None,
+            recipe_owner="external_owner_unverified",
+            step_timer_owner="external_owner_unverified",
+            target_owner="external_owner_unverified",
+            heat_owner="none_until_resync",
+            pump_owner="none_until_resync",
+            target_write_allowed_by_mode=False,
+            heater_switch_write_allowed_by_mode=False,
+            heat_utilization_write_allowed_by_mode=False,
+            pump_write_allowed_by_mode=False,
+            direct_brewzilla_control_allowed=False,
+            live_timer_active=False,
+            refresh_recommended=False,
+            reconnect_expected=False,
+            time_remaining_seconds=None,
+            time_remaining_minutes=None,
+        )
+    if str(out.get("runtime_state") or "").lower() == "aborted":
+        # ABORT remains the highest-priority presentation and write lock.
+        out.update(
+            target_temperature=None,
+            direct_brewzilla_control_allowed=False,
+            target_write_allowed_by_mode=False,
+            heater_switch_write_allowed_by_mode=False,
+            heat_utilization_write_allowed_by_mode=False,
+            pump_write_allowed_by_mode=False,
+        )
     return out
 
 
