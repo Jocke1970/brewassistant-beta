@@ -89,16 +89,23 @@ def build_environment(*, age_seconds=5, profile_active=True, aborted=False):
         ),
         services=SimpleNamespace(async_call=switch_call),
     )
+    runtime_override = {}
     def runtime(h):
-        return {
+        source = state_map[profile].attributes
+        result = {
             "brewday_mode": "RCL Brewing",
             "source": "RAPT BrewZilla Profile",
             "source_entity": profile,
-            "step": state_map[profile].attributes["step_name"],
-            "target_temperature": state_map[profile].attributes["step_target_temperature"],
+            "step": source["step_name"],
+            "profile_step_id": source["step_id"],
+            "profile_id": source["profile_id"],
+            "profile_session_id": source["profile_session_id"],
+            "target_temperature": source["step_target_temperature"],
             "fallback_active": False,
             "resync_required": False,
         }
+        result.update(runtime_override)
+        return result
     namespace = {
         "asyncio": asyncio,
         "math": __import__("math"),
@@ -112,6 +119,7 @@ def build_environment(*, age_seconds=5, profile_active=True, aborted=False):
         "HomeAssistantError": FakeError,
         "dt_util": SimpleNamespace(utcnow=lambda: now, as_utc=lambda x: x),
         "build_brewday_runtime_snapshot": runtime,
+        "runtime_override": runtime_override,
         "brewday_operator_abort_active": lambda h: aborted,
         "bz": ids,
         "observe": SimpleNamespace(observation_required=lambda h: read_only["enabled"]),
@@ -193,3 +201,52 @@ def test_preflight_never_guesses_an_inactive_profile_id_and_direct_switch_requir
     assert "mdi:alert-octagon" in ui
     assert "service: switch.turn_off" not in ui
     assert "expected_session_id" in ui and "expected_step_id" in ui
+
+
+def test_display_step_spelling_diff_does_not_override_matching_verified_step_id():
+    hass, states, ro, calls, funcs = build_environment()
+    funcs["runtime_override"]["step"] = "Mash  Rest"  # RAPT displays "Mash Rest"
+    pre = funcs["preflight_snapshot"](hass)
+    assert pre["status"] == "ready", pre["reasons"]
+    assert pre["reasons"] == []
+    by_id = {entry["id"]: entry for entry in pre["checks"]}
+    assert by_id["step"]["status"] == "passed"
+    assert by_id["step_label"]["status"] == "warning"
+    assert by_id["step_label"]["blocking"] is False
+    assert calls == []
+
+
+def test_wrong_step_id_blocks_even_if_display_step_name_matches():
+    hass, states, ro, calls, funcs = build_environment()
+    funcs["runtime_override"]["profile_step_id"] = "different-step-id"
+    pre = funcs["preflight_snapshot"](hass)
+    assert pre["status"] == "waiting"
+    assert pre["ready"] is False
+    assert "Steg-ID skiljer" in " | ".join(pre["reasons"])
+    assert {v["id"]: v for v in pre["checks"]}["step"]["status"] == "failed"
+    assert calls == []
+
+
+def test_wrong_session_id_blocks_even_when_step_id_and_target_match():
+    hass, states, ro, calls, funcs = build_environment()
+    funcs["runtime_override"]["profile_session_id"] = "stale-old-session"
+    pre = funcs["preflight_snapshot"](hass)
+    assert pre["status"] == "waiting"
+    assert {v["id"]: v for v in pre["checks"]}["session"]["status"] == "failed"
+    assert {v["id"]: v for v in pre["checks"]}["step"]["status"] == "failed"
+    assert calls == []
+
+
+def test_start_chips_explain_freshness_abort_and_confirmation_independently():
+    hass, states, ro, calls, funcs = build_environment()
+    pre = funcs["preflight_snapshot"](hass)
+    statuses = {v["id"]: v["status"] for v in pre["checks"]}
+    for key in ("source", "profile", "session", "step", "target", "bz_power",
+                "telemetry", "heater", "pump", "read_only", "abort"):
+        assert statuses[key] == "passed", (key, statuses[key])
+    assert statuses["operator"] == "pending"
+    states["switch.brewzilla"].state = "off"
+    blocked = funcs["preflight_snapshot"](hass)
+    assert blocked["status"] == "waiting"
+    assert {v["id"]: v for v in blocked["checks"]}["bz_power"]["status"] == "failed"
+    assert calls == []

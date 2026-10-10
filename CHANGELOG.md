@@ -1,3 +1,9 @@
+## DEV PREVIEW — 0b7 START preflight diagnostics (2026-10-10)
+
+- Färgade START-chips (grön/gul/röd) för alla verifierade käll-/session-/steg-/target-/BZ-/read-only-/ABORT-kontroller, med detaljer och blockeringsorsaker. Fullständiga SV/EN premiumkort.
+- 0b6-bugfix: verifiera RCL `profile_step_id` mot RCL:s `step_id` och matchande profil + session, i stället för exakt displaynamn (`Heat Strike` / `Heatstrike`). Skiljande namn ger gult **icke-blockerande** chip; steg-ID-konflikt är fortfarande blockerande röd.
+- Ingenting släpps till `beta`/`main` utan tester och kontrollerat vattenprov. ABORT är separat och överordnad START.
+
 ## 0b6 — RAPT Profile Runtime entity fix
 
 - Uppdaterade fullständiga kort `dashboard/cards/rapt_profile_runtime_sv.yaml` + `rapt_profile_runtime.yaml` läser nu dynamiskt RCL:s faktiska profilsensor via `ba_source: rapt_cloud_link_brewzilla_profile_runtime` i stället för att hårdkoda `binary_sensor.brewzilla_profile_active`.
