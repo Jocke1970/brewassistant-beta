@@ -1,3 +1,11 @@
+## DEV PREVIEW — RAPT Profile Runtime UI (inför 2026.10.0b6)
+
+- Uppdaterade fullständiga kort `dashboard/cards/rapt_profile_runtime_sv.yaml` + `rapt_profile_runtime.yaml` läser nu dynamiskt RCL:s faktiska profilsensor via `ba_source: rapt_cloud_link_brewzilla_profile_runtime` i stället för att hårdkoda `binary_sensor.brewzilla_profile_active`.
+- Saknade numeriska attribut ger **—**, inte ett påhittat RAPT-mål `0.0 °C` eller `0/0` steg. En riktig rå `0 °C` (t.ex. ChillOut) visas fortfarande som `0.0 °C`.
+- Okänt/otillräckligt profilkontrakt, saknade stegfält samt RCL-observation/snapshot över 90 sekunder markeras tydligt. Flera möjliga enheter väljs aldrig godtyckligt.
+- `tests/test_b6_rapt_profile_card_dynamic_source.py` kontrollerar UI-kontraktet. Inga backend- eller hårdvaruskrivningar ändrades.
+- **Manuellt byte:** använd hela svenska UI-filen på `dev` i ditt personliga HA-kort. Bara Lovelace YAML uppdateras; ingen HA-omstart krävs. `beta` 0b5 och `main` är opåverkade.
+
 ## DEV PREVIEW — inför 2026.10.0b6 — premium Brewday UI och stale-varningar (ingen release)
 
 - Nya kompletta Lovelace-paneler `dashboard/cards/brewday_control_status_sv.yaml` och `dashboard/cards/brewday_control_status.yaml`: källägare, läge, timer, target, fallback, `resync_required`, read-only, ABORT, manuell kvittens.
