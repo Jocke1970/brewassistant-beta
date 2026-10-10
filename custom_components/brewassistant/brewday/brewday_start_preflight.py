@@ -159,7 +159,13 @@ def preflight_snapshot(hass: Any) -> dict[str, Any]:
         "device_id": device_id,
     }
     current = store.get("started_identity")
-    same = current is not None and current == identity
+    # A confirmed brew session stays RUNNING as RAPT advances profile steps.
+    # Session/profile/device identity is sticky; step identity is revalidated
+    # only during the START transaction, not at every legitimate new step.
+    stable_keys = ("mode", "source", "profile_id", "session_id", "device_id")
+    same = isinstance(current, dict) and all(
+        current.get(key) == identity.get(key) for key in stable_keys
+    )
     readonly = observe.observation_required(hass)
     if store["starting"]:
         status = "starting"
@@ -246,5 +252,23 @@ async def async_start_verified(
                 raise HomeAssistantError("Källan ändrades under START; BA återställd till read-only.")
             store["started_identity"] = identity
             return preflight_snapshot(hass)
+        except Exception:
+            # A partial HA switch turn_off must never leave BA armed after
+            # START validation failed. Reassert observation, fail visibly.
+            store["started_identity"] = None
+            from ..brewzilla.brewzilla_observe_only import observation_required
+            if not observation_required(hass):
+                try:
+                    await hass.services.async_call(
+                        "switch", "turn_on",
+                        {"entity_id": "switch.brewassistant_brewzilla_observe_only"},
+                        blocking=True,
+                    )
+                except Exception as rollback_error:
+                    raise HomeAssistantError(
+                        "START misslyckades OCH återgång till BA READ-ONLY misslyckades. "
+                        "Stoppa styrningen fysiskt och kontrollera BrewZilla."
+                    ) from rollback_error
+            raise
         finally:
             store["starting"] = False
