@@ -4,23 +4,16 @@ conditions:
     state: RAPT BrewZilla Profile
 card:
   type: custom:button-card
-  entity: binary_sensor.brewzilla_profile_active
+  # Anchor to BA runtime; find the RCL profile dynamically using ba_source.
+  entity: sensor.brewassistant_brewday_runtime_source
+  update_timer: 30s
   name: RAPT-profilruntime
   icon: mdi:playlist-play
   show_state: false
   show_label: true
   tap_action:
     action: more-info
-  triggers_update:
-    - binary_sensor.brewzilla_profile_active
-    - sensor.brewassistant_brewday_runtime_source
-    - sensor.brewassistant_brewday_runtime_state
-    - sensor.brewassistant_brewday_runtime_stage
-    - sensor.brewassistant_brewday_runtime_step
-    - sensor.brewassistant_brewday_runtime_next_step
-    - sensor.brewassistant_brewday_target_temperature
-    - sensor.brewassistant_brewday_snapshot_age_minutes
-    - sensor.brewassistant_brewzilla_control_reason
+  triggers_update: all
   label: |
     [[[
       const clean = (v) => {
@@ -29,7 +22,11 @@ card:
         return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? null : s;
       };
       const num = (v) => {
-        const n = Number(String(v ?? '').replace(',', '.'));
+        // Number(null), Number('') and Number('unavailable') may hide missing
+        // source payload as plausible 0.0 °C / 0 of 0 profile steps.
+        if (v === undefined || v === null || String(v).trim() === '' ||
+          ['unknown','unavailable','none','null'].includes(String(v).trim().toLowerCase())) return null;
+        const n = Number(String(v).replace(',', '.'));
         return Number.isFinite(n) ? n : null;
       };
       const fmtTemp = (v) => {
@@ -41,8 +38,23 @@ card:
         return s.length > m ? `${s.slice(0, m - 1)}…` : s;
       };
 
-      const a = states['binary_sensor.brewzilla_profile_active']?.attributes || {};
+      const marker = 'rapt_cloud_link_brewzilla_profile_runtime';
+      const candidates = Object.values(states).filter(s =>
+        s?.entity_id?.startsWith('binary_sensor.') && s?.attributes?.ba_source === marker);
+      const runtimeAttrs = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+      const expectedId = runtimeAttrs.snapshot_entity || runtimeAttrs.source_entity || null;
+      // Never choose an arbitrary physical BrewZilla when multiple profiles exist.
+      const profileSensor = candidates.length === 1 ? candidates[0] :
+        candidates.find(s => s.entity_id === expectedId) || null;
+      const a = profileSensor?.attributes || {};
       const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
+      const sourceAmbiguous = candidates.length > 1 && !profileSensor;
+      const sourceVerified = profileSensor?.state === 'on' &&
+        a.profile_contract_complete === true && a.restored !== true;
+      const reported = profileSensor?.last_reported || profileSensor?.last_updated;
+      const reportedMs = reported ? Date.parse(reported) : NaN;
+      const sourceAgeSeconds = Number.isFinite(reportedMs) ? Math.max(0, (Date.now() - reportedMs) / 1000) : null;
+      const sourceStale = sourceAgeSeconds === null || sourceAgeSeconds > 90;
       const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
       const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
       const runtimeStep = clean(states['sensor.brewassistant_brewday_runtime_step']?.state) || '—';
@@ -71,6 +83,11 @@ card:
       let badge = runtimeState === 'source_unavailable' ? 'KÄLLA SAKNAS' : runtimeState === 'inactive' ? 'STOPPAD' : 'RAPT → BA';
       let badgeBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.16)' : 'rgba(156,39,176,.13)';
       let badgeBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.38)' : 'rgba(156,39,176,.30)';
+      if (caution && runtimeState !== 'source_unavailable') {
+        badge = 'KONTROLLERA KÄLLAN';
+        badgeBg = 'rgba(244,67,54,.13)';
+        badgeBorder = 'rgba(244,67,54,.38)';
+      }
 
       if (String(stepName).toLowerCase().includes('mash in')) {
         if (gate === 'ready_for_mash_in') {
@@ -88,7 +105,19 @@ card:
       }
 
       const duration = length !== null ? `${length.toFixed(0)} min` : '—';
-      const stepIndex = stepNo !== null && stepCount !== null ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const stepIndex = stepNo !== null && stepNo > 0 && stepCount !== null && stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const missingContract = !sourceVerified || rawTarget === null || stepIndex === '—';
+      const oldSnapshot = age !== null && age > 1.5;
+      const caution = missingContract || sourceStale || oldSnapshot;
+      const diagnostics = [
+        !profileSensor ? 'Ingen unik RCL-profilsensor hittades' : null,
+        sourceAmbiguous ? 'Flera möjliga profilsensorer' : null,
+        profileSensor && !sourceVerified ? 'RCL-profilkontraktet ej verifierat' : null,
+        rawTarget === null ? 'RAPT-mål saknas' : null,
+        stepIndex === '—' ? 'Profilsteg saknas' : null,
+        sourceStale ? 'Profilsensorns mättid saknas eller är över 90 s' : null,
+        oldSnapshot ? 'BA-snapshot äldre än 90 s' : null,
+      ].filter(Boolean).join(' · ');
       const timerText = String(endType).toLowerCase() === 'duration'
         ? `${duration} · timer ${String(durationType).toLowerCase() === 'target' ? 'från target' : durationType}`
         : endType;
@@ -110,6 +139,7 @@ card:
 
         <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">AKTIVT DIREKTIV</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${short(stepName, 54)}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
 
+        ${caution ? `<div style="margin-top:10px;border-radius:12px;padding:9px 10px;background:rgba(244,67,54,.11);border:1px solid rgba(244,67,54,.4);font-size:11px;font-weight:850;color:#b3261e"><ha-icon icon="mdi:alert-circle" style="width:16px;height:16px;vertical-align:middle"></ha-icon> EJ VERIFIERAD RAPT-DATA · ${diagnostics}. Okända mål visas som —, inte 0 °C.</div>` : ''}
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
           <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(rawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT-target</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTarget)}</b><br><span style="font-size:9px;opacity:.62;">runtime-target</span></div>
