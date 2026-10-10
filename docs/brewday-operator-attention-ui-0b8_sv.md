@@ -18,12 +18,22 @@ Dessa tillstånd kan lämna hela vyn tom.
 
 ### Återanslutning – överst på Brewday Control
 
-När `sensor.brewassistant_brewday_runtime_state=resync_required` **eller** attributet
-`resync_required: true` finns på `sensor.brewassistant_brewday_runtime_summary` visas
-en **stor pulserande gul operatörspanel** överst, före övriga statuskort.
+En **stor pulserande gul operatörspanel** ligger överst, före övriga
+statuskort. Den visas när `sensor.brewassistant_brewday_runtime_state` är
+`resync_required` **eller** attributet `resync_required: true` finns på
+`sensor.brewassistant_brewday_runtime_summary`.
+
+**Viktigt 0b8-fälttest / korrigering:** Lovelace `conditional`-kortets
+`state`-villkor stöder inte attributjämförelsen från PR #274. Därför
+använder operatörspanelen nu `custom:button-card` med en reaktiv
+JavaScript-`styles.card.display`-kontroll (`triggers_update: all`).
 Det täcker HA-omstart där runtime fortfarande är `idle` men den persistenta
-reconnect-spärren väntar på kvittens. Vid utgången spärr försvinner panelen
-först när båda villkoren är falska. Åtgärdsknappen förblir separat guardad.
+reconnect-spärren väntar på kvittens. Vid hävd spärr blir panelens
+`display: none` först när båda signalerna är falska.
+
+Operatörens kvittens är fortfarande separat backendguardad; visning ger
+**ingen** ny rätt att styra BrewZilla. Denna ändring är inte fältverifierad
+i användarens Lovelace förrän kortet klistrats in och kontrollerats.
 Den visar:
 
 - **BA VÄNTAR PÅ DIG** när aktuella villkor för ACK ser klara ut.
