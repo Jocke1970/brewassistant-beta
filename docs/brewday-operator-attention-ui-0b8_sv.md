@@ -73,6 +73,23 @@ session-/source-/ABORT-kontroll och RCL som exklusiv väg till
 BrewZilla. Manual PREPARE startar inte värmare eller pump.
 Separat operatörsbekräftad Manual Physical START är ännu ej införd (#258).
 
+## 0b8 – kompakt READ-ONLY och tydlig tidsindikering
+
+- READ-ONLY-panelen har ett explicit kompakt två-radersgrid med synlig
+  sköldikon, tydlig rubrik och kort instruktion. Ett högt tomt ikonfält ska
+  inte längre ta plats. Den enda tillåtna manuella tjänsten från denna panel
+  är `switch.turn_on` för att aktivera observation, **aldrig** manuell
+  `switch.turn_off`.
+- Reconnect-panelens rubrik och kvittensindikation använder samma spärrvillkor
+  som knappen: riktig `resync_required`, BA READ-ONLY, giltigt steg (inte
+  `idle/unknown/none`), färsk data, verifierad källa/session och ingen ABORT.
+  Backend avgör alltid slutligt.
+- Under reconnect/fallback och annan uttryckligt osäker timer visas `—`
+  i stället för ett falskt `0 min`. Manual RAPT-steg med säker källa visar
+  fortfarande `MANUELLT`.
+- Kontrollera båda språkvarianterna i faktisk Lovelace (inte bara YAML-parser).
+  Backend-spärrar, RCL ägarskap och ABORT får inte kringgås av UI.
+
 ## Leverans och tester
 
 Kompletta EN/SV-kort:
