@@ -18,8 +18,40 @@ def test_operator_reconnect_hero_precedes_status_and_remains_ack_only():
         hero, status = cards[0], cards[1]
         assert hero["type"] == "conditional"
         assert hero["conditions"] == [
-            {"entity": "sensor.brewassistant_brewday_runtime_state", "state": "resync_required"}
+            {
+                "condition": "or",
+                "conditions": [
+                    {
+                        "condition": "state",
+                        "entity": "sensor.brewassistant_brewday_runtime_state",
+                        "state": "resync_required",
+                    },
+                    {
+                        "condition": "state",
+                        "entity": "sensor.brewassistant_brewday_runtime_summary",
+                        "attribute": "resync_required",
+                        "state": True,
+                    },
+                ],
+            }
         ]
+        # Field regression: HA may restore a sticky resync latch while the
+        # process sensor still reports idle. Neither path may hide the hero.
+        def visible(runtime_state, summary_latched):
+            alternatives = hero["conditions"][0]["conditions"]
+            return any(
+                (item.get("attribute") == "resync_required" and
+                 summary_latched is item["state"])
+                or (item["entity"] == "sensor.brewassistant_brewday_runtime_state"
+                    and runtime_state == item["state"])
+                for item in alternatives
+            )
+
+        assert visible("resync_required", False)
+        assert visible("idle", True)
+        assert visible("paused", True)
+        assert not visible("idle", False)
+        assert not visible("running", False)
         assert hero["card"]["type"] == "custom:button-card"
         assert status["name"] == "Brewday Control / Status"
         assert hero["card"]["tap_action"]["service"] == "brewassistant.brewday_reconnect_ack"
