@@ -223,32 +223,32 @@ cards:
                 '#198448' : '#94650d';
             ]]]
   - type: custom:button-card
-        entity: switch.brewassistant_brewzilla_observe_only
-        name: "BA READ-ONLY"
-        icon: mdi:shield-eye-outline
-        show_label: true
-        label: "Slår på BA:s read-only. Påverkar inte en körande RAPT-profil."
-        tap_action:
-          action: |
-            [[[
-              return states['switch.brewassistant_brewzilla_observe_only']?.state === 'off' ? 'call-service' : 'none';
-            ]]]
-          service: switch.turn_on
-          target:
-            entity_id: switch.brewassistant_brewzilla_observe_only
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 13px
-            - min-height: 92px
-            - background: rgba(33,150,243,.09)
-            - border: 1px solid rgba(33,150,243,.28)
-          name:
-            - font-weight: 900
-            - font-size: 11px
-          label:
-            - font-size: 10px
-            - white-space: normal
+    entity: switch.brewassistant_brewzilla_observe_only
+    name: "BA READ-ONLY"
+    icon: mdi:shield-eye-outline
+    show_label: true
+    label: "Slår på BA:s read-only. Påverkar inte en körande RAPT-profil."
+    tap_action:
+      action: |
+        [[[
+          return states['switch.brewassistant_brewzilla_observe_only']?.state === 'off' ? 'call-service' : 'none';
+        ]]]
+      service: switch.turn_on
+      target:
+        entity_id: switch.brewassistant_brewzilla_observe_only
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 13px
+        - min-height: 92px
+        - background: rgba(33,150,243,.09)
+        - border: 1px solid rgba(33,150,243,.28)
+      name:
+        - font-weight: 900
+        - font-size: 11px
+      label:
+        - font-size: 10px
+        - white-space: normal
   - type: custom:button-card
     entity: sensor.brewassistant_brewday_runtime_summary
     name: "KVITTERA ÅTERANSLUTNING"
