@@ -1,7 +1,7 @@
-"""Regress the real ABORT button's active-RAPT manual-reset exception (0b5 field finding).
+"""0b6 field regression: ABORT must enter emergency lane before ManualPlan logic.
 
-Tests run the production async_press AST method with fake HA state. No hardware
-is touched. A successful HA service response never proves physical OFF.
+Execute the *actual* button async_press AST without importing Home Assistant.
+No hardware/cloud involved; device-order acceptance is in isolated HA smoke.
 """
 
 from __future__ import annotations
@@ -11,107 +11,73 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
-BUTTON_FILE = Path(__file__).resolve().parents[1] / "custom_components/brewassistant/button.py"
+SOURCE = Path(__file__).resolve().parents[1] / "custom_components/brewassistant/button.py"
 
 
-def _load_abort_press(namespace):
-    tree = ast.parse(BUTTON_FILE.read_text(encoding="utf-8"))
-    button_cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "BrewAssistantAbortBrewdayButton")
-    method = next(n for n in button_cls.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "async_press")
-    exec(compile(ast.Module(body=[method], type_ignores=[]), str(BUTTON_FILE), "exec"), namespace)
+def _load(namespace):
+    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "BrewAssistantAbortBrewdayButton")
+    method = next(n for n in cls.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "async_press")
+    exec(compile(ast.Module(body=[method], type_ignores=[]), str(SOURCE), "exec"), namespace)
     return namespace["async_press"]
 
 
-class _Logger:
-    def __init__(self):
-        self.errors = []
-
-    def exception(self, msg):
-        self.errors.append(msg)
+class HomeAssistantError(Exception):
+    pass
 
 
-def _case(*, source, manual_reset_raises=False, latch_raises=False):
-    calls = []
-    logger = _Logger()
-    holder = SimpleNamespace(hass=object())
+class Logger:
+    def exception(self, message):
+        raise AssertionError(f"Unexpected logging exception: {message}")
 
-    async def latch(hass, **context):
-        calls.append("latch")
-        assert context["source"] == source
-        if latch_raises:
-            raise RuntimeError("storage temporarily unavailable")
+
+def _run(*, persistence_failed=False):
+    events = []
 
     async def emergency(hass):
-        calls.append("EMERGENCY_BREWZILLA_OFF_REQUEST")
-        return {"actions": ["heater_off", "pump_off"], "safe_state_enforced": False}
+        events.append("EMERGENCY_OFF_ZERO_FIRST")
+        return {
+            "output_off_requests_sent": True,
+            "errors": ["abort_latch_persistence: fake failure"] if persistence_failed else [],
+        }
 
     async def audit(hass, event, **kwargs):
-        calls.append("audit")
         assert event == "brewday_abort"
-
-    def manual_session(hass):
-        calls.append("get_manual_session")
-        if source != "Manual Brewday":
-            raise AssertionError("ABORT must not access ManualPlan under active RAPT ownership")
-        return SimpleNamespace(reset=reset)
-
-    def reset():
-        calls.append("manual_reset")
-        if manual_reset_raises:
-            raise RuntimeError("manual reset failed")
+        events.append("audit")
 
     async def refresh():
-        calls.append("refresh")
+        events.append("refresh")
 
-    class HomeAssistantError(Exception):
-        pass
-
-    namespace = {
-        "HomeAssistantError": HomeAssistantError,
-        "build_brewday_runtime_snapshot": lambda hass: {"source": source, "stage": "Mash", "step": "Mash Rest"},
-        "async_latch_brewday_operator_abort": latch,
+    press = _load({
         "async_abort_brewzilla": emergency,
-        "cancel_pending_action": lambda hass: calls.append("cancel_pending"),
-        "get_manual_brewday_session": manual_session,
         "async_record_brewday_audit_event": audit,
-        "_LOGGER": logger,
-    }
-    press = _load_abort_press(namespace)
+        "HomeAssistantError": HomeAssistantError,
+        "_LOGGER": Logger(),
+    })
     self_obj = SimpleNamespace(
-        coordinator=SimpleNamespace(hass=holder.hass, async_request_refresh=refresh),
-        async_write_ha_state=lambda: calls.append("write_state"),
+        coordinator=SimpleNamespace(hass=object(), async_request_refresh=refresh),
+        async_write_ha_state=lambda: events.append("state"),
     )
     try:
         asyncio.run(press(self_obj))
     except HomeAssistantError:
-        if not latch_raises:
+        if not persistence_failed:
             raise
-        calls.append("operator_notified_lockout_not_verified")
-    return calls, logger.errors
+        events.append("LOCKOUT_STORAGE_UNVERIFIED")
+    return events
 
 
-def test_abort_with_active_rapt_skips_manual_guard_and_requests_physical_off():
-    calls, errors = _case(source="RAPT BrewZilla Profile")
-    assert not errors
-    assert calls == [
-        "latch",
-        "EMERGENCY_BREWZILLA_OFF_REQUEST",
-        "cancel_pending",
-        "audit",
-        "refresh",
-        "write_state",
+def test_active_rapt_abort_never_mutates_manual_runtime_before_emergency():
+    assert _run() == ["EMERGENCY_OFF_ZERO_FIRST", "audit", "refresh", "state"]
+    code = SOURCE.read_text(encoding="utf-8").split("class BrewAssistantAbortBrewdayButton", 1)[1].split(
+        "class BrewAssistantRearmBrewdayControlButton", 1
+    )[0]
+    assert "get_manual_brewday_session" not in code
+    assert "cancel_pending_action" not in code
+    assert "build_brewday_runtime_snapshot" not in code
+
+
+def test_abort_reports_failed_persistence_without_skipping_emergency():
+    assert _run(persistence_failed=True) == [
+        "EMERGENCY_OFF_ZERO_FIRST", "audit", "refresh", "state", "LOCKOUT_STORAGE_UNVERIFIED"
     ]
-
-
-def test_manual_reset_error_is_not_allowed_to_cancel_emergency_off_request():
-    calls, errors = _case(source="Manual Brewday", manual_reset_raises=True)
-    assert calls.index("EMERGENCY_BREWZILLA_OFF_REQUEST") < calls.index("manual_reset")
-    assert "audit" in calls
-    assert len(errors) == 1
-
-
-def test_abort_attempts_emergency_even_when_abort_latch_storage_fails():
-    calls, errors = _case(source="RAPT BrewZilla Profile", latch_raises=True)
-    assert calls.index("EMERGENCY_BREWZILLA_OFF_REQUEST") == 1
-    assert "operator_notified_lockout_not_verified" in calls
-    assert len(errors) == 1

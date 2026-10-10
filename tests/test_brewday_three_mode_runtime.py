@@ -83,6 +83,7 @@ def test_abort_is_global_and_not_a_fourth_mode():
     assert "ABORT" not in mode_line
     for token in (
         '"heater_off"', '"pump_off"', '"heat_utilization_zero"',
-        '"pump_utilization_zero"', '"main_power_off"',
+        '"pump_utilization_zero"', '"main_power_command"',
     ):
         assert token in abort
+    assert '("main_power_off", "switch"' not in abort
