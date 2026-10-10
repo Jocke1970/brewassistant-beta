@@ -63,7 +63,11 @@ def _case(*, source, manual_reset_raises=False, latch_raises=False):
     async def refresh():
         calls.append("refresh")
 
+    class HomeAssistantError(Exception):
+        pass
+
     namespace = {
+        "HomeAssistantError": HomeAssistantError,
         "build_brewday_runtime_snapshot": lambda hass: {"source": source, "stage": "Mash", "step": "Mash Rest"},
         "async_latch_brewday_operator_abort": latch,
         "async_abort_brewzilla": emergency,
@@ -77,7 +81,12 @@ def _case(*, source, manual_reset_raises=False, latch_raises=False):
         coordinator=SimpleNamespace(hass=holder.hass, async_request_refresh=refresh),
         async_write_ha_state=lambda: calls.append("write_state"),
     )
-    asyncio.run(press(self_obj))
+    try:
+        asyncio.run(press(self_obj))
+    except HomeAssistantError:
+        if not latch_raises:
+            raise
+        calls.append("operator_notified_lockout_not_verified")
     return calls, logger.errors
 
 
@@ -104,4 +113,5 @@ def test_manual_reset_error_is_not_allowed_to_cancel_emergency_off_request():
 def test_abort_attempts_emergency_even_when_abort_latch_storage_fails():
     calls, errors = _case(source="RAPT BrewZilla Profile", latch_raises=True)
     assert calls.index("EMERGENCY_BREWZILLA_OFF_REQUEST") == 1
+    assert "operator_notified_lockout_not_verified" in calls
     assert len(errors) == 1
