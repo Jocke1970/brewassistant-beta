@@ -59,6 +59,22 @@ cards:
         const pct = v => n(v) === null ? '—' : n(v).toFixed(0) + ' %';
         const target = n(st('sensor.brewassistant_brewday_target_temperature')?.state);
         const left = n(st('sensor.brewassistant_brewday_live_time_remaining_minutes')?.state);
+        // RAPT step end-type is source-owned; a manual step has no trusted
+        // countdown. Profile step length is NOT a live remaining-time value.
+        const rclRuntime = a.brewday_mode === 'RCL Brewing' && a.source === 'RAPT BrewZilla Profile';
+        const endType = String(a.profile_step_end_type || '').trim().toLowerCase();
+        const manualRcl = rclRuntime && endType === 'manual';
+        const durationRcl = rclRuntime && endType === 'duration';
+        const plannedSeconds = n(a.profile_step_length);
+        const timeDisplay = manualRcl ? 'MANUELLT' :
+          a.fallback_timer_uncertain===true || left===null ? '—' : left.toFixed(0)+' min';
+        const timeDetail = manualRcl ? 'Väntar på manuellt RAPT-stegbyte' :
+          rclRuntime && left===null ?
+            (durationRcl && plannedSeconds!==null && plannedSeconds > 0 ?
+              'Planerat '+(plannedSeconds/60).toFixed(plannedSeconds%60===0?0:1)+
+              ' min · tid kvar ej verifierad' :
+              'RAPT-timer ej verifierad') :
+          a.fallback_timer_uncertain===true ? T.noTime : clean(state);
         const tile = (title,value,sub) =>
           '<div style="border:1px solid rgba(127,127,127,.18);background:rgba(127,127,127,.05);border-radius:14px;padding:10px 7px;min-width:0;text-align:center">' +
             '<div style="font-size:9px;opacity:.67;font-weight:850">'+escape(title)+'</div>' +
@@ -66,14 +82,14 @@ cards:
             '<div style="font-size:10px;opacity:.65;overflow-wrap:anywhere">'+escape(sub)+'</div></div>';
         const chip = (key,val) => '<span style="border:1px solid rgba(127,127,127,.2);border-radius:99px;padding:5px 9px;font-size:10px;font-weight:850;background:rgba(127,127,127,.04)">'+escape(key)+' · '+escape(val)+'</span>';
         return '<div style="text-align:left;min-width:0;line-height:1.35">' +
-          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><b style="letter-spacing:.08em;font-size:10px;opacity:.65">BREWASSISTANT · 0b6 UI</b><b style="color:'+tint+';font-size:10px">'+escape(state)+'</b></div>' +
+          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><b style="letter-spacing:.08em;font-size:10px;opacity:.65">BREWASSISTANT · BREWDAY</b><b style="color:'+tint+';font-size:10px">'+escape(state)+'</b></div>' +
           '<div style="font-size:21px;font-weight:950;letter-spacing:-.035em;color:'+tint+';margin-top:9px">'+escape(headline)+'</div>' +
           '<div style="font-size:11.5px;margin-top:6px;opacity:.83">'+escape(note)+'</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+chip(T.mode,mode)+chip(T.source,source)+chip(T.owner,clean(a.recipe_owner))+'</div>' +
           '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:11px">' +
              tile(T.step,clean(a.step || st('sensor.brewassistant_brewday_runtime_step')?.state),T.next+': '+clean(a.next_step)) +
              tile(T.target,target===null?'—':target.toFixed(1)+' °C',clean(a.target_owner)) +
-             tile(T.remaining,a.fallback_timer_uncertain===true||left===null?'—':left.toFixed(0)+' min',a.fallback_timer_uncertain===true?T.noTime:clean(state)) +
+             tile(T.remaining,timeDisplay,timeDetail) +
              tile(T.authority,blocking?T.noWrite:clean(bz.hot_side_write_scope || bz.orchestration_mode),clean(a.heat_owner)) +
           '</div>' +
           (observe ? '<div style="margin-top:10px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.2);border-radius:12px;padding:9px;font-size:11px;font-weight:850">'+

@@ -61,6 +61,17 @@ card:
       const nextRuntime = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
       const baTarget = num(states['sensor.brewassistant_brewday_target_temperature']?.state);
       const age = num(states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state);
+      // Physical/current kettle temperature is a distinct readback, NOT
+      // the RAPT profile's commanded target. Refuse old/invalid samples.
+      const measured = states['sensor.brewzilla_temperature'];
+      const measuredRaw = num(measured?.state);
+      const measuredReported = measured?.last_reported || measured?.last_updated;
+      const measuredMs = measuredReported ? Date.parse(measuredReported) : NaN;
+      const measuredAge = Number.isFinite(measuredMs) ? Math.max(0, (Date.now() - measuredMs) / 1000) : null;
+      const measuredFresh = measuredAge !== null && measuredAge <= 90;
+      const measuredTemp = measuredFresh && measuredRaw !== null &&
+        measuredRaw >= 0 && measuredRaw <= 105 ? measuredRaw : null;
+
 
       const profile = clean(a.profile_name) || 'RAPT BrewZilla Profile';
       const stepName = clean(a.step_name) || runtimeStep;
@@ -75,6 +86,9 @@ card:
       const gate = String(oz.mash_in_gate_state || 'idle').toLowerCase();
       const manual = String(endType).toLowerCase() === 'manual';
       const cooling = String(stage).toLowerCase().includes('cool') || String(stepName).toLowerCase().includes('chill');
+      // RAPT's 0 °C ChillOut sentinel is not a valid target for hot-side
+      // Mash In/Heatstrike. Show unknown rather than a fake 0 °C target.
+      const displayRawTarget = rawTarget === 0 && !cooling ? null : rawTarget;
 
       let statusText = 'RAPT/BrewZilla äger recept och target · BrewAssistant assisterar heat/pump';
       let actionText = manual
@@ -99,16 +113,16 @@ card:
         actionText = 'BA stoppar värme/heat-utilization och lämnar BrewZilla-pumpen till Cooling Runtime/operatören.';
       }
 
-      const duration = length !== null ? `${length.toFixed(0)} min` : '—';
+      const duration = length !== null && length >= 0 ? `${(length / 60).toFixed(length % 60 === 0 ? 0 : 1)} min` : '—';
       const stepIndex = stepNo !== null && stepNo > 0 && stepCount !== null && stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
-      const missingContract = !sourceVerified || rawTarget === null || stepIndex === '—';
+      const missingContract = !sourceVerified || displayRawTarget === null || stepIndex === '—';
       const oldSnapshot = age !== null && age > 1.5;
       const caution = missingContract || sourceStale || oldSnapshot;
       const diagnostics = [
         !profileSensor ? 'Ingen unik RCL-profilsensor hittades' : null,
         sourceAmbiguous ? 'Flera möjliga profilsensorer' : null,
         profileSensor && !sourceVerified ? 'RCL-profilkontraktet ej verifierat' : null,
-        rawTarget === null ? 'RAPT-mål saknas' : null,
+        displayRawTarget === null ? 'RAPT-mål saknas eller är 0 °C för ett värmesteg' : null,
         stepIndex === '—' ? 'Profilsteg saknas' : null,
         sourceStale ? 'Profilsensorns mättid saknas eller är över 90 s' : null,
         oldSnapshot ? 'BA-snapshot äldre än 90 s' : null,
@@ -140,13 +154,15 @@ card:
         <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">AKTIVT DIREKTIV</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${short(stepName, 54)}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
 
         ${caution ? `<div style="margin-top:10px;border-radius:12px;padding:9px 10px;background:rgba(244,67,54,.11);border:1px solid rgba(244,67,54,.4);font-size:11px;font-weight:850;color:#b3261e"><ha-icon icon="mdi:alert-circle" style="width:16px;height:16px;vertical-align:middle"></ha-icon> EJ VERIFIERAD RAPT-DATA · ${diagnostics}. Okända mål visas som —, inte 0 °C.</div>` : ''}
-        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(rawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT-target</span></div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;">
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(displayRawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT-target</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTarget)}</b><br><span style="font-size:9px;opacity:.62;">runtime-target</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(76,175,80,.085);border:1px solid rgba(76,175,80,.22);text-align:center;"><b>${fmtTemp(measuredTemp)}</b><br><span style="font-size:9px;opacity:.62;">BZ aktuell</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(0,188,212,.08);border:1px solid rgba(0,188,212,.20);text-align:center;"><b>${stepIndex}</b><br><span style="font-size:9px;opacity:.62;">profilsteg</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${age !== null ? `${age.toFixed(1)} min` : '—'}</b><br><span style="font-size:9px;opacity:.62;">snapshot</span></div>
         </div>
 
+        ${measuredTemp === null ? '<div style="margin-top:6px;font-size:10px;color:#946200;text-align:center;font-weight:760;">BZ-temperatur saknas eller är äldre än 90 s; ingen aktuell temperatur visas.</div>' : ''}
         <div style="margin-top:8px;padding:8px 9px;border-radius:13px;background:${manual || cooling ? 'rgba(255,193,7,.10)' : 'rgba(127,127,127,.055)'};border:1px solid ${manual || cooling ? 'rgba(255,193,7,.28)' : 'rgba(127,127,127,.13)'};font-size:11.2px;font-weight:820;text-align:center;">${actionText}</div>
         <div style="margin-top:7px;font-size:9.8px;font-weight:780;opacity:.58;text-align:center;">Slutvillkor: ${timerText} · control ${clean(a.step_control_type) || '—'} · BA Learning äger heat-utilization och pumpassistans</div>
       </div>`;
