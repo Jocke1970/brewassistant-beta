@@ -32,8 +32,11 @@ def test_brewday_premium_cards_have_parity_and_real_guarded_controls():
         assert "service: button.press" in source
         assert "entity_id: button.brewassistant_abort_brewday" in source
         assert "entity_id: button.brewassistant_rearm_brewday_control" in source
-        # ABORT is unconditional, independent of visible card-source state.
-        assert "type: conditional" not in source
+        # Only the reconnection attention banner is conditional. ABORT must
+        # remain a separate always-present unconditional card.
+        assert source.count("type: conditional") == 1
+        assert "state: \"resync_required\"" in source
+        assert source.index("button.brewassistant_abort_brewday") > source.index("state: \"resync_required\"")
         assert "type: vertical-stack" in source
         assert "button.press" in source
         assert "number.set_value" not in source
