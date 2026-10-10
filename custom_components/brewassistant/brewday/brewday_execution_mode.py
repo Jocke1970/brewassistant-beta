@@ -484,6 +484,16 @@ def decorate_snapshot(
             time_remaining_seconds=None,
             time_remaining_minutes=None,
         )
+    if str(out.get("runtime_state") or "").lower() == "aborted":
+        # ABORT remains the highest-priority presentation and write lock.
+        out.update(
+            target_temperature=None,
+            direct_brewzilla_control_allowed=False,
+            target_write_allowed_by_mode=False,
+            heater_switch_write_allowed_by_mode=False,
+            heat_utilization_write_allowed_by_mode=False,
+            pump_write_allowed_by_mode=False,
+        )
     return out
 
 
