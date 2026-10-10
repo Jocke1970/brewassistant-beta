@@ -7,143 +7,139 @@ type: vertical-stack
 cards:
   # Visually prominent OPERATOR-REQUIRED reconnection. Hidden when cleared.
   # An ACK never lifts BA READ-ONLY or authorizes heater/pump writes.
-  - type: conditional
-    conditions:
-      # Runtime can still be idle/manual fallback while the persistent
-      # external reconciliation latch remains active after HA restart.
-      - condition: or
-        conditions:
-          - condition: state
-            entity: sensor.brewassistant_brewday_runtime_state
-            state: "resync_required"
-          - condition: state
-            entity: sensor.brewassistant_brewday_runtime_summary
-            attribute: resync_required
-            state: true
-    card:
-      type: custom:button-card
-      entity: sensor.brewassistant_brewday_runtime_summary
-      triggers_update: all
-      show_state: false
-      show_label: true
-      icon: mdi:hand-back-right-outline
-      name: |
+  # Operator attention uses the same runtime summary as the status card;
+  # no unsupported native conditional attribute comparison.
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_runtime_summary
+    triggers_update: all
+    show_state: false
+    show_label: true
+    icon: mdi:hand-back-right-outline
+    name: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        const age = a.snapshot_age_seconds;
+        const raw = String(a.raw_step_name || a.step || '').trim();
+        const ready = a.resync_required === true &&
+          states['switch.brewassistant_brewzilla_observe_only']?.state === 'on' &&
+          a.operator_abort_active !== true &&
+          states['sensor.brewassistant_brewday_operator_control_state']?.state !== 'aborted' &&
+          raw.length > 0 && typeof age === 'number' && age >= 0 && age <= 90 &&
+          (a.resync_from_mode === 'RCL Brewing' ?
+            a.profile_active === true && a.profile_source_available === true &&
+            !!String(a.profile_session_id || '').trim() :
+            a.resync_from_mode === 'Brewfather Brewing');
+        return ready ? 'BA VÄNTAR PÅ DIG' : 'ÅTERANSLUTNING – KONTROLL KRÄVS';
+      ]]]
+    label: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const age = a.snapshot_age_seconds;
+        const raw = String(a.raw_step_name || a.step || '').trim();
+        const abort = a.operator_abort_active === true ||
+          states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+        const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
+        const rcl = a.resync_from_mode === 'RCL Brewing' && a.profile_active === true &&
+          a.profile_source_available === true && !!String(a.profile_session_id || '').trim();
+        const bf = a.resync_from_mode === 'Brewfather Brewing';
+        const fresh = typeof age === 'number' && age >= 0 && age <= 90;
+        const ready = a.resync_required === true && !abort && observer && fresh &&
+          raw.length>0 && (rcl || bf);
+        const chips = [
+          [!abort, 'ABORT'],
+          [observer, 'BA READ-ONLY'],
+          [fresh, 'SNAPSHOT'],
+          [raw.length>0, 'STEG'],
+          [rcl || bf, 'KÄLLA']
+        ].map(([ok,k])=>'<span style="display:inline-block;border:1px solid '+
+          (ok?'#82c89b':'#ec9393')+';background:'+(ok?'#e4f6e9':'#fde8e8')+
+          ';color:'+(ok?'#14643b':'#982520')+
+          ';padding:5px 9px;border-radius:20px;font-size:10px;font-weight:850;">'+
+          (ok?'✓ ':'✕ ')+safe(k)+'</span>').join(' ');
+        const session = a.resync_from_mode === 'RCL Brewing' ? a.profile_session_id : '—';
+        const reason = a.resync_reason || a.fallback_reason || '—';
+        const info = [
+          ['KÄLLA', a.resync_from_mode || '—'],
+          ['SESSION', session || '—'],
+          ['STEG', raw || '—'],
+          ['SNAPSHOT',fresh?Math.round(age)+' s':'för gammal/okänd'],
+        ].map(([key,value])=>'<span style="font-size:11px;">'+safe(key)+': <b>'+safe(value)+'</b></span>').join(' · ');
+        return '<div style="display:block;text-align:center;line-height:1.45;">'+
+          '<div style="font-size:11px;font-weight:850;margin-bottom:10px;">Kontrollera fysisk utrustning, källa och aktuellt steg före kvittens.</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">'+chips+'</div>'+
+          '<div style="margin-top:12px;padding:9px;border-radius:10px;background:rgba(255,255,255,.57);">'+info+'</div>'+
+          '<div style="font-size:10px;margin-top:7px;opacity:.85;">'+safe(reason)+'</div>'+
+          '<div style="margin-top:12px;font-size:15px;font-weight:950;">'+
+            (ready?'▶ KVITTERA ÅTERANSLUTNING':'🔒 KÄLLAN KAN ÄNNU INTE KVITTERAS')+'</div>'+
+          '<div style="font-size:10px;margin-top:6px;">RAPT/Brewfather fortsätter på egen hand. BA skriver inte till BrewZilla innan kvittens och separat START.</div>'+
+          '<div style="font-size:9px;margin-top:6px;opacity:.76;">BACKEND KONTROLLERAR SESSION OCH STEG IGEN</div></div>';
+      ]]]
+    tap_action:
+      action: |
         [[[
           const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
+          const mode = a.resync_from_mode;
+          const step = String(a.raw_step_name || a.step || '').trim();
+          const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
           const age = a.snapshot_age_seconds;
-          const raw = String(a.raw_step_name || a.step || '').trim();
-          const ready = a.resync_required === true &&
-            states['switch.brewassistant_brewzilla_observe_only']?.state === 'on' &&
-            a.operator_abort_active !== true &&
-            states['sensor.brewassistant_brewday_operator_control_state']?.state !== 'aborted' &&
-            raw.length > 0 && typeof age === 'number' && age >= 0 && age <= 90 &&
-            (a.resync_from_mode === 'RCL Brewing' ?
-              a.profile_active === true && a.profile_source_available === true &&
-              !!String(a.profile_session_id || '').trim() :
-              a.resync_from_mode === 'Brewfather Brewing');
-          return ready ? 'BA VÄNTAR PÅ DIG' : 'ÅTERANSLUTNING – KONTROLL KRÄVS';
-        ]]]
-      label: |
-        [[[
-          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-          const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-          const age = a.snapshot_age_seconds;
-          const raw = String(a.raw_step_name || a.step || '').trim();
-          const abort = a.operator_abort_active === true ||
-            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
+            a.profile_source_available === true && String(a.profile_session_id || '').trim().length > 0;
+          const bf = mode === 'Brewfather Brewing';
           const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
-          const rcl = a.resync_from_mode === 'RCL Brewing' && a.profile_active === true &&
-            a.profile_source_available === true && !!String(a.profile_session_id || '').trim();
-          const bf = a.resync_from_mode === 'Brewfather Brewing';
-          const fresh = typeof age === 'number' && age >= 0 && age <= 90;
-          const ready = a.resync_required === true && !abort && observer && fresh &&
-            raw.length>0 && (rcl || bf);
-          const chips = [
-            [!abort, 'ABORT'],
-            [observer, 'BA READ-ONLY'],
-            [fresh, 'SNAPSHOT'],
-            [raw.length>0, 'STEG'],
-            [rcl || bf, 'KÄLLA']
-          ].map(([ok,k])=>'<span style="display:inline-block;border:1px solid '+
-            (ok?'#82c89b':'#ec9393')+';background:'+(ok?'#e4f6e9':'#fde8e8')+
-            ';color:'+(ok?'#14643b':'#982520')+
-            ';padding:5px 9px;border-radius:20px;font-size:10px;font-weight:850;">'+
-            (ok?'✓ ':'✕ ')+safe(k)+'</span>').join(' ');
-          const session = a.resync_from_mode === 'RCL Brewing' ? a.profile_session_id : '—';
-          const reason = a.resync_reason || a.fallback_reason || '—';
-          const info = [
-            ['KÄLLA', a.resync_from_mode || '—'],
-            ['SESSION', session || '—'],
-            ['STEG', raw || '—'],
-            ['SNAPSHOT',fresh?Math.round(age)+' s':'för gammal/okänd'],
-          ].map(([key,value])=>'<span style="font-size:11px;">'+safe(key)+': <b>'+safe(value)+'</b></span>').join(' · ');
-          return '<div style="display:block;text-align:center;line-height:1.45;">'+
-            '<div style="font-size:11px;font-weight:850;margin-bottom:10px;">Kontrollera fysisk utrustning, källa och aktuellt steg före kvittens.</div>'+
-            '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">'+chips+'</div>'+
-            '<div style="margin-top:12px;padding:9px;border-radius:10px;background:rgba(255,255,255,.57);">'+info+'</div>'+
-            '<div style="font-size:10px;margin-top:7px;opacity:.85;">'+safe(reason)+'</div>'+
-            '<div style="margin-top:12px;font-size:15px;font-weight:950;">'+
-              (ready?'▶ KVITTERA ÅTERANSLUTNING':'🔒 KÄLLAN KAN ÄNNU INTE KVITTERAS')+'</div>'+
-            '<div style="font-size:10px;margin-top:6px;">RAPT/Brewfather fortsätter på egen hand. BA skriver inte till BrewZilla innan kvittens och separat START.</div>'+
-            '<div style="font-size:9px;margin-top:6px;opacity:.76;">BACKEND KONTROLLERAR SESSION OCH STEG IGEN</div></div>';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          return observer && a.resync_required === true && state === 'resync_required' &&
+            hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
+            (rcl || bf) && !aborted ? 'call-service' : 'none';
         ]]]
-      tap_action:
-        action: |
-          [[[
-            const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-            const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
-            const mode = a.resync_from_mode;
-            const step = String(a.raw_step_name || a.step || '').trim();
-            const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
-            const age = a.snapshot_age_seconds;
-            const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
-              a.profile_source_available === true && String(a.profile_session_id || '').trim().length > 0;
-            const bf = mode === 'Brewfather Brewing';
-            const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
-            const aborted = a.operator_abort_active === true ||
-              states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
-            return observer && a.resync_required === true && state === 'resync_required' &&
-              hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
-              (rcl || bf) && !aborted ? 'call-service' : 'none';
-          ]]]
-        service: brewassistant.brewday_reconnect_ack
-        data: |
-          [[[
-            const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-            const out = {mode: a.resync_from_mode, expected_step: String(a.raw_step_name || a.step || '')};
-            if (a.resync_from_mode === 'RCL Brewing') out.expected_session_id = String(a.profile_session_id || '');
-            return out;
-          ]]]
-        confirmation:
-          text: "Du bekräftar aktuell extern session/steg. Backend läser källan igen, men kvittensen skickar ingen egen hårdvaruåtgärd. Nästa tick kan senare återuppta tillåtna kommandon när read-only stängs av. Har du kontrollerat fysisk utrustning?"
-      extra_styles: |
-        @keyframes ba-operator-reconnect-pulse {
-          0%,100% { box-shadow: 0 0 0 1px rgba(245,158,11,.34); }
-          50% { box-shadow: 0 0 0 7px rgba(245,158,11,.24); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          #card { animation: none !important; }
-        }
-      styles:
-        card:
-          - border-radius: 22px
-          - border: 3px solid rgba(222,138,13,.95)
-          - background: linear-gradient(145deg,rgba(255,196,55,.27),rgba(255,154,43,.12))
-          - padding: 18px
-          - min-height: 230px
-          - animation: ba-operator-reconnect-pulse 1.8s ease-in-out infinite
-        name:
-          - font-size: 20px
-          - font-weight: 950
-          - white-space: normal
-          - color: "#9c4f0d"
-        label:
-          - white-space: normal
-          - text-align: center
-          - font-size: 12px
-        icon:
-          - width: 58px
-          - color: "#b76b0c"
+      service: brewassistant.brewday_reconnect_ack
+      data: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const out = {mode: a.resync_from_mode, expected_step: String(a.raw_step_name || a.step || '')};
+          if (a.resync_from_mode === 'RCL Brewing') out.expected_session_id = String(a.profile_session_id || '');
+          return out;
+        ]]]
+      confirmation:
+        text: "Du bekräftar aktuell extern session/steg. Backend läser källan igen, men kvittensen skickar ingen egen hårdvaruåtgärd. Nästa tick kan senare återuppta tillåtna kommandon när read-only stängs av. Har du kontrollerat fysisk utrustning?"
+    extra_styles: |
+      @keyframes ba-operator-reconnect-pulse {
+        0%,100% { box-shadow: 0 0 0 1px rgba(245,158,11,.34); }
+        50% { box-shadow: 0 0 0 7px rgba(245,158,11,.24); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #card { animation: none !important; }
+      }
+    styles:
+      card:
+        # Native conditional cards cannot reliably inspect an entity attribute.
+        # Use the same live summary attribute that drives the status headline.
+        - display: |
+            [[[
+              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+              return a.resync_required === true || runtime === 'resync_required' ? 'grid' : 'none';
+            ]]]
+        - border-radius: 22px
+        - border: 3px solid rgba(222,138,13,.95)
+        - background: linear-gradient(145deg,rgba(255,196,55,.27),rgba(255,154,43,.12))
+        - padding: 18px
+        - min-height: 230px
+        - animation: ba-operator-reconnect-pulse 1.8s ease-in-out infinite
+      name:
+        - font-size: 20px
+        - font-weight: 950
+        - white-space: normal
+        - color: "#9c4f0d"
+      label:
+        - white-space: normal
+        - text-align: center
+        - font-size: 12px
+      icon:
+        - width: 58px
+        - color: "#b76b0c"
   - type: custom:button-card
     entity: sensor.brewassistant_brewday_runtime_summary
     name: "Brewday Control / Status"
