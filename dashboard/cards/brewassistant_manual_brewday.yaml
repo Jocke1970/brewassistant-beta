@@ -2,52 +2,165 @@
 # The full manual control card below continues to require actual Manual ownership.
 type: vertical-stack
 cards:
-  - type: conditional
-    conditions:
-      - entity: switch.brewassistant_show_brewday
-        state: "on"
-      - entity: sensor.brewassistant_brewday_runtime_source
-        state: "None"
-      - entity: sensor.brewassistant_brewday_runtime_state
-        state: "idle"
-      - entity: sensor.brewassistant_manual_brewday_status
-        state: "idle"
-    card:
-      type: custom:button-card
-      entity: sensor.brewassistant_manual_brewday_status
-      name: "MANUAL BREWING · PREPARE BREWDAY"
-      icon: mdi:clipboard-check-outline
-      show_state: false
-      show_label: true
-      label: |
+  - type: custom:button-card
+    entity: sensor.brewassistant_manual_brewday_status
+    show_state: false
+    show_label: true
+    triggers_update: all
+    name: |
+      [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
+          const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state || '');
+          const manual = String(states['sensor.brewassistant_manual_brewday_status']?.state || '');
+          const enabled = states['switch.brewassistant_show_brewday']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          const resync = a.resync_required === true || runtime === 'resync_required' ||
+            a.fallback_active === true || !!a.resync_from_mode || !!a.fallback_from_mode;
+          const raptActive = Object.values(states).some(s =>
+            s?.entity_id?.startsWith('binary_sensor.') &&
+            s.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' &&
+            (s.state === 'on' || s.attributes?.profile_active === true));
+          const bfActive = states['sensor.brewfather_brew_tracker_status']?.state === 'active';
+          const external = raptActive || bfActive || (
+            !['None','Manual Brewday'].includes(source) && !['unknown','unavailable'].includes(source));
+          const activeManual = source === 'Manual Brewday' && runtime !== 'idle' &&
+            !['unknown','unavailable','resync_required'].includes(runtime) && !resync && !external;
+          const ready = enabled && !aborted && !resync && !external &&
+            ['None','Manual Brewday'].includes(source) && runtime === 'idle' && manual === 'idle';
+        return activeManual ? 'MANUAL BREWING · ACTIVE' :
+          ready ? 'MANUAL BREWING · PREPARE BREWDAY' :
+          aborted || resync || external ? 'MANUAL BREWING · LOCKED' : 'MANUAL BREWING · CHECK SOURCE';
+      ]]]
+    icon: |
+      [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
+          const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state || '');
+          const manual = String(states['sensor.brewassistant_manual_brewday_status']?.state || '');
+          const enabled = states['switch.brewassistant_show_brewday']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          const resync = a.resync_required === true || runtime === 'resync_required' ||
+            a.fallback_active === true || !!a.resync_from_mode || !!a.fallback_from_mode;
+          const raptActive = Object.values(states).some(s =>
+            s?.entity_id?.startsWith('binary_sensor.') &&
+            s.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' &&
+            (s.state === 'on' || s.attributes?.profile_active === true));
+          const bfActive = states['sensor.brewfather_brew_tracker_status']?.state === 'active';
+          const external = raptActive || bfActive || (
+            !['None','Manual Brewday'].includes(source) && !['unknown','unavailable'].includes(source));
+          const activeManual = source === 'Manual Brewday' && runtime !== 'idle' &&
+            !['unknown','unavailable','resync_required'].includes(runtime) && !resync && !external;
+          const ready = enabled && !aborted && !resync && !external &&
+            ['None','Manual Brewday'].includes(source) && runtime === 'idle' && manual === 'idle';
+        return ready ? 'mdi:clipboard-check-outline' :
+          activeManual ? 'mdi:clipboard-text-outline' :
+          aborted ? 'mdi:alert-octagon' :
+          resync ? 'mdi:shield-lock-outline' : 'mdi:lock-alert-outline';
+      ]]]
+    label: |
+      [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
+          const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state || '');
+          const manual = String(states['sensor.brewassistant_manual_brewday_status']?.state || '');
+          const enabled = states['switch.brewassistant_show_brewday']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          const resync = a.resync_required === true || runtime === 'resync_required' ||
+            a.fallback_active === true || !!a.resync_from_mode || !!a.fallback_from_mode;
+          const raptActive = Object.values(states).some(s =>
+            s?.entity_id?.startsWith('binary_sensor.') &&
+            s.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' &&
+            (s.state === 'on' || s.attributes?.profile_active === true));
+          const bfActive = states['sensor.brewfather_brew_tracker_status']?.state === 'active';
+          const external = raptActive || bfActive || (
+            !['None','Manual Brewday'].includes(source) && !['unknown','unavailable'].includes(source));
+          const activeManual = source === 'Manual Brewday' && runtime !== 'idle' &&
+            !['unknown','unavailable','resync_required'].includes(runtime) && !resync && !external;
+          const ready = enabled && !aborted && !resync && !external &&
+            ['None','Manual Brewday'].includes(source) && runtime === 'idle' && manual === 'idle';
+        const explanation = aborted ? 'ABORT is active. Physical checks and separate rearm are required.' :
+          resync ? 'WAITING FOR OPERATOR ACKNOWLEDGEMENT of external reconnection. Manual cannot take ownership.' :
+          external ? 'RAPT/Brewfather owns the active brewday – Manual must not take over.' :
+          ready ? 'No external source owns this brewday. Tap to prepare Manual Brewday. This does NOT start heater or pump.' :
+          activeManual ? 'The prepared Manual Brewday process is below. A separate START is required for physical BA control.' : 'Source ownership cannot be verified. Check RCL, Brewfather and brewday source before preparing.';
+        const safe = value => String(value ?? '—').replace(/[&<>"']/g, c =>
+          ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        return '<div style="font-size:12px;line-height:1.5;text-align:center;">'+
+          '<div style="font-weight:800;">'+safe(explanation)+'</div>'+
+          '<div style="font-size:10px;opacity:.78;margin-top:7px;">'+safe('Manual preparation never grants automatic writes to BrewZilla.')+'</div>'+
+          '<div style="font-size:10px;opacity:.65;margin-top:7px;">'+
+          'SOURCE: '+safe(source)+' · STATUS: '+safe(runtime)+
+          ' · MANUAL PLAN: '+safe(manual)+'</div></div>';
+      ]]]
+    tap_action:
+      action: |
         [[[
-          const status = states['sensor.brewassistant_manual_brewday_status']?.state || 'unknown';
-          return '<b>No external source owns the active process. Prepare the Manual Brewday plan; begin brewing separately.</b><div style="margin-top:7px;opacity:.7;font-size:11px;">BA READ-ONLY continues to block physical actuator writes. Manual mode does not bypass RAPT/Brewfather or ABORT.</div><div style="margin-top:8px;font-size:11px;font-weight:900;color:#986600;">'+
-            'TAP TO PREPARE →'+'</div>';
-        ]]]
-      tap_action:
-        action: call-service
-        service: brewassistant.manual_brewday_prepare
-        confirmation:
-          text: "Prepare Manual Brewday? This only prepares the manual process and does NOT start heater, pump or BrewZilla. Verify no external brew is still active."
-      styles:
-        card:
-          - border-radius: 22px
-          - border: 2px solid rgba(233,156,15,.52)
-          - background: linear-gradient(135deg,rgba(255,193,7,.17),rgba(255,193,7,.04))
-          - padding: 16px
-          - min-height: 120px
-        name:
-          - font-weight: 950
-          - font-size: 16px
-          - white-space: normal
-        label:
-          - white-space: normal
-          - text-align: left
-          - font-size: 12px
-        icon:
-          - width: 34px
-          - color: "#c48a16"
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
+          const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state || '');
+          const manual = String(states['sensor.brewassistant_manual_brewday_status']?.state || '');
+          const enabled = states['switch.brewassistant_show_brewday']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          const resync = a.resync_required === true || runtime === 'resync_required' ||
+            a.fallback_active === true || !!a.resync_from_mode || !!a.fallback_from_mode;
+          const raptActive = Object.values(states).some(s =>
+            s?.entity_id?.startsWith('binary_sensor.') &&
+            s.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' &&
+            (s.state === 'on' || s.attributes?.profile_active === true));
+          const bfActive = states['sensor.brewfather_brew_tracker_status']?.state === 'active';
+          const external = raptActive || bfActive || (
+            !['None','Manual Brewday'].includes(source) && !['unknown','unavailable'].includes(source));
+          const activeManual = source === 'Manual Brewday' && runtime !== 'idle' &&
+            !['unknown','unavailable','resync_required'].includes(runtime) && !resync && !external;
+          const ready = enabled && !aborted && !resync && !external &&
+            ['None','Manual Brewday'].includes(source) && runtime === 'idle' && manual === 'idle';
+        return ready ? 'call-service' : 'more-info';
+      ]]]
+      service: brewassistant.manual_brewday_prepare
+      confirmation:
+        text: "Prepare Manual Brewday? First verify RAPT/Brewfather no longer owns this brew and the hardware is safe. This prepares the process ONLY; no heater or pump is started."
+    styles:
+      card:
+        - border-radius: 20px
+        - border: |
+            [[[
+              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+              const source = states['sensor.brewassistant_brewday_runtime_source']?.state;
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+              const manual = states['sensor.brewassistant_manual_brewday_status']?.state;
+              const resync = a.resync_required === true || runtime === 'resync_required' || a.fallback_active === true;
+              const aborted = a.operator_abort_active === true ||
+                states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+              const ready = !aborted && !resync && (source === 'None' || source === 'Manual Brewday') &&
+                runtime === 'idle' && manual === 'idle';
+              return '2px solid '+(ready?'#ddaa32':aborted?'#d94a47':'#a5a9b0');
+            ]]]
+        - background: |
+            [[[
+              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+              const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
+              const source = states['sensor.brewassistant_brewday_runtime_source']?.state;
+              const ready = (source === 'None' || source === 'Manual Brewday') &&
+                state === 'idle' && a.resync_required !== true && a.operator_abort_active !== true;
+              return ready ? 'rgba(255,193,7,.13)' : 'rgba(127,127,127,.055)';
+            ]]]
+        - padding: 14px
+        - min-height: 110px
+      name:
+        - font-weight: 950
+        - font-size: 15px
+        - white-space: normal
+      label:
+        - font-size: 11px
+        - white-space: normal
+        - text-align: center
+      icon:
+        - width: 30px
   # Activated Manual Brewday. External RAPT/Brewfather active sessions must not
   # automatically reveal or activate this physical/process control panel.
   - type: conditional
