@@ -49,6 +49,29 @@ Canonical short-form documentation lives beside each backend under `custom_compo
 
 HLT SIM-1 is a **read-only simulator** running every 30 s from Brewday Audit and normalized BrewZilla Batch Context `sparge_water_l`. BZ has absolute electrical priority; HLT may receive only hypothetical scenario capacity in verified cruise. No BZ heat-utilization caps, no physical HLT service calls and `power_budget_verified=false`. The 2,500 W scenario is not a circuit rating. The September water test found incorrect held-setting freshness and one virtual HLT grant during explicit `Ramp to 72°C`; fixes are integrated on `dev` and require new HA field verification. A 30-second loop cannot be used as an electrical safety interlock. Physical HLT requires independent fast fail-OFF load-shedding, verified OFF feedback, dry-fire protection and circuit inspection. See dated evidence above.
 
+## Brew Analytics and historical HLT planning (PRs #209, #211)
+
+The following documents are **design references**, not declarations of live
+BrewAssistant equipment control. Current code-local backend READMEs and
+dated field evidence remain authoritative.
+
+| Document | Scope |
+| --- | --- |
+| [`../brew-analytics-roadmap.md`](../brew-analytics-roadmap.md) | Completed-batch analytics and calibrated Brewfather profile recommendations |
+| [`../brew-analytics-data-model.md`](../brew-analytics-data-model.md) | Provenance-preserving raw measurements, derived data and persistence |
+| [`../brew-analytics-metrics.md`](../brew-analytics-metrics.md) | Yield, efficiency, volume loss and confidence definitions |
+| [`../brew-analytics-batch-method-policy.md`](../brew-analytics-batch-method-policy.md) | Brewing method/batch-size profile planning |
+| [`../reference/brewzilla-gen4-35l-brewfather-profiles/README.md`](../reference/brewzilla-gen4-35l-brewfather-profiles/README.md) | Reference CSV snapshots from the September BrewZilla/Brewfather profile workbook |
+| [`hlt-backend.md`](./hlt-backend.md) | **Historical September** HLT future-design concept, not current SIM-1 contract |
+| [`../power-budget-arbiter.md`](../power-budget-arbiter.md) | **Historical September** design for prospective shared circuit reservation/revocation |
+
+**Actual status:** HLT SIM-1 read-only simulation is already implemented; a
+physical HLT power arbiter and electrical load-sharing enforcement are **not**.
+Follow current [HLT SIM-1 backend README](../../custom_components/brewassistant/hlt/README.md)
+and the physical validation gates before implementing power changes.
+Brew Analytics plans may recommend but may not silently change an active recipe,
+Brewfather profile or BrewZilla actuator.
+
 ## Grainfather naming boundary
 
 Two distinct concepts remain:
