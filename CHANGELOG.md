@@ -1,3 +1,10 @@
+## DEV PREVIEW — 0b8 RAPT profile temperature + honest step time (2026-10-10)
+
+- EN/SV RAPT Profile Runtime: **BZ aktuell** från färsk `sensor.brewzilla_temperature` separat från RAPT-profilmål/BA-runtime-mål. Ogiltig 0 °C under värmesteg visas som `—` och källa varnas. Aldrig falskt `0/0` steg.
+- Korrigerat `step_length` (sekunder → minuter) som **planerad längd**, inte faktisk tid kvar.
+- EN/SV Brewday Control visar **MANUELLT** vid manuellt slutvillkor och *planerad längd, live-tid ej verifierad* vid Duration utan giltig timer, i stället för otydligt `— running`.
+- Skiljer UI-cache/äldre inklistrade dashboardkort från backendproblem; ingen fysisk styrkod ändrad. Se `docs/brewday-rapt-visualization-fixes-0b8_sv.md`.
+
 ## RELEASE CANDIDATE — 2026.10.0b7 START preflight diagnostics (2026-10-10)
 
 - Färgade START-chips (grön/gul/röd) för alla verifierade käll-/session-/steg-/target-/BZ-/read-only-/ABORT-kontroller, med detaljer och blockeringsorsaker. Fullständiga SV/EN premiumkort.
