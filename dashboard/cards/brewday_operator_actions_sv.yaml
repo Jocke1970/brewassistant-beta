@@ -13,7 +13,7 @@ card:
       icon: mdi:alert-octagon
       show_state: false
       show_label: true
-      label: Alltid tillgänglig · begär STOP av aktiv RAPT-profil och OFF/0 på BZ · kontrollera fysisk avstängning
+      label: ALLTID TILLGÄNGLIG · begär RAPT STOP, värmare/pump AV och 0 % · BZ-huvudström PÅ för telemetri · fysisk kontroll krävs
       tap_action:
         action: call-service
         service: button.press
