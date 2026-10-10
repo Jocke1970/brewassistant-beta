@@ -140,14 +140,43 @@ cards:
       ]]]
     label: |
       [[[
-        const a = states['sensor.brewassistant_brewday_start_status']?.attributes || {};
-        const status = states['sensor.brewassistant_brewday_start_status']?.state;
+        const s = states['sensor.brewassistant_brewday_start_status'];
+        const a = s?.attributes || {};
+        const status = s?.state || 'waiting';
         const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        if (status === 'ready') return 'GO · tryck för fysisk kontroll och bekräftad RCL Assist-start';
-        if (status === 'running') return 'Samma RAPT-session verifierad · BA:s assistans aktiverad';
-        if (status === 'starting') return 'Verifierar session, steg och läsback';
+        const statusText = ({
+          ready: 'GO · bekräfta START efter fysisk kontroll',
+          running: 'RCL-session verifierad · BA Assist pågår',
+          starting: 'START verifieras – inga dubbla tryck',
+          waiting: 'Väntar på gröna villkor',
+          blocked: 'START spärrad – återställ READ-ONLY',
+          aborted: 'ABORT aktiv – START spärrad',
+        })[status] || 'Status ej verifierad';
+        const checkList = Array.isArray(a.checks) ? a.checks : [];
+        const colors = {
+          passed: {bg:'#e2f5e8', fg:'#166534', border:'#87ca9d', symbol:'✓'},
+          failed: {bg:'#fde7e7', fg:'#991b1b', border:'#ed9797', symbol:'✕'},
+          pending: {bg:'#fff3d6', fg:'#915700', border:'#e6b862', symbol:'…'},
+          warning: {bg:'#fff3d6', fg:'#915700', border:'#e6b862', symbol:'!'},
+        };
+        const pills = checkList.length ? checkList.map(c => {
+          const t = colors[c.status] || colors.pending;
+          const detail = safe(c.detail || '');
+          return '<span title="'+detail+'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:99px;border:1px solid '+t.border+';background:'+t.bg+';color:'+t.fg+';font-size:10px;font-weight:850;white-space:nowrap;">'+
+            '<b style="font-size:12px">'+t.symbol+'</b>'+safe(c.label || c.id || 'Kontroll')+'</span>';
+        }).join('') : '<span style="color:#915700;font-weight:800;">Diagnostik saknas – kontrollera backendversion</span>';
+        const blocking = checkList.filter(c => c.blocking !== false && c.status !== 'passed');
         const reasons = Array.isArray(a.reasons) ? a.reasons : [];
-        return safe(reasons.slice(0,3).join(' · ') || 'Förhandskontroll saknas. Uppdatera HA.');
+        const details = blocking.length ? blocking.slice(0,3).map(c =>
+          '<div style="margin-top:3px;font-size:10px;color:#991b1b;">✕ '+safe(c.detail)+'</div>'
+        ).join('') : reasons.length ? reasons.slice(0,3).map(v =>
+          '<div style="margin-top:3px;font-size:10px;color:#991b1b;">✕ '+safe(v)+'</div>'
+        ).join('') : '';
+        return '<div style="width:100%;line-height:1.45;text-align:center;">'+
+          '<div style="font-size:11px;font-weight:800;margin-bottom:9px;">'+safe(statusText)+'</div>'+
+          '<div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;">'+pills+'</div>'+
+          (details ? '<div style="border-top:1px solid rgba(127,127,127,.2);margin-top:9px;padding-top:7px;text-align:left;">'+details+'</div>' : '')+
+          '</div>';
       ]]]
     tap_action:
       action: |
