@@ -45,11 +45,11 @@ def _fresh_after(hass: Any, entity_id: str, since: datetime) -> Any | None:
 async def _command(hass: Any, result: dict[str, Any], key: str, domain: str,
                    service: str, data: dict[str, Any]) -> None:
     """Continue emergency attempts if any individual output or RCL call fails."""
-    if not hass.services.has_service(domain, service):
-        result["emergency_commands"][key] = "service_unavailable"
-        result["errors"].append(f"{key}: service unavailable")
-        return
     try:
+        if not hass.services.has_service(domain, service):
+            result["emergency_commands"][key] = "service_unavailable"
+            result["errors"].append(f"{key}: service unavailable")
+            return
         await hass.services.async_call(domain, service, data, blocking=True)
     except Exception as exc:  # Emergency best effort: never skip remaining outputs.
         result["emergency_commands"][key] = "failed"
@@ -82,8 +82,12 @@ async def async_emergency_abort(hass: Any) -> dict[str, Any]:
     # Establish the in-memory positive-action lockout BEFORE any awaited call.
     # The physical OFF/0 requests must not wait for RAPT cloud STOP, storage,
     # runtime snapshots, or non-critical cleanup.
-    base.clear_owned_control(hass, reason="emergency_abort")
     hass.data.setdefault("brewassistant", {})[base.ABORT_DATA_KEY] = result
+    try:
+        base.clear_owned_control(hass, reason="emergency_abort")
+    except Exception as exc:
+        # A stale owned-control lease must never prevent physical OFF requests.
+        result["errors"].append(f"abort_owned_control_cleanup: {type(exc).__name__}: {exc}")
 
     # Leave the BrewZilla main controller powered for feedback. Disconnecting
     # it prevents us from checking the actual heater/pump/utilization readbacks.
