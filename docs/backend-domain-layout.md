@@ -42,6 +42,8 @@ custom_components/brewassistant/
 │   └── README.md
 ├── fermentation_tracking/
 │   └── README.md
+├── hlt/                         # SIM-1, virtual read-only
+│   └── README.md
 ├── grainfather_fermenter/
 │   └── README.md
 ├── kegerator/
@@ -64,11 +66,27 @@ custom_components/brewassistant/
 | `cooling/` | Cooling Runtime v2 for CFC/immersion/manual cooling, sanitation context and cooling advice |
 | `fermentation_tracking/` | Independent fermentation observations, source resolution, SG/Brix correction, progress/stability/readiness |
 | `fermentation_chamber/` | Fermentation/cold-crash chamber-air recommendation plus Supervised Apply bridge |
+| `hlt/` | HLT SIM-1 virtual, read-only heater simulation; no physical HLT power allocation or direct heater writes |
 | `grainfather_fermenter/` | Grainfather fermentation-device discovery/normalization; phase 1 read-only GF30 preparation and future supervised profile-target bridge |
 | `fermentation/` | Legacy compatibility bridges only; no new business logic |
 | `kegerator/` | Kegerator fan control/model, serving presets and legacy/policy guard/watchdog |
 | `modules/` | Module/capability metadata registry; existing `grainfather` reservation remains hot-side only |
 | `shared/` | Domain-neutral support helpers such as rolling temperature stats |
+
+## HLT and shared power budget — current versus planned
+
+- **Implemented:** `hlt/` contains HLT SIM-1, a read-only virtual
+  secondary heater driven by normalized Brewday/BrewZilla evidence.
+  No physical HLT load control and no physical BrewZilla power cap.
+- **Historical September design:** a future `power_budget/` domain would own
+  reservation/grant/revoke/reclaim state only **after** verified physical
+  feedback, protection and explicit operator-approved implementation. The
+  proposal is recorded in [HLT planning](./backends/hlt-backend.md) and
+  [power arbiter planning](./power-budget-arbiter.md).
+- Transiently low measured BrewZilla watts cannot authorize a real HLT to
+  energize. The simulator's virtual grants are not electrical safety approvals.
+- No September planning document takes precedence over the
+  [implemented HLT README](../custom_components/brewassistant/hlt/README.md).
 
 ## Platform-root rule
 
