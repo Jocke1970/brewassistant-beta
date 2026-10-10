@@ -9,8 +9,17 @@ cards:
   # An ACK never lifts BA READ-ONLY or authorizes heater/pump writes.
   - type: conditional
     conditions:
-      - entity: sensor.brewassistant_brewday_runtime_state
-        state: "resync_required"
+      # Runtime can still be idle/manual fallback while the persistent
+      # external reconciliation latch remains active after HA restart.
+      - condition: or
+        conditions:
+          - condition: state
+            entity: sensor.brewassistant_brewday_runtime_state
+            state: "resync_required"
+          - condition: state
+            entity: sensor.brewassistant_brewday_runtime_summary
+            attribute: resync_required
+            state: true
     card:
       type: custom:button-card
       entity: sensor.brewassistant_brewday_runtime_summary
