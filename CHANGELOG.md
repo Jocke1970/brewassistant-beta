@@ -1,3 +1,12 @@
+## 0b6 — RAPT Profile Runtime entity fix
+
+- Uppdaterade fullständiga kort `dashboard/cards/rapt_profile_runtime_sv.yaml` + `rapt_profile_runtime.yaml` läser nu dynamiskt RCL:s faktiska profilsensor via `ba_source: rapt_cloud_link_brewzilla_profile_runtime` i stället för att hårdkoda `binary_sensor.brewzilla_profile_active`.
+- Saknade numeriska attribut ger **—**, inte ett påhittat RAPT-mål `0.0 °C` eller `0/0` steg. En riktig rå `0 °C` (t.ex. ChillOut) visas fortfarande som `0.0 °C`.
+- Okänt/otillräckligt profilkontrakt, saknade stegfält samt RCL-observation/snapshot över 90 sekunder markeras tydligt. Flera möjliga enheter väljs aldrig godtyckligt.
+- `tests/test_b6_rapt_profile_card_dynamic_source.py` kontrollerar UI-kontraktet. Inga backend- eller hårdvaruskrivningar ändrades.
+- **Manuellt byte:** använd hela svenska UI-filen på `dev` i ditt personliga HA-kort. Bara Lovelace YAML uppdateras; ingen HA-omstart krävs. `beta` 0b5 och `main` är opåverkade.
+
+
 ## DEV PREVIEW — 0b6 Premium START preflight, RCL Assist attach (2026-10-10)
 
 - Ny `sensor.brewassistant_brewday_start_status` med aktuell `ready/waiting/starting/running/blocked/aborted`, blockeringsorsaker, verifierad session, profil och steg.
