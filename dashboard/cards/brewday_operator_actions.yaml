@@ -46,7 +46,7 @@ card:
           target:
             entity_id: button.brewassistant_rearm_brewday_control
           confirmation:
-            text: Have you physically checked BrewZilla and want to release the ABORT latch? BA read-only and other safety interlocks remain separate.
+            text: First turn BA READ-ONLY ON and physically inspect BrewZilla heat/pump. Rearm releases ABORT only; it does not START brewing.
         styles:
           card:
             - border-radius: 16px
