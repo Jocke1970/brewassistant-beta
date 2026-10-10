@@ -13,7 +13,7 @@ card:
       icon: mdi:alert-octagon
       show_state: false
       show_label: true
-      label: Always available · request active RAPT profile STOP and BZ OFF/0 · verify physical shutdown
+      label: Always available · request active RAPT profile STOP and BZ heater/pump OFF/0 · keep BZ main ON for telemetry · verify physical shutdown
       tap_action:
         action: call-service
         service: button.press
