@@ -53,6 +53,37 @@ brewday_audit_snapshot:
       description: Optional note stored on the manual snapshot event.
       example: Before next Brewfather step
 
+brewday_start_verified:
+  name: Confirmed Brewday START (verified RCL assist)
+  description: >-
+    Operator-confirmed START of BrewAssistant heat/pump assistance ONLY for the
+    same already-active, attested RAPT BrewZilla session. Revalidates source,
+    step, profile identity, fresh BZ telemetry, read-only and ABORT before
+    enabling BA writes. Does not launch an inactive RAPT profile. Hardware
+    start is not equivalent to switching off read-only without preflight.
+  fields:
+    confirmed:
+      name: Physical equipment inspected and START confirmed
+      description: Must be true; inspect liquid, pump path and heating safety.
+      required: true
+      selector:
+        boolean:
+    expected_session_id:
+      name: Verified current RAPT session ID
+      required: true
+      selector:
+        text:
+    expected_step_id:
+      name: Verified current RAPT step ID
+      required: true
+      selector:
+        text:
+    expected_profile_id:
+      name: Verified current RAPT profile ID
+      required: true
+      selector:
+        text:
+
 brewday_reconnect_ack:
   name: Acknowledge external Brewday reconnection
   description: >-
