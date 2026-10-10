@@ -20,6 +20,7 @@ cards:
         const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
         const age = a.snapshot_age_seconds;
         const raw = String(a.raw_step_name || a.step || '').trim();
+        const origin = String(a.snapshot_entity || a.source_entity || '');
         const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
         const hasStep = raw.length > 0 && !['unknown','idle','none'].includes(raw.toLowerCase());
         const ready = a.resync_required === true && runtime === 'resync_required' &&
@@ -29,8 +30,11 @@ cards:
           hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
           (a.resync_from_mode === 'RCL Brewing' ?
             a.profile_active === true && a.profile_source_available === true &&
-            !!String(a.profile_session_id || '').trim() :
-            a.resync_from_mode === 'Brewfather Brewing');
+            !!String(a.profile_session_id || '').trim() &&
+            origin.startsWith('binary_sensor.') :
+            a.resync_from_mode === 'Brewfather Brewing' &&
+            states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+            origin.startsWith('sensor.brewfather_'));
         return ready ? 'BA VÄNTAR PÅ DIG' : 'ÅTERANSLUTNING – KONTROLL KRÄVS';
       ]]]
     label: |
@@ -39,13 +43,17 @@ cards:
         const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const age = a.snapshot_age_seconds;
         const raw = String(a.raw_step_name || a.step || '').trim();
+        const origin = String(a.snapshot_entity || a.source_entity || '');
         const abort = a.operator_abort_active === true ||
           states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
         const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
         const rcl = a.resync_from_mode === 'RCL Brewing' && a.profile_active === true &&
-          a.profile_source_available === true && !!String(a.profile_session_id || '').trim();
-        const bf = a.resync_from_mode === 'Brewfather Brewing';
-        const fresh = typeof age === 'number' && age >= 0 && age <= 90;
+          a.profile_source_available === true && !!String(a.profile_session_id || '').trim() &&
+          origin.startsWith('binary_sensor.');
+        const bf = a.resync_from_mode === 'Brewfather Brewing' &&
+          states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+          origin.startsWith('sensor.brewfather_');
+        const fresh = typeof age === 'number' && age >= 0 && age <= 90 && (rcl || bf);
         const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
         const hasStep = raw.length > 0 && !['unknown','idle','none'].includes(raw.toLowerCase());
         const ready = a.resync_required === true && runtime === 'resync_required' &&
@@ -67,7 +75,7 @@ cards:
           ['KÄLLA', a.resync_from_mode || '—'],
           ['SESSION', session || '—'],
           ['STEG', raw || '—'],
-          ['SNAPSHOT',fresh?Math.round(age)+' s':'för gammal/okänd'],
+          ['SNAPSHOT',fresh?Math.round(age)+' s':'ej verifierad'],
         ].map(([key,value])=>'<span style="font-size:11px;">'+safe(key)+': <b>'+safe(value)+'</b></span>').join(' · ');
         return '<div style="display:block;text-align:center;line-height:1.45;">'+
           '<div style="font-size:11px;font-weight:850;margin-bottom:10px;">Kontrollera fysisk utrustning, källa och aktuellt steg före kvittens.</div>'+
@@ -88,9 +96,14 @@ cards:
           const step = String(a.raw_step_name || a.step || '').trim();
           const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
           const age = a.snapshot_age_seconds;
+          const origin = String(a.snapshot_entity || a.source_entity || '');
           const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
-            a.profile_source_available === true && String(a.profile_session_id || '').trim().length > 0;
-          const bf = mode === 'Brewfather Brewing';
+            a.profile_source_available === true &&
+            String(a.profile_session_id || '').trim().length > 0 &&
+            origin.startsWith('binary_sensor.');
+          const bf = mode === 'Brewfather Brewing' &&
+            states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+            origin.startsWith('sensor.brewfather_');
           const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
           const aborted = a.operator_abort_active === true ||
             states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
