@@ -148,6 +148,14 @@ async def async_rearm(hass: Any) -> None:
         raise HomeAssistantError("Stäng först av switchen Endast observation.")
     if _PREVIOUS_AUTHORITY is None:
         raise HomeAssistantError("Styrspärren är inte installerad.")
+    # START is a separate operator-verified transaction. A direct switch OFF
+    # may no longer silently grant BA physical control.
+    from ..brewday.brewday_start_preflight import _store as _start_store
+    if _start_store(hass).get("starting") is not True:
+        raise HomeAssistantError(
+            "BA-styrning får bara aktiveras via verifierad START. "
+            "READ-ONLY avaktiveras automatiskt efter godkänd START-preflight."
+        )
     decision, context = _PREVIOUS_AUTHORITY(hass)
     from ..brewday.brewday_operator_abort import brewday_operator_abort_active
     if brewday_operator_abort_active(hass):

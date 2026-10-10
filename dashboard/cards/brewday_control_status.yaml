@@ -106,60 +106,149 @@ cards:
         - white-space: normal
         - text-align: left
         - justify-self: stretch
-  - type: horizontal-stack
-    cards:
-      - type: custom:button-card
-        entity: switch.brewassistant_brewzilla_observe_only
-        name: "BA READ-ONLY"
-        icon: mdi:shield-eye-outline
-        show_label: true
-        label: "Enable BA read-only. Does not stop a running RAPT profile."
-        tap_action:
-          action: |
+  # START is source-specific and backend-guarded; green is NOT authority.
+  # Yellow tap opens preflight reasons; only green can call START service.
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_start_status
+    show_state: false
+    show_label: true
+    update_timer: 5s
+    triggers_update:
+      - sensor.brewassistant_brewday_start_status
+      - sensor.brewassistant_brewday_runtime_summary
+      - sensor.brewassistant_brewday_operator_control_state
+      - switch.brewassistant_brewzilla_observe_only
+    name: |
+      [[[
+        const status = states['sensor.brewassistant_brewday_start_status']?.state || 'waiting';
+        return ({
+          waiting: 'WAITING FOR SYSTEM',
+          ready: 'START BREWING',
+          starting: 'STARTING / VERIFYING',
+          running: 'BREWING ACTIVE · GO',
+          blocked: 'START BLOCKED',
+          aborted: 'ABORT ACTIVE – START BLOCKED',
+        })[status] || 'CHECK SYSTEM';
+      ]]]
+    icon: |
+      [[[
+        const status = states['sensor.brewassistant_brewday_start_status']?.state;
+        return status === 'running' ? 'mdi:fire' :
+          status === 'ready' ? 'mdi:play-circle' :
+          status === 'starting' ? 'mdi:progress-clock' :
+          status === 'aborted' ? 'mdi:alert-octagon' : 'mdi:connection';
+      ]]]
+    label: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_start_status']?.attributes || {};
+        const status = states['sensor.brewassistant_brewday_start_status']?.state;
+        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        if (status === 'ready') return 'GO · tap for physical inspection and confirmed RCL Assist start';
+        if (status === 'running') return 'Same RAPT session verified · BA assistance enabled';
+        if (status === 'starting') return 'Verifying session, step and readbacks';
+        const reasons = Array.isArray(a.reasons) ? a.reasons : [];
+        return safe(reasons.slice(0,3).join(' · ') || 'No preflight available. Update HA.');
+      ]]]
+    tap_action:
+      action: |
+        [[[
+          return states['sensor.brewassistant_brewday_start_status']?.state === 'ready' ?
+            'call-service' : 'more-info';
+        ]]]
+      service: brewassistant.brewday_start_verified
+      data: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_start_status']?.attributes || {};
+          const i = a.identity || {};
+          return {
+            confirmed: true,
+            expected_session_id: String(i.session_id || ''),
+            expected_step_id: String(i.step_id || ''),
+            expected_profile_id: String(i.profile_id || ''),
+          };
+        ]]]
+      confirmation:
+        text: "START – inspect actual water level, pump path and BrewZilla. Only attaches BA RCL Assist to the displayed already ACTIVE RAPT session. Backend rechecks step and session. Continue?"
+    extra_styles: |
+      @keyframes ba-start-yellow {
+        0%, 100% { box-shadow: 0 0 0 1px rgba(216,150,17,.24); }
+        50% { box-shadow: 0 0 0 6px rgba(216,150,17,.22); }
+      }
+      @keyframes ba-start-green {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(38,166,91,.14); }
+        50% { box-shadow: 0 0 0 7px rgba(38,166,91,.28); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #card { animation: none !important; }
+      }
+    styles:
+      card:
+        - border-radius: 20px
+        - min-height: 108px
+        - padding: 14px
+        - border: |
             [[[
-              return states['switch.brewassistant_brewzilla_observe_only']?.state === 'off' ? 'call-service' : 'none';
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return '2px solid ' + (s === 'running' ? '#d34540' :
+                s === 'ready' ? '#2ea85e' : s === 'starting' ? '#4189c7' : '#d8a22f');
             ]]]
-          service: switch.turn_on
-          target:
-            entity_id: switch.brewassistant_brewzilla_observe_only
-        styles: &safe_action
-          card:
-            - border-radius: 16px
-            - padding: 13px
-            - min-height: 92px
-            - background: rgba(33,150,243,.09)
-            - border: 1px solid rgba(33,150,243,.28)
-          name:
-            - font-weight: 900
-            - font-size: 11px
-          label:
-            - font-size: 10px
-            - white-space: normal
-      - type: custom:button-card
-        entity: switch.brewassistant_brewzilla_observe_only
-        name: "ENABLE BA CONTROL"
-        icon: mdi:shield-check-outline
-        show_label: true
-        label: "Allows BA actuation only for an already active verified source. Starting a RAPT profile needs a separate START flow (#258)."
-        tap_action:
-          action: |
+        - background: |
             [[[
-              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-              const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
-              const valid = (a.brewday_mode === 'RCL Brewing' && a.source === 'RAPT BrewZilla Profile') ||
-                (a.brewday_mode === 'Brewfather Brewing' && a.source === 'Brewfather Brew Tracker') ||
-                (a.brewday_mode === 'Manual Brewing' && a.source === 'Manual Brewday' &&
-                  ['prepared','running','paused','awaiting_confirm'].includes(state));
-              return states['switch.brewassistant_brewzilla_observe_only']?.state === 'on' &&
-                !a.fallback_active && !a.resync_required && !a.operator_abort_active &&
-                state !== 'aborted' && valid ? 'call-service' : 'none';
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return s === 'running' ? 'rgba(220,58,54,.15)' :
+                s === 'ready' ? 'rgba(30,176,86,.14)' :
+                s === 'starting' ? 'rgba(34,124,210,.11)' : 'rgba(250,182,36,.13)';
             ]]]
-          service: switch.turn_off
-          target:
-            entity_id: switch.brewassistant_brewzilla_observe_only
-          confirmation:
-            text: "Check equipment, water level and external controller. Leaving read-only may restart allowed BA heat/pump commands on the next tick. Continue?"
-        styles: *safe_action
+        - animation: |
+            [[[
+              const s = states['sensor.brewassistant_brewday_start_status']?.state;
+              return s === 'ready' ? 'ba-start-green 1.6s ease-in-out infinite' :
+                s === 'waiting' || s === 'blocked' ? 'ba-start-yellow 1.8s ease-in-out infinite' : 'none';
+            ]]]
+      name:
+        - font-size: 17px
+        - font-weight: 950
+        - white-space: normal
+      label:
+        - font-size: 11px
+        - font-weight: 650
+        - white-space: normal
+        - text-align: center
+      icon:
+        - width: 32px
+        - color: |
+            [[[
+              return states['sensor.brewassistant_brewday_start_status']?.state === 'running' ?
+                '#b02a27' : states['sensor.brewassistant_brewday_start_status']?.state === 'ready' ?
+                '#198448' : '#94650d';
+            ]]]
+  - type: custom:button-card
+    entity: switch.brewassistant_brewzilla_observe_only
+    name: "BA READ-ONLY"
+    icon: mdi:shield-eye-outline
+    show_label: true
+    label: "Enable BA read-only. Does not stop a running RAPT profile."
+    tap_action:
+      action: |
+        [[[
+          return states['switch.brewassistant_brewzilla_observe_only']?.state === 'off' ? 'call-service' : 'none';
+        ]]]
+      service: switch.turn_on
+      target:
+        entity_id: switch.brewassistant_brewzilla_observe_only
+    styles:
+      card:
+        - border-radius: 16px
+        - padding: 13px
+        - min-height: 92px
+        - background: rgba(33,150,243,.09)
+        - border: 1px solid rgba(33,150,243,.28)
+      name:
+        - font-weight: 900
+        - font-size: 11px
+      label:
+        - font-size: 10px
+        - white-space: normal
   - type: custom:button-card
     entity: sensor.brewassistant_brewday_runtime_summary
     name: "ACKNOWLEDGE RECONNECTION"

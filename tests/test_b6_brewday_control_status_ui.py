@@ -27,7 +27,8 @@ def test_brewday_premium_cards_have_parity_and_real_guarded_controls():
         assert "snapshot_age_seconds" in source
         assert "states['switch.brewassistant_brewzilla_observe_only']?.state === 'on'" in source
         assert "service: switch.turn_on" in source
-        assert "service: switch.turn_off" in source
+        assert "service: switch.turn_off" not in source
+        assert "brewassistant.brewday_start_verified" in source
         assert "service: button.press" in source
         assert "entity_id: button.brewassistant_abort_brewday" in source
         assert "entity_id: button.brewassistant_rearm_brewday_control" in source
