@@ -65,3 +65,33 @@ RCL. Spåras i issue #258.
 Detta är en **UI-förbättring på dev**, inte en ny installerad beta.
 Manuellt inklistrade Lovelace-kort behöver ersättas som **hela YAML-kort**;
 en HACS-backenduppdatering byter inte automatiskt deras konfiguration.
+
+
+## Fältuppföljning 2026-10-10: reconnect/HA-omstart
+
+Flight recorder visade aktiva RCL-profilidentiteter medan Brewday låg
+`resync_required`. Första fallet började 15:40:36 UTC och släpptes
+först efter `brewday_reconnect_ack` 15:57:23 UTC, alltså en manuell
+kvittens. Det var **inte** belagd långsam RAPT Cloud Link-pollning.
+En HA-initialisering syns 15:56:12 UTC, med enhetssensorer återlästa
+15:56:58 UTC. En senare omstart 16:29 UTC följdes av ny
+`resync_required`, men ingen kvittens syns före ABORT 16:36:55 UTC.
+
+Nuvarande backend gör detta avsiktligt:
+`async_load_brewday_recipe_context` återställer receptkontext men
+lägger på `ha_restart_requires_external_reconciliation` och kräver
+`acknowledge_external_reconnect` med live RCL session + steg. Återanslutning
+ska inte automatiskt återaktivera aktuatorer från gammal snapshot.
+Däremot bör UI uttryckligen visa **VÄNTAR PÅ OPERATÖRSKVITTENS**,
+aktuellt RCL-session/steg, och korrekt kvittensknapp med detaljerad
+blockerande orsak. Det är separat framtida UI/backend-arbete,
+inte en anledning att ta bort spärren eller nollställa sessionen.
+
+### Korrigerad Manual YAML-struktur
+
+PR för komplett YAML-reparation är separat: första och andra
+`conditional`-kortet måste vara två poster (`- type: conditional`)
+under samma `vertical-stack.cards`. Tidigare dev-kort innehöll
+`type: conditional` direkt under listan utan listmarkör och visade
+`Ingen typ angiven`. Regressionstest parsar nu båda fullständiga
+korten som YAML och verifierar två kortposter.
