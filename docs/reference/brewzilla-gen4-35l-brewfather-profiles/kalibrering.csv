@@ -1,0 +1,10 @@
+Kalibrering efter bryggdag / vattenprov,,,,,
+,,,,,
+Kalibrering,Inmatning 1,Inmatning 2,Inmatning 3,Beräknat resultat,Kommentar
+Boil-off L/h,25,21,60,4,"Startvolym L, slutvolym L (samma temperaturreferens), minuter kok."
+Trub/CFC loss L,22,21.2,0,0.800000000000001,Kyld volym före transfer minus volym i fermenter. Inmatning 3 används ej.
+Grain absorption L/kg,20,16.5,5,0.7,"Mash water in + sparge/extra water som gått genom malt, minus runnings före kok, delat med grain kg. Grov metod."
+Ny BH efficiency,0.72,1.05,1.047,0.676799999999998,"Nuvarande efficiency, förväntad OG, faktisk OG. Approx: current × actual gravity points / expected points."
+,,,,,
+,,,,,
+"Tips: uppdatera Grundvärden först när du har 2–3 bryggningar med liknande process. Boil-off kan ändras med effekt, lock/steam-condenser, ventilation och kokintensitet. Effektivitet påverkas bland annat av maltkross, mäskning, recirkulationsflöde, lakning och grain bill.",,,,,
