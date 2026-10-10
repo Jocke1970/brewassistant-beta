@@ -56,7 +56,8 @@ def test_reconnect_snapshot_provenance_and_ack_are_fail_closed(name):
     }
     red = evaluate(card["label"], base)
     assert "✕ SNAPSHOT" in red
-    assert "✕ KÄLLA" in red
+    source_label = "KÄLLA" if name.endswith("_sv.yaml") else "SOURCE"
+    assert f"✕ {source_label}" in red
     assert "0 s" not in red
     assert evaluate(card["tap_action"]["action"], base) == "none"
 
@@ -70,7 +71,7 @@ def test_reconnect_snapshot_provenance_and_ack_are_fail_closed(name):
     }
     green = evaluate(card["label"], attested)
     assert "✓ SNAPSHOT" in green
-    assert "✓ KÄLLA" in green
+    assert f"✓ {source_label}" in green
     assert evaluate(card["tap_action"]["action"], attested) == "call-service"
 
     forged_age = {**attested, "snapshot_entity": "python_manual_runtime",
