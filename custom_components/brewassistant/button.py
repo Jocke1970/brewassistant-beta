@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .brewday.brewday_audit import async_record_brewday_audit_event
@@ -169,6 +170,7 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
         # Safety invariant: neither the optional Manual session nor supervised
         # cleanup may delay/deny explicit physical emergency requests. A live
         # RAPT profile deliberately blocks Manual session mutations.
+        latch_failed = False
         try:
             await async_latch_brewday_operator_abort(
                 hass,
@@ -177,6 +179,7 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
                 step=str(runtime.get("step") or "Idle"),
             )
         except Exception:
+            latch_failed = True
             # Persistence can fail. Still try the physical emergency lane;
             # report both failures instead of leaving actuators untouched.
             _LOGGER.exception("Failed to persist Brewday ABORT latch; issuing emergency OFF anyway")
@@ -208,6 +211,14 @@ class BrewAssistantAbortBrewdayButton(BrewAssistantButtonEntity):
         )
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
+        if latch_failed:
+            # Do not report a successful operator lockout when durable ABORT
+            # state was not saved, even if the emergency request was sent.
+            raise HomeAssistantError(
+                "Brewday ABORT lockout could not be stored. Emergency OFF was "
+                "requested, but neither ongoing lockout nor physical OFF is "
+                "verified. Inspect BrewZilla locally and keep controls stopped."
+            )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
