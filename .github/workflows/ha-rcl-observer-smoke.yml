@@ -23,11 +23,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: ba
 
-      - name: Check out published RCL beta.1 commit (immutable)
+      - name: Check out current published RCL 2026.10.0b3 commit (immutable)
         uses: actions/checkout@v7
         with:
           repository: Jocke1970/home-assistant-rapt-cloud-link
-          ref: 149d51aaa4d467fd37c932ceaf8161c9f1387314
+          ref: 116a3cf0117fe753a7a341867f6fba3aa265750a
           path: rcl
 
       - name: Set up Home Assistant Python
@@ -46,7 +46,7 @@ jobs:
           cp -R rcl/custom_components/rapt_cloud_link ba/custom_components/rapt_cloud_link
           python -m json.tool ba/custom_components/brewassistant/manifest.json >/dev/null
           python -m json.tool ba/custom_components/rapt_cloud_link/manifest.json >/dev/null
-          test "$(python -c 'import json; print(json.load(open("ba/custom_components/rapt_cloud_link/manifest.json"))["version"])')" = '0.5.0-beta.1'
+          test "$(python -c 'import json; print(json.load(open("ba/custom_components/rapt_cloud_link/manifest.json"))["version"])')" = '2026.10.0b3'
 
       - name: Exercise real HA StateMachine and ServiceRegistry (no cloud/hardware)
         working-directory: ba
