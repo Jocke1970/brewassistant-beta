@@ -74,7 +74,7 @@ card:
           };
 
           return `<div style="line-height:1.25;min-width:0;">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Bryggdagsaudit / händelsebackend · snapshots</div><div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div></div><div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon><span>${badge}</span></div></div>
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;"><div style="min-width:0;"><div style="font-size:12px;font-weight:850;opacity:.66;">Bryggdagslogg · komplett historik i fil</div><div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div></div><div style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:${chipBg};border:1px solid ${chipBorder};font-size:11px;font-weight:950;white-space:nowrap;"><ha-icon icon="${badgeIcon}" style="width:14px;height:14px;"></ha-icon><span>${badge}</span></div></div>
             <div style="margin-top:8px;text-align:center;"><div style="font-size:23px;font-weight:950;letter-spacing:-.04em;line-height:1.02;">${headline}</div><div style="margin-top:5px;font-size:12px;font-weight:800;opacity:.74;">${runtime} · ${stage} · ${short(step, 54)}<br>senast: ${short(lastEvent, 62)}</div></div>
             <div style="margin-top:11px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;">
               ${metric('Händelser', String(count), summary, 'mdi:counter', count > 0 ? 'green' : 'neutral')}
@@ -82,7 +82,7 @@ card:
               ${metric('Steg', short(lastStep, 14), 'senaste steg', 'mdi:format-list-checks', 'cyan')}
               ${metric('Mål', short(lastTarget, 14), 'senaste mål', 'mdi:target', 'neutral')}
             </div>
-            <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${count > 0 ? 'rgba(76,175,80,.10)' : 'rgba(127,127,127,.08)'};border:1px solid ${count > 0 ? 'rgba(76,175,80,.24)' : 'rgba(127,127,127,.14)'};"><ha-icon icon="${count > 0 ? 'mdi:check-circle-outline' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${count > 0 ? `senast ${short(lastEvent, 42)} · ${short(lastStep, 42)}` : 'Starta loggen när du vill ha en ren diagnostisk tidslinje för bryggdagen.'}</div></div>
+            <div style="margin-top:10px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:center;border-radius:14px;padding:8px 9px;background:${count > 0 ? 'rgba(76,175,80,.10)' : 'rgba(127,127,127,.08)'};border:1px solid ${count > 0 ? 'rgba(76,175,80,.24)' : 'rgba(127,127,127,.14)'};"><ha-icon icon="${count > 0 ? 'mdi:check-circle-outline' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon><div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">${count > 0 ? `senast ${short(lastEvent, 42)} · ${short(lastStep, 42)}` : 'Starta loggen för en ny tidslinje. Filer finns i /config/brewassistant/logs/.'}</div></div>
           </div>`;
         ]]]
       styles:
@@ -155,13 +155,13 @@ card:
             service: brewassistant.brewday_audit_stop
           styles: *log_action
         - type: custom:button-card
-          name: Rensa
+          name: Rensa vy
           icon: mdi:trash-can-outline
           tap_action:
             action: call-service
             service: brewassistant.brewday_audit_clear
             confirmation:
-              text: Rensa bryggdagens händelselogg?
+              text: Rensa nuvarande loggvy? Tidigare JSONL-filer sparas på disk.
           styles: *log_action
     - type: custom:expander-card
       title-card:
