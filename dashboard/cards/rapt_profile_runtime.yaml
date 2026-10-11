@@ -204,8 +204,7 @@ card:
       const canEstimateTimer = timedProfileStep &&
         String(durationType).toLowerCase() === 'start' &&
         Number.isFinite(transitionMs) && transitionMs <= Date.now() &&
-        sourceAgeSeconds !== null && sourceAgeSeconds <= 90 &&
-        runtimeAttrs.resync_required !== true;
+        !stale && rt.resync_required !== true;
       const remainingEstimate = canEstimateTimer ?
         Math.max(0, length - Math.max(0, (Date.now() - transitionMs) / 1000)) : null;
       const remainingLabel = remainingEstimate === null ? '—' :
