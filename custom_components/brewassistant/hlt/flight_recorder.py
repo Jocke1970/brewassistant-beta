@@ -116,5 +116,4 @@ async def async_record_hlt_tick(
         **selected_context,
     })
     event["severity"] = "warning" if conflict else "info"
-    audit._append_event(log, event)
-    await audit.async_save_brewday_audit_log(hass)
+    await audit.async_record_brewday_audit_prebuilt_event(hass, event)
