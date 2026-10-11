@@ -1,3 +1,11 @@
+## DEV PREVIEW — 2026.10.0b11: BOIL pump OFF/0 % (2026-10-11)
+
+- Under **aktuellt** BOIL-steg ska BA begära både pump OFF och pump-utilization 0 % via den skyddade RCL-vägen. Nästa planerade Boil-steg, Pre-Boil och efterföljande Cooling räknas inte som aktiv BOIL.
+- Även alternativa BA-pumpanrop med positiv utilization/ON nekas under BOIL. Värme, RAPT-profil och target påverkas inte.
+- Source loss/resync/ABORT/fail-passive/READ-ONLY och saknad fysisk readback får aldrig omvandlas till obehörig OFF/0-kommendering; RAPT-profilen kan fortfarande själv styra pump, vilket kräver kontroll i vattenprov.
+- `docs/2026.10.0b11-boil-pump-off-zero_sv.md`, rena Python-regressionstester och kvarvarande 0b11-UI-putsning.
+- `dev` endast, beta/main orörda.
+
 ## DEV PREVIEW — 2026.10.0b11 operator attention: only when needed (2026-10-11)
 
 - Brewday Control/Status SV+EN: döljer stora BA-assistans/START-kortet när BA kör med verifierat gröna kontroller, inga blockerande orsaker och ingen ABORT/resync/fallback. Vid ny operatörsåtgärd eller varning visas kortet igen.
