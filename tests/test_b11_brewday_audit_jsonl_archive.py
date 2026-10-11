@@ -89,8 +89,6 @@ def test_legacy_import_once_never_truncates_or_duplicates(tmp_path):
     assert events[0]["legacy_events_retained"] == 2
     assert events[1:] == old
 
-
-
 def test_legacy_import_rejects_a_truncated_existing_file(tmp_path):
     ns = archive()
     p = tmp_path / "audit.jsonl"
