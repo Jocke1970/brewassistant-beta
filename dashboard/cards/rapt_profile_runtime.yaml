@@ -44,6 +44,7 @@ card:
       const reported = profileSensor?.last_reported || profileSensor?.last_updated;
       const reportedMs = reported ? Date.parse(reported) : NaN;
       const stale = !Number.isFinite(reportedMs) || (Date.now() - reportedMs) > 90000;
+      const profileReadable = verified && !stale;
       const oz = states['sensor.brewassistant_brewzilla_control_reason']?.attributes || {};
       const runtimeState = clean(states['sensor.brewassistant_brewday_runtime_state']?.state) || 'idle';
       const stage = clean(states['sensor.brewassistant_brewday_runtime_stage']?.state) || '—';
@@ -51,6 +52,9 @@ card:
       const nextRuntime = clean(states['sensor.brewassistant_brewday_runtime_next_step']?.state) || '—';
       const baTarget = num(states['sensor.brewassistant_brewday_target_temperature']?.state);
       const age = num(states['sensor.brewassistant_brewday_snapshot_age_minutes']?.state);
+      // BA's normalized target is advisory context, never proof of the RAPT setpoint.
+      const baTargetTrusted = age !== null && age >= 0 && age <= 1.5 &&
+        rt.resync_required !== true && profileReadable;
       // Physical/current kettle temperature is a distinct readback, NOT
       // the RAPT profile's commanded target. Refuse old/invalid samples.
       const measured = states['sensor.brewzilla_temperature'];
@@ -78,17 +82,19 @@ card:
       const cooling = String(stage).toLowerCase().includes('cool') || String(stepName).toLowerCase().includes('chill');
       // RAPT's 0 °C ChillOut sentinel is not a valid target for hot-side
       // Mash In/Heatstrike. Show unknown rather than a fake 0 °C target.
-      const displayRawTarget = rawTarget === 0 && !cooling ? null : rawTarget;
+      const displayRawTarget = profileReadable && !(rawTarget === 0 && !cooling) ? rawTarget : null;
 
-      let statusText = 'RAPT/BrewZilla owns recipe and target · BrewAssistant assists heat/pump';
-      let actionText = manual
-        ? 'RAPT is waiting for a manual button press on the BrewZilla.'
-        : `Next: ${short(nextName, 62)}${nextTarget !== null ? ` · ${fmtTemp(nextTarget)}` : ''}`;
+      let statusText = 'RAPT owns profile, steps and temperature target · BA assists via RCL';
+      let actionText = !profileReadable
+        ? 'Verify RCL active profile and telemetry before proceeding.'
+        : manual
+          ? 'RAPT is waiting for a manual button press on the BrewZilla.'
+          : `Next: ${short(nextName, 62)}${nextTarget !== null ? ` · ${fmtTemp(nextTarget)}` : ''}`;
       let badge = runtimeState === 'source_unavailable' ? 'SOURCE LOST' : runtimeState === 'inactive' ? 'STOPPED' : 'RAPT → BA';
       let badgeBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.16)' : 'rgba(156,39,176,.13)';
       let badgeBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.38)' : 'rgba(156,39,176,.30)';
 
-      if (String(stepName).toLowerCase().includes('mash in')) {
+      if (profileReadable && String(stepName).toLowerCase().includes('mash in')) {
         if (gate === 'ready_for_mash_in') {
           actionText = 'Strike is ready · press MASH-IN STARTED in BrewAssistant when you begin adding grain.';
         } else if (gate === 'mash_in_started') {
@@ -98,13 +104,17 @@ card:
         }
       }
 
-      if (cooling) {
+      if (profileReadable && cooling) {
         statusText = `ChillOut is a process marker · RAPT target ${fmtTemp(rawTarget)} is not sent as a hot-side target`;
         actionText = 'BA removes heat/heat-utilization and releases BrewZilla pump ownership to Cooling Runtime/operator.';
       }
 
       const duration = length !== null && length >= 0 ? `${(length / 60).toFixed(length % 60 === 0 ? 0 : 1)} min` : '—';
-      const stepIndex = stepNo !== null && stepNo > 0 && stepCount !== null && stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const stepIndex = profileReadable && stepNo !== null && stepNo > 0 &&
+        stepCount !== null && stepCount > 0 && stepNo <= stepCount ?
+        `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : '—';
+      const stepHeadline = profileReadable ? short(stepName, 54) :
+        'Unverified (last: ' + short(stepName, 38) + ')';
       const caution = !verified || stale || displayRawTarget === null || stepIndex === '—' || (age !== null && age > 1.5);
       const diagnostics = [
         !profileSensor ? 'Profile sensor absent or ambiguous' : null,
@@ -115,7 +125,7 @@ card:
         age !== null && age > 1.5 ? 'BA snapshot older than 90 s' : null
       ].filter(Boolean).join(' · ');
       if (caution && runtimeState !== 'source_unavailable') {
-        badge = 'CHECK SOURCE';
+        badge = stale ? 'STALE RCL DATA' : 'CHECK SOURCE';
         badgeBg = 'rgba(244,67,54,.13)';
         badgeBorder = 'rgba(244,67,54,.38)';
       }
@@ -132,26 +142,26 @@ card:
         </div>
 
         <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;">
-          ${chip('RAPT PROFILE','mdi:playlist-play','rgba(156,39,176,.10)','rgba(156,39,176,.25)')}<span style="opacity:.45;">→</span>
+          ${chip('RAPT · PROFILE OWNER','mdi:playlist-play','rgba(156,39,176,.10)','rgba(156,39,176,.25)')}
           ${chip('BREWASSISTANT','mdi:brain','rgba(33,150,243,.10)','rgba(33,150,243,.24)')}<span style="opacity:.45;">→</span>
           ${chip('RCL','mdi:cloud-sync-outline','rgba(0,188,212,.09)','rgba(0,188,212,.22)')}<span style="opacity:.45;">→</span>
           ${chip('BREWZILLA','mdi:kettle-steam-outline','rgba(76,175,80,.09)','rgba(76,175,80,.22)')}
         </div>
 
-        <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">ACTIVE DIRECTIVE</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${short(stepName, 54)}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
+        <div style="margin-top:10px;text-align:center;"><div style="font-size:10px;font-weight:950;letter-spacing:.07em;opacity:.58;text-transform:uppercase;">${profileReadable ? 'ACTIVE PROFILE STEP' : 'PROFILE STEP UNVERIFIED'}</div><div style="margin-top:3px;font-size:23px;font-weight:950;letter-spacing:-.035em;">${stepHeadline}</div><div style="margin-top:4px;font-size:11.5px;font-weight:800;opacity:.70;">${statusText}</div></div>
 
         ${caution ? `<div style="margin-top:10px;border-radius:12px;padding:9px 10px;background:rgba(244,67,54,.11);border:1px solid rgba(244,67,54,.4);font-size:11px;font-weight:850;color:#b3261e"><ha-icon icon="mdi:alert-circle" style="width:16px;height:16px;vertical-align:middle"></ha-icon> RAPT DATA NOT VERIFIED · ${diagnostics}. Unknown targets are shown as —, not 0 °C.</div>` : ''}
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;">
           <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(displayRawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT target</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTarget)}</b><br><span style="font-size:9px;opacity:.62;">runtime target</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTargetTrusted ? baTarget : null)}</b><br><span style="font-size:9px;opacity:.62;">BA target (reference)</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(76,175,80,.085);border:1px solid rgba(76,175,80,.22);text-align:center;"><b>${fmtTemp(measuredTemp)}</b><br><span style="font-size:9px;opacity:.62;">BZ actual</span></div>
           <div style="padding:7px 4px;border-radius:13px;background:rgba(0,188,212,.08);border:1px solid rgba(0,188,212,.20);text-align:center;"><b>${stepIndex}</b><br><span style="font-size:9px;opacity:.62;">profile step</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${age !== null ? `${age.toFixed(1)} min` : '—'}</b><br><span style="font-size:9px;opacity:.62;">snapshot</span></div>
+          <div style="padding:7px 4px;border-radius:13px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${age !== null ? `${age.toFixed(1)} min` : '—'}</b><br><span style="font-size:9px;opacity:.62;">BA snapshot</span></div>
         </div>
 
         ${measuredTemp === null ? '<div style="margin-top:6px;font-size:10px;color:#946200;text-align:center;font-weight:760;">BZ temperature is missing or older than 90 s; no current temperature is displayed.</div>' : ''}
         <div style="margin-top:8px;padding:8px 9px;border-radius:13px;background:${manual || cooling ? 'rgba(255,193,7,.10)' : 'rgba(127,127,127,.055)'};border:1px solid ${manual || cooling ? 'rgba(255,193,7,.28)' : 'rgba(127,127,127,.13)'};font-size:11.2px;font-weight:820;text-align:center;">${actionText}</div>
-        <div style="margin-top:7px;font-size:9.8px;font-weight:780;opacity:.58;text-align:center;">End condition: ${timerText} · control ${clean(a.step_control_type) || '—'} · BA Learning owns heat utilization and pump assistance</div>
+        <div style="margin-top:7px;font-size:9.8px;font-weight:780;opacity:.58;text-align:center;">End condition: ${profileReadable ? timerText : '—'} · control ${profileReadable ? (clean(a.step_control_type) || '—') : '—'} · BA assists via RCL</div>
       </div>`;
     ]]]
   styles:
