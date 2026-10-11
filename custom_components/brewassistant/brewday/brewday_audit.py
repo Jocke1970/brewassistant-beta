@@ -193,6 +193,7 @@ class BrewdayAuditLog:
     file_path: str | None = None
     file_error: str | None = None
     legacy_window_only: bool = False
+    archive_write_failures: int = 0
 
 
 def _now() -> datetime:
@@ -257,6 +258,7 @@ def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
         "log_file": log.file_path,
         "log_file_error": log.file_error,
         "legacy_window_only": log.legacy_window_only,
+        "archive_write_failures": log.archive_write_failures,
         "events": short_tail,
     }
 
@@ -277,6 +279,7 @@ def _from_store(payload: Any) -> BrewdayAuditLog:
         file_path=payload.get("log_file") if isinstance(payload.get("log_file"), str) else None,
         file_error=payload.get("log_file_error") if isinstance(payload.get("log_file_error"), str) else None,
         legacy_window_only=bool(payload.get("legacy_window_only", False)),
+        archive_write_failures=int(payload.get("archive_write_failures") or 0),
     )
 
 
@@ -559,6 +562,7 @@ async def _archive_record(hass: HomeAssistant, log: BrewdayAuditLog, event: dict
         if log.file_error != error:
             _LOGGER.error("Brewday Flight Recorder archive unavailable (%s): %s", log.file_path, error)
         log.file_error = error
+        log.archive_write_failures += 1
     else:
         log.file_error = None
 
@@ -577,6 +581,7 @@ async def async_start_brewday_audit_log(hass: HomeAssistant, *, note: str | None
         log.file_path = archive.new_session_file(now)
         log.file_error = None
         log.legacy_window_only = False
+        log.archive_write_failures = 0
         event = _event_base(hass, "audit_started", note=note)
         _append_event(log, event)
         await _archive_record(hass, log, event)
@@ -679,7 +684,8 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "max_events": MAX_EVENTS,
         "archive_format": "jsonl",
         "archive_path": log.file_path,
-        "archive_status": "error" if log.file_error else "active" if log.file_path else "none",
+        "archive_status": "error" if log.file_error else "incomplete" if log.archive_write_failures else "active" if log.file_path else "none",
+        "archive_write_failures": log.archive_write_failures,
         "archive_error": log.file_error,
         "archive_legacy_window_only": log.legacy_window_only,
         "recent_preview_count": len(log.events),
