@@ -9,7 +9,7 @@ def test_b9_release_tag_manifest_and_prerelease_notes():
     manifest = json.loads(
         (ROOT / "custom_components/brewassistant/manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["version"] == "2026.10.0b9"
+    assert manifest["version"] == "2026.10.0b10"  # b9 notes/tags remain historical
     notes = (ROOT / "docs/2026.10.0b9-prerelease-notes_sv.md").read_text(encoding="utf-8")
     assert "v2026.10.0b9" in notes
     assert "2026.10.0b8" in notes
@@ -21,12 +21,13 @@ def test_b9_release_tag_manifest_and_prerelease_notes():
 
 
 def test_b9_publisher_checks_seven_required_beta_sha_jobs_and_is_prerelease():
-    ci = (ROOT / ".github/workflows/b9-hacs-prerelease.yml").read_text(encoding="utf-8")
-    assert "2026.10.0b9" in ci
-    assert "v2026.10.0b9" in ci
+    ci = (ROOT / ".github/workflows/b10-hacs-prerelease.yml").read_text(encoding="utf-8")
+    assert "2026.10.0b10" in ci
+    assert "v2026.10.0b10" in ci
     assert "--prerelease" in ci
     assert "GITHUB_SHA" in ci
     for name in ("quality", "test (3.11)", "test (3.12)", "test (3.13)",
                  "Hassfest", "HACS", "ha-rcl-observer-smoke"):
         assert name in ci
+    assert not (ROOT / ".github/workflows/b9-hacs-prerelease.yml").exists()
     assert not (ROOT / ".github/workflows/b8-hacs-prerelease.yml").exists()
