@@ -75,10 +75,18 @@ async def run() -> None:
         restarted = HomeAssistant(config_dir)
         assert observe.observation_required(restarted), "fresh HA runtime must fail closed"
         reloaded = await audit.async_load_brewday_audit_log(restarted)
-        assert reloaded.active and len(reloaded.events) == snap["event_count"]
-        assert any(event.get("power_w") == 1650.0 for event in reloaded.events)
+        assert reloaded.active and reloaded.total_events == snap["event_count"]
+        assert len(reloaded.events) <= audit.STORE_TAIL_EVENTS
+        assert reloaded.file_path == snap["archive_path"]
+        path = Path(config_dir, reloaded.file_path)
+        assert path.is_file()
+        import json
+        archived = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        assert len(archived) == snap["event_count"]
+        assert any(event.get("power_w") == 1650.0 for event in archived)
+        assert "events" not in snap and "recent_events" not in snap
         assert calls == []
-        print("PASS audit log survives Store reload; new BA runtime defaults to observation")
+        print("PASS complete JSONL survives HA Store reload; HA only keeps light continuity")
 
         hass.states.async_set("sensor.brewzilla_power", "unavailable")
         await audit.async_record_brewday_audit_tick(hass, brewzilla_result=result)
