@@ -6,6 +6,7 @@ No HA services/cloud hardware are invoked by these isolated tests.
 from __future__ import annotations
 
 import ast
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -239,6 +240,7 @@ def test_source_authority_pump_positive_rejected_even_by_manual_write_path():
         cooling_gate=SimpleNamespace(
             observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
         ),
+        math=math,
         base=SimpleNamespace(BREWZILLA_PUMP_SWITCH=PUMP,
             BREWZILLA_PUMP_UTILIZATION=PCT, UTILIZATION_TOLERANCE=0.1),
         _live_authority=lambda ha: (
