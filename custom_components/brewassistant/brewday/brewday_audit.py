@@ -612,6 +612,24 @@ async def async_clear_brewday_audit_log(hass: HomeAssistant) -> dict[str, Any]:
         await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
 
+ 
+async def async_record_brewday_audit_prebuilt_event(
+    hass: HomeAssistant, event: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Record an enriched producer event in both preview and full JSONL.
+
+    HLT and other producers that add structured context must use this
+    lock-protected path, not the private in-memory _append_event helper.
+    """
+    async with _write_lock(hass):
+        log = get_brewday_audit_log(hass)
+        if not log.active:
+            return None
+        recorded = _append_event(log, event)
+        await _archive_record(hass, log, event)
+        await async_save_brewday_audit_log(hass)
+        return recorded
+
 
 async def async_record_brewday_audit_event(
     hass: HomeAssistant,
