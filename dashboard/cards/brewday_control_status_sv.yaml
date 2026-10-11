@@ -50,7 +50,7 @@ cards:
         entity: sensor.brewassistant_brewzilla_boil_cooling_status
         triggers_update: all
         icon: mdi:pipe-wrench
-        name: "CFC/KYLSPlRAL KLAR"
+        name: "CFC/KYLSPIRAL KLAR"
         show_state: false
         show_label: true
         label: "Tryck för att kvittera. Pumpstart sker ENDAST sista 15 min med färsk RCL."
