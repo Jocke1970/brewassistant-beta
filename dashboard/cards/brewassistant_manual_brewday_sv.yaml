@@ -1,4 +1,4 @@
-# Manual Brewday entry remains visible when there is NO active external source.
+# Manual Brewday entry is shown only when preparing or running an owned Manual session.
 # The full manual control card below continues to require actual Manual ownership.
 type: vertical-stack
 cards:
@@ -126,6 +126,33 @@ cards:
         text: "Förbered Manual Brewday? Kontrollera först att RAPT/Brewfather inte längre äger bryggningen och att utrustningen är säker. Detta laddar bara processen och startar INTE värme eller pump."
     styles:
       card:
+        - display: |
+            [[[
+              // Operator UI only; service handlers enforce the real safety boundary.
+              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+              const source = String(states['sensor.brewassistant_brewday_runtime_source']?.state || '');
+              const runtime = String(states['sensor.brewassistant_brewday_runtime_state']?.state || '');
+              const manual = String(states['sensor.brewassistant_manual_brewday_status']?.state || '');
+              const enabled = states['switch.brewassistant_show_brewday']?.state === 'on';
+              const aborted = a.operator_abort_active === true ||
+                states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+              const resync = a.resync_required === true || runtime === 'resync_required' ||
+                a.fallback_active === true || !!a.resync_from_mode || !!a.fallback_from_mode;
+              const raptActive = Object.values(states).some(s =>
+                s?.entity_id?.startsWith('binary_sensor.') &&
+                s.attributes?.ba_source === 'rapt_cloud_link_brewzilla_profile_runtime' &&
+                (s.state === 'on' || s.attributes?.profile_active === true));
+              const bfActive = states['sensor.brewfather_brew_tracker_status']?.state === 'active';
+              const external = raptActive || bfActive ||
+                !['None','Manual Brewday'].includes(source);
+              const ready = enabled && !aborted && !resync && !external &&
+                ['None','Manual Brewday'].includes(source) &&
+                runtime === 'idle' && manual === 'idle';
+              const activeManual = enabled && !aborted && !resync && !external &&
+                source === 'Manual Brewday' && manual !== 'idle' &&
+                !['idle','unknown','unavailable','resync_required','aborted'].includes(runtime);
+              return ready || activeManual ? 'grid' : 'none';
+            ]]]
         - border-radius: 20px
         - border: |
             [[[
