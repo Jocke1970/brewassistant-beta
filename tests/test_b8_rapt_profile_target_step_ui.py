@@ -119,7 +119,8 @@ def test_rapt_target_steps_and_freshness_not_invented(name):
     assert "Mash Rest" in zero
     assert "0/0" not in zero
     assert "0.0 °C" not in zero
-    assert "31.0 °C" in zero  # BA reference, not RAPT setpoint
+    assert "31.0 °C" in zero  # reported as red diagnostic, never trusted
+    assert 'font-size:14px;">31.0 °C</b>' not in zero
     assert "RAPT-DATA" in zero or "RAPT DATA" in zero
     assert "EJ VERIFIERAT" in zero or "UNVERIFIED" in zero
 
