@@ -11,6 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 from custom_components.brewassistant.brewday import brewday_audit as audit
 from custom_components.brewassistant.brewzilla import brewzilla_learning as learning
@@ -19,7 +20,22 @@ from custom_components.brewassistant.brewzilla import brewzilla_observe_only as 
 
 async def run() -> None:
     with TemporaryDirectory(prefix="ba-observe-passive-") as config_dir:
+        # A real HA Store from the old rolling-window test era must be
+        # discarded exactly once when the clean JSONL generation starts.
+        legacy = HomeAssistant(config_dir)
+        legacy_store = Store(legacy, audit.STORAGE_VERSION, audit.STORAGE_KEY)
+        await legacy_store.async_save({
+            "active": True, "event_count_total": 250,
+            "started_at": "2026-10-10T15:40:00+00:00",
+            "events": [{"event_type": "runtime_tick", "note": "prior test"}],
+        })
         hass = HomeAssistant(config_dir)
+        clean = await audit.async_load_brewday_audit_log(hass)
+        assert not clean.active and not clean.events and clean.total_events == 0
+        assert clean.file_path is None
+        saved = await Store(hass, audit.STORAGE_VERSION, audit.STORAGE_KEY).async_load()
+        assert saved["archive_generation"] == audit.ARCHIVE_GENERATION
+        print("PASS one-time reset discards only pre-release audit test history")
         calls: list[tuple[str, str, dict]] = []
         for domain, services in {"switch": ("turn_on", "turn_off"), "number": ("set_value",)}.items():
             for service in services:
