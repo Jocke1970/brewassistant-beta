@@ -1,4 +1,4 @@
-## DEV PREVIEW — 2026.10.0b9: BOIL = endast BrewZilla intern vörttemperatur (2026-10-11)
+## BETA RELEASE — 2026.10.0b9: BOIL = endast BrewZilla intern vörttemperatur (2026-10-11)
 
 - BA:s processtemperaturval är nu hårt begränsat vid **aktuellt BOIL-steg**:
   `sensor.brewzilla_temperature`, aldrig RAPT BLE-/Control Device-/extern mäsktermometer,
@@ -12,7 +12,7 @@
   val måste verifieras separat under vattenprov; RCL exponerar inte någon verifierad
   sensorvalstjänst för detta.
 - Regressionstester och `docs/2026.10.0b9-boil-internal-wort-only_sv.md`.
-- Endast `dev`, ingen beta/main-release här.
+- Beta Pre-release via HACS efter testad dev → beta-merge. `main` oförändrad. **BZ:s fysiska reglergivare måste växlas manuellt från BLE till intern inför BOIL.**
 
 ## RELEASE CANDIDATE — 2026.10.0b8 reconnect safety and RCL profile heartbeat (2026-10-11)
 
