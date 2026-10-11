@@ -13,6 +13,8 @@ working.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import asyncio
+import logging
 from datetime import datetime, timezone
 import json
 from typing import Any
@@ -22,6 +24,11 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .brewday_runtime import build_brewday_runtime_snapshot
+from . import brewday_audit_file as archive
+
+_LOGGER = logging.getLogger(__name__)
+LOCK_DATA_KEY = "brewday_audit_archive_lock"
+STORE_TAIL_EVENTS = 12  # Lightweight continuity across HA restarts, NOT history.
 
 DATA_KEY = "brewday_audit_log"
 STORE_DATA_KEY = "brewday_audit_log_store"
@@ -182,6 +189,11 @@ class BrewdayAuditLog:
     stopped_at: datetime | None = None
     updated_at: datetime | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
+    total_events: int = 0
+    file_path: str | None = None
+    file_error: str | None = None
+    legacy_window_only: bool = False
+    archive_write_failures: int = 0
 
 
 def _now() -> datetime:
@@ -229,12 +241,25 @@ def _store(hass: HomeAssistant) -> Store:
 
 
 def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
+    # Only a tiny continuity window remains in HA .storage. Full raw events
+    # belong in the JSONL archive, never in Home Assistant sensor attributes.
+    short_tail = []
+    for row in log.events[-STORE_TAIL_EVENTS:]:
+        short_tail.append({
+            key: value for key, value in row.items()
+            if key not in {"note", "signature", "control_reason"}
+        })
     return {
         "active": log.active,
         "started_at": log.started_at.isoformat() if log.started_at else None,
         "stopped_at": log.stopped_at.isoformat() if log.stopped_at else None,
         "updated_at": log.updated_at.isoformat() if log.updated_at else None,
-        "events": list(log.events[-MAX_EVENTS:]),
+        "event_count_total": log.total_events,
+        "log_file": log.file_path,
+        "log_file_error": log.file_error,
+        "legacy_window_only": log.legacy_window_only,
+        "archive_write_failures": log.archive_write_failures,
+        "events": short_tail,
     }
 
 
@@ -250,6 +275,11 @@ def _from_store(payload: Any) -> BrewdayAuditLog:
         stopped_at=_as_datetime(payload.get("stopped_at")),
         updated_at=_as_datetime(payload.get("updated_at")),
         events=normalized_events[-MAX_EVENTS:],
+        total_events=max(int(payload.get("event_count_total") or 0), len(normalized_events)),
+        file_path=payload.get("log_file") if isinstance(payload.get("log_file"), str) else None,
+        file_error=payload.get("log_file_error") if isinstance(payload.get("log_file_error"), str) else None,
+        legacy_window_only=bool(payload.get("legacy_window_only", False)),
+        archive_write_failures=int(payload.get("archive_write_failures") or 0),
     )
 
 
@@ -269,11 +299,22 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
-    """Load persisted audit log into hass.data."""
-
+    """Load light metadata; migrate the last legacy window into JSONL once."""
     payload = await _store(hass).async_load()
     log = _from_store(payload)
     hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
+    if log.events and not log.file_path:
+        new_path = archive.new_session_file(log.started_at or log.updated_at or _now())
+        try:
+            await archive.async_migrate_legacy(hass, new_path, log.events)
+        except (OSError, ValueError) as exc:
+            log.file_error = f"{type(exc).__name__}: {exc}"
+            _LOGGER.error("Brewday archive migration failed; retaining legacy window: %s", exc)
+            return log
+        log.file_path = new_path
+        log.legacy_window_only = True
+        log.file_error = None
+        await async_save_brewday_audit_log(hass)
     return log
 
 
@@ -487,6 +528,7 @@ def _merge_repeated_event(existing: dict[str, Any], event: dict[str, Any]) -> No
 
 
 def _append_event(log: BrewdayAuditLog, event: dict[str, Any]) -> dict[str, Any]:
+    log.total_events += 1  # Includes individually archived coalesced ticks.
     if _should_coalesce(event) and log.events:
         previous = log.events[-1]
         if previous.get("signature") == event.get("signature"):
@@ -500,38 +542,74 @@ def _append_event(log: BrewdayAuditLog, event: dict[str, Any]) -> dict[str, Any]
     return event
 
 
-async def async_start_brewday_audit_log(hass: HomeAssistant, *, note: str | None = None) -> dict[str, Any]:
-    """Start collecting audit events."""
+def _write_lock(hass: HomeAssistant) -> asyncio.Lock:
+    data = hass.data.setdefault("brewassistant", {})
+    lock = data.get(LOCK_DATA_KEY)
+    if not isinstance(lock, asyncio.Lock):
+        lock = asyncio.Lock()
+        data[LOCK_DATA_KEY] = lock
+    return lock
 
-    log = get_brewday_audit_log(hass)
-    now = _now()
-    log.active = True
-    log.started_at = now
-    log.stopped_at = None
-    log.updated_at = now
-    log.events.clear()
-    _append_event(log, _event_base(hass, "audit_started", note=note))
-    await async_save_brewday_audit_log(hass)
+
+async def _archive_record(hass: HomeAssistant, log: BrewdayAuditLog, event: dict[str, Any]) -> None:
+    """Archive one original event; never let disk failure operate hardware."""
+    if not log.file_path:
+        log.file_path = archive.new_session_file(log.started_at or _now())
+    try:
+        await archive.async_append_event(hass, log.file_path, event)
+    except (OSError, ValueError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        if log.file_error != error:
+            _LOGGER.error("Brewday Flight Recorder archive unavailable (%s): %s", log.file_path, error)
+        log.file_error = error
+        log.archive_write_failures += 1
+    else:
+        log.file_error = None
+
+
+async def async_start_brewday_audit_log(hass: HomeAssistant, *, note: str | None = None) -> dict[str, Any]:
+    """Start a NEW archived Brewday session, leaving previous JSONL untouched."""
+    async with _write_lock(hass):
+        log = get_brewday_audit_log(hass)
+        now = _now()
+        log.active = True
+        log.started_at = now
+        log.stopped_at = None
+        log.updated_at = now
+        log.events.clear()
+        log.total_events = 0
+        log.file_path = archive.new_session_file(now)
+        log.file_error = None
+        log.legacy_window_only = False
+        log.archive_write_failures = 0
+        event = _event_base(hass, "audit_started", note=note)
+        _append_event(log, event)
+        await _archive_record(hass, log, event)
+        await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
 
 
 async def async_stop_brewday_audit_log(hass: HomeAssistant, *, note: str | None = None) -> dict[str, Any]:
-    """Stop collecting audit events without clearing them."""
-
-    log = get_brewday_audit_log(hass)
-    log.active = False
-    log.stopped_at = _now()
-    log.updated_at = log.stopped_at
-    _append_event(log, _event_base(hass, "audit_stopped", note=note))
-    await async_save_brewday_audit_log(hass)
+    """Stop this session; leave the JSONL history available on disk."""
+    async with _write_lock(hass):
+        log = get_brewday_audit_log(hass)
+        log.active = False
+        log.stopped_at = _now()
+        log.updated_at = log.stopped_at
+        event = _event_base(hass, "audit_stopped", note=note)
+        _append_event(log, event)
+        await _archive_record(hass, log, event)
+        await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
 
 
 async def async_clear_brewday_audit_log(hass: HomeAssistant) -> dict[str, Any]:
-    """Clear audit events and stop logging."""
-
-    hass.data.setdefault("brewassistant", {})[DATA_KEY] = BrewdayAuditLog(active=False, updated_at=_now())
-    await async_save_brewday_audit_log(hass)
+    """Clear only current HA status/window; NEVER delete archived JSONL."""
+    async with _write_lock(hass):
+        hass.data.setdefault("brewassistant", {})[DATA_KEY] = BrewdayAuditLog(
+            active=False, updated_at=_now()
+        )
+        await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
 
 
@@ -543,16 +621,16 @@ async def async_record_brewday_audit_event(
     note: str | None = None,
     always_record: bool = False,
 ) -> dict[str, Any] | None:
-    """Record one audit event if logging is active or always_record is true."""
-
-    log = get_brewday_audit_log(hass)
-    if not log.active and not always_record:
-        return None
-
-    event = _event_base(hass, event_type, brewzilla_result=brewzilla_result, note=note)
-    recorded = _append_event(log, event)
-    await async_save_brewday_audit_log(hass)
-    return recorded
+    """Keep the unmodified full event in file, light status in HA."""
+    async with _write_lock(hass):
+        log = get_brewday_audit_log(hass)
+        if not log.active and not always_record:
+            return None
+        event = _event_base(hass, event_type, brewzilla_result=brewzilla_result, note=note)
+        recorded = _append_event(log, event)
+        await _archive_record(hass, log, event)
+        await async_save_brewday_audit_log(hass)
+        return recorded
 
 
 async def async_record_brewday_audit_tick(
@@ -561,27 +639,21 @@ async def async_record_brewday_audit_tick(
     brewzilla_result: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Record a coordinator/orchestration tick while audit logging is active."""
-
     log = get_brewday_audit_log(hass)
     if not log.active:
         return None
-
     runtime = build_brewday_runtime_snapshot(hass)
     result = brewzilla_result or {}
     event_type = _tick_event_type(runtime, result)
-
     return await async_record_brewday_audit_event(
-        hass,
-        event_type,
-        brewzilla_result=brewzilla_result,
-        always_record=True,
+        hass, event_type, brewzilla_result=brewzilla_result, always_record=True,
     )
 
 
 async def async_record_brewday_audit_snapshot(hass: HomeAssistant, *, note: str | None = None) -> dict[str, Any] | None:
-    """Record a manual diagnostic snapshot."""
-
-    return await async_record_brewday_audit_event(hass, "manual_snapshot", note=note, always_record=True)
+    return await async_record_brewday_audit_event(
+        hass, "manual_snapshot", note=note, always_record=True
+    )
 
 
 def _last_action_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -608,8 +680,15 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     return {
         "active": log.active,
         "status": "recording" if log.active else "stopped" if log.events else "empty",
-        "event_count": len(log.events),
+        "event_count": log.total_events,
         "max_events": MAX_EVENTS,
+        "archive_format": "jsonl",
+        "archive_path": log.file_path,
+        "archive_status": "error" if log.file_error else "incomplete" if log.archive_write_failures else "active" if log.file_path else "none",
+        "archive_write_failures": log.archive_write_failures,
+        "archive_error": log.file_error,
+        "archive_legacy_window_only": log.legacy_window_only,
+        "recent_preview_count": len(log.events),
         "schema_version": EVENT_SCHEMA_VERSION,
         "started_at": log.started_at.isoformat() if log.started_at else None,
         "stopped_at": log.stopped_at.isoformat() if log.stopped_at else None,
@@ -653,6 +732,4 @@ def build_brewday_audit_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "last_rapt_critical_refresh_recommended": (
             last_event.get("rapt_critical_refresh_recommended") if last_event else None
         ),
-        "events": list(log.events[-MAX_EVENTS:]),
-        "recent_events": list(log.events[-RECENT_EVENTS:]),
     }
