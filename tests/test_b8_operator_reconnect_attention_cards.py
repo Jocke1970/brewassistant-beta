@@ -73,7 +73,7 @@ def test_operator_reconnect_hero_precedes_status_and_remains_ack_only():
         assert text.count("service: brewassistant.brewday_reconnect_ack") == 1
         # Outside the reconnect banner the emergency STOP stays unconditional.
         assert any(
-            isinstance(card, dict) and card.get("type") == "horizontal-stack"
+            isinstance(card, dict) and card.get("type") == "vertical-stack"
             and "button.brewassistant_abort_brewday" in str(card)
             for card in cards
         )

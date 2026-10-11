@@ -1,3 +1,11 @@
+## DEV PREVIEW — 2026.10.0b11 operator attention: only when needed (2026-10-11)
+
+- Brewday Control/Status SV+EN: döljer stora BA-assistans/START-kortet när BA kör med verifierat gröna kontroller, inga blockerande orsaker och ingen ABORT/resync/fallback. Vid ny operatörsåtgärd eller varning visas kortet igen.
+- Återaktivering efter ABORT visas endast när en faktisk ABORT-latch rapporteras. ABORT/NÖDSTOPP är fortfarande ovillkorligt tillgänglig, får full bredd i normalt läge och påverkas inte av statuskortets synlighetsregler.
+- Read-only, manuell kvittens och skyddade backend-anrop är oförändrade. Separat operatörskort har redan ABORT-villkorad rearm.
+- Visuella tester i SV/EN exekverar verklig Lovelace button-card-JavaScript, plus YAML- och säkerhetskontrakt; fullständig Lovelace-YAML behöver klistras in manuellt.
+- Enbart dev inför nästa b11-beta; main/beta orörda.
+
 ## BETA CANDIDATE — 2026.10.0b10: RAPT profiltimers & stegaviseringar (2026-10-11)
 
 - RAPT: planerad steglängd och tydligt märkt ungefärlig återstående tid i svenska/engelska kort; endast med verifierad RCL b5-observation av faktisk stegövergång och Start-timer. Manuellt steg, återanslutning eller väntan på temperatur ger —, inte falsk 0-min nedräkning.
