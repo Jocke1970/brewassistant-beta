@@ -95,6 +95,7 @@ def test_cards_describe_rcl_assist_not_ba_target_ownership():
     for path in (RAPT_CARD, RAPT_CARD_SV):
         card = path.read_text(encoding="utf-8")
         assert "RAPT PROFILE" in card and "BREWASSISTANT" in card and "RCL" in card
-        assert "runtime target" in card or "runtime-target" in card
+        assert "BA-mål (referens)" in card or "BA target (reference)" in card
+        assert "profileReadable" in card
         assert "controls target/heat/pump" not in card
         assert "styr target/heat/pump" not in card
