@@ -216,7 +216,7 @@ def test_brewfather_ramp_boiling_uses_wort_only_with_no_ble_fallback():
     ns = extract(RAMP, "_runtime_temperature")
     looked_up = []
     ns.update(
-        bz_temperature=SimpleNamespace(
+        _temperature_module=lambda: SimpleNamespace(
             _boil_stage_active=lambda ha: False,
             BREWZILLA_INTERNAL_TEMP_SENSOR=INTERNAL,
         ),
@@ -225,6 +225,10 @@ def test_brewfather_ramp_boiling_uses_wort_only_with_no_ble_fallback():
             94.0 if entity == INTERNAL else 65.0
         ),
     )
+    # The lazy module helper must not import BrewZilla during package initialization.
+    source = RAMP.read_text(encoding="utf-8")
+    assert "from ..brewzilla import brewzilla_temperature" in source
+    assert "from ..brewzilla import brewzilla_temperature as bz_temperature" not in source
     assert ns["_runtime_temperature"](object(), boil_step=True) == (94.0, INTERNAL)
     assert looked_up == [INTERNAL]
     looked_up.clear()
