@@ -243,12 +243,19 @@ def _store(hass: HomeAssistant) -> Store:
 def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
     # Only a tiny continuity window remains in HA .storage. Full raw events
     # belong in the JSONL archive, never in Home Assistant sensor attributes.
-    short_tail = []
-    for row in log.events[-STORE_TAIL_EVENTS:]:
-        short_tail.append({
-            key: value for key, value in row.items()
-            if key not in {"note", "signature", "control_reason"}
-        })
+    # A failed legacy migration must not discard the *only* surviving copy
+    # of the old rows. Keep the full recoverable window in .storage until a
+    # valid JSONL archive has been published successfully.
+    migration_pending = bool(log.events and log.file_error and not log.file_path)
+    if migration_pending:
+        short_tail = [dict(row) for row in log.events]
+    else:
+        short_tail = []
+        for row in log.events[-STORE_TAIL_EVENTS:]:
+            short_tail.append({
+                key: value for key, value in row.items()
+                if key not in {"note", "signature", "control_reason"}
+            })
     return {
         "active": log.active,
         "started_at": log.started_at.isoformat() if log.started_at else None,
@@ -554,6 +561,11 @@ def _write_lock(hass: HomeAssistant) -> asyncio.Lock:
 async def _archive_record(hass: HomeAssistant, log: BrewdayAuditLog, event: dict[str, Any]) -> None:
     """Archive one original event; never let disk failure operate hardware."""
     if not log.file_path:
+        if log.file_error and log.events:
+            # Migration failed: never append to a potentially truncated
+            # destination or set log_file before the old Store is recovered.
+            log.archive_write_failures += 1
+            return
         log.file_path = archive.new_session_file(log.started_at or _now())
     try:
         await archive.async_append_event(hass, log.file_path, event)
