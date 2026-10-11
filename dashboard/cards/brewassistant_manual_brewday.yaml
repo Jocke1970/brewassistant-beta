@@ -198,6 +198,19 @@ cards:
         state: "Manual Brewday"
       - entity: sensor.brewassistant_brewday_runtime_state
         state_not: "idle"
+      # Never expose the Manual process cockpit in a known unsafe runtime.
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "resync_required"
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "aborted"
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "source_unavailable"
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "source_unverified"
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "unavailable"
+      - entity: sensor.brewassistant_brewday_runtime_state
+        state_not: "unknown"
     card:
       type: vertical-stack
       cards:
