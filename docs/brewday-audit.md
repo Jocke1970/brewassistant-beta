@@ -47,7 +47,10 @@ It is the primary evidence source for supervised hot-side regression tests.
   IO on the event loop). One async lock preserves event ordering even during
   rapid state changes. A disk error is exposed as
   `archive_status: error` / `archive_error`; **never change brew control**
-  as a side effect of losing the diagnostic file.
+  as a side effect of losing the diagnostic file. The persistent
+  `archive_write_failures` counter keeps the file in
+  `archive_status: incomplete` even after disk access recovers, so missing
+  rows never masquerade as a complete audit history.
 - On the first HA restart after upgrading, the old persisted **most recent**
   250-event window (if present) is imported once into a file. A
   `archive_migration` header flags it as `legacy_window_only: true`,
