@@ -320,6 +320,7 @@ async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
     hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
     return log
 
+
 async def async_save_brewday_audit_log(hass: HomeAssistant) -> None:
     """Persist the current audit log."""
 
