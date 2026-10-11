@@ -1,3 +1,13 @@
+## RELEASE CANDIDATE — 2026.10.0b8 reconnect safety and RCL profile heartbeat (2026-10-11)
+
+- Backend: Manual-processens tjänster spärras vid kvarhållen extern session, fallback/resync eller ABORT; runtime exponerar ej längre falskt Manual-ägarskap/positiva skrivflaggor under resync.
+- UI: reconnect-kvittens och läsbart READ-ONLY, korrekta blockeringsindikatorer, Manual-portalen döljs när den inte kan användas.
+- RAPT Profile Runtime: profilsteg med namn, separata temperaturer/mål, rödmarkering av ej verifierade värden och RCL:s `profile_observed_at` för färskhet oberoende av temperaturförändringar.
+- Kräver **RCL 2026.10.0b4**, validering med RCL-profilheartbeat före fysiskt vattenprov.
+- Enda normala styrvägen förblir BA → RCL → BrewZilla; ingen automatisk STOP vid källbortfall, ingen automatisk step-advance.
+- Kompletta svenska Lovelace-kort ska ersättas manuellt efter HACS-uppdatering. Home Assistant måste startas om för Python-backend.
+- Releasegrind: grön CI, Hassfest, HACS och isolerat HA/RCL-smoke, dev → beta PR med merge-commit, ny tagg och separat GitHub Pre-release.
+
 ## DEV PREVIEW — 0b8 Operator attention and Manual visibility (2026-10-10)
 
 - Reconnect med `resync_required` visas som **stor pulserande gul operatörspanel överst** med operatörskvittens, källa, session, steg, ålder och blockeringschips. Den befintliga backend-guardade `brewday_reconnect_ack` och operatörsbekräftelsen är oförändrade; ingen auto-återaktivering, ABORT/read-only fortsatt separata.
