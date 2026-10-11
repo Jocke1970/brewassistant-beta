@@ -72,8 +72,8 @@ def test_archive_path_is_generated_only_and_cannot_escape_config(tmp_path, bad_p
         ns["_absolute_path"](hass, bad_path)
 
 
-def test_legacy_test_store_discarded_but_current_jsonl_store_survives():
-    """Pre-0b11 logs are disposable tests; real JSONL sessions survive HA restart."""
+def test_pre_release_test_history_discarded_once_then_jsonl_state_resumes():
+    """Both legacy and early JSONL tests are disposable; new baseline survives reboot."""
     source = SRC.read_text(encoding="utf-8")
     tree = ast.parse(source)
     node = next(
@@ -103,9 +103,11 @@ def test_legacy_test_store_discarded_but_current_jsonl_store_survives():
     async def save(fake_hass):
         log = fake_hass.data["brewassistant"]["brewday_audit_log"]
         store.payload = {"active": log.active, "events": list(log.events),
-                         "log_file": log.file_path, "event_count_total": log.total_events}
+                         "log_file": log.file_path, "event_count_total": log.total_events,
+                         "archive_generation": 1}
 
     ns = {"_store": lambda _: store,
+          "ARCHIVE_GENERATION": 1,
           "_from_store": lambda payload: SimpleNamespace(
               active=payload["active"], events=list(payload["events"]),
               file_path=payload["log_file"], total_events=payload["event_count_total"]
@@ -120,9 +122,18 @@ def test_legacy_test_store_discarded_but_current_jsonl_store_survives():
     assert loaded.events == [] and loaded.total_events == 0
     assert store.payload["events"] == [] and store.payload["log_file"] is None
 
+    # An early developer JSONL session is also test history until generation 1.
     store.payload = {"active": True, "events": [{"event_type": "audit_started"}],
                      "log_file": "brewassistant/logs/brewday-20261011T123000-000000Z.jsonl",
                      "event_count_total": 85}
+    reset = asyncio.run(ns["async_load_brewday_audit_log"](hass))
+    assert reset.active is False and reset.total_events == 0
+    assert store.payload["archive_generation"] == 1
+
+    # New generation file state survives successive HA loads.
+    store.payload = {"active": True, "events": [{"event_type": "audit_started"}],
+                     "log_file": "brewassistant/logs/brewday-20261011T123000-000000Z.jsonl",
+                     "event_count_total": 85, "archive_generation": 1}
     resumed = asyncio.run(ns["async_load_brewday_audit_log"](hass))
     assert resumed.active is True
     assert resumed.total_events == 85
@@ -169,7 +180,7 @@ def test_sensor_never_exposes_event_lists_and_keeps_existing_service_names():
     assert 'STORE_TAIL_EVENTS = 12' in src
     assert 'key not in {"note", "signature", "control_reason"}' in src
     assert 'await archive.async_append_event(hass, log.file_path, event)' in src
-    assert 'Discarding pre-JSONL Brewday test log' in src
+    assert '"archive_generation": ARCHIVE_GENERATION' in src
     for service in ("async_start_brewday_audit_log", "async_stop_brewday_audit_log",
                     "async_clear_brewday_audit_log", "async_record_brewday_audit_snapshot"):
         assert f"def {service}" in src
