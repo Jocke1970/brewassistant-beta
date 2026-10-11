@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from . import brewday_runtime_core as core
-from ..brewzilla import brewzilla_temperature as bz_temperature
 
 RAMP_TARGET_REACHED_TOLERANCE_C = 0.3
 MIN_RAMP_WAIT_REMAINING_SECONDS = 1
@@ -29,9 +28,16 @@ def _float_state(hass: HomeAssistant, entity_id: str) -> float | None:
         return None
 
 
+def _temperature_module():
+    """Import only after HA loads Brewday/BrewZilla to avoid circular startup."""
+    from ..brewzilla import brewzilla_temperature
+    return brewzilla_temperature
+
+
 def _runtime_temperature(hass: HomeAssistant, *, boil_step: bool = False) -> tuple[float | None, str | None]:
     # A Brewfather ramp named BOIL must not use BLE even when its
     # Brewday normalized step sensor is lagging behind.
+    bz_temperature = _temperature_module()
     if boil_step or bz_temperature._boil_stage_active(hass):
         internal = bz_temperature.BREWZILLA_INTERNAL_TEMP_SENSOR
         value = _float_state(hass, internal)
@@ -75,7 +81,7 @@ def build_core_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     target = _ramp_target(live_step)
     step_label = core.step_name(live_step, "")
     current_temperature, temperature_entity = _runtime_temperature(
-        hass, boil_step=bz_temperature._is_current_boil_label(step_label)
+        hass, boil_step=_temperature_module()._is_current_boil_label(step_label)
     )
     reached = _target_reached(current_temperature, target)
     if reached is not False:
