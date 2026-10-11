@@ -49,6 +49,9 @@ It is the primary evidence source for supervised hot-side regression tests.
 - Legacy-window migration writes and fsyncs a temporary file, then publishes
   it exclusively and atomically. Any existing file must match the complete
   expected migration or the old Store window is retained for recovery.
+  While migration is blocked, the recoverable legacy window is kept in
+  `.storage`; new file appends remain blocked rather than silently blessing
+  a possibly partial destination. A persistent archive error warns of this.
 - All file operations use the Home Assistant executor (no synchronous disk
   IO on the event loop). One async lock preserves event ordering even during
   rapid state changes. A disk error is exposed as
