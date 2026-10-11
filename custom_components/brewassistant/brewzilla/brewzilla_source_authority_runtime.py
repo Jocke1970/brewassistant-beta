@@ -14,6 +14,7 @@ are OFF.
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from homeassistant.util import dt as dt_util
 
@@ -153,8 +154,11 @@ def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value
         if entity == base.BREWZILLA_PUMP_SWITCH and switch_action not in {"on", "off"}:
             return False
         if entity == base.BREWZILLA_PUMP_UTILIZATION and (
-            value is None or value < 0 or value > 100
+            not isinstance(value, (int, float)) or not math.isfinite(value)
+            or value < 0 or value > 100
             or (not recirculate and value > base.UTILIZATION_TOLERANCE)
+            or (recirculate and value > base.UTILIZATION_TOLERANCE
+                and abs(value - 100.0) > base.UTILIZATION_TOLERANCE)
         ):
             return False
     authority, context = _live_authority(hass)
