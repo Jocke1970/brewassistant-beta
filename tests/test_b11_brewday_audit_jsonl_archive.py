@@ -98,8 +98,12 @@ def test_pre_release_test_history_discarded_once_then_jsonl_state_resumes():
 
     store = FakeStore()
     hass = SimpleNamespace(data={})
-    empty = lambda: SimpleNamespace(active=False, events=[], total_events=0,
-                                     file_path=None, file_error=None)
+    def empty():
+        return SimpleNamespace(
+            active=False, events=[], total_events=0,
+            file_path=None, file_error=None,
+        )
+
     async def save(fake_hass):
         log = fake_hass.data["brewassistant"]["brewday_audit_log"]
         store.payload = {"active": log.active, "events": list(log.events),
