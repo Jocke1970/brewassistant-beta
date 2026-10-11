@@ -46,12 +46,17 @@ It is the primary evidence source for supervised hot-side regression tests.
 - HLT simulator's enriched high-signal transitions use the same serialized
   Flight Recorder writer, so HLT rows also appear in the full session JSONL
   rather than only in the HA sensor preview.
-- Legacy-window migration writes and fsyncs a temporary file, then publishes
-  it exclusively and atomically. Any existing file must match the complete
-  expected migration or the old Store window is retained for recovery.
-  While migration is blocked, the recoverable legacy window is kept in
-  `.storage`; new file appends remain blocked rather than silently blessing
-  a possibly partial destination. A persistent archive error warns of this.
+- **Clean break for 0b11:** previous Home Assistant `.storage` Flight
+  Recorder histories were test sessions and are deliberately **discarded**
+  at first load if they have no JSONL archive path. They are **not migrated**.
+  The new recorder starts with an empty status and creates its first JSONL
+  file when a new Brewday session starts. This reset affects audit metadata
+  only; it does not reset RAPT/RCL profiles, any physical actuator, or the
+  separate operator ABORT latch.
+- Existing JSONL sessions with a stored `log_file` path still resume after
+  HA restart. Existing files are never automatically deleted or overwritten.
+  Clearing old test JSONL files on disk is a separate **manual** cleanup
+  action and should only be done outside an active brewing session.
 - All file operations use the Home Assistant executor (no synchronous disk
   IO on the event loop). One async lock preserves event ordering even during
   rapid state changes. A disk error is exposed as
@@ -60,10 +65,6 @@ It is the primary evidence source for supervised hot-side regression tests.
   `archive_write_failures` counter keeps the file in
   `archive_status: incomplete` even after disk access recovers, so missing
   rows never masquerade as a complete audit history.
-- On the first HA restart after upgrading, the old persisted **most recent**
-  250-event window (if present) is imported once into a file. A
-  `archive_migration` header flags it as `legacy_window_only: true`,
-  because already overwritten pre-window events are **unrecoverable**.
 - The existing HA Store path stays as a **lightweight compatibility record**
   containing active status, timestamps, total count, archive path, error and
   a small continuity tail needed by the boundary guard:
