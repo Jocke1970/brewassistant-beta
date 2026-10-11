@@ -171,7 +171,7 @@ def test_module_never_calls_hardware_and_cards_have_confirmed_backend_actions():
     sensor = (ROOT / "custom_components/brewassistant/brewzilla/brewzilla_orchestration_sensor.py").read_text(encoding="utf-8")
     assert "hass.services.async_call" not in src
     assert "cooling_gate.observe(hass, active_boil=True)" in auth
-    assert "if not recirculate" in auth
+    assert "not recirculate and value > base.UTILIZATION_TOLERANCE" in auth
     assert "SERVICE_BOIL_COOLING_CHOICE" in impl
     assert '"brewzilla_boil_cooling_status"' in sensor
     for name in ("brewday_control_status_sv.yaml", "brewday_control_status.yaml"):
