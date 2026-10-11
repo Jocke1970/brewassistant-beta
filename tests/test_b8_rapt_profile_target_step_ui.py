@@ -40,8 +40,12 @@ def _scenario(*, target=0, step_no=0, step_count=0, source_age=3,
     profile = {
         "entity_id": "binary_sensor.brewzilla_profile_active",
         "state": "on" if source_available else "unavailable",
-        "last_reported": stamp,
+        # An unchanged profile can have old last_updated, while the RCL
+        # coordinator has just successfully observed that same active step.
+        "last_reported": "2026-01-01T00:00:00+00:00",
+        "last_updated": "2026-01-01T00:00:00+00:00",
         "attributes": {
+            "profile_observed_at": stamp,
             "ba_source": "rapt_cloud_link_brewzilla_profile_runtime",
             "raw_device_id": "bz-1",
             "profile_contract_complete": contract,
@@ -101,6 +105,8 @@ def test_rapt_target_steps_and_freshness_not_invented(name):
     label = data["card"]["label"]
     assert "profileReadable" in label
     assert "sourceAgeSeconds" in label or "stale" in label
+    assert "const reported = a.profile_observed_at;" in label
+    assert "profileSensor?.last_reported" not in label
     assert "stepNo > 0" in label
     assert "stepCount > 0" in label
     assert "rawTarget === 0 && !cooling" in label
@@ -123,6 +129,16 @@ def test_rapt_target_steps_and_freshness_not_invented(name):
     assert 'font-size:14px;">31.0 °C</b>' not in zero
     assert "RAPT-DATA" in zero or "RAPT DATA" in zero
     assert "EJ VERIFIERAT" in zero or "UNVERIFIED" in zero
+
+    # No explicit heartbeat: temperature can be fresh, but the current
+    # RAPT step/target must remain unverified (fail-closed old RCL version).
+    no_heartbeat = _scenario(target=66, step_no=3, step_count=7)
+    no_heartbeat["binary_sensor.brewzilla_profile_active"]["attributes"].pop(
+        "profile_observed_at"
+    )
+    no_heartbeat_html = _render(label, no_heartbeat)
+    assert 'font-size:14px;">66.0 °C</b>' not in no_heartbeat_html
+    assert "STALE RCL DATA" in no_heartbeat_html or "RCL-DATA FÖR GAMMAL" in no_heartbeat_html
 
     valid = _render(label, _scenario(target=66, step_no=3, step_count=7,
                                      telemetry_step_id="step-3"))
