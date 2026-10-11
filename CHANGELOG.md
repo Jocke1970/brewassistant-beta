@@ -1,6 +1,6 @@
-## DEV PREVIEW — 2026.10.0b11: BOIL pump OFF/0 % (2026-10-11)
+## DEV PREVIEW — 2026.10.0b11: BOIL heat 100 %, pump OFF/0 % (2026-10-11)
 
-- Under **aktuellt** BOIL-steg ska BA begära både pump OFF och pump-utilization 0 % via den skyddade RCL-vägen. Nästa planerade Boil-steg, Pre-Boil och efterföljande Cooling räknas inte som aktiv BOIL.
+- Under **aktuellt** BOIL-steg ska BA begära **heat-utilization 100 %**, pump OFF och pump-utilization 0 % via den skyddade RCL-vägen. Det är inte heater ON, och explicit heat-safe-down/ABORT går före. Nästa planerade Boil-steg, Pre-Boil och efterföljande Cooling räknas inte som aktiv BOIL.
 - Även alternativa BA-pumpanrop med positiv utilization/ON nekas under BOIL. Värme, RAPT-profil och target påverkas inte.
 - Source loss/resync/ABORT/fail-passive/READ-ONLY och saknad fysisk readback får aldrig omvandlas till obehörig OFF/0-kommendering; RAPT-profilen kan fortfarande själv styra pump, vilket kräver kontroll i vattenprov.
 - `docs/2026.10.0b11-boil-pump-off-zero_sv.md`, rena Python-regressionstester och kvarvarande 0b11-UI-putsning.

@@ -87,6 +87,9 @@ def test_boil_commands_off_and_zero_independently(pump, utilization, expected_of
 
 @pytest.mark.parametrize("block", [
     {"fail_passive_active": True},
+    {"resync_required": True},
+    {"fallback_active": True},
+    {"hot_side_actuator_writes_allowed": False},
     {"abort_lockout_active": True},
     {"rapt_cooling_handoff_active": True},
     {"completed_runtime": True},
@@ -136,6 +139,83 @@ def test_non_boil_stage_does_not_force_zero_or_off():
     assert out["desired_pump_on"] is True
     assert out["desired_pump_utilization"] == 45
 
+
+
+@pytest.mark.parametrize(("current_heat", "expected_change"), [
+    (0.0, True), (40.0, True), (75.0, True), (100.0, False),
+])
+def test_boil_heat_100_independent_of_pump_without_forcing_heater_on(current_heat, expected_change):
+    fn, h = prep_guard(pump="off", utilization=0)
+    out = fn(h, {
+        "connected": True, "can_apply_target": False,
+        "orchestration_mode": "monitor",
+        "heat_utilization": current_heat,
+        "desired_heat_utilization": 30, "heat_utilization_action_needed": True,
+        "desired_heater_on": None, "heater_action_needed": False,
+    })
+    assert out["desired_heat_utilization"] == 100.0
+    assert out["heat_utilization_action_needed"] is expected_change
+    assert out["can_apply_target"] is expected_change
+    assert out["desired_heater_on"] is None
+    assert out["heater_action_needed"] is False
+    assert out["desired_pump_on"] is False
+    assert out["desired_pump_utilization"] == 0.0
+    assert out["boil_heat_readback_verified"] is True
+
+
+def test_boil_heat_100_overrides_previous_mash_advice():
+    fn, h = prep_guard(pump="on", utilization=50)
+    out = fn(h, {
+        "connected": True, "can_apply_target": False,
+        "orchestration_mode": "monitor",
+        "heat_utilization": 60.0, "desired_heat_utilization": 25.0,
+        "heat_utilization_action_needed": True,
+        "ba_owned_reassert_action_needed": True,
+    })
+    assert out["desired_heat_utilization"] == 100
+    assert out["heat_utilization_action_needed"] is True
+    assert out["ba_owned_reassert_action_needed"] is False
+    assert out["pump_stop_needed"] is True
+    assert out["pump_utilization_action_needed"] is True
+
+
+@pytest.mark.parametrize("raw", [None, "unavailable", "NaN", -1.0, 130.0])
+def test_boil_heat_unknown_never_guessed_as_zero(raw):
+    fn, h = prep_guard(pump="off", utilization=0)
+    out = fn(h, {
+        "connected": True, "can_apply_target": False,
+        "orchestration_mode": "monitor",
+        "heat_utilization": raw, "desired_heat_utilization": 40.0,
+        "heat_utilization_action_needed": True,
+    })
+    assert out["heat_utilization_action_needed"] is False
+    assert out["desired_heat_utilization"] is None
+    assert out["can_apply_target"] is False
+    assert out["boil_heat_readback_verified"] is False
+
+
+def test_boil_explicit_heat_safety_reduction_wins():
+    fn, h = prep_guard(pump="on", utilization=35)
+    out = fn(h, {
+        "connected": True, "can_apply_target": True,
+        "orchestration_mode": "monitor",
+        "heat_utilization": 60.0,
+        "desired_heat_utilization": 0.0,
+        "desired_heater_on": False, "heater_stop_needed": True,
+        "heat_utilization_action_needed": True,
+    })
+    assert out["desired_heat_utilization"] == 0.0
+    assert out["heat_utilization_action_needed"] is True
+    assert out["boil_heat_safety_reduction_preserved"] is True
+    assert out["desired_heater_on"] is False
+    assert out["desired_pump_utilization"] == 0.0
+
+
+def test_non_boil_does_not_force_heat_100():
+    fn, h = prep_guard(active=False)
+    source = {"connected": True, "heat_utilization": 50,
+              "desired_heat_utilization": 30, "heat_utilization_action_needed": True}
+    assert fn(h, source)["desired_heat_utilization"] == 30
 
 def test_base_boil_detection_ignores_upcoming_and_preboil():
     ns = extract(ORCH, "_stage_is_boil")
