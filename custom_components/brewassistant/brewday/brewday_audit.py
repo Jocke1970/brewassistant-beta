@@ -243,19 +243,12 @@ def _store(hass: HomeAssistant) -> Store:
 def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
     # Only a tiny continuity window remains in HA .storage. Full raw events
     # belong in the JSONL archive, never in Home Assistant sensor attributes.
-    # A failed legacy migration must not discard the *only* surviving copy
-    # of the old rows. Keep the full recoverable window in .storage until a
-    # valid JSONL archive has been published successfully.
-    migration_pending = bool(log.events and log.file_error and not log.file_path)
-    if migration_pending:
-        short_tail = [dict(row) for row in log.events]
-    else:
-        short_tail = []
-        for row in log.events[-STORE_TAIL_EVENTS:]:
-            short_tail.append({
-                key: value for key, value in row.items()
-                if key not in {"note", "signature", "control_reason"}
-            })
+    short_tail = []
+    for row in log.events[-STORE_TAIL_EVENTS:]:
+        short_tail.append({
+            key: value for key, value in row.items()
+            if key not in {"note", "signature", "control_reason"}
+        })
     return {
         "active": log.active,
         "started_at": log.started_at.isoformat() if log.started_at else None,
@@ -306,24 +299,25 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
-    """Load light metadata; migrate the last legacy window into JSONL once."""
+    """Load JSONL session metadata; discard pre-JSONL test history.
+
+    0b10 and earlier stored up to 250 events without a JSONL archive path.
+    Those historical test sessions are intentionally NOT migrated. This only
+    resets Flight Recorder status; it never alters Brewday authority, ABORT,
+    RAPT/RCL session ownership, or physical actuator state.
+    """
     payload = await _store(hass).async_load()
+    if isinstance(payload, dict) and not payload.get("log_file"):
+        # One-time discard of legacy-only TEST logs. New JSONL sessions have
+        # log_file and must survive a normal HA reboot without a reset.
+        log = BrewdayAuditLog()
+        hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
+        _LOGGER.info("Discarding pre-JSONL Brewday test log; new sessions use JSONL")
+        await async_save_brewday_audit_log(hass)
+        return log
     log = _from_store(payload)
     hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
-    if log.events and not log.file_path:
-        new_path = archive.new_session_file(log.started_at or log.updated_at or _now())
-        try:
-            await archive.async_migrate_legacy(hass, new_path, log.events)
-        except (OSError, ValueError) as exc:
-            log.file_error = f"{type(exc).__name__}: {exc}"
-            _LOGGER.error("Brewday archive migration failed; retaining legacy window: %s", exc)
-            return log
-        log.file_path = new_path
-        log.legacy_window_only = True
-        log.file_error = None
-        await async_save_brewday_audit_log(hass)
     return log
-
 
 async def async_save_brewday_audit_log(hass: HomeAssistant) -> None:
     """Persist the current audit log."""
@@ -561,11 +555,6 @@ def _write_lock(hass: HomeAssistant) -> asyncio.Lock:
 async def _archive_record(hass: HomeAssistant, log: BrewdayAuditLog, event: dict[str, Any]) -> None:
     """Archive one original event; never let disk failure operate hardware."""
     if not log.file_path:
-        if log.file_error and log.events:
-            # Migration failed: never append to a potentially truncated
-            # destination or set log_file before the old Store is recovered.
-            log.archive_write_failures += 1
-            return
         log.file_path = archive.new_session_file(log.started_at or _now())
     try:
         await archive.async_append_event(hass, log.file_path, event)
