@@ -64,6 +64,10 @@ async def run() -> None:
         assert second["observation_count"] > first["observation_count"]
         assert second["power_w"] == 1650.0
         await audit.async_record_brewday_audit_tick(hass, brewzilla_result=result)
+        hlt_event = audit._event_base(hass, "hlt_sim_yield", note="isolated HLT audit")
+        hlt_event.update({"hlt_simulation": True, "hlt_state": "yield",
+                          "hlt_transition_events": ["virtual_hlt_off_requested"]})
+        await audit.async_record_brewday_audit_prebuilt_event(hass, hlt_event)
         snap = audit.build_brewday_audit_snapshot(hass)
         assert snap["active"] is True and snap["event_count"] >= 2
         assert any(event.get("power_w") == 1650.0 for event in audit.get_brewday_audit_log(hass).events)
@@ -84,6 +88,8 @@ async def run() -> None:
         archived = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
         assert len(archived) == snap["event_count"]
         assert any(event.get("power_w") == 1650.0 for event in archived)
+        assert any(event.get("hlt_state") == "yield" and event.get("hlt_simulation")
+                   for event in archived)
         assert "events" not in snap and "recent_events" not in snap
         assert calls == []
         print("PASS complete JSONL survives HA Store reload; HA only keeps light continuity")
