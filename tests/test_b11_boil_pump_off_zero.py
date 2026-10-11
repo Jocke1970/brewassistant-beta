@@ -120,8 +120,12 @@ def test_missing_readback_does_not_guess_physical_off(pump, pct):
                  "can_apply_target": False, "desired_pump_on": None})
     assert out["boil_pump_readback_verified"] is False
     assert out["boil_pump_policy_block_reason"] == "pump_readback_unavailable"
-    assert out.get("pump_stop_needed") is None
-    assert out.get("pump_utilization_action_needed") is None
+    assert out["pump_stop_needed"] is False
+    assert out["pump_utilization_action_needed"] is False
+    assert out["pump_action_needed"] is False
+    assert out["can_apply_target"] is False
+    assert out["desired_pump_on"] is None
+    assert out["desired_pump_utilization"] is None
 
 
 def test_non_boil_stage_does_not_force_zero_or_off():
