@@ -84,7 +84,10 @@ def test_timelength_and_additions_do_not_fabricate_exact_rapt_time(filename):
 
     html = render(label, scenario())
     assert "30:00" in html
-    assert "≈ 29:50" in html
+    # RAPT card uses a wall-clock estimate, so subsecond scheduling can
+    # round to a neighbouring second during CI. Assert a tight time window.
+    import re
+    assert re.search(r"≈ 29:(?:4[89]|5[01])", html)
     assert "&lt;b&gt;Humle Magnum&lt;/b&gt;" in html
     assert "Kylare" in html
     assert "600" in html and ("råvärde" in html or "raw value" in html)
