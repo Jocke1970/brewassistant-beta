@@ -30,6 +30,27 @@ på RAPT-profilens aktiva temperaturmål.
 - Kortet är read-only presentation; ingen target-, heat-,
   pump- eller profil-START/STOP-tjänst finns i kortet.
 
+## 2026-10-11: falsk föråldring trots färsk RCL-temperatur
+
+Fältbild: RCL Telemetry Age/BLE Data Age 43,7 s, medan BA visade
+BA-snapshot 2,0 min och rödmarkerade samma profil (Mash Out).
+Orsaken är att frontend normalt inte exponerar `last_reported`,
+och `last_updated` står still när profilsteg och attribut är oförändrade.
+Temperaturen kan samtidigt uppdateras separat.
+
+RCL `dev`-PR #2 inför det explicita profilsensorattributet
+`profile_observed_at`, som bara sätts vid lyckad API-hämtning av en
+ansluten, aktiv profil. Det bekräftar en ny observation av samma profil,
+INTE ett nytt stegbeslut och INTE fysisk utrustningsstyrning.
+BA-kortet beräknar därför profilens 90-sekundersfärskhet från
+`profile_observed_at`. Fältet får inte härledas från BLE/temperaturålder.
+Om äldre RCL ännu inte rapporterar attributet fortsätter BA att
+markera profildata overifierad (fail-closed).
+
+Efter installation av BÅDA dev-ändringarna ska en frisk, stabil Mash Out
+kunna vara grön även med gammal `last_updated`; en misslyckad
+RCL-poll ska INTE förnya `profile_observed_at`. Kontrollera råattributet
+i Utvecklarverktyg och status i båda integrationerna före beta.
 ## 2026-10-11: stegnamn, rödmarkering och diagnostik
 
 Visa både **3/7** och **Mash Rest** i profilstegets ruta. Saknade eller
