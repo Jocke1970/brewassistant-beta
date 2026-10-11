@@ -51,7 +51,11 @@ card:
       const sourceAmbiguous = candidates.length > 1 && !profileSensor;
       const sourceVerified = profileSensor?.state === 'on' &&
         a.profile_contract_complete === true && a.restored !== true;
-      const reported = profileSensor?.last_reported || profileSensor?.last_updated;
+      // HA does not expose last_reported reliably to Lovelace, while
+      // last_updated stays unchanged when the same step is reported again.
+      // RCL explicitly timestamps every successful connected profile poll.
+      // Never borrow temperature/BLE age as proof of profile freshness.
+      const reported = a.profile_observed_at;
       const reportedMs = reported ? Date.parse(reported) : NaN;
       const sourceAgeSeconds = Number.isFinite(reportedMs) ? Math.max(0, (Date.now() - reportedMs) / 1000) : null;
       const sourceStale = sourceAgeSeconds === null || sourceAgeSeconds > 90;
@@ -148,7 +152,7 @@ card:
         profileSensor && !sourceVerified ? 'RCL-profilkontraktet ej verifierat' : null,
         displayRawTarget === null ? 'RAPT-mål saknas eller är 0 °C för ett värmesteg' : null,
         stepIndex === '—' ? 'Profilsteg saknas' : null,
-        sourceStale ? 'Profilsensorns mättid saknas eller är över 90 s' : null,
+        sourceStale ? 'RCL-observation saknas eller är över 90 s' : null,
         oldSnapshot ? 'BA-snapshot äldre än 90 s' : null,
         stepIdentityMismatch ? 'RCL aktivt steg-ID skiljer sig från telemetri-ID' : null,
       ].filter(Boolean).join(' · ');
