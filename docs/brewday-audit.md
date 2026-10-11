@@ -43,6 +43,12 @@ It is the primary evidence source for supervised hot-side regression tests.
 - The archive is **not limited to 250 events** and its prior files are
   **never erased** by the UI's *Rensa vy / Clear view* button. Retention,
   backups and intentional operator deletion are separate administrative tasks.
+- HLT simulator's enriched high-signal transitions use the same serialized
+  Flight Recorder writer, so HLT rows also appear in the full session JSONL
+  rather than only in the HA sensor preview.
+- Legacy-window migration writes and fsyncs a temporary file, then publishes
+  it exclusively and atomically. Any existing file must match the complete
+  expected migration or the old Store window is retained for recovery.
 - All file operations use the Home Assistant executor (no synchronous disk
   IO on the event loop). One async lock preserves event ordering even during
   rapid state changes. A disk error is exposed as
