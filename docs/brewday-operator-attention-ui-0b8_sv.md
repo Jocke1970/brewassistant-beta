@@ -51,27 +51,29 @@ Den visar:
 ABORT-knappen är fortfarande ett separat alltid synligt nödkommando.
 Ingen automatisk återaktivering eller direkt BZ-kontroll tillkommer.
 
-### Manual Brewday – alltid synlig men source-aware
+### Manual Brewday – visas bara när det är relevant
 
-Manual-kortets första panel är inte längre ett HA `conditional`-kort.
-Den är **alltid synlig** och kan visa:
+Efter fältgranskning 2026-10-11 ska Manual Brewing **inte** visa en grå
+`SPÄRRAD`-panel när RAPT/Brewfather äger bryggningen, när återanslutning
+väntar på kvittens eller när ABORT/okänt källäge gör Manual otillgängligt.
+Brewday Control visar redan aktuellt ägarskap, spärr och åtgärd.
 
-- **FÖRBERED BRYGGDAG** – endast när modul är på, källan `None` eller
-  `Manual Brewday`, Brewday-processen `idle`, manuell session `idle`,
-  och ingen upptäckt aktiv RAPT/Brewfather, ABORT, fallback eller
-  resync-spärr finns. Anropar befintliga
-  `brewassistant.manual_brewday_prepare` med operatörsbekräftelse.
-- **MANUAL BREWING · PÅGÅR** – redan förberedd/aktiv Manual-process,
-  vars befintliga arbetskort visas längre ner.
-- **SPÄRRAD** – aktiva/återanslutande externa källor eller ABORT.
-  Ingen fysisk eller manuell takeover tillåts via panelen.
-- **KONTROLLERA KÄLLA** – otillgängliga/okända värden där BA inte kan
-  avgöra ägaren.
+Den översta Manual-panelen är ett `custom:button-card` med
+`triggers_update: all` och ett reaktivt `styles.card.display`-uttryck:
+- **Visas:** `FÖRBERED BRYGGDAG` när modulen är på, källan är
+  `None` eller `Manual Brewday`, både Brewday och Manual-sessionen är
+  `idle` och ingen extern RAPT/Brewfather-källa, fallback, resync eller ABORT
+  finns. Förberedelse har en separat bekräftelse och **startar inte hårdvara**.
+- **Visas:** `MANUAL BREWING · PÅGÅR` när en faktisk Manual-session kör
+  utan extern ägarkonflikt och modulen är på.
+- **Döljs:** när RCL/RAPT/Brewfather äger, en säkerhetsspärr ligger kvar,
+  modulen är av, källan saknas/inte kan verifieras eller Manual ännu inte är
+  redo. Inga tomma spärrkort ska ta dashboardutrymme.
 
-**Panelens färg/visning är inte en säkerhetsspärr.** Backend behåller
-session-/source-/ABORT-kontroll och RCL som exklusiv väg till
-BrewZilla. Manual PREPARE startar inte värmare eller pump.
-Separat operatörsbekräftad Manual Physical START är ännu ej införd (#258).
+Det befintliga processkortet för aktiv Manual-session har fortsatt separata
+Lovelace-villkor och skyddas av backendspärrarna (#276). Visningslogik
+är aldrig en rätt att skicka BrewZilla-kommandon: BA → RCL → BrewZilla,
+READ-ONLY, ABORT och operatörsbekräftelse gäller oförändrat.
 
 ## 0b8 – kompakt READ-ONLY och tydlig tidsindikering
 
@@ -101,7 +103,7 @@ Kompletta EN/SV-kort:
 
 Regressionskontroll parsar YAML till rätt kortstruktur och kontrollerar
 guardad ACK, källa, session, read-only, ABORT och Manual Prep.
-JavaScript-mock kontrollerades för `Manual Brewday+idle` (PREPARE tillåtet),
+JavaScript-mock kontrollerades för `Manual Brewday+idle` (PREPARE synlig/tillåten),
 `resync_required` och aktiv RAPT (PREPARE blockerat),
 ACK med färsk session (anrop möjlig), samt stale session (ingen ACK).
 

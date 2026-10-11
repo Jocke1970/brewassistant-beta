@@ -9,12 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CARDS = ROOT / "dashboard" / "cards"
 
 
-def test_manual_brewday_entry_is_always_visible_but_backend_guarded():
+def test_manual_brewday_entry_is_visible_when_relevant_and_backend_guarded():
     for p in ("brewassistant_manual_brewday_sv.yaml", "brewassistant_manual_brewday.yaml"):
         text = (CARDS / p).read_text(encoding="utf-8")
         assert text.startswith("# Manual Brewday entry")
         assert "type: vertical-stack\ncards:" in text
-        # The landing panel must not disappear when source=Manual Brewday + idle.
+        # The landing panel remains visible for idle Manual preparation only.
         assert "  - type: custom:button-card\n    entity: sensor.brewassistant_manual_brewday_status" in text
         assert "['None','Manual Brewday'].includes(source)" in text
         assert "runtime === 'idle' && manual === 'idle'" in text
@@ -46,8 +46,8 @@ def test_rcl_start_is_labeled_as_assist_only_not_profile_start():
         assert "entity_id: button.brewassistant_abort_brewday" in text
 
 
-def test_brewday_manual_cards_are_valid_yaml_with_permanent_entry_and_conditional_process():
-    """Never lose the Manual entry panel through mutually exclusive conditions."""
+def test_brewday_manual_cards_are_valid_yaml_with_guarded_entry_and_process():
+    """Never lose Manual PREPARE while idle and legitimately source-free."""
     import yaml
 
     for file in ("brewassistant_manual_brewday_sv.yaml", "brewassistant_manual_brewday.yaml"):

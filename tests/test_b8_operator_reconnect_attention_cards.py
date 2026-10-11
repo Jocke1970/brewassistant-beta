@@ -1,4 +1,4 @@
-"""Regression contract for prominent operator ACK and always-visible Manual portal.
+"""Regression contract for prominent operator ACK and context-visible Manual portal.
 
 These view-only Lovelace cards may never bypass protected backend ownership
 and must keep ABORT/READ-ONLY strictly separate from reconnect ACK.
@@ -81,13 +81,13 @@ def test_operator_reconnect_hero_precedes_status_and_remains_ack_only():
         assert "rapt_cloud_link.end_brewzilla_profile" not in text
 
 
-def test_manual_entry_is_visible_even_in_ambiguous_source_states_but_not_enabled():
+def test_manual_entry_hides_during_ambiguous_ownership_without_enabling_actions():
     for name in ("brewassistant_manual_brewday_sv.yaml", "brewassistant_manual_brewday.yaml"):
         text = (CARDS / name).read_text(encoding="utf-8")
         cards = yaml.safe_load(text)["cards"]
         assert len(cards) == 2
         portal, active = cards
-        assert portal["type"] == "custom:button-card"  # no visibility conditional
+        assert portal["type"] == "custom:button-card"  # template hides blocked modes
         assert active["type"] == "conditional"
         assert "Manual Brewday" in str(active["conditions"])
         assert portal["tap_action"]["service"] == "brewassistant.manual_brewday_prepare"
