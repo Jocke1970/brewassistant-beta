@@ -1,3 +1,19 @@
+## DEV PREVIEW — 2026.10.0b9: BOIL = endast BrewZilla intern vörttemperatur (2026-10-11)
+
+- BA:s processtemperaturval är nu hårt begränsat vid **aktuellt BOIL-steg**:
+  `sensor.brewzilla_temperature`, aldrig RAPT BLE-/Control Device-/extern mäsktermometer,
+  inte ens vid explicit vald mäskgivare.
+- Resolvern, Equipment Learning, Brewfather-rampvillkor och fail-passive spärras mot
+  extern sensorfallback på BOIL; saknad intern sensormätning betyder okänt värde och
+  inga nya BA-styrskrivningar, **inte** heater OFF/0 eller profil-STOP.
+- Aktuellt RCL-profilsteg kan aktivera regeln även när BA:s normaliserade stage släpar.
+  Pre-Boil och nästa steg får inte utlösa den.
+- Ingen parallell BA → BrewZilla-styrning. BrewZillas **egen** temperaturreglergivares
+  val måste verifieras separat under vattenprov; RCL exponerar inte någon verifierad
+  sensorvalstjänst för detta.
+- Regressionstester och `docs/2026.10.0b9-boil-internal-wort-only_sv.md`.
+- Endast `dev`, ingen beta/main-release här.
+
 ## RELEASE CANDIDATE — 2026.10.0b8 reconnect safety and RCL profile heartbeat (2026-10-11)
 
 - Backend: Manual-processens tjänster spärras vid kvarhållen extern session, fallback/resync eller ABORT; runtime exponerar ej längre falskt Manual-ägarskap/positiva skrivflaggor under resync.

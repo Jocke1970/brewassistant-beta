@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
-from .brewzilla_temperature import brewzilla_temperature_snapshot
+from .brewzilla_temperature import _boil_stage_active, brewzilla_temperature_snapshot
 
 DATA_KEY = "brewzilla_learning"
 
@@ -544,13 +544,16 @@ def _temperature_source_snapshot(hass: HomeAssistant, stage_kind: str) -> dict[s
     learning_source = snapshot.get("mash_temperature_source")
     learning_role = "mash_temperature"
 
-    if stage_kind not in {"ramp", "mash_hold"}:
+    if stage_kind not in {"ramp", "mash_hold"} or snapshot.get("boil_internal_only"):
         learning_temperature = snapshot.get("wort_temperature")
         learning_entity = snapshot.get("wort_temperature_entity")
         learning_source = snapshot.get("wort_temperature_source")
         learning_role = "wort_or_kettle_temperature"
 
-    if learning_temperature is None:
+    if learning_temperature is None and stage_kind != "boil" and not snapshot.get("boil_internal_only"):
+        # Non-BOIL phases retain the existing optional probe fallback.
+        # BOIL must never recover from missing wort data via BLE/mash,
+        # even if a dashboard or stale normalized runtime still shows it.
         learning_temperature = snapshot.get("mash_temperature") or snapshot.get("wort_temperature")
         learning_entity = snapshot.get("mash_temperature_entity") or snapshot.get("wort_temperature_entity")
         learning_source = snapshot.get("mash_temperature_source") or snapshot.get("wort_temperature_source")
@@ -781,7 +784,9 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     store = _learning_store(hass)
     runtime = build_brewday_runtime_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle").lower()
-    stage_kind = _stage_kind(runtime)
+    # A live RCL BOIL step may precede the normalized BA runtime refresh.
+    # Never apply mash-stage equipment learning to a current RAPT BOIL.
+    stage_kind = "boil" if _boil_stage_active(hass) else _stage_kind(runtime)
     context = learning_context(hass)
     context_mod = _context_bias(context)
     batch_context = _batch_context_snapshot(hass, runtime, stage_kind)

@@ -60,7 +60,11 @@ def _resolved_temperature_health(hass: HomeAssistant) -> dict[str, Any]:
     process_available = resolved.get("mash_temperature") is not None
 
     reason = None
-    if lock_active and lock_degraded:
+    if resolved.get("boil_internal_only") and not process_available:
+        # BOIL has no BLE fallback. Missing internal wort readback is a
+        # no-new-writes condition, NOT an instruction to switch heat OFF.
+        reason = "boil_internal_wort_temperature_unavailable"
+    elif lock_active and lock_degraded:
         reason = f"owned_process_probe_degraded:{lock_degraded}"
     elif not process_available and resolved.get("hot_side_process_sensor_owned"):
         reason = "owned_process_probe_unavailable"

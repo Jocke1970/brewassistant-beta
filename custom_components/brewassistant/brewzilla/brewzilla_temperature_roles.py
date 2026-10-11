@@ -86,6 +86,10 @@ def _resolve(selected: str, ble: dict[str, Any], ctl: dict[str, Any], internal: 
 
 def _snapshot(hass: HomeAssistant) -> dict[str, Any]:
     selected = t.selected_mash_source(hass)
+    # This patch replaces the base resolver at runtime. Keep BOIL's hard
+    # sensor gate here too: no explicit selection can override wort-only.
+    if t._boil_stage_active(hass):
+        return t._boil_internal_only_snapshot(hass, selected=selected)
     ble = t._candidate(hass, t.BREWZILLA_BLE_TEMP_SENSOR, "RAPT BLE Thermometer")
     ctl = t._candidate(hass, t.BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR, "BrewZilla Control Device")
     internal = t._candidate(hass, t.BREWZILLA_INTERNAL_TEMP_SENSOR, "BrewZilla Internal")
