@@ -120,6 +120,44 @@ def test_legacy_import_interrupted_before_atomic_publish_is_retryable(tmp_path, 
     assert [json.loads(row) for row in p.read_text().splitlines()][1:] == old
 
 
+
+def test_failed_migration_retains_full_store_window_and_never_appends_to_partial_archive():
+    src = SRC.read_text(encoding="utf-8")
+    ast_tree = ast.parse(src)
+    funcs = {
+        node.name: node for node in ast_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_to_store", "_archive_record"}
+    }
+    assert set(funcs) == {"_to_store", "_archive_record"}
+    ns = {"STORE_TAIL_EVENTS": 12,
+          "_LOGGER": SimpleNamespace(error=lambda *args, **kwargs: None)}
+    code = ast.Module(body=[
+        ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+        funcs["_to_store"], funcs["_archive_record"],
+    ], type_ignores=[])
+    exec(compile(ast.fix_missing_locations(code), str(SRC), "exec"), ns)
+    legacy_events = [{"event_type": "runtime_tick", "note": f"old-{i}"}
+                     for i in range(35)]
+    log = SimpleNamespace(active=True, started_at=None, stopped_at=None, updated_at=None,
+                          events=legacy_events, total_events=35, file_path=None,
+                          file_error="OSError: interrupted migration", legacy_window_only=False,
+                          archive_write_failures=0)
+    payload = ns["_to_store"](log)
+    assert len(payload["events"]) == 35
+    assert payload["events"][0]["note"] == "old-0"
+
+    async def unexpected_append(*args):
+        raise AssertionError("Must not append over truncated legacy archive")
+
+    ns["archive"] = SimpleNamespace(async_append_event=unexpected_append)
+    asyncio.run(ns["_archive_record"](SimpleNamespace(), log,
+                                      {"event_type": "hlt_sim_state"}))
+    assert log.file_path is None
+    assert log.archive_write_failures == 1
+    assert log.file_error == "OSError: interrupted migration"
+
+
 def test_hlt_audit_producer_routes_enriched_rows_through_archive_lock():
     hlt = (ROOT / "custom_components/brewassistant/hlt/flight_recorder.py").read_text(
         encoding="utf-8"
