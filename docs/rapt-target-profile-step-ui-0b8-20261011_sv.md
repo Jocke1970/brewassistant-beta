@@ -30,6 +30,36 @@ på RAPT-profilens aktiva temperaturmål.
 - Kortet är read-only presentation; ingen target-, heat-,
   pump- eller profil-START/STOP-tjänst finns i kortet.
 
+## 2026-10-11: stegnamn, rödmarkering och diagnostik
+
+Visa både **3/7** och **Mash Rest** i profilstegets ruta. Saknade eller
+ej verifierade värden markeras rött. Huvudvärdet ska vara **—** när
+fältet är osäkert; senast rapporterat tal/steg kan visas som liten röd
+diagnostiktext med märkningen *uppgivet* / *senast*, aldrig som aktivt mål.
+Temperatursensorns eget rapportdatum gäller oberoende av profilsteget.
+
+**Profilsteg ≠ temperatur.** RCL läser API:ts aktiva profilsteg från
+`activeProfileStepId` matchat mot `activeProfileSession.profile.steps`.
+Temperatur kan ändras många gånger medan steget är samma. Använd
+profilsensorns `last_reported` i första hand, inte dess `last_changed`,
+för att verifiera att integrationen fortsatt rapporterar. 90-sekunders-
+regeln och `profile_contract_complete` används fortfarande.
+
+**Möjlig RCL-avvikelse:** RCL:s BrewZilla Debug-sensor innehåller
+`devices[*].profile_runtime.telemetry_profile_step_id` från rå telemetri.
+Profilens `step_id` kommer från rotfältet `activeProfileStepId`.
+Vid matchande BrewZilla-enhets-ID men olika icke-tomma steg-ID:n
+får kortet visa en tydlig röd konflikt och inga *verifierade*
+setpoints/steg. Det finns ingen automatisk step-advance, heater/pump-
+åtgärd eller ny styrväg. Saknas diagnostikkällan ignoreras jämförelsen
+utan att ett påhittat fel visas.
+
+**Fälttest:** Jämför binär profilsensors `step_id`, `step_name`,
+`step_number`, `step_count`, tidpunkten `last_reported`, BrewZilla Debug
+`active_profile_step_id` och `telemetry_profile_step_id` mot riktiga
+stegbyten på BrewZilla. Om RCL-root och telemetri divergerar krävs
+utredning i RCL/API, inte ett kosmetiskt UI-antagande.
+
 ## Acceptans
 Fälttesta komplett SV/EN-kort under vattenprov med en aktiv RCL-session:
 `Mash Rest` och giltig måldata, gammal RCL-observation >90 s,
