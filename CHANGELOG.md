@@ -1,3 +1,12 @@
+## BETA CANDIDATE — 2026.10.0b10: RAPT profiltimers & stegaviseringar (2026-10-11)
+
+- RAPT: planerad steglängd och tydligt märkt ungefärlig återstående tid i svenska/engelska kort; endast med verifierad RCL b5-observation av faktisk stegövergång och Start-timer. Manuellt steg, återanslutning eller väntan på temperatur ger —, inte falsk 0-min nedräkning.
+- Tillsatser: visa begränsad lista från RAPT:s aktuella profilaviseringar. Duration-trigger och råa offsetvärden får **inte** tolkas som säker humlegivetimer innan fälttest.
+- Beroende: RAPT Cloud Link **2026.10.0b5**, HACS prerelease. Ett manuellt inklistrat Lovelace-kort måste uppdateras separat.
+- Ingående redan mergade dev-förändringar i cooling: CFC-mätare `sensor.rapt_temp_a7ba_temperature`, standardmål **20 °C** och BF-mål före manuellt värde såvida inte manuellt override uttryckligen kvitterats. Ingen parallell BA→BrewZilla-styrning.
+- Mash In-pumpens fysiska tidsförlopp är okänt (issue #288); ingen pumpregel ändras i denna beta. BOIL kräver fortsatt manuellt givarskifte i den fysiska BrewZillan.
+- Release: dev → beta merge-commit, 7/7 CI på exakt beta SHA, unik tagg `v2026.10.0b10` och GitHub Pre-release; main orörd.
+
 ## BETA RELEASE — 2026.10.0b9: BOIL = endast BrewZilla intern vörttemperatur (2026-10-11)
 
 - BA:s processtemperaturval är nu hårt begränsat vid **aktuellt BOIL-steg**:
