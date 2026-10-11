@@ -29,6 +29,7 @@ from . import brewday_audit_file as archive
 _LOGGER = logging.getLogger(__name__)
 LOCK_DATA_KEY = "brewday_audit_archive_lock"
 STORE_TAIL_EVENTS = 12  # Lightweight continuity across HA restarts, NOT history.
+ARCHIVE_GENERATION = 1  # One-time clean break from pre-release test logs.
 
 DATA_KEY = "brewday_audit_log"
 STORE_DATA_KEY = "brewday_audit_log_store"
@@ -250,6 +251,7 @@ def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
             if key not in {"note", "signature", "control_reason"}
         })
     return {
+        "archive_generation": ARCHIVE_GENERATION,
         "active": log.active,
         "started_at": log.started_at.isoformat() if log.started_at else None,
         "stopped_at": log.stopped_at.isoformat() if log.stopped_at else None,
@@ -299,20 +301,19 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
-    """Load JSONL session metadata; discard pre-JSONL test history.
+    """Load recorder metadata; once discard all pre-release test sessions.
 
-    0b10 and earlier stored up to 250 events without a JSONL archive path.
-    Those historical test sessions are intentionally NOT migrated. This only
-    resets Flight Recorder status; it never alters Brewday authority, ABORT,
-    RAPT/RCL session ownership, or physical actuator state.
+    Prior test sessions include the old capped .storage history and early
+    development JSONL files. Only the audit Store is reset: no brewday
+    authority, ABORT, RAPT/RCL profile, or physical actuator state changes.
     """
     payload = await _store(hass).async_load()
-    if isinstance(payload, dict) and not payload.get("log_file"):
-        # One-time discard of legacy-only TEST logs. New JSONL sessions have
-        # log_file and must survive a normal HA reboot without a reset.
+    if isinstance(payload, dict) and payload.get("archive_generation") != ARCHIVE_GENERATION:
+        # One-time clean break for pre-release *test* history. This advances
+        # the Store generation so a normal future HA restart resumes JSONL.
         log = BrewdayAuditLog()
         hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
-        _LOGGER.info("Discarding pre-JSONL Brewday test log; new sessions use JSONL")
+        _LOGGER.info("Discarding pre-release Brewday test log metadata; new JSONL baseline")
         await async_save_brewday_audit_log(hass)
         return log
     log = _from_store(payload)
