@@ -46,15 +46,16 @@ It is the primary evidence source for supervised hot-side regression tests.
 - HLT simulator's enriched high-signal transitions use the same serialized
   Flight Recorder writer, so HLT rows also appear in the full session JSONL
   rather than only in the HA sensor preview.
-- **Clean break for 0b11:** previous Home Assistant `.storage` Flight
-  Recorder histories were test sessions and are deliberately **discarded**
-  at first load if they have no JSONL archive path. They are **not migrated**.
-  The new recorder starts with an empty status and creates its first JSONL
-  file when a new Brewday session starts. This reset affects audit metadata
-  only; it does not reset RAPT/RCL profiles, any physical actuator, or the
-  separate operator ABORT latch.
-- Existing JSONL sessions with a stored `log_file` path still resume after
-  HA restart. Existing files are never automatically deleted or overwritten.
+- **Clean break for 0b11:** all previous Flight Recorder runs have
+  been classified as tests. At the first load of the new `archive_generation`,
+  recorder-only metadata is **reset once**; the old capped `.storage` event
+  window and early development JSONL references are **not migrated**.
+  The new recorder starts empty and creates its first JSONL file when a new
+  Brewday starts. This does not reset RAPT/RCL profiles, any physical actuator,
+  or the separate operator ABORT latch.
+- **Normal HA restarts after this upgrade** preserve new-generation JSONL
+  session metadata, history and counts. Existing files are never
+  automatically deleted or overwritten.
   Clearing old test JSONL files on disk is a separate **manual** cleanup
   action and should only be done outside an active brewing session.
 - All file operations use the Home Assistant executor (no synchronous disk
