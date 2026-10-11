@@ -23,11 +23,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: ba
 
-      - name: Check out RCL 2026.10.0b4 candidate commit (pinned)
+      - name: Check out RCL 2026.10.0b4 beta commit (pinned)
         uses: actions/checkout@v7
         with:
           repository: Jocke1970/home-assistant-rapt-cloud-link
-          ref: 14c6c7a0104f5b0d2cef85302f05484e0f6dd7a8
+          ref: 3f1ee0819027133c99a4dc132f4433d8ff6c2079
           path: rcl
 
       - name: Set up Home Assistant Python
