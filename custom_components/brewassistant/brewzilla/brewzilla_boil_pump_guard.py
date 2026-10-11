@@ -83,6 +83,15 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         out.update(
             boil_pump_readback_verified=False,
             boil_pump_policy_block_reason="pump_readback_unavailable",
+            pump_recommended=False,
+            desired_pump_on=None,
+            desired_pump_utilization=None,
+            pump_action_needed=False,
+            pump_stop_needed=False,
+            pump_utilization_action_needed=False,
+            ba_owned_reassert_action_needed=False,
+            can_apply_target=False,
+            orchestration_mode="blocked",
             control_reason="BOIL pump OFF/0 required, but pump readback is unavailable; no new pump write",
         )
         return out
