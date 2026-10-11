@@ -115,7 +115,7 @@ card:
             <div style="line-height:1.25;min-width:0;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
-                  <div style="font-size:12px;font-weight:850;opacity:.66;">Brewday audit/event backend · snapshots</div>
+                  <div style="font-size:12px;font-weight:850;opacity:.66;">Brewday event recorder · full history in file</div>
                   <div style="font-size:12px;font-weight:850;opacity:.66;">${short(summary, 62)}</div>
                 </div>
                 <div style="
@@ -167,7 +167,7 @@ card:
               ">
                 <ha-icon icon="${count > 0 ? 'mdi:check-circle-outline' : 'mdi:information-outline'}" style="width:15px;height:15px;opacity:.76;"></ha-icon>
                 <div style="font-size:11.5px;line-height:1.25;font-weight:800;opacity:.78;text-align:left;white-space:normal;">
-                  ${count > 0 ? `latest ${short(lastEvent, 42)} · ${short(lastStep, 42)}` : 'Start log when you want a clean Brewday diagnostic timeline.'}
+                  ${count > 0 ? `latest ${short(lastEvent, 42)} · ${short(lastStep, 42)}` : 'Start a new Brewday log; full archive lives in /config/brewassistant/logs/.'}
                 </div>
               </div>
             </div>
@@ -271,13 +271,13 @@ card:
               - font-size: 11px
               - font-weight: 950
         - type: custom:button-card
-          name: Clear
+          name: Clear view
           icon: mdi:trash-can-outline
           tap_action:
             action: call-service
             service: brewassistant.brewday_audit_clear
             confirmation:
-              text: Clear Brewday Event Log?
+              text: Clear the current log view? Existing JSONL archives on disk are retained.
           styles:
             card:
               - border-radius: 15px

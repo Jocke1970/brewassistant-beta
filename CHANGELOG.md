@@ -1,3 +1,27 @@
+## BETA CANDIDATE — 2026.10.0b11: BOIL guards, premium UI och JSONL Flight Recorder (2026-10-11)
+
+- **BOIL:** endast aktuellt/verifierat RAPT BOIL-steg begär heat-utilization **100 %**, pump **OFF** och pump-utilization **0 %** via BA → RCL → BrewZilla. Ingen heater-ON eller profil-/targetövertagning. Säkerhetsreduktion, READ-ONLY, ABORT, källa/telemetrifel och resync går före.
+- **UI:** BA-ASSISTANS/START-panelen döljs när kontrollen redan kör med gröna verifierade förutsättningar; visas vid problem/kvittensbehov. Återaktivera efter ABORT syns enbart vid verklig ABORT-latch; nödstopp alltid synligt. Äldre inklistrad Lovelace-YAML måste manuellt ersättas.
+- **Flight Recorder:** komplett händelsehistorik i append-only JSONL per bryggsession under `/config/brewassistant/logs/brewday-*.jsonl`, ingen 250-radersgräns i filen. HA-sensorn visar lätt status i stället för alla händelser. HLT-övergångar skrivs genom samma serialiserade filbackend. Diskfel påverkar aldrig fysisk styrning och `archive_status` markerar bestående luckor.
+- **Ren testbaseline:** gamla testkörningar (inklusive experimentella JSONL-referenser) migreras **inte**. Flight Recorder får `archive_generation=1` och nollställer tidigare audit-metadata en enda gång; nya JSONL-sessioner överlever omstart. Inga äldre filer raderas automatiskt och separat ABORT-latch, RAPT/RCL-session och hårdvara påverkas inte.
+- **Release:** dev → beta, 7/7 på exakt beta-SHA, unik tagg `v2026.10.0b11` och HACS Pre-release. Main oförändrad. Vattenprov under operatörens uppsikt krävs före stable.
+
+## DEV PREVIEW — 2026.10.0b11: BOIL heat 100 %, pump OFF/0 % (2026-10-11)
+
+- Under **aktuellt** BOIL-steg ska BA begära **heat-utilization 100 %**, pump OFF och pump-utilization 0 % via den skyddade RCL-vägen. Det är inte heater ON, och explicit heat-safe-down/ABORT går före. Nästa planerade Boil-steg, Pre-Boil och efterföljande Cooling räknas inte som aktiv BOIL.
+- Även alternativa BA-pumpanrop med positiv utilization/ON nekas under BOIL. Värme, RAPT-profil och target påverkas inte.
+- Source loss/resync/ABORT/fail-passive/READ-ONLY och saknad fysisk readback får aldrig omvandlas till obehörig OFF/0-kommendering; RAPT-profilen kan fortfarande själv styra pump, vilket kräver kontroll i vattenprov.
+- `docs/2026.10.0b11-boil-pump-off-zero_sv.md`, rena Python-regressionstester och kvarvarande 0b11-UI-putsning.
+- `dev` endast, beta/main orörda.
+
+## DEV PREVIEW — 2026.10.0b11 operator attention: only when needed (2026-10-11)
+
+- Brewday Control/Status SV+EN: döljer stora BA-assistans/START-kortet när BA kör med verifierat gröna kontroller, inga blockerande orsaker och ingen ABORT/resync/fallback. Vid ny operatörsåtgärd eller varning visas kortet igen.
+- Återaktivering efter ABORT visas endast när en faktisk ABORT-latch rapporteras. ABORT/NÖDSTOPP är fortfarande ovillkorligt tillgänglig, får full bredd i normalt läge och påverkas inte av statuskortets synlighetsregler.
+- Read-only, manuell kvittens och skyddade backend-anrop är oförändrade. Separat operatörskort har redan ABORT-villkorad rearm.
+- Visuella tester i SV/EN exekverar verklig Lovelace button-card-JavaScript, plus YAML- och säkerhetskontrakt; fullständig Lovelace-YAML behöver klistras in manuellt.
+- Enbart dev inför nästa b11-beta; main/beta orörda.
+
 ## BETA CANDIDATE — 2026.10.0b10: RAPT profiltimers & stegaviseringar (2026-10-11)
 
 - RAPT: planerad steglängd och tydligt märkt ungefärlig återstående tid i svenska/engelska kort; endast med verifierad RCL b5-observation av faktisk stegövergång och Start-timer. Manuellt steg, återanslutning eller väntan på temperatur ger —, inte falsk 0-min nedräkning.

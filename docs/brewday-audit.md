@@ -29,17 +29,75 @@ It is the primary evidence source for supervised hot-side regression tests.
 
 ---
 
-## Storage
+## Storage – JSONL archive since 0b11
 
-Persisted Home Assistant storage:
+**Full audit history belongs to the filesystem, NOT an HA sensor.**
 
 ```text
-.storage/brewassistant_brewday_audit_log
+/config/brewassistant/logs/brewday-YYYYMMDDTHHMMSS-mmmmmmZ.jsonl
 ```
 
-The filename remains unchanged for compatibility.
+- **Append-only JSON Lines**: each captured event is a full UTF-8 JSON object
+  on its own line. Start creates a new immutable-session filename; ordinary
+  Start/Stop/ABORT events append, and each new Brewday gets another file.
+- The archive is **not limited to 250 events** and its prior files are
+  **never erased** by the UI's *Rensa vy / Clear view* button. Retention,
+  backups and intentional operator deletion are separate administrative tasks.
+- HLT simulator's enriched high-signal transitions use the same serialized
+  Flight Recorder writer, so HLT rows also appear in the full session JSONL
+  rather than only in the HA sensor preview.
+- **Clean break for 0b11:** all previous Flight Recorder runs have
+  been classified as tests. At the first load of the new `archive_generation`,
+  recorder-only metadata is **reset once**; the old capped `.storage` event
+  window and early development JSONL references are **not migrated**.
+  The new recorder starts empty and creates its first JSONL file when a new
+  Brewday starts. This does not reset RAPT/RCL profiles, any physical actuator,
+  or the separate operator ABORT latch.
+- **Normal HA restarts after this upgrade** preserve new-generation JSONL
+  session metadata, history and counts. Existing files are never
+  automatically deleted or overwritten.
+  Clearing old test JSONL files on disk is a separate **manual** cleanup
+  action and should only be done outside an active brewing session.
+- All file operations use the Home Assistant executor (no synchronous disk
+  IO on the event loop). One async lock preserves event ordering even during
+  rapid state changes. A disk error is exposed as
+  `archive_status: error` / `archive_error`; **never change brew control**
+  as a side effect of losing the diagnostic file. The persistent
+  `archive_write_failures` counter keeps the file in
+  `archive_status: incomplete` even after disk access recovers, so missing
+  rows never masquerade as a complete audit history.
+- The existing HA Store path stays as a **lightweight compatibility record**
+  containing active status, timestamps, total count, archive path, error and
+  a small continuity tail needed by the boundary guard:
 
-The operator Brewday ABORT latch is intentionally a separate persistent store because safety ownership must survive even if the rolling event log is cleared or rotated.
+```text
+/config/.storage/brewassistant_brewday_audit_log
+```
+
+- Sensor `sensor.brewassistant_brewday_event_log_summary` and the other
+  event-log sensors now carry **summary metadata only**: no `events` or
+  `recent_events` arrays. Attributes include `archive_format`,
+  `archive_path`, `archive_status`, `archive_error`,
+  `archive_legacy_window_only`, `event_count`.
+- Existing RAPT ownership, operator ABORT latch, physical authorization and
+  source-loss protections are entirely separate from audit storage. Audit
+  files are evidence only, never authority to send commands.
+
+### Read a Brewday file
+
+Through Home Assistant File Editor, Samba or Terminal:
+
+```bash
+ls -lh /config/brewassistant/logs/
+tail -n 40 /config/brewassistant/logs/brewday-*.jsonl
+```
+
+Each line can be imported into Python, jq or another JSONL viewer.
+A full file may contain sensitive process telemetry and control decisions:
+keep it local or redact it before uploading it publicly.
+
+The operator Brewday ABORT latch remains a separate persistent store because
+safety ownership must survive even if the current status preview is cleared.
 
 ---
 
@@ -150,11 +208,13 @@ sensor.brewassistant_brewday_event_log_last_step
 sensor.brewassistant_brewday_event_log_last_target
 ```
 
-The summary sensor exposes:
+The summary sensor exposes metadata only (the full events are in JSONL):
 
 ```text
-events
-recent_events
+archive_path
+archive_status
+archive_error
+event_count
 started_at
 updated_at
 last_event_type

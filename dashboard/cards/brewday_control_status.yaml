@@ -381,6 +381,28 @@ cards:
       }
     styles:
       card:
+        # The large preflight/assist CTA is only a call to attention.
+        # Hide once START is running and ALL checks are green; bring it
+        # back for START requests, warnings, lost source, resync or ABORT.
+        # This view rule never changes read-only or hardware authority.
+        - display: |
+            [[[
+              const start = states['sensor.brewassistant_brewday_start_status'];
+              const summary = states['sensor.brewassistant_brewday_runtime_summary'];
+              const a = summary?.attributes || {};
+              const checks = Array.isArray(start?.attributes?.checks) ? start.attributes.checks : [];
+              const reasons = Array.isArray(start?.attributes?.reasons) ? start.attributes.reasons : [];
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+              const operator = states['sensor.brewassistant_brewday_operator_control_state']?.state;
+              const allGreen = checks.length > 0 && checks.every(c => c?.status === 'passed');
+              const healthy = start?.state === 'running' && allGreen && reasons.length === 0 &&
+                summary && !['unknown','unavailable'].includes(summary.state) &&
+                runtime && !['unknown','unavailable','resync_required','aborted','source_unavailable'].includes(runtime) &&
+                operator !== 'aborted' && a.operator_abort_active !== true &&
+                a.resync_required !== true && a.fallback_active !== true &&
+                a.profile_source_available !== false;
+              return healthy ? 'none' : 'grid';
+            ]]]
         - border-radius: 20px
         - min-height: 108px
         - padding: 14px
@@ -468,7 +490,9 @@ cards:
         - white-space: normal
         - text-align: left
         - justify-self: stretch
-  - type: horizontal-stack
+  # ABORT is always available. Rearm appears only for an ABORT latch.
+  # Use a vertical stack so a hidden rearm does not reserve a half-width slot.
+  - type: vertical-stack
     cards:
       - type: custom:button-card
         entity: button.brewassistant_abort_brewday
@@ -496,6 +520,10 @@ cards:
             - white-space: normal
       - type: custom:button-card
         entity: button.brewassistant_rearm_brewday_control
+        triggers_update:
+          - sensor.brewassistant_brewday_operator_control_state
+          - sensor.brewassistant_brewday_runtime_state
+          - sensor.brewassistant_brewday_runtime_summary
         name: "REARM AFTER ABORT"
         icon: mdi:shield-check
         show_label: true
@@ -512,6 +540,16 @@ cards:
             text: "Have you physically inspected heater, pump and BrewZilla? Rearming does NOT prove outputs OFF."
         styles:
           card:
+            - display: |
+                [[[
+                  const operator = states['sensor.brewassistant_brewday_operator_control_state']?.state;
+                  const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+                  const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+                  // Show if ANY live ABORT latch is asserted; do not
+                  // interpret stale or unknown as a cleared backend guard.
+                  return operator === 'aborted' || runtime === 'aborted' ||
+                    a.operator_abort_active === true ? 'grid' : 'none';
+                ]]]
             - border-radius: 17px
             - padding: 13px
             - min-height: 96px

@@ -58,6 +58,7 @@ def _allowed(mode, may_write, scope="none", *, rapt_stop=False,
         _sparge_write_allowed=FN["_sparge_write_allowed"],
         _rcl_assist_write_allowed=FN["_rcl_assist_write_allowed"],
         sparge=SimpleNamespace(_observe=lambda hass: SimpleNamespace(phase="inactive")),
+        boil_pump_guard=SimpleNamespace(_current_boil=lambda hass: False),
     )
     return FN["_write_allowed"](None, entity, switch_action=switch_action, value=value)
 

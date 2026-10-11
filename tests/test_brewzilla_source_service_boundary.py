@@ -98,6 +98,8 @@ async def _run_case(mode, *, stop=False, abort=False):
         clear_pending_action_from_source=lambda hass, source: None,
         rapt_profile_runtime=SimpleNamespace(_store=lambda hass: hass.data.setdefault("rapt", {})),
         sparge=SimpleNamespace(_observe=lambda hass: SimpleNamespace(phase="inactive")),
+        # Mash/Heatstrike legacy exercises; active BOIL is covered by b11 tests.
+        boil_pump_guard=SimpleNamespace(_current_boil=lambda hass: False),
     )
 
     for entity, value in ((TARGET, 95), (HEAT, 100), (PUMP_PCT, 70)):

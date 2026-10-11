@@ -59,9 +59,17 @@ def scenario(*, duration=1800, transition_seconds_ago=10, end="Duration",
 
 def render(label, states):
     js = label.strip().removeprefix("[[[").removesuffix("]]]").strip()
+    # Freeze JS Date.now relative to the fixture's observed step transition;
+    # CI process startup time is not a RAPT timer signal.
+    transition = states["binary_sensor.brewzilla_profile_active"]["attributes"].get(
+        "profile_step_transition_observed_at"
+    )
+    observed = datetime.fromisoformat(transition) + timedelta(seconds=10) if transition else datetime.now(timezone.utc)
+    frozen_ms = int(observed.timestamp() * 1000)
     script = ("const states = " + json.dumps(states, ensure_ascii=False) + ";\n"
-              "function render(){\n" + js + "\n}\n"
-              "process.stdout.write(String(render()));\n")
+              + "Date.now = () => " + str(frozen_ms) + ";\n"
+              + "function render(){\n" + js + "\n}\n"
+              + "process.stdout.write(String(render()));\n")
     return subprocess.run(["node", "-e", script], check=True,
                           capture_output=True, text=True).stdout
 
@@ -84,6 +92,7 @@ def test_timelength_and_additions_do_not_fabricate_exact_rapt_time(filename):
 
     html = render(label, scenario())
     assert "30:00" in html
+    # The test controls JS time, so this is deterministic regardless of CI load.
     assert "≈ 29:50" in html
     assert "&lt;b&gt;Humle Magnum&lt;/b&gt;" in html
     assert "Kylare" in html
@@ -92,20 +101,20 @@ def test_timelength_and_additions_do_not_fabricate_exact_rapt_time(filename):
 
     no_anchor = render(label, scenario(transition_seconds_ago=None))
     assert "30:00" in no_anchor
-    assert "≈ 29:50" not in no_anchor
+    assert "≈ 29:" not in no_anchor
     assert "Humle Magnum" in no_anchor
 
     manual = render(label, scenario(end="Manual"))
     assert "30:00" not in manual
-    assert "≈ 29:50" not in manual
+    assert "≈ 29:" not in manual
     assert "Manual" in manual or "Manuell" in manual
 
     target = render(label, scenario(start="Temperature"))
     assert "30:00" in target  # planned duration can remain useful
-    assert "≈ 29:50" not in target  # no proof timer started
+    assert "≈ 29:" not in target  # no proof timer started
 
     stale = render(label, scenario(fresh=False))
-    assert "≈ 29:50" not in stale
+    assert "≈ 29:" not in stale
     assert "&lt;b&gt;Humle Magnum&lt;/b&gt;" not in stale
     assert "Källan ej verifierad" in stale or "Source unverified" in stale
 

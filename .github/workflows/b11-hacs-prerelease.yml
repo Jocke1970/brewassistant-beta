@@ -1,0 +1,73 @@
+name: Publish verified 0b11 beta prerelease
+
+on:
+  push:
+    branches: [beta]
+
+permissions:
+  contents: write
+  checks: read
+
+jobs:
+  publish-b11:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Require 0b11 manifest and seven completed beta-SHA checks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python -c 'import json; print(json.load(open("custom_components/brewassistant/manifest.json"))["version"])')"
+          if [[ "${version}" != "2026.10.0b11" ]]; then
+            echo "Not a b11 release candidate (manifest: ${version}); skip."
+            exit 1
+          fi
+          passed=false
+          for attempt in $(seq 1 60); do
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" > /tmp/b11-checks.json
+            if python - <<'PY'
+          import json
+          import sys
+          runs = json.load(open('/tmp/b11-checks.json', encoding='utf-8'))['check_runs']
+          required = {'quality', 'test (3.11)', 'test (3.12)', 'test (3.13)',
+                      'Hassfest', 'HACS', 'ha-rcl-observer-smoke'}
+          status = {r['name']: (r['status'], r['conclusion'])
+                    for r in runs if r['name'] in required}
+          missing = required - set(status)
+          failing = {name: value for name, value in status.items()
+                     if value != ('completed', 'success')}
+          print('Missing:', sorted(missing), 'Pending/failed:', failing, flush=True)
+          sys.exit(0 if not missing and not failing else 1)
+          PY
+            then
+              passed=true
+              break
+            fi
+            sleep 15
+          done
+          test "${passed}" = true
+
+      - name: Publish immutable 2026.10.0b11 GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v2026.10.0b11"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Tag already exists; refusing to move immutable prerelease."
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha')" = "${GITHUB_SHA}"
+            test "$(gh release view "${tag}" --json isPrerelease --jq '.isPrerelease')" = "true"
+            exit 0
+          fi
+          gh release create "${tag}" \
+            --target "${GITHUB_SHA}" \
+            --title "BrewAssistant 2026.10.0b11" \
+            --notes-file docs/2026.10.0b11-prerelease-notes_sv.md \
+            --prerelease

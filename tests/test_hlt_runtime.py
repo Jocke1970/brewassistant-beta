@@ -56,10 +56,15 @@ def rig(monkeypatch, tmp_path):
     audit = SimpleNamespace(active=True, started_at=started, events=[])
     async def save(_hass):
         return None
+    async def record_prebuilt(_hass, event):
+        if not audit.active:
+            return None
+        audit.events.append(event)
+        return event
     _module(monkeypatch, BASE + ".brewday.brewday_audit",
             get_brewday_audit_log=lambda hass: audit,
             _event_base=lambda hass, event_type, note=None: {"event_type": event_type, "note": note},
-            _append_event=lambda log, event: log.events.append(event),
+            async_record_brewday_audit_prebuilt_event=record_prebuilt,
             async_save_brewday_audit_log=save)
     brewday = {"runtime_state": "running", "stage": "Mash", "step": "Saccharification",
                "target_temperature": 65.0}
