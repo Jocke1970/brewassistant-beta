@@ -14,7 +14,7 @@ METHOD_MANUAL = "Manual cooling"
 METHOD_OPTIONS = [METHOD_COUNTERFLOW, METHOD_IMMERSION, METHOD_MANUAL]
 
 DEFAULT_METHOD = METHOD_COUNTERFLOW
-DEFAULT_TARGET_C = 18.0
+DEFAULT_TARGET_C = 20.0
 DEFAULT_MANUAL_TEMP_C = 20.0
 DEFAULT_SANITIZE_MINUTES = 15.0
 READY_TOLERANCE_C = 1.0
@@ -25,12 +25,7 @@ REMAINING_MINUTES_ENTITY = "sensor.brewassistant_brewday_live_time_remaining_min
 BREWZILLA_TEMP_ENTITY = "sensor.brewassistant_brewzilla_wort_temperature"
 PUMP_ENTITY = "switch.brewzilla_pump"
 
-CFC_OUTPUT_TEMP_ENTITIES = (
-    "sensor.rapt_ble_thermometer_temperature",
-    "sensor.rapt_ble_thermometer_temp",
-    "sensor.counterflow_output_temperature",
-    "sensor.wort_output_temperature",
-)
+CFC_OUTPUT_TEMP_ENTITIES = ("sensor.rapt_temp_a7ba_temperature",)
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
@@ -43,6 +38,8 @@ def _store(hass: HomeAssistant) -> dict[str, Any]:
             "target_temperature": DEFAULT_TARGET_C,
             "manual_temperature": DEFAULT_MANUAL_TEMP_C,
             "sanitize_minutes": DEFAULT_SANITIZE_MINUTES,
+            "manual_override_confirmed": False,
+            "brewfather_target_temperature": None,
         },
     )
 
@@ -61,6 +58,11 @@ def update_cooling_runtime_settings(hass: HomeAssistant, values: dict[str, Any])
         store["manual_temperature"] = max(-5.0, min(110.0, float(values["manual_temperature"])))
     if "sanitize_minutes" in values:
         store["sanitize_minutes"] = max(10.0, min(25.0, round(float(values["sanitize_minutes"]))))
+    if "brewfather_target_temperature" in values:
+        raw = values["brewfather_target_temperature"]
+        store["brewfather_target_temperature"] = float(raw) if raw is not None and 8 <= float(raw) <= 30 else None
+    if "manual_override_confirmed" in values:
+        store["manual_override_confirmed"] = bool(values["manual_override_confirmed"])
     return dict(store)
 
 
@@ -113,7 +115,11 @@ def _runtime_state(method: str, stage: str, remaining_minutes: float | None, san
 def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     settings = _store(hass)
     method = str(settings.get("method", DEFAULT_METHOD))
-    target = float(settings.get("target_temperature", DEFAULT_TARGET_C))
+    manual_target = float(settings.get("target_temperature", DEFAULT_TARGET_C))
+    bf_target = settings.get("brewfather_target_temperature")
+    override = bool(settings.get("manual_override_confirmed", False))
+    target = manual_target if override or bf_target is None else float(bf_target)
+    target_source = "manual_override" if override else ("brewfather" if bf_target is not None else "manual")
     manual_temp = float(settings.get("manual_temperature", DEFAULT_MANUAL_TEMP_C))
     sanitize_minutes = float(settings.get("sanitize_minutes", DEFAULT_SANITIZE_MINUTES))
     stage = _stage(hass)
@@ -153,6 +159,10 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "sanitize_minutes": sanitize_minutes,
         "sanitize_required": sanitize_required,
         "target_temperature": target,
+        "target_temperature_source": target_source,
+        "manual_target_temperature": manual_target,
+        "brewfather_target_temperature": bf_target,
+        "manual_override_confirmed": override,
         "manual_temperature": manual_temp,
         "process_temperature": process_temp,
         "process_temperature_source": process_source,

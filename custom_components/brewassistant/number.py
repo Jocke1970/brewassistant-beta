@@ -93,7 +93,7 @@ COOLING_NUMBERS: dict[str, dict[str, Any]] = {
         "min": 8.0,
         "max": 30.0,
         "step": 1.0,
-        "default": 18.0,
+        "default": 20.0,
         "runtime_key": "target_temperature",
     },
     "cooling_manual_temperature": {
