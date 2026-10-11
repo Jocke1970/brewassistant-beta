@@ -259,7 +259,14 @@ def _stage_text(runtime: dict[str, Any]) -> str:
 
 
 def _stage_is_boil(runtime: dict[str, Any]) -> bool:
-    return any(word in _stage_text(runtime) for word in _BOIL_WORDS)
+    # BOIL must be the CURRENT step, never the next planned profile step.
+    # "Pre-Boil" is not an active boil and must not switch the pump off early.
+    text = _current_stage_text(runtime)
+    if any(word in text for word in ("pre-boil", "pre boil", "preboil")):
+        return False
+    import re
+
+    return bool(re.search(r"(?<![a-z])(?:boil(?:ing)?|kok(?:ning|giva)?)(?![a-z])", text))
 
 
 def _stage_is_heat_to_mash_in(runtime: dict[str, Any]) -> bool:
