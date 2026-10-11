@@ -5,6 +5,8 @@ import ast
 import asyncio
 from datetime import datetime, timezone
 import json
+import os
+import tempfile
 from pathlib import Path
 import re
 from types import SimpleNamespace
@@ -29,7 +31,8 @@ def archive():
     ], type_ignores=[])
     ns = {"_LOG_DIR": ("brewassistant", "logs"),
           "_SAFE_NAME": re.compile(r"^brewday-\d{8}T\d{6}-\d{6}Z\.jsonl$"),
-          "timezone": timezone, "Path": Path, "json": json}
+          "timezone": timezone, "Path": Path, "json": json,
+          "os": os, "tempfile": tempfile}
     exec(compile(ast.fix_missing_locations(module), str(FILE), "exec"), ns)
     return ns
 
@@ -87,6 +90,58 @@ def test_legacy_import_once_never_truncates_or_duplicates(tmp_path):
     assert events[1:] == old
 
 
+
+def test_legacy_import_rejects_a_truncated_existing_file(tmp_path):
+    ns = archive()
+    p = tmp_path / "audit.jsonl"
+    old = [{"event_type": "brewzilla_action", "note": "kept in old Store"},
+           {"event_type": "hlt_sim_state", "hlt_state": "on"}]
+    p.write_text('{"event_type":"archive_migration"}\n{"event_type":', encoding="utf-8")
+    previous = p.read_bytes()
+    with pytest.raises(OSError, match="incomplete or inconsistent"):
+        ns["_migrate_legacy_window"](p, old)
+    assert p.read_bytes() == previous  # Never clobber evidence.
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_legacy_import_interrupted_before_atomic_publish_is_retryable(tmp_path, monkeypatch):
+    ns = archive()
+    p = tmp_path / "audit.jsonl"
+    old = [{"event_type": "audit_started"}, {"event_type": "hlt_sim_yield"}]
+
+    def simulate_power_loss(*args):
+        raise OSError("simulated interruption before publish")
+
+    with monkeypatch.context() as m:
+        m.setattr(os, "link", simulate_power_loss)
+        with pytest.raises(OSError, match="simulated interruption"):
+            ns["_migrate_legacy_window"](p, old)
+    assert not p.exists()
+    assert not list(tmp_path.glob("*.tmp"))
+    assert ns["_migrate_legacy_window"](p, old) is True
+    assert [json.loads(row) for row in p.read_text().splitlines()][1:] == old
+
+
+def test_hlt_audit_producer_routes_enriched_rows_through_archive_lock():
+    hlt = (ROOT / "custom_components/brewassistant/hlt/flight_recorder.py").read_text(
+        encoding="utf-8"
+    )
+    audit_source = SRC.read_text(encoding="utf-8")
+    assert "await audit.async_record_brewday_audit_prebuilt_event(hass, event)" in hlt
+    assert "audit._append_event(log, event)" not in hlt
+    tree = ast.parse(audit_source)
+    func = next(
+        node for node in tree.body
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "async_record_brewday_audit_prebuilt_event"
+    )
+    fragment = ast.get_source_segment(audit_source, func)
+    assert "async with _write_lock(hass)" in fragment
+    assert "_append_event(log, event)" in fragment
+    assert "await _archive_record(hass, log, event)" in fragment
+    assert "await async_save_brewday_audit_log(hass)" in fragment
+
+
 def test_sensor_never_exposes_event_lists_and_keeps_existing_service_names():
     src = SRC.read_text(encoding="utf-8")
     sensor = SENSOR.read_text(encoding="utf-8")
@@ -113,9 +168,11 @@ def test_async_event_serialization_and_off_loop_file_io_guards():
     assert "async with _write_lock(hass):" in src
     assert "hass.async_add_executor_job(_append_jsonl" in fs
     assert "path.open(\"a\", encoding=\"utf-8\")" in fs
-    assert "path.open(\"x\", encoding=\"utf-8\")" in fs
+    assert "os.link(temporary, path)" in fs
+    assert "os.fsync(handle.fileno())" in fs
     assert 'def async_clear_brewday_audit_log' in src
-    assert "unlink(" not in src and "unlink(" not in fs
+    assert "unlink(" not in src  # Never remove session archive from audit service
+    assert "temporary.unlink(missing_ok=True)" in fs  # Only discard uncommitted temp
 
 
 def test_failed_archive_append_marks_sticky_incomplete_without_control_writes():
