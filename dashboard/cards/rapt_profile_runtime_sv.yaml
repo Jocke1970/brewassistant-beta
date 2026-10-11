@@ -178,7 +178,8 @@ card:
       const reportedIndex = stepNo !== null && stepNo > 0 && stepCount !== null &&
         stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : null;
       const raptValid = displayRawTarget !== null;
-      const baValid = baTargetTrusted && stepDataReadable && baTarget !== null;
+      const baValid = baTargetTrusted && stepDataReadable && baTarget !== null &&
+        displayRawTarget !== null && stepIndex !== '—';
       const bzValid = measuredTemp !== null;
       const stepValid = stepDataReadable && stepIndex !== '—' && clean(a.step_name) !== null;
       const baSnapshotValid = age !== null && age >= 0 && age <= 1.5;
