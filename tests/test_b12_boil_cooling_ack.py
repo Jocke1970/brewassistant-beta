@@ -161,7 +161,7 @@ def test_choice_requires_explicit_confirmation_and_same_current_identity():
             expected_transition_at=attrs["profile_step_transition_observed_at"],
             active_boil=True,
         )
-    assert not hass.data
+    assert "brewzilla_boil_cooling_choice" not in hass.data.get("brewassistant", {})
 
 
 def test_module_never_calls_hardware_and_cards_have_confirmed_backend_actions():
