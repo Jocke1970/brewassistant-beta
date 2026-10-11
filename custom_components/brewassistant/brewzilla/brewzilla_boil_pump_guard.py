@@ -40,16 +40,14 @@ def _current_boil(hass) -> bool:
 
     source = str(runtime.get("source") or "")
     if source == _RCL_SOURCE:
-        for entity in hass.states.async_all("binary_sensor"):
-            attrs = getattr(entity, "attributes", {}) or {}
-            if attrs.get("ba_source") != "rapt_cloud_link_brewzilla_profile_runtime":
-                continue
-            if str(entity.state).lower() != "on":
-                continue
-            if attrs.get("profile_active") is not True:
-                continue
-            return temperature._is_current_boil_label(attrs.get("step_name"))
-        return False
+        from ..brewday import rapt_profile_runtime
+        profile = rapt_profile_runtime._profile_state(hass)
+        if not rapt_profile_runtime._active_contract(profile):
+            return False
+        attrs = profile.attributes
+        if attrs.get("profile_active") is not True or attrs.get("profile_contract_complete") is not True:
+            return False
+        return temperature._is_current_boil_label(attrs.get("step_name"))
 
     return any(temperature._is_current_boil_label(runtime.get(key))
                for key in ("stage", "step", "raw_step_name"))
