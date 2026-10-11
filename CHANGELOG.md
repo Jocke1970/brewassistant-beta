@@ -1,3 +1,33 @@
+## RELEASE CANDIDATE — 2026.10.0b8 reconnect safety and RCL profile heartbeat (2026-10-11)
+
+- Backend: Manual-processens tjänster spärras vid kvarhållen extern session, fallback/resync eller ABORT; runtime exponerar ej längre falskt Manual-ägarskap/positiva skrivflaggor under resync.
+- UI: reconnect-kvittens och läsbart READ-ONLY, korrekta blockeringsindikatorer, Manual-portalen döljs när den inte kan användas.
+- RAPT Profile Runtime: profilsteg med namn, separata temperaturer/mål, rödmarkering av ej verifierade värden och RCL:s `profile_observed_at` för färskhet oberoende av temperaturförändringar.
+- Kräver **RCL 2026.10.0b4**, validering med RCL-profilheartbeat före fysiskt vattenprov.
+- Enda normala styrvägen förblir BA → RCL → BrewZilla; ingen automatisk STOP vid källbortfall, ingen automatisk step-advance.
+- Kompletta svenska Lovelace-kort ska ersättas manuellt efter HACS-uppdatering. Home Assistant måste startas om för Python-backend.
+- Releasegrind: grön CI, Hassfest, HACS och isolerat HA/RCL-smoke, dev → beta PR med merge-commit, ny tagg och separat GitHub Pre-release.
+
+## DEV PREVIEW — 0b8 Operator attention and Manual visibility (2026-10-10)
+
+- Reconnect med `resync_required` visas som **stor pulserande gul operatörspanel överst** med operatörskvittens, källa, session, steg, ålder och blockeringschips. Den befintliga backend-guardade `brewday_reconnect_ack` och operatörsbekräftelsen är oförändrade; ingen auto-återaktivering, ABORT/read-only fortsatt separata.
+- **Manual Brewday alltid synlig:** lös `Manual Brewday + idle`-glappet. Permanent source-aware portal med *Förbered*, *Pågår*, *Spärrad* eller *Kontrollera källa*. PREPARE är endast klickbart efter verifierat inaktivt/ledigt processläge utan upptäckt RCL/BF/resync/ABORT; backend avgör slutligt behörighet.
+- Kompletta EN/SV-kort, parser-/kontraktstester och `docs/brewday-operator-attention-ui-0b8_sv.md`. `beta`/`main` orörda.
+
+## DEV PREVIEW — 0b8 Manual entry + RCL BA Assist operator clarity (2026-10-10)
+
+- Grön START i RCL-läget heter nu **AKTIVERA BA-ASSISTANS** / ENABLE BA ASSIST, eftersom RAPT-profilen redan kör. Bekräftelsen och BA READ-ONLY-kortet förklarar korrekt säker handoff i stället för direkt READ-ONLY OFF.
+- Manual Brewday-premiumkortets första **Förbered bryggdag** blir synligt när Brewday är `idle`, källa `None`, manuell session `idle` och bryggdagsmodulen visas. Den befintliga Manual-processpanelen förblir source-gated och visas först efter förberedelse.
+- Ingen ny backend-behörighet eller fysiska kommandon: `manual_brewday_prepare` är sedan tidigare guardad mot extern källa. Fysisk Manual START saknas fortfarande; se issue #258.
+- Full EN/SV YAML, UX-kontraktstester och `docs/brewday-start-manual-entry-ux-0b8_sv.md`. Beta/main oförändrade.
+
+## DEV PREVIEW — 0b8 RAPT profile temperature + honest step time (2026-10-10)
+
+- EN/SV RAPT Profile Runtime: **BZ aktuell** från färsk `sensor.brewzilla_temperature` separat från RAPT-profilmål/BA-runtime-mål. Ogiltig 0 °C under värmesteg visas som `—` och källa varnas. Aldrig falskt `0/0` steg.
+- Korrigerat `step_length` (sekunder → minuter) som **planerad längd**, inte faktisk tid kvar.
+- EN/SV Brewday Control visar **MANUELLT** vid manuellt slutvillkor och *planerad längd, live-tid ej verifierad* vid Duration utan giltig timer, i stället för otydligt `— running`.
+- Skiljer UI-cache/äldre inklistrade dashboardkort från backendproblem; ingen fysisk styrkod ändrad. Se `docs/brewday-rapt-visualization-fixes-0b8_sv.md`.
+
 ## RELEASE CANDIDATE — 2026.10.0b7 START preflight diagnostics (2026-10-10)
 
 - Färgade START-chips (grön/gul/röd) för alla verifierade käll-/session-/steg-/target-/BZ-/read-only-/ABORT-kontroller, med detaljer och blockeringsorsaker. Fullständiga SV/EN premiumkort.

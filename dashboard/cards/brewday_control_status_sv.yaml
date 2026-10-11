@@ -5,6 +5,158 @@
 # Observe-only does not stop RAPT. ACK does not prove physical OFF.
 type: vertical-stack
 cards:
+  # Visually prominent OPERATOR-REQUIRED reconnection. Hidden when cleared.
+  # An ACK never lifts BA READ-ONLY or authorizes heater/pump writes.
+  # Operator attention uses the same runtime summary as the status card;
+  # no unsupported native conditional attribute comparison.
+  - type: custom:button-card
+    entity: sensor.brewassistant_brewday_runtime_summary
+    triggers_update: all
+    show_state: false
+    show_label: true
+    icon: mdi:hand-back-right-outline
+    name: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        const age = a.snapshot_age_seconds;
+        const raw = String(a.raw_step_name || a.step || '').trim();
+        const origin = String(a.snapshot_entity || a.source_entity || '');
+        const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+        const hasStep = raw.length > 0 && !['unknown','idle','none'].includes(raw.toLowerCase());
+        const ready = a.resync_required === true && runtime === 'resync_required' &&
+          states['switch.brewassistant_brewzilla_observe_only']?.state === 'on' &&
+          a.operator_abort_active !== true &&
+          states['sensor.brewassistant_brewday_operator_control_state']?.state !== 'aborted' &&
+          hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
+          (a.resync_from_mode === 'RCL Brewing' ?
+            a.profile_active === true && a.profile_source_available === true &&
+            !!String(a.profile_session_id || '').trim() &&
+            origin.startsWith('binary_sensor.') :
+            a.resync_from_mode === 'Brewfather Brewing' &&
+            states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+            origin.startsWith('sensor.brewfather_'));
+        return ready ? 'BA VÄNTAR PÅ DIG' : 'ÅTERANSLUTNING – KONTROLL KRÄVS';
+      ]]]
+    label: |
+      [[[
+        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const age = a.snapshot_age_seconds;
+        const raw = String(a.raw_step_name || a.step || '').trim();
+        const origin = String(a.snapshot_entity || a.source_entity || '');
+        const abort = a.operator_abort_active === true ||
+          states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+        const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
+        const rcl = a.resync_from_mode === 'RCL Brewing' && a.profile_active === true &&
+          a.profile_source_available === true && !!String(a.profile_session_id || '').trim() &&
+          origin.startsWith('binary_sensor.');
+        const bf = a.resync_from_mode === 'Brewfather Brewing' &&
+          states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+          origin.startsWith('sensor.brewfather_');
+        const fresh = typeof age === 'number' && age >= 0 && age <= 90 && (rcl || bf);
+        const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+        const hasStep = raw.length > 0 && !['unknown','idle','none'].includes(raw.toLowerCase());
+        const ready = a.resync_required === true && runtime === 'resync_required' &&
+          !abort && observer && fresh && hasStep && (rcl || bf);
+        const chips = [
+          [!abort, 'ABORT'],
+          [observer, 'BA READ-ONLY'],
+          [fresh, 'SNAPSHOT'],
+          [hasStep, 'STEG'],
+          [rcl || bf, 'KÄLLA']
+        ].map(([ok,k])=>'<span style="display:inline-block;border:1px solid '+
+          (ok?'#82c89b':'#ec9393')+';background:'+(ok?'#e4f6e9':'#fde8e8')+
+          ';color:'+(ok?'#14643b':'#982520')+
+          ';padding:5px 9px;border-radius:20px;font-size:10px;font-weight:850;">'+
+          (ok?'✓ ':'✕ ')+safe(k)+'</span>').join(' ');
+        const session = a.resync_from_mode === 'RCL Brewing' ? a.profile_session_id : '—';
+        const reason = a.resync_reason || a.fallback_reason || '—';
+        const info = [
+          ['KÄLLA', a.resync_from_mode || '—'],
+          ['SESSION', session || '—'],
+          ['STEG', raw || '—'],
+          ['SNAPSHOT',fresh?Math.round(age)+' s':'ej verifierad'],
+        ].map(([key,value])=>'<span style="font-size:11px;">'+safe(key)+': <b>'+safe(value)+'</b></span>').join(' · ');
+        return '<div style="display:block;text-align:center;line-height:1.45;">'+
+          '<div style="font-size:11px;font-weight:850;margin-bottom:10px;">Kontrollera fysisk utrustning, källa och aktuellt steg före kvittens.</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">'+chips+'</div>'+
+          '<div style="margin-top:12px;padding:9px;border-radius:10px;background:rgba(255,255,255,.57);">'+info+'</div>'+
+          '<div style="font-size:10px;margin-top:7px;opacity:.85;">'+safe(reason)+'</div>'+
+          '<div style="margin-top:12px;font-size:15px;font-weight:950;">'+
+            (ready?'▶ KVITTERA ÅTERANSLUTNING':'🔒 KÄLLAN KAN ÄNNU INTE KVITTERAS')+'</div>'+
+          '<div style="font-size:10px;margin-top:6px;">RAPT/Brewfather fortsätter på egen hand. BA skriver inte till BrewZilla innan kvittens och separat START.</div>'+
+          '<div style="font-size:9px;margin-top:6px;opacity:.76;">BACKEND KONTROLLERAR SESSION OCH STEG IGEN</div></div>';
+      ]]]
+    tap_action:
+      action: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
+          const mode = a.resync_from_mode;
+          const step = String(a.raw_step_name || a.step || '').trim();
+          const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
+          const age = a.snapshot_age_seconds;
+          const origin = String(a.snapshot_entity || a.source_entity || '');
+          const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
+            a.profile_source_available === true &&
+            String(a.profile_session_id || '').trim().length > 0 &&
+            origin.startsWith('binary_sensor.');
+          const bf = mode === 'Brewfather Brewing' &&
+            states['sensor.brewfather_brew_tracker_status']?.state === 'active' &&
+            origin.startsWith('sensor.brewfather_');
+          const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
+          const aborted = a.operator_abort_active === true ||
+            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
+          return observer && a.resync_required === true && state === 'resync_required' &&
+            hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
+            (rcl || bf) && !aborted ? 'call-service' : 'none';
+        ]]]
+      service: brewassistant.brewday_reconnect_ack
+      data: |
+        [[[
+          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+          const out = {mode: a.resync_from_mode, expected_step: String(a.raw_step_name || a.step || '')};
+          if (a.resync_from_mode === 'RCL Brewing') out.expected_session_id = String(a.profile_session_id || '');
+          return out;
+        ]]]
+      confirmation:
+        text: "Du bekräftar aktuell extern session/steg. Backend läser källan igen, men kvittensen skickar ingen egen hårdvaruåtgärd. Nästa tick kan senare återuppta tillåtna kommandon när read-only stängs av. Har du kontrollerat fysisk utrustning?"
+    extra_styles: |
+      @keyframes ba-operator-reconnect-pulse {
+        0%,100% { box-shadow: 0 0 0 1px rgba(245,158,11,.34); }
+        50% { box-shadow: 0 0 0 7px rgba(245,158,11,.24); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #card { animation: none !important; }
+      }
+    styles:
+      card:
+        # Native conditional cards cannot reliably inspect an entity attribute.
+        # Use the same live summary attribute that drives the status headline.
+        - display: |
+            [[[
+              const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
+              const runtime = states['sensor.brewassistant_brewday_runtime_state']?.state;
+              return a.resync_required === true || runtime === 'resync_required' ? 'grid' : 'none';
+            ]]]
+        - border-radius: 22px
+        - border: 3px solid rgba(222,138,13,.95)
+        - background: linear-gradient(145deg,rgba(255,196,55,.27),rgba(255,154,43,.12))
+        - padding: 18px
+        - min-height: 230px
+        - animation: ba-operator-reconnect-pulse 1.8s ease-in-out infinite
+      name:
+        - font-size: 20px
+        - font-weight: 950
+        - white-space: normal
+        - color: "#9c4f0d"
+      label:
+        - white-space: normal
+        - text-align: center
+        - font-size: 12px
+      icon:
+        - width: 58px
+        - color: "#b76b0c"
   - type: custom:button-card
     entity: sensor.brewassistant_brewday_runtime_summary
     name: "Brewday Control / Status"
@@ -59,6 +211,23 @@ cards:
         const pct = v => n(v) === null ? '—' : n(v).toFixed(0) + ' %';
         const target = n(st('sensor.brewassistant_brewday_target_temperature')?.state);
         const left = n(st('sensor.brewassistant_brewday_live_time_remaining_minutes')?.state);
+        // RAPT step end-type is source-owned; a manual step has no trusted
+        // countdown. Profile step length is NOT a live remaining-time value.
+        const rclRuntime = a.brewday_mode === 'RCL Brewing' && a.source === 'RAPT BrewZilla Profile';
+        const endType = String(a.profile_step_end_type || '').trim().toLowerCase();
+        const manualRcl = rclRuntime && endType === 'manual';
+        const durationRcl = rclRuntime && endType === 'duration';
+        const plannedSeconds = n(a.profile_step_length);
+        const timeUnverified = resync || fallback || a.fallback_timer_uncertain === true;
+        const timeDisplay = timeUnverified ? '—' : manualRcl ? 'MANUELLT' :
+          left===null ? '—' : left.toFixed(0)+' min';
+        const timeDetail = timeUnverified ? T.noTime : manualRcl ? 'Väntar på manuellt RAPT-stegbyte' :
+          rclRuntime && left===null ?
+            (durationRcl && plannedSeconds!==null && plannedSeconds > 0 ?
+              'Planerat '+(plannedSeconds/60).toFixed(plannedSeconds%60===0?0:1)+
+              ' min · tid kvar ej verifierad' :
+              'RAPT-timer ej verifierad') :
+          a.fallback_timer_uncertain===true ? T.noTime : clean(state);
         const tile = (title,value,sub) =>
           '<div style="border:1px solid rgba(127,127,127,.18);background:rgba(127,127,127,.05);border-radius:14px;padding:10px 7px;min-width:0;text-align:center">' +
             '<div style="font-size:9px;opacity:.67;font-weight:850">'+escape(title)+'</div>' +
@@ -66,14 +235,14 @@ cards:
             '<div style="font-size:10px;opacity:.65;overflow-wrap:anywhere">'+escape(sub)+'</div></div>';
         const chip = (key,val) => '<span style="border:1px solid rgba(127,127,127,.2);border-radius:99px;padding:5px 9px;font-size:10px;font-weight:850;background:rgba(127,127,127,.04)">'+escape(key)+' · '+escape(val)+'</span>';
         return '<div style="text-align:left;min-width:0;line-height:1.35">' +
-          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><b style="letter-spacing:.08em;font-size:10px;opacity:.65">BREWASSISTANT · 0b6 UI</b><b style="color:'+tint+';font-size:10px">'+escape(state)+'</b></div>' +
+          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><b style="letter-spacing:.08em;font-size:10px;opacity:.65">BREWASSISTANT · BREWDAY</b><b style="color:'+tint+';font-size:10px">'+escape(state)+'</b></div>' +
           '<div style="font-size:21px;font-weight:950;letter-spacing:-.035em;color:'+tint+';margin-top:9px">'+escape(headline)+'</div>' +
           '<div style="font-size:11.5px;margin-top:6px;opacity:.83">'+escape(note)+'</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+chip(T.mode,mode)+chip(T.source,source)+chip(T.owner,clean(a.recipe_owner))+'</div>' +
           '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:11px">' +
              tile(T.step,clean(a.step || st('sensor.brewassistant_brewday_runtime_step')?.state),T.next+': '+clean(a.next_step)) +
              tile(T.target,target===null?'—':target.toFixed(1)+' °C',clean(a.target_owner)) +
-             tile(T.remaining,a.fallback_timer_uncertain===true||left===null?'—':left.toFixed(0)+' min',a.fallback_timer_uncertain===true?T.noTime:clean(state)) +
+             tile(T.remaining,timeDisplay,timeDetail) +
              tile(T.authority,blocking?T.noWrite:clean(bz.hot_side_write_scope || bz.orchestration_mode),clean(a.heat_owner)) +
           '</div>' +
           (observe ? '<div style="margin-top:10px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.2);border-radius:12px;padding:9px;font-size:11px;font-weight:850">'+
@@ -123,9 +292,9 @@ cards:
         const status = states['sensor.brewassistant_brewday_start_status']?.state || 'waiting';
         return ({
           waiting: 'VÄNTAR PÅ SYSTEM',
-          ready: 'STARTA BRYGGNING',
+          ready: 'AKTIVERA BA-ASSISTANS',
           starting: 'STARTAR / VERIFIERAR',
-          running: 'BRYGGNING PÅGÅR · GO',
+          running: 'BA-ASSISTANS AKTIV · GO',
           blocked: 'START SPÄRRAD',
           aborted: 'ABORT AKTIV – START SPÄRRAD',
         })[status] || 'KONTROLLERA SYSTEM';
@@ -145,8 +314,8 @@ cards:
         const status = s?.state || 'waiting';
         const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const statusText = ({
-          ready: 'GO · bekräfta START efter fysisk kontroll',
-          running: 'RCL-session verifierad · BA Assist pågår',
+          ready: 'RAPT-profilen kör redan. Tryck här för att låta BA ta sin godkända heat/pump-assistans efter fysisk kontroll.',
+          running: 'BA:s assistans aktiv. RAPT äger fortfarande recept, target och profilkörning.',
           starting: 'START verifieras – inga dubbla tryck',
           waiting: 'Väntar på gröna villkor',
           blocked: 'START spärrad – återställ READ-ONLY',
@@ -197,7 +366,7 @@ cards:
           };
         ]]]
       confirmation:
-        text: "START – verifiera fysiskt: vattennivå, cirkulation och BrewZilla. Startar endast BA RCL Assist för den redan AKTIVA RAPT-sessionen som visas. Backend kontrollerar session och steg igen. Fortsätta?"
+        text: "AKTIVERA BA-ASSISTANS – RAPT-profilen kör REDAN. Kontrollera vätskenivå, pumpväg och BrewZilla fysiskt. Bekräftelse låter BA assistera heat-utilization och pump via RCL i samma verifierade session. RAPT fortsätter äga recept och temperaturmål. Fortsätta?"
     extra_styles: |
       @keyframes ba-start-yellow {
         0%, 100% { box-shadow: 0 0 0 1px rgba(216,150,17,.24); }
@@ -253,10 +422,13 @@ cards:
             ]]]
   - type: custom:button-card
     entity: switch.brewassistant_brewzilla_observe_only
-    name: "BA READ-ONLY"
+    name: "BA READ-ONLY · SKYDD"
     icon: mdi:shield-eye-outline
+    show_icon: true
+    show_name: true
+    show_state: false
     show_label: true
-    label: "Slår på BA:s read-only. Påverkar inte en körande RAPT-profil."
+    label: "Slå INTE av manuellt. Tryck på den GRÖNA AKTIVERA BA-ASSISTANS ovan när allt är redo; backend släpper read-only efter godkänd START."
     tap_action:
       action: |
         [[[
@@ -269,71 +441,33 @@ cards:
       card:
         - border-radius: 16px
         - padding: 13px
-        - min-height: 92px
+        - height: auto
+        - min-height: 0px
         - background: rgba(33,150,243,.09)
         - border: 1px solid rgba(33,150,243,.28)
+      grid:
+        - grid-template-areas: '"i n" "l l"'
+        - grid-template-columns: 32px minmax(0,1fr)
+        - grid-template-rows: min-content min-content
+        - row-gap: 6px
+      img_cell:
+        - width: 28px
+        - height: 28px
+        - align-self: center
+      icon:
+        - width: 26px
+        - color: "#1578ad"
       name:
         - font-weight: 900
-        - font-size: 11px
+        - font-size: 12px
+        - justify-self: start
+        - align-self: center
+        - text-align: left
       label:
         - font-size: 10px
         - white-space: normal
-  - type: custom:button-card
-    entity: sensor.brewassistant_brewday_runtime_summary
-    name: "KVITTERA ÅTERANSLUTNING"
-    icon: mdi:link-variant-plus
-    show_label: true
-    label: |
-      [[[
-        const T = {"title":"Brewday Control / Status","mode":"BRYGGLÄGE","source":"KÄLLA","step":"AKTUELLT STEG","target":"TEMPERATURMÅL","remaining":"TID KVAR","owner":"ÄGARE","authority":"STYRLÄGE","abort":"ABORT · NÖDSTOPP","rearm":"ÅTERAKTIVERA EFTER ABORT","observe":"BA READ-ONLY","enable":"AKTIVERA BA-STYRNING","ack":"KVITTERA ÅTERANSLUTNING","diag":"Källa, fallback & säkerhetsdiagnostik","idle":"Väntar på bryggdag","aborted":"NÖDSTOPP AKTIVT","resync":"ÅTERANSLUTNING SPÄRRAD","fallback":"KÄLLA SAKNAS · MANUELL FALLBACK","observing":"BA OBSERVERAR","running":"Bryggdag aktiv","status":"STATUS","reason":"Orsak","lost":"Senaste externkälla","raw":"Exakt råsteg","session":"RCL-session","age":"Snapshot-ålder","noTime":"Tid ej verifierad","none":"Ingen verifierad källa","unknown":"Ej verifierat","noWrite":"BA-SKRIVNINGAR SPÄRRADE","warnAbort":"ABORT kräver fysisk kontroll. Ingen UI-kvittens bevisar att värme eller pump är AV.","warnResync":"Kontrollera RAPT/Brewfather-session och aktuellt steg fysiskt. BA avstår ordinarie styrning.","warnFallback":"Receptet finns kvar, men värme/pump får inte övertas automatiskt från extern källa.","warnObserve":"BA fortsätter beräkna mål och heat/pump från vald källa men skriver inte till BZ. RAPT-profilen kan fortsätta själv.","warnActive":"RAPT äger target och värmare i RCL-läge; BA får endast assistera heat/pump inom godkänd scope.","noOff":"UI-status och servicekvittens är INTE bevis för fysisk OFF.","observeInfo":"Slår på BA:s read-only. Påverkar inte en körande RAPT-profil.","enableInfo":"Ger BA skrivbehörighet för redan aktiv/verifierad källa. Start av själva RAPT-profilen kräver separat START-flöde (#258).","enableConfirm":"Kontrollera bryggverk, vätskenivå och extern styrenhet. När read-only stängs av kan BA återuppta tillåtna värme-/pumpkommandon vid nästa tick. Fortsätta?","ackInfo":"Endast efter fysisk kontroll av aktuell extern session, råsteg och BrewZilla. Låt read-only vara PÅ.","ackDisabled":"Ingen verifierad aktiv återanslutning att kvittera.","ackConfirm":"Du bekräftar aktuell extern session/steg. Backend läser källan igen, men kvittensen skickar ingen egen hårdvaruåtgärd. Nästa tick kan senare återuppta tillåtna kommandon när read-only stängs av. Har du kontrollerat fysisk utrustning?","abortInfo":"Begär STOP, värmare/pump AV och båda utilization 0 %. BZ-huvudström lämnas PÅ för återläsning; kontrollera fysiskt.","rearmInfo":"Kräver BA READ-ONLY PÅ och fysisk kontroll. Häver bara ABORT-spärren; startar aldrig bryggningen.","rearmConfirm":"Har du kontrollerat värmare, pump och BrewZilla fysiskt? Återaktiveringen intygar INTE fysisk OFF.","diagnosticsInfo":"Tidsstämpel i HA är inte alltid ett verifierat fysiskt mätprov. Kvittens verifieras åter i backend.","next":"Nästa","controller":"Orkestrering","lockReason":"Spärrorsak","scope":"Behörighet"};
-        const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-        if (a.resync_required !== true) return T.ackDisabled;
-        const safe = v => String(v ?? '—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-        return safe(T.ackInfo) + ' · ' + safe(a.resync_from_mode || T.unknown) +
-          ' · ' + safe(a.raw_step_name || a.step || T.unknown);
-      ]]]
-    tap_action:
-      action: |
-        [[[
-          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-          const state = states['sensor.brewassistant_brewday_runtime_state']?.state;
-          const mode = a.resync_from_mode;
-          const step = String(a.raw_step_name || a.step || '').trim();
-          const hasStep = step.length>0 && !['unknown','idle','none'].includes(step.toLowerCase());
-          const age = a.snapshot_age_seconds;
-          const rcl = mode === 'RCL Brewing' && a.profile_active === true &&
-            a.profile_source_available === true && String(a.profile_session_id || '').trim().length > 0;
-          const bf = mode === 'Brewfather Brewing';
-          const observer = states['switch.brewassistant_brewzilla_observe_only']?.state === 'on';
-          const aborted = a.operator_abort_active === true ||
-            states['sensor.brewassistant_brewday_operator_control_state']?.state === 'aborted';
-          return observer && a.resync_required === true && state === 'resync_required' &&
-            hasStep && typeof age === 'number' && age >= 0 && age <= 90 &&
-            (rcl || bf) && !aborted ? 'call-service' : 'none';
-        ]]]
-      service: brewassistant.brewday_reconnect_ack
-      data: |
-        [[[
-          const a = states['sensor.brewassistant_brewday_runtime_summary']?.attributes || {};
-          const out = {mode: a.resync_from_mode, expected_step: String(a.raw_step_name || a.step || '')};
-          if (a.resync_from_mode === 'RCL Brewing') out.expected_session_id = String(a.profile_session_id || '');
-          return out;
-        ]]]
-      confirmation:
-        text: "Du bekräftar aktuell extern session/steg. Backend läser källan igen, men kvittensen skickar ingen egen hårdvaruåtgärd. Nästa tick kan senare återuppta tillåtna kommandon när read-only stängs av. Har du kontrollerat fysisk utrustning?"
-    styles:
-      card:
-        - border-radius: 17px
-        - padding: 14px
-        - background: rgba(255,193,7,.09)
-        - border: 2px solid rgba(255,193,7,.4)
-      name:
-        - font-size: 13px
-        - font-weight: 950
-      label:
-        - font-size: 11px
-        - white-space: normal
         - text-align: left
+        - justify-self: stretch
   - type: horizontal-stack
     cards:
       - type: custom:button-card
