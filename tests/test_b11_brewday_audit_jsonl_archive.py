@@ -168,6 +168,7 @@ def test_async_event_serialization_and_off_loop_file_io_guards():
     assert "path.open(\"a\", encoding=\"utf-8\")" in fs
     assert "os.link(temporary, path)" in fs
     assert "os.fsync(handle.fileno())" in fs
+    assert "os.fsync(directory_fd)" in fs
     assert 'def async_clear_brewday_audit_log' in src
     assert "unlink(" not in src  # Never remove session archive from audit service
     assert "temporary.unlink(missing_ok=True)" in fs  # Only discard uncommitted temp
