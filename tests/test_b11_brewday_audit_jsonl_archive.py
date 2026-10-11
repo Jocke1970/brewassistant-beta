@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -115,3 +116,34 @@ def test_async_event_serialization_and_off_loop_file_io_guards():
     assert "path.open(\"x\", encoding=\"utf-8\")" in fs
     assert 'def async_clear_brewday_audit_log' in src
     assert "unlink(" not in src and "unlink(" not in fs
+
+
+def test_failed_archive_append_marks_sticky_incomplete_without_control_writes():
+    tree = ast.parse(SRC.read_text(encoding="utf-8"))
+    node = next(n for n in tree.body
+                if isinstance(n, ast.AsyncFunctionDef) and n.name == "_archive_record")
+    code = ast.Module(body=[
+        ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+        node,
+    ], type_ignores=[])
+    ns = {"_LOGGER": SimpleNamespace(error=lambda *a, **kw: None)}
+    filename = "brewassistant/logs/brewday-20261011T120000-000000Z.jsonl"
+    log = SimpleNamespace(file_path=filename, file_error=None, archive_write_failures=0)
+    async def broken(hass, path, event):
+        raise OSError("disk full")
+    ns["archive"] = SimpleNamespace(async_append_event=broken)
+    exec(compile(ast.fix_missing_locations(code), str(SRC), "exec"), ns)
+    asyncio.run(ns["_archive_record"](SimpleNamespace(), log, {"event_type": "brewday_abort"}))
+    assert log.archive_write_failures == 1
+    assert "disk full" in log.file_error
+
+    async def recovered(hass, path, event):
+        return None
+    ns["archive"].async_append_event = recovered
+    asyncio.run(ns["_archive_record"](SimpleNamespace(), log, {"event_type": "runtime_tick"}))
+    assert log.file_error is None
+    assert log.archive_write_failures == 1  # Historical gap must not turn green.
+
+    source = SRC.read_text(encoding="utf-8")
+    assert '"archive_status": "error" if log.file_error else "incomplete" if log.archive_write_failures' in source
+    assert '"archive_write_failures": log.archive_write_failures' in source
