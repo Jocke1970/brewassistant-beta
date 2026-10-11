@@ -5,8 +5,6 @@ import ast
 import asyncio
 from datetime import datetime, timezone
 import json
-import os
-import tempfile
 from pathlib import Path
 import re
 from types import SimpleNamespace
@@ -21,7 +19,7 @@ SENSOR = ROOT / "custom_components/brewassistant/brewday/brewday_audit_sensor.py
 
 def archive():
     tree = ast.parse(FILE.read_text(encoding="utf-8"))
-    wanted = {"new_session_file", "_absolute_path", "_append_jsonl", "_migrate_legacy_window"}
+    wanted = {"new_session_file", "_absolute_path", "_append_jsonl"}
     functions = [n for n in tree.body
                  if isinstance(n, ast.FunctionDef) and n.name in wanted]
     assert {n.name for n in functions} == wanted
@@ -31,8 +29,7 @@ def archive():
     ], type_ignores=[])
     ns = {"_LOG_DIR": ("brewassistant", "logs"),
           "_SAFE_NAME": re.compile(r"^brewday-\d{8}T\d{6}-\d{6}Z\.jsonl$"),
-          "timezone": timezone, "Path": Path, "json": json,
-          "os": os, "tempfile": tempfile}
+          "timezone": timezone, "Path": Path, "json": json}
     exec(compile(ast.fix_missing_locations(module), str(FILE), "exec"), ns)
     return ns
 
@@ -75,87 +72,71 @@ def test_archive_path_is_generated_only_and_cannot_escape_config(tmp_path, bad_p
         ns["_absolute_path"](hass, bad_path)
 
 
-def test_legacy_import_once_never_truncates_or_duplicates(tmp_path):
-    ns = archive()
-    p = tmp_path / "audit.jsonl"
-    old = [{"event_type": "brewzilla_action", "actions": ["set_heat_utilization:40"]},
-           {"event_type": "brewday_abort", "source": "RAPT BrewZilla Profile"}]
-    assert ns["_migrate_legacy_window"](p, old) is True
-    original = p.read_bytes()
-    assert ns["_migrate_legacy_window"](p, old) is False
-    assert p.read_bytes() == original
-    events = [json.loads(line) for line in original.splitlines()]
-    assert events[0]["legacy_window_only"] is True
-    assert events[0]["legacy_events_retained"] == 2
-    assert events[1:] == old
-
-def test_legacy_import_rejects_a_truncated_existing_file(tmp_path):
-    ns = archive()
-    p = tmp_path / "audit.jsonl"
-    old = [{"event_type": "brewzilla_action", "note": "kept in old Store"},
-           {"event_type": "hlt_sim_state", "hlt_state": "on"}]
-    p.write_text('{"event_type":"archive_migration"}\n{"event_type":', encoding="utf-8")
-    previous = p.read_bytes()
-    with pytest.raises(OSError, match="incomplete or inconsistent"):
-        ns["_migrate_legacy_window"](p, old)
-    assert p.read_bytes() == previous  # Never clobber evidence.
-    assert not list(tmp_path.glob("*.tmp"))
-
-
-def test_legacy_import_interrupted_before_atomic_publish_is_retryable(tmp_path, monkeypatch):
-    ns = archive()
-    p = tmp_path / "audit.jsonl"
-    old = [{"event_type": "audit_started"}, {"event_type": "hlt_sim_yield"}]
-
-    def simulate_power_loss(*args):
-        raise OSError("simulated interruption before publish")
-
-    with monkeypatch.context() as m:
-        m.setattr(os, "link", simulate_power_loss)
-        with pytest.raises(OSError, match="simulated interruption"):
-            ns["_migrate_legacy_window"](p, old)
-    assert not p.exists()
-    assert not list(tmp_path.glob("*.tmp"))
-    assert ns["_migrate_legacy_window"](p, old) is True
-    assert [json.loads(row) for row in p.read_text().splitlines()][1:] == old
-
-
-
-def test_failed_migration_retains_full_store_window_and_never_appends_to_partial_archive():
-    src = SRC.read_text(encoding="utf-8")
-    ast_tree = ast.parse(src)
-    funcs = {
-        node.name: node for node in ast_tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name in {"_to_store", "_archive_record"}
-    }
-    assert set(funcs) == {"_to_store", "_archive_record"}
-    ns = {"STORE_TAIL_EVENTS": 12,
-          "_LOGGER": SimpleNamespace(error=lambda *args, **kwargs: None)}
+def test_legacy_test_store_discarded_but_current_jsonl_store_survives():
+    """Pre-0b11 logs are disposable tests; real JSONL sessions survive HA restart."""
+    source = SRC.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(
+        n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
+        and n.name == "async_load_brewday_audit_log"
+    )
     code = ast.Module(body=[
         ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
-        funcs["_to_store"], funcs["_archive_record"],
+        node,
     ], type_ignores=[])
+
+    class FakeStore:
+        def __init__(self):
+            self.payload = {
+                "active": True, "event_count_total": 250,
+                "events": [{"event_type": "runtime_tick"} for _ in range(250)],
+                "log_file": None,
+            }
+
+        async def async_load(self):
+            return self.payload
+
+    store = FakeStore()
+    hass = SimpleNamespace(data={})
+    empty = lambda: SimpleNamespace(active=False, events=[], total_events=0,
+                                     file_path=None, file_error=None)
+    async def save(fake_hass):
+        log = fake_hass.data["brewassistant"]["brewday_audit_log"]
+        store.payload = {"active": log.active, "events": list(log.events),
+                         "log_file": log.file_path, "event_count_total": log.total_events}
+
+    ns = {"_store": lambda _: store,
+          "_from_store": lambda payload: SimpleNamespace(
+              active=payload["active"], events=list(payload["events"]),
+              file_path=payload["log_file"], total_events=payload["event_count_total"]
+          ),
+          "BrewdayAuditLog": empty,
+          "_LOGGER": SimpleNamespace(info=lambda *a: None),
+          "async_save_brewday_audit_log": save,
+          "DATA_KEY": "brewday_audit_log"}
     exec(compile(ast.fix_missing_locations(code), str(SRC), "exec"), ns)
-    legacy_events = [{"event_type": "runtime_tick", "note": f"old-{i}"}
-                     for i in range(35)]
-    log = SimpleNamespace(active=True, started_at=None, stopped_at=None, updated_at=None,
-                          events=legacy_events, total_events=35, file_path=None,
-                          file_error="OSError: interrupted migration", legacy_window_only=False,
-                          archive_write_failures=0)
-    payload = ns["_to_store"](log)
-    assert len(payload["events"]) == 35
-    assert payload["events"][0]["note"] == "old-0"
+    loaded = asyncio.run(ns["async_load_brewday_audit_log"](hass))
+    assert loaded.active is False
+    assert loaded.events == [] and loaded.total_events == 0
+    assert store.payload["events"] == [] and store.payload["log_file"] is None
 
-    async def unexpected_append(*args):
-        raise AssertionError("Must not append over truncated legacy archive")
+    store.payload = {"active": True, "events": [{"event_type": "audit_started"}],
+                     "log_file": "brewassistant/logs/brewday-20261011T123000-000000Z.jsonl",
+                     "event_count_total": 85}
+    resumed = asyncio.run(ns["async_load_brewday_audit_log"](hass))
+    assert resumed.active is True
+    assert resumed.total_events == 85
+    assert resumed.file_path.endswith(".jsonl")
+    assert len(resumed.events) == 1
 
-    ns["archive"] = SimpleNamespace(async_append_event=unexpected_append)
-    asyncio.run(ns["_archive_record"](SimpleNamespace(), log,
-                                      {"event_type": "hlt_sim_state"}))
-    assert log.file_path is None
-    assert log.archive_write_failures == 1
-    assert log.file_error == "OSError: interrupted migration"
+
+def test_no_legacy_import_code_or_unsafe_archive_deletion():
+    src = SRC.read_text(encoding="utf-8")
+    fs = FILE.read_text(encoding="utf-8")
+    assert "async_migrate_legacy" not in src + fs
+    assert "_migrate_legacy_window" not in fs
+    assert "unlink(" not in src + fs
+    assert "path.open(\"a\", encoding=\"utf-8\")" in fs
 
 
 def test_hlt_audit_producer_routes_enriched_rows_through_archive_lock():
@@ -188,7 +169,7 @@ def test_sensor_never_exposes_event_lists_and_keeps_existing_service_names():
     assert 'STORE_TAIL_EVENTS = 12' in src
     assert 'key not in {"note", "signature", "control_reason"}' in src
     assert 'await archive.async_append_event(hass, log.file_path, event)' in src
-    assert 'await archive.async_migrate_legacy(hass, new_path, log.events)' in src
+    assert 'Discarding pre-JSONL Brewday test log' in src
     for service in ("async_start_brewday_audit_log", "async_stop_brewday_audit_log",
                     "async_clear_brewday_audit_log", "async_record_brewday_audit_snapshot"):
         assert f"def {service}" in src
@@ -204,12 +185,8 @@ def test_async_event_serialization_and_off_loop_file_io_guards():
     assert "async with _write_lock(hass):" in src
     assert "hass.async_add_executor_job(_append_jsonl" in fs
     assert "path.open(\"a\", encoding=\"utf-8\")" in fs
-    assert "os.link(temporary, path)" in fs
-    assert "os.fsync(handle.fileno())" in fs
-    assert "os.fsync(directory_fd)" in fs
     assert 'def async_clear_brewday_audit_log' in src
-    assert "unlink(" not in src  # Never remove session archive from audit service
-    assert "temporary.unlink(missing_ok=True)" in fs  # Only discard uncommitted temp
+    assert "unlink(" not in src and "unlink(" not in fs
 
 
 def test_failed_archive_append_marks_sticky_incomplete_without_control_writes():
