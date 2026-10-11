@@ -29,6 +29,7 @@ from . import brewday_audit_file as archive
 _LOGGER = logging.getLogger(__name__)
 LOCK_DATA_KEY = "brewday_audit_archive_lock"
 STORE_TAIL_EVENTS = 12  # Lightweight continuity across HA restarts, NOT history.
+ARCHIVE_GENERATION = 1  # One-time clean break from pre-release test logs.
 
 DATA_KEY = "brewday_audit_log"
 STORE_DATA_KEY = "brewday_audit_log_store"
@@ -250,6 +251,7 @@ def _to_store(log: BrewdayAuditLog) -> dict[str, Any]:
             if key not in {"note", "signature", "control_reason"}
         })
     return {
+        "archive_generation": ARCHIVE_GENERATION,
         "active": log.active,
         "started_at": log.started_at.isoformat() if log.started_at else None,
         "stopped_at": log.stopped_at.isoformat() if log.stopped_at else None,
@@ -299,22 +301,23 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def async_load_brewday_audit_log(hass: HomeAssistant) -> BrewdayAuditLog:
-    """Load light metadata; migrate the last legacy window into JSONL once."""
+    """Load recorder metadata; once discard all pre-release test sessions.
+
+    Prior test sessions include the old capped .storage history and early
+    development JSONL files. Only the audit Store is reset: no brewday
+    authority, ABORT, RAPT/RCL profile, or physical actuator state changes.
+    """
     payload = await _store(hass).async_load()
+    if isinstance(payload, dict) and payload.get("archive_generation") != ARCHIVE_GENERATION:
+        # One-time clean break for pre-release *test* history. This advances
+        # the Store generation so a normal future HA restart resumes JSONL.
+        log = BrewdayAuditLog()
+        hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
+        _LOGGER.info("Discarding pre-release Brewday test log metadata; new JSONL baseline")
+        await async_save_brewday_audit_log(hass)
+        return log
     log = _from_store(payload)
     hass.data.setdefault("brewassistant", {})[DATA_KEY] = log
-    if log.events and not log.file_path:
-        new_path = archive.new_session_file(log.started_at or log.updated_at or _now())
-        try:
-            await archive.async_migrate_legacy(hass, new_path, log.events)
-        except (OSError, ValueError) as exc:
-            log.file_error = f"{type(exc).__name__}: {exc}"
-            _LOGGER.error("Brewday archive migration failed; retaining legacy window: %s", exc)
-            return log
-        log.file_path = new_path
-        log.legacy_window_only = True
-        log.file_error = None
-        await async_save_brewday_audit_log(hass)
     return log
 
 
@@ -611,6 +614,24 @@ async def async_clear_brewday_audit_log(hass: HomeAssistant) -> dict[str, Any]:
         )
         await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
+
+
+async def async_record_brewday_audit_prebuilt_event(
+    hass: HomeAssistant, event: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Record an enriched producer event in both preview and full JSONL.
+
+    HLT and other producers that add structured context must use this
+    lock-protected path, not the private in-memory _append_event helper.
+    """
+    async with _write_lock(hass):
+        log = get_brewday_audit_log(hass)
+        if not log.active:
+            return None
+        recorded = _append_event(log, event)
+        await _archive_record(hass, log, event)
+        await async_save_brewday_audit_log(hass)
+        return recorded
 
 
 async def async_record_brewday_audit_event(

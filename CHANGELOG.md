@@ -1,11 +1,10 @@
-## DEV PREVIEW — 2026.10.0b11: Flight Recorder archive i JSONL-fil (2026-10-11)
+## BETA CANDIDATE — 2026.10.0b11: BOIL guards, premium UI och JSONL Flight Recorder (2026-10-11)
 
-- Bryggdagens fullständiga händelsehistorik skrivs append-only i en ny fil per session under `/config/brewassistant/logs/brewday-*.jsonl`; ingen 250-händelsegräns för filarkivet.
-- HA-sensorn `sensor.brewassistant_brewday_event_log_summary` visar bara lätt sammanfattning och arkivväg/status, inte `events` eller `recent_events`. Befintliga fem entiteter och servicegränssnitt behålls.
-- Befintligt HA `.storage`-arkiv migreras säkert och exakt en gång med uttrycklig markering att bara de redan behållna sista händelserna kunde återvinnas. Där finns fortsatt en minimal status-/sessionkontinuitetscache.
-- Alla filskrivningar körs i executor, serialiseras per HA-instans och stör aldrig hårdvarustyrningen om disken inte fungerar. Fel syns i `archive_status: error`/ `archive_error`.
-- Ny bryggdag ger ny fil, manuell **Rensa vy** raderar INGA historiska filer. Storlek/retention/backup administreras separat.
-- Två hela Lovelace-kort (SV/EN) uppdaterade med tydlig information om arkivet. Sju CI-kontroller och fysisk verifiering krävs inför 0b11-beta; 0b10/main orörda.
+- **BOIL:** endast aktuellt/verifierat RAPT BOIL-steg begär heat-utilization **100 %**, pump **OFF** och pump-utilization **0 %** via BA → RCL → BrewZilla. Ingen heater-ON eller profil-/targetövertagning. Säkerhetsreduktion, READ-ONLY, ABORT, källa/telemetrifel och resync går före.
+- **UI:** BA-ASSISTANS/START-panelen döljs när kontrollen redan kör med gröna verifierade förutsättningar; visas vid problem/kvittensbehov. Återaktivera efter ABORT syns enbart vid verklig ABORT-latch; nödstopp alltid synligt. Äldre inklistrad Lovelace-YAML måste manuellt ersättas.
+- **Flight Recorder:** komplett händelsehistorik i append-only JSONL per bryggsession under `/config/brewassistant/logs/brewday-*.jsonl`, ingen 250-radersgräns i filen. HA-sensorn visar lätt status i stället för alla händelser. HLT-övergångar skrivs genom samma serialiserade filbackend. Diskfel påverkar aldrig fysisk styrning och `archive_status` markerar bestående luckor.
+- **Ren testbaseline:** gamla testkörningar (inklusive experimentella JSONL-referenser) migreras **inte**. Flight Recorder får `archive_generation=1` och nollställer tidigare audit-metadata en enda gång; nya JSONL-sessioner överlever omstart. Inga äldre filer raderas automatiskt och separat ABORT-latch, RAPT/RCL-session och hårdvara påverkas inte.
+- **Release:** dev → beta, 7/7 på exakt beta-SHA, unik tagg `v2026.10.0b11` och HACS Pre-release. Main oförändrad. Vattenprov under operatörens uppsikt krävs före stable.
 
 ## DEV PREVIEW — 2026.10.0b11: BOIL heat 100 %, pump OFF/0 % (2026-10-11)
 

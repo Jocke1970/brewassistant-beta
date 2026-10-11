@@ -43,6 +43,21 @@ It is the primary evidence source for supervised hot-side regression tests.
 - The archive is **not limited to 250 events** and its prior files are
   **never erased** by the UI's *Rensa vy / Clear view* button. Retention,
   backups and intentional operator deletion are separate administrative tasks.
+- HLT simulator's enriched high-signal transitions use the same serialized
+  Flight Recorder writer, so HLT rows also appear in the full session JSONL
+  rather than only in the HA sensor preview.
+- **Clean break for 0b11:** all previous Flight Recorder runs have
+  been classified as tests. At the first load of the new `archive_generation`,
+  recorder-only metadata is **reset once**; the old capped `.storage` event
+  window and early development JSONL references are **not migrated**.
+  The new recorder starts empty and creates its first JSONL file when a new
+  Brewday starts. This does not reset RAPT/RCL profiles, any physical actuator,
+  or the separate operator ABORT latch.
+- **Normal HA restarts after this upgrade** preserve new-generation JSONL
+  session metadata, history and counts. Existing files are never
+  automatically deleted or overwritten.
+  Clearing old test JSONL files on disk is a separate **manual** cleanup
+  action and should only be done outside an active brewing session.
 - All file operations use the Home Assistant executor (no synchronous disk
   IO on the event loop). One async lock preserves event ordering even during
   rapid state changes. A disk error is exposed as
@@ -51,10 +66,6 @@ It is the primary evidence source for supervised hot-side regression tests.
   `archive_write_failures` counter keeps the file in
   `archive_status: incomplete` even after disk access recovers, so missing
   rows never masquerade as a complete audit history.
-- On the first HA restart after upgrading, the old persisted **most recent**
-  250-event window (if present) is imported once into a file. A
-  `archive_migration` header flags it as `legacy_window_only: true`,
-  because already overwritten pre-window events are **unrecoverable**.
 - The existing HA Store path stays as a **lightweight compatibility record**
   containing active status, timestamps, total count, archive path, error and
   a small continuity tail needed by the boundary guard:

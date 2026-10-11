@@ -41,39 +41,6 @@ def _append_jsonl(path: Path, event: dict[str, Any]) -> None:
         handle.write(payload + "\n")
 
 
-def _migrate_legacy_window(path: Path, events: list[dict[str, Any]]) -> bool:
-    """Import the last HA .storage window once, without pretending it is complete.
-
-    Exclusive creation makes a retry after power failure non-destructive. If
-    the file already exists, preserve its contents rather than replaying rows.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with path.open("x", encoding="utf-8") as handle:
-            header = {
-                "schema_version": 3, "event_type": "archive_migration",
-                "legacy_window_only": True,
-                "legacy_events_retained": len(events),
-                "note": "Earlier overwritten .storage events cannot be recovered.",
-            }
-            handle.write(json.dumps(header, sort_keys=True) + "\n")
-            for event in events:
-                handle.write(json.dumps(event, sort_keys=True, ensure_ascii=False,
-                                        default=str, separators=(",", ":")) + "\n")
-        return True
-    except FileExistsError:
-        return False
-
-
 async def async_append_event(hass: HomeAssistant, relative: str, event: dict[str, Any]) -> None:
     """Write an actual event off the HA event loop."""
     await hass.async_add_executor_job(_append_jsonl, _absolute_path(hass, relative), dict(event))
-
-
-async def async_migrate_legacy(
-    hass: HomeAssistant, relative: str, events: list[dict[str, Any]]
-) -> bool:
-    return await hass.async_add_executor_job(
-        _migrate_legacy_window, _absolute_path(hass, relative),
-        [dict(event) for event in events],
-    )
