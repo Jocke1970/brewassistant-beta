@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: Jocke1970/home-assistant-rapt-cloud-link
-          ref: 286a735ad6e2fad96d0c5f08d83d8484dce34424
+          ref: 14c6c7a0104f5b0d2cef85302f05484e0f6dd7a8
           path: rcl
 
       - name: Set up Home Assistant Python
