@@ -1,3 +1,29 @@
+# BrewAssistant – aktuella milstolpar (11 oktober 2026)
+
+**Gällande release:** [2026.10.0b11 – publicerad HACS Pre-release](2026.10.0b11-prerelease-notes_sv.md). Manifest och betatagg matchar testad beta-merge-SHA `87d80316f53df8d46a7edf06114e8a96c902b186`. 7/7 CI, Hassfest, HACS och isolerad HA/RCL-smoke godkända. **Detta är inte fysisk acceptans.**
+
+**SOP:** `dev → beta → main`. `main` är tidigare stable-gren; ingen 0b11-promotion till stable är gjord.
+
+**Nästa dev-arbete:** [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300) – CFC/kylspiral-kvittens vid **aktuellt BOIL**. Inget val / `Ingen kylning` innebär pump OFF/0 %. `CFC/kylspiral klar` ska endast kunna ge ON/100 % sista 15 minuterna med verifierad färsk RCL-identitet och Start-baserad tid. Detta är **inte** implementerat i publicerad 0b11; före nästa beta återstår review och fältverifiering av RAPT-stegstartens noggrannhet.
+
+## Prioriterade nästa steg
+
+1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
+2. **BOIL CFC-grind på dev:** avsluta PR #300:s kodgranskning, validera tidssemantik från verklig RAPT/RCL-profil och regressionsprova kvittens + källa-/ABORT-/READ-ONLY-spärrar. Ny beta får ny kalenderbaserad tagg (tidigare `v2026.10.0b11` får inte flyttas).
+3. **Öppna fältavvikelser:** utred [issue #298](https://github.com/Jocke1970/brewassistant-beta/issues/298) om Mash-In gate under Mash Out, och [issue #288](https://github.com/Jocke1970/brewassistant-beta/issues/288) om pumpförlopp under Mash In utan att anta fysisk orsak.
+4. **Loggning och granskning:** använd nya [Flight Recorder JSONL](brewday-audit.md) för hela sekvensen utan 250-eventgräns. Tidigare testloggar migreras inte; bevara säkerhets-ABORT och källa separat.
+5. **Stable först senare:** inga `beta → main`-ändringar förrän fysisk testacceptans finns och relevanta återstående risker har bedömts.
+
+**Viktigt styrkontrakt:** vid RCL-kommunikationsbortfall gäller fail-passive och kvarhållet RAPT-ägarskap, **inte** STOP/OFF/0. BA skickar enbart via RCL:s exponerade HA-väg. Ingen automatisk takeover, heater ON eller step-advance på grund av otillgänglig data.
+
+Dokumentation: [README](../README.md), [HACS-installation](INSTALLATION.md), [BOIL 0b11](2026.10.0b11-boil-pump-off-zero_sv.md), [CFC PR](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+
+---
+
+## Historisk roadmap / äldre planeringsstatus
+
+**Materialet nedan dokumenterar läget ungefär september–1 oktober 2026.** Versioner, rekommenderade installationssteg och statusbeskrivningar i den historiska sektionen är **inte** gällande för 0b11. Ändra inte historiska testresultat retroaktivt; använd avsnittet ovan för nuläge.
+
 > **Brewday checkpoint 2026-10-09:** `dev` inför **Manual Brewing / Brewfather Brewing / RCL Brewing**. RCL Assist låser target/heater till RAPT/BrewZilla och ger BA Learning endast heat-utilization + pump ON/OFF/%. RCL/BF source-loss går via retained-recipe Manual fallback; reconnect återtar source ownership. Full persistent recipe→ManualPlan över HA-restart återstår. Se [designkontraktet](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
 
 # BrewAssistant – roadmap och acceptansgrindar

@@ -1,3 +1,11 @@
+> **Aktuellt 2026-10-11:** Detta är delvis ett äldre
+> kortinventarium och en designlogg. Hämta alltid de **fullständiga**
+> SV/EN-korten från [publicerad `v2026.10.0b11`](https://github.com/Jocke1970/brewassistant-beta/tree/v2026.10.0b11/dashboard/cards).
+> Aktuella relevanta ytor är `brewday_control_status`,
+> `rapt_profile_runtime` och `brewassistant_brewday_event_log`.
+> Lovelace-kort byts manuellt. Den nya CFC-kvittensen under BOIL är
+> endast i [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+
 # Dashboard baselines
 
 This document summarizes the current BrewAssistant dashboard baseline.

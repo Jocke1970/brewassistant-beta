@@ -1,3 +1,13 @@
+> **Publiceringsstatus 2026-10-11:** treläges-/RCL Assist-kontraktet
+> nedan utvecklades inför b5. Den publicerade aktuella installationen är
+> **[2026.10.0b11](2026.10.0b11-prerelease-notes_sv.md)**.
+> RAPT/RCL äger aktiv profil, steg, timer och target; BA styr inte
+> parallellt direkt mot BrewZilla. Source-loss är fail-passive och
+> får **aldrig** bli automatiskt STOP/OFF/0, även om en
+> ManualPlan/receptkontext behålls diagnostiskt. Gamla
+> steg-för-steg-anvisningar nedan är daterad designhistorik; kontrollera
+> aktuell preflight och verkligt readback inför varje fysiskt test.
+
 # Brewday trelägesmodell + RCL Assist — 2026-10-09
 
 ## Beslut

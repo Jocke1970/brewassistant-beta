@@ -1,3 +1,11 @@
+> **Aktuellt 2026-10-11:** Tidigare checklistor nedan beskriver
+> en äldre HA-testinstallation och är **inte** nya verifierade
+> fältresultat. För **0b11**: [installationsguide](INSTALLATION.md),
+> [BOIL/pump-kontroll](2026.10.0b11-boil-pump-off-zero_sv.md) och
+> [Flight Recorder](brewday-audit.md) gäller. Exakta lokala
+> entity-ID:n, fysiskt pump-/värme-readback och ABORT måste verifieras
+> separat. RCL-förlust är aldrig automatiskt STOP.
+
 # BrewAssistant Clean Baseline
 
 This document describes the expected clean Home Assistant install baseline for the current BrewAssistant beta.

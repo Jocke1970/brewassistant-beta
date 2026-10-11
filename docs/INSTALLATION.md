@@ -1,70 +1,146 @@
-# Installation – BrewAssistant Beta
+# Installation och uppdatering – BrewAssistant Beta
 
-**Uppdaterat 2026-09-24.** Nästa prerelease är `v0.2.0-beta.15`; installera den först när den är publicerad som GitHub Pre-release efter gröna checks på exakt `beta`-merge-SHA. Före publiceringen är [`v0.2.0-beta.15`](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v0.2.0-beta.15) senaste publicerade tagg. `dev` är utveckling, `beta` testgren och `main` stabil gren. Beta.15 tillför GF30 read-only/preflight men **ingen fysisk GF30-/pump-/frysstyrning**.
+**Senast uppdaterad: 2026-10-11.** Gällande installerbar beta är
+**[BrewAssistant 2026.10.0b11](https://github.com/Jocke1970/brewassistant-beta/releases/tag/v2026.10.0b11)**,
+GitHub **Pre-release** med integrationsmanifest `2026.10.0b11`. Installera inte
+`dev` eller en enskild feature-/releasebranch för fysiskt styrprov.
 
-## Rekommenderat: HACS som anpassat repository
+**Kontrollkedja för RAPT-bryggning:**
+`BrewAssistant → RAPT Cloud Link → BrewZilla`.
+BrewAssistant får inte ta över en aktiv RAPT-profil vid RCL-bortfall.
+Stabil `main` och gamla publicerade taggar påverkas inte av beta-uppdateringar.
 
-1. I HACS: öppna Custom repositories och lägg till `https://github.com/Jocke1970/brewassistant-beta`, kategori **Integration**.
-2. Installera BrewAssistant Beta och välj uttryckligen prerelease **v0.2.0-beta.15** via HACS versionsval om den inte är förvald. Kontrollera visad version före och efter installation; använd inte ett ospecificerat branch-HEAD.
-3. Ta säkerhetskopia, kontrollera kompatibel RAPT Cloud Link-fork `v0.5.0-beta.1`, installera/uppdatera när BrewZilla inte används och starta om Home Assistant.
-4. Lägg till integrationen via Inställningar → Enheter och tjänster om den inte redan finns. HACS lägger integrationskoden under `/config/custom_components/brewassistant/` men installerar **inte** egna Lovelace-dashboardkort automatiskt.
+## 1. Före installation
 
-## Manuell beta.15-installation (endast med uttryckligt versionsval)
+1. Stoppa ny bryggning, arbeta **inte under aktiv eller obevakad värmning**.
+   Använd lokal kontroll och säkra vatten-/vätskenivåer.
+2. Säkerhetskopiera HA och befintlig `/config/custom_components/brewassistant/`
+   utanför `custom_components`.
+3. Säkerställ en fungerande **RAPT Cloud Link 2026.10.0b5** för RAPT:s
+   aktuella profil-, timer- och tillsatsattribut. RCL har egen kontakt med
+   BrewZilla och behåller den fysiska profilsessionen.
+4. Notera faktiska entity-ID:n under **Utvecklarverktyg → Tillstånd**.
+   Egen entity registry och tidigare installationshistorik kan ge andra ID:n.
 
-Synka bara katalogen `custom_components/brewassistant/`, inte tidigare hela repositoryn eller en gammal featurebranch. Exempel i Home Assistants skal när maskinen är inaktiv:
+## 2. Rekommenderad HACS-installation
+
+1. Lägg till `https://github.com/Jocke1970/brewassistant-beta` som
+   **Custom repository → Integration** i HACS om det inte redan finns.
+2. Öppna **BrewAssistant Beta**, visa beta/prerelease-versioner och välj
+   uttryckligen **2026.10.0b11**.
+3. Kontrollera att HACS-versionen och
+   `custom_components/brewassistant/manifest.json` motsvarar `2026.10.0b11`.
+4. **Starta om Home Assistant** så att uppdaterad Python-backend laddas.
+5. Kontrollera integrationslogg, tillgängliga sensorer, RCL-profilstatus,
+   READ-ONLY och ABORT-latch **innan** någon övervakad testkörning.
+
+**Observera:** HACS installerar integrationskoden, **inte** dina manuellt
+inklippta Lovelace-kort. Filer under `dashboard/cards/` måste bytas var för sig
+med hela aktuella YAML-kortet.
+
+## 3. Alternativ manuell installation – exakt låst tagg
+
+Använd en **ny tom temporärkatalog**, backa upp först och kontrollera
+källan innan du använder `rsync --delete`. Kör endast när bryggningen
+är inaktiv:
 
 ```bash
-git clone --depth 1 --branch v0.2.0-beta.15 \
-  https://github.com/Jocke1970/brewassistant-beta.git /tmp/brewassistant-beta15
+git clone --depth 1 --branch v2026.10.0b11 \
+  https://github.com/Jocke1970/brewassistant-beta.git \
+  /tmp/brewassistant-2026.10.0b11
+
 mkdir -p /config/brewassistant_backups/custom_components
+
 if [ -d /config/custom_components/brewassistant ]; then
   cp -a /config/custom_components/brewassistant \
     "/config/brewassistant_backups/custom_components/brewassistant_$(date +%Y%m%d_%H%M%S)"
 fi
-# Granska källan och backupen före synk: --delete tar bort filer i mål som saknas i taggen.
+
+# Inspektera filerna. --delete tar bort filer i målet som saknas i taggen.
 rsync -a --delete \
-  /tmp/brewassistant-beta15/custom_components/brewassistant/ \
+  /tmp/brewassistant-2026.10.0b11/custom_components/brewassistant/ \
   /config/custom_components/brewassistant/
 ```
 
-Använd en tom temporär klonkatalog; om sökvägen redan finns, välj en ny. Kontrollera därefter att `/config/custom_components/brewassistant/manifest.json` anger `0.2.0-beta.15` och starta om HA. Följ vanlig backup-/rollbackrutin vid fel. En GitHub-branchmerge uppdaterar aldrig installerad Home Assistant-kod.
+Kontrollera versionsfältet `2026.10.0b11` i målmanifestet, starta om HA
+och verifiera samtliga käll-/säkerhetsspärrar. En PR-merge eller uppdaterad
+GitHub-branch uppdaterar **inte** automatiskt installerad kod.
 
-## Kontroll efter omstart
+## 4. Uppdatera svenska premiumkort
 
-Sök under Utvecklarverktyg → Tillstånd och Inställningar → Enheter och tjänster → Entiteter (inklusive inaktiverade). Kontrollera bland annat:
+Hämta **hela** kortet från den tagg som matchar din installerade backend.
+För 0b11 är relevanta exempel:
 
-- `sensor.brewassistant_brewzilla_orchestration_mode`
-- `sensor.brewassistant_brewday_operator_control_state`
-- `button.brewassistant_abort_brewday`
-- `button.brewassistant_rearm_brewday_control`
-- Den faktiska switchen med visningsnamn **Endast observation – BrewZilla styrs lokalt**.
+- [Brewday Control/Status SV](https://github.com/Jocke1970/brewassistant-beta/blob/v2026.10.0b11/dashboard/cards/brewday_control_status_sv.yaml)
+- [RAPT Profile Runtime SV](https://github.com/Jocke1970/brewassistant-beta/blob/v2026.10.0b11/dashboard/cards/rapt_profile_runtime_sv.yaml)
+- [Flight Recorder SV](https://github.com/Jocke1970/brewassistant-beta/blob/v2026.10.0b11/dashboard/cards/brewassistant_brewday_event_log_sv.yaml)
 
-**Känt beta.15-ID-fynd:** HA registrerade i en verklig installation `switch.brewassistant_endast_observation_brewzilla_styrs_lokalt` i stället för det avsedda `switch.brewassistant_brewzilla_observe_only`. Ändra entitets-ID genom HA:s entitetsinställningar, eller anpassa lokala kort efter faktiskt ID. Editera inte `.storage` manuellt. Detta är en **öppen kodfix**, inte korrigerat i den publicerade taggen. Avsaknad av switchen ska undersökas; anta aldrig att en felande entity innebär fysisk read-only.
+Engelska motsvarigheter finns utan suffixet `_sv`.
+Vanliga beroenden är `custom:button-card`, `custom:expander-card` och
+andra frontendkort som anges i respektive YAML. **Montering är manuell.**
 
-Efter HA-start ska switchen vara PÅ och `sensor.brewassistant_brewzilla_orchestration_mode` ha `observe_only_effective: true` och `hot_side_actuator_writes_allowed: false`. Dessa anger endast att BA:s ordinarie skrivningar spärras; kontrollera fysiska utgångar lokalt. Kontrollera RCL:s anslutning och att återläsning är färsk innan styrprov; `Disconnected` är inte fysisk OFF-verifikation.
+Kontrollera före användning:
+- `sensor.brewassistant_brewday_runtime_summary`,
+  `sensor.brewassistant_brewday_start_status` och aktuell RCL-profilsensor.
+- `switch.brewassistant_brewzilla_observe_only` eller dess **verkliga**
+  entity-ID om din entity registry fortfarande använder äldre namn.
+- `button.brewassistant_abort_brewday` och
+  `button.brewassistant_rearm_brewday_control`, där återaktivering endast
+  används efter fysisk kontroll och en faktisk ABORT-latch.
+- Flight Recorders `archive_path` och `archive_status`.
 
-**Två separata handgrepp:** efter ABORT och fysisk kontroll tryck `button.brewassistant_rearm_brewday_control`, kontrollera `operator_abort_active: false` och `operator_control_state: armed`. Switch **AV** gör därefter sin egen atomiska kontroll av behörig källa + sex färska readbacks. Ingen separat observe-only-rearmtjänst behövs i normal UI. Med `source: None` eller gammal telemetri nekas styrning och read-only förblir PÅ. För manuellt vattenprov: behåll read-only PÅ, välj Manual Brewday och verifiera uttryckligt RAPT-profil-STOP.
+Öppna [dashboard-guiden](../dashboard/README.md) för fullständiga kort och
+[0b11-releasenoterna](2026.10.0b11-prerelease-notes_sv.md) för UI-ändringar.
 
-## Dashboard
+## 5. Safety-first test efter uppdatering
 
-Kort under `dashboard/cards/` är exempel och behöver läggas till manuellt. För beta.15: lägg `dashboard/cards/brewzilla_observe_only_sv.yaml` (eller engelska motsvarigheten) **bredvid** det befintliga `brewassistant_manual_brewday_sv.yaml`. Kontrollera att dess entity-ID matchar faktisk installation. Kortet har ABORT och switch, med direkta RCL-reglage endast under villkoren read-only PÅ, källa Manual Brewday, RAPT-profil bekräftat stoppad och ingen ABORT. Visningsvillkor är inte ett globalt behörighetsskydd för andra direkt-RCL-kort. Rensa lokala referenser till avvecklade `switch.brewassistant_brewzilla_orchestration_enabled`.
+**0b11 BOIL:** endast verifierat *aktuellt* BOIL-steg tillåter BA att begära
+**heat-utilization 100 %, pump OFF och pump-utilization 0 %** via RCL, under
+befintliga authority-, readback- och supervised-apply-spärrar.
+`heat-utilization 100 %` är **inte** ett separat heater-ON-kommando.
 
-Läs [testkontraktet](brewzilla-observe-only-test_sv.md), [dashboard-baselines](dashboard-baselines.md) och [dashboard/README](../dashboard/README.md). Vanliga frontendberoenden inkluderar `custom:button-card`, `custom:vertical-stack-in-card`, Mushroom, expander-card och övriga cards som respektive YAML-fil anger.
+**Viktigt för BOIL:** BrewZillas egna fysiska reglergivare ska växlas
+**manuellt från BLE till intern vörttemperatur** innan kokning, och
+RAPT-profilens pumpbeteende ska kontrolleras separat. RAPT/BrewZilla
+äger fortfarande steg, timers och temperaturmål.
 
-## Äldre YAML-paket och säkerhet
+**CFC under de sista 15 minuterna:** 0b11 har **inte** ännu någon
+BOIL-kvittens som startar cirkulationen. En separat förbättring finns
+i [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300);
+den är utvecklingskod och ska **inte** blandas med installerad 0b11.
+Använd ingen automatisk pumpstart baserad på en oviss RAPT-timer.
 
-Äldre BrewAssistant-paket under `/config/packages/` eller `/config/packages_disabled/` är inte denna Python-integrations källa. Kör dem inte parallellt utan avsiktlig migrationsplan eftersom dubbla hjälpare och oanvändbara entity-ID kan uppstå. Ta bort övergivna entities via HA UI, aldrig genom direktmanipulation av `.storage`.
+**RCL-bortfall:** BA slutar skicka nya normalstyrkommandon; bortfallet
+innebär **inte** STOP, OFF eller utilization 0. Ägarskap, resync och
+operatörskvittens avgör när normal styrning får återupptas.
 
-Beta.14:s ABORT försöker profil-STOP och OFF/0 men varken tjänstekvittens eller HA:s OFF är fysisk avstängningsgaranti. Kontrollera vattennivå, faktisk värme, pump, effekt och huvudström, håll lokal frånkoppling tillgänglig och använd inga obevakade testkörningar. Nästa praktiska acceptans är endast vattenprov; dokumentera nytt resultat innan någon promotion till `main`.
+**ABORT:** global operatörsåtgärd är separat och kan begära profil-STOP
+och OFF/0 även om normal styrning är spärrad. Kontrollera verkligt
+BrewZilla-readback och fysisk pump/värme – en lyckad HA-tjänst är inte
+fysisk bekräftelse.
 
-## GF30 beta.15 – första read-only kontrollen
+Testa **först med vatten och fysisk uppsikt**, inte obevakat med vört.
+`main` uppdateras först efter separat fältacceptans.
 
-Efter HA-omstart finns nya GF30-diagnostiksensorer och tjänster. Lämna de tre nya coolant/freezer-options-fälten tomma tills verkliga sensorer/termostat finns. Tomt är ett giltigt fail-passive läge.
+## 6. Flight Recorder och äldre loggar
 
-För första vatten-/temperaturprovet:
+0b11 använder ett komplett **append-only JSONL-arkiv per bryggsession**
+under `/config/brewassistant/logs/brewday-*.jsonl`. HA-sensorn visar
+en kort sammanfattning. Tidigare recorder-sessioner var testkörningar:
+0b11 nollställer **endast äldre Flight Recorder-metadata en gång** och
+migrerar inte gamla historikfönster. Nya JSONL-sessioner bevaras över HA-omstarter.
+**Gamla filer raderas inte automatiskt** av uppdateringen eller `Rensa vy`.
 
-1. Kör `brewassistant.gf30_clear_preflight`.
-2. Ta en manuell temperaturmätning och kör `brewassistant.gf30_record_manual_temperature` med `temperature_c`, gärna `phase: baseline`.
-3. Upprepa under `cooling` och senare `recovery`; BrewAssistant sparar samtidigt aktuell konfigurerad Pill-temperatur och dess timestamp.
-4. Läs bland annat `sensor.brewassistant_gf30_preflight_status`, delta/rate-sensorer och `sensor.brewassistant_gf30_safe_point`.
-5. Tolka allt som diagnostik. Ingen av dessa sensorer eller tjänster startar GF30-pump, frys eller temperaturändring.
+Dokumentation: [Flight Recorder](brewday-audit.md).
+
+## 7. Äldre installationer, releasehistorik och brancher
+
+Äldre beta.14/beta.15-guidningar, gamla lokala YAML-paket och deras
+verkliga felrapporter är **historik**, inte installationsmål för aktuell beta.
+Radera inte entity registry eller ändra `.storage` manuellt för att försöka
+lösa gamla visningsnamn. Undvik parallella automationsvägar från gamla
+`/config/packages/` om de kan skriva till samma hårdvara.
+
+Versionsflödet är **`dev → beta → main`**. En version måste få egen ny tagg
+och CI-verifiering; ingen gammal release/tagg får flyttas.
+Se [SOP](../CONTRIBUTING.md) och [roadmap](roadmap.md).

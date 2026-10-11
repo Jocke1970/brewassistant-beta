@@ -1,3 +1,13 @@
+> **Aktuell status 2026-10-11:** Detta är den ursprungliga
+> arkitektur-/roadmaptexten från 31 augusti och ska inte ensam användas
+> som driftinstruktion för publicerad beta. **2026.10.0b11** ger BOIL
+> heat-utilization 100 %, pump OFF/0 % och separat Cooling Runtime.
+> Operatörskvitterad **CFC/kylspiral-cirkulation sista 15 min** byggs
+> separat i [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300)
+> och är **inte** inkluderad i b11. Den normala styrkedjan för RAPT-profiler
+> är **BA → RCL → BrewZilla** med fail-passive vid länkbortfall.
+> Läs [aktuella releasenoter](../2026.10.0b11-prerelease-notes_sv.md).
+
 # BrewAssistant Cooling Backend Roadmap
 
 Status: architecture fixed / implementation pending  
