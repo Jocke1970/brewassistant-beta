@@ -25,6 +25,7 @@ from ..supervised_apply import clear_pending_action_from_source
 from . import brewzilla_learning as learning
 from . import brewzilla_orchestration as base
 from . import brewzilla_rapt_sparge_controller as sparge
+from . import brewzilla_boil_pump_guard as boil_pump_guard
 from . import brewzilla_supervised_runtime_guard as supervised
 from .brewzilla_source_authority_contract import HotSideAuthority, resolve_hot_side_authority
 
@@ -140,6 +141,15 @@ def _rcl_assist_write_allowed(hass, entity: str, *, switch_action: str | None = 
 def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value: float | None = None) -> bool:
     if entity not in BREWZILLA_ENTITIES:
         return True
+    # Even explicitly requested positive pump writes cannot bypass BOIL.
+    # This is a DENY-only guard, never authority to send OFF/0 on source loss.
+    if boil_pump_guard._current_boil(hass):
+        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action != "off":
+            return False
+        if entity == base.BREWZILLA_PUMP_UTILIZATION and (
+            value is None or value > base.UTILIZATION_TOLERANCE
+        ):
+            return False
     authority, context = _live_authority(hass)
     if authority.may_write_brewzilla is True:
         scope = getattr(
