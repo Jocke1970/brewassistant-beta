@@ -100,6 +100,10 @@ def test_boil_active_from_brewday_or_current_rapt_step_never_next_step():
     assert ns["_boil_stage_active"](h)
     values["sensor.brewassistant_brewday_runtime_step"] = state("Pre-Boil")
     assert not ns["_boil_stage_active"](h)
+    values["sensor.brewassistant_brewday_runtime_state"] = state("source_unavailable")
+    values["sensor.brewassistant_brewday_runtime_step"] = state("Boil")
+    assert ns["_boil_stage_active"](h)  # source loss is not STOP
+    values["sensor.brewassistant_brewday_runtime_state"] = state("running")
     values["sensor.brewassistant_brewday_runtime_step"] = state("Mash Rest")
     rcl_boil = state(
         "on", ba_source="rapt_cloud_link_brewzilla_profile_runtime",
