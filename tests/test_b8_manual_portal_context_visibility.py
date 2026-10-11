@@ -74,6 +74,12 @@ def test_manual_portal_visible_only_when_operator_can_use_it(name):
     assert portal["type"] == "custom:button-card"
     assert portal["triggers_update"] == "all"
     assert operational["type"] == "conditional"
+    for unsafe in ("resync_required", "aborted", "source_unavailable",
+                   "source_unverified", "unavailable", "unknown"):
+        assert {
+            "entity": "sensor.brewassistant_brewday_runtime_state",
+            "state_not": unsafe,
+        } in operational["conditions"]
     assert portal["tap_action"]["service"] == "brewassistant.manual_brewday_prepare"
     assert "confirmation" in portal["tap_action"]
     visibility = next(s["display"] for s in portal["styles"]["card"] if "display" in s)
