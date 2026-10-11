@@ -148,6 +148,38 @@ card:
         ? `${duration} · timer ${String(durationType).toLowerCase() === 'target' ? 'from target' : durationType}`
         : endType;
 
+      const escapeHtml = v => String(v ?? '—').replace(/[&<>"']/g, ch =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      const valueTile = (value, title, ok, rgb, detail = '') => {
+        const bg = ok ? `rgba(${rgb},.08)` : 'rgba(244,67,54,.12)';
+        const border = ok ? `rgba(${rgb},.22)` : 'rgba(211,47,47,.50)';
+        const ink = ok ? 'inherit' : '#b71c1c';
+        const warning = ok ? '' :
+          '<div style="font-size:9px;font-weight:950;color:#b71c1c;margin-top:3px;">UNVERIFIED</div>';
+        const extra = detail ?
+          `<div style="font-size:10px;line-height:1.2;margin-top:3px;overflow-wrap:anywhere;color:${ink}">${escapeHtml(detail)}</div>` : '';
+        return `<div style="min-width:0;padding:8px 5px;border-radius:13px;background:${bg};border:1px solid ${border};text-align:center;color:${ink};">
+          <b style="font-size:14px;">${escapeHtml(value)}</b>${extra}
+          <div style="font-size:9px;opacity:.73;margin-top:4px;">${escapeHtml(title)}</div>${warning}</div>`;
+      };
+      const reportedIndex = stepNo !== null && stepNo > 0 && stepCount !== null &&
+        stepCount > 0 && stepNo <= stepCount ? `${stepNo.toFixed(0)}/${stepCount.toFixed(0)}` : null;
+      const raptValid = displayRawTarget !== null;
+      const baValid = baTargetTrusted && stepDataReadable && baTarget !== null;
+      const bzValid = measuredTemp !== null;
+      const stepValid = stepDataReadable && stepIndex !== '—' && clean(a.step_name) !== null;
+      const baSnapshotValid = age !== null && age >= 0 && age <= 1.5;
+      const raptDetail = !raptValid && rawTarget !== null && (rawTarget !== 0 || cooling)
+        ? `reported: ${fmtTemp(rawTarget)}` : '';
+      const baDetail = !baValid && baTarget !== null
+        ? `reported: ${fmtTemp(baTarget)}` : '';
+      const bzDetail = !bzValid && measuredRaw !== null && measuredRaw >= 0 && measuredRaw <= 105
+        ? `last: ${fmtTemp(measuredRaw)}` : '';
+      const stepDetail = stepValid ? short(a.step_name, 32)
+        : [
+            reportedIndex ? `reported ${reportedIndex}` : '',
+            clean(a.step_name) ? `last: ${short(a.step_name, 28)}` : ''
+          ].filter(Boolean).join(' · ');
       const chip = (text, icon, bg, border) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:9.8px;font-weight:950;white-space:nowrap;"><ha-icon icon="${icon}" style="width:12px;height:12px;"></ha-icon>${text}</span>`;
 
       return `<div style="line-height:1.25;min-width:0;">
@@ -167,12 +199,13 @@ card:
 
         ${caution ? `<div style="margin-top:10px;border-radius:12px;padding:9px 10px;background:rgba(244,67,54,.11);border:1px solid rgba(244,67,54,.4);font-size:11px;font-weight:850;color:#b3261e"><ha-icon icon="mdi:alert-circle" style="width:16px;height:16px;vertical-align:middle"></ha-icon> RAPT DATA NOT VERIFIED · ${diagnostics}. Unknown targets are shown as —, not 0 °C.</div>` : ''}
         <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;">
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(156,39,176,.08);border:1px solid rgba(156,39,176,.20);text-align:center;"><b>${fmtTemp(displayRawTarget)}</b><br><span style="font-size:9px;opacity:.62;">RAPT target</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.20);text-align:center;"><b>${fmtTemp(baTargetTrusted ? baTarget : null)}</b><br><span style="font-size:9px;opacity:.62;">BA target (reference)</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(76,175,80,.085);border:1px solid rgba(76,175,80,.22);text-align:center;"><b>${fmtTemp(measuredTemp)}</b><br><span style="font-size:9px;opacity:.62;">BZ actual</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(0,188,212,.08);border:1px solid rgba(0,188,212,.20);text-align:center;"><b>${stepIndex}</b><br><span style="font-size:9px;opacity:.62;">profile step</span></div>
-          <div style="padding:7px 4px;border-radius:13px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.14);text-align:center;"><b>${age !== null ? `${age.toFixed(1)} min` : '—'}</b><br><span style="font-size:9px;opacity:.62;">BA snapshot</span></div>
+          ${valueTile(fmtTemp(displayRawTarget), 'RAPT target', raptValid, '156,39,176', raptDetail)}
+          ${valueTile(fmtTemp(baValid ? baTarget : null), 'BA target (reference)', baValid, '33,150,243', baDetail)}
+          ${valueTile(fmtTemp(measuredTemp), 'BZ actual', bzValid, '76,175,80', bzDetail)}
+          ${valueTile(stepValid ? stepIndex : '—', 'Profile step', stepValid, '0,188,212', stepDetail)}
+          ${valueTile(age !== null ? `${age.toFixed(1)} min` : '—', 'BA snapshot', baSnapshotValid, '127,127,127')}
         </div>
+        <div style="margin-top:5px;font-size:9.5px;opacity:.63;text-align:center;">The RCL profile step changes on step transitions, not on each temperature update.</div>
 
         ${measuredTemp === null ? '<div style="margin-top:6px;font-size:10px;color:#946200;text-align:center;font-weight:760;">BZ temperature is missing or older than 90 s; no current temperature is displayed.</div>' : ''}
         <div style="margin-top:8px;padding:8px 9px;border-radius:13px;background:${manual || cooling ? 'rgba(255,193,7,.10)' : 'rgba(127,127,127,.055)'};border:1px solid ${manual || cooling ? 'rgba(255,193,7,.28)' : 'rgba(127,127,127,.13)'};font-size:11.2px;font-weight:820;text-align:center;">${actionText}</div>
