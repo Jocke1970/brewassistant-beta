@@ -31,6 +31,7 @@ from .brewzilla.brewzilla_mash_in_gate import (
     async_start_mash_circulation,
 )
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
+from .brewzilla import brewzilla_boil_pump_guard, brewzilla_boil_cooling_gate
 from .carbonation_backend.carbonation_runtime import (
     async_load_carbonation_runtime,
     async_save_carbonation_runtime,
@@ -72,6 +73,7 @@ SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
 SERVICE_BREWDAY_AUDIT_SNAPSHOT = "brewday_audit_snapshot"
 SERVICE_EXTERNAL_RECONNECT_ACK = "brewday_reconnect_ack"
 SERVICE_BREWDAY_START_VERIFIED = "brewday_start_verified"
+SERVICE_BOIL_COOLING_CHOICE = "boil_cooling_choice"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -378,6 +380,36 @@ def _register_services(hass: HomeAssistant) -> None:
         )
         await _refresh_runtime_sensors()
 
+    async def _handle_boil_cooling_choice(call: ServiceCall) -> None:
+        """Arm only the current verified RCL BOIL; no immediate hardware write."""
+        try:
+            result = brewzilla_boil_cooling_gate.select(
+                hass,
+                choice=str(call.data.get("choice") or ""),
+                confirmed=call.data.get("confirmed") is True,
+                expected_session_id=str(call.data.get("expected_session_id") or ""),
+                expected_profile_id=str(call.data.get("expected_profile_id") or ""),
+                expected_step_id=str(call.data.get("expected_step_id") or ""),
+                expected_transition_at=str(call.data.get("expected_transition_at") or ""),
+                active_boil=brewzilla_boil_pump_guard._current_boil(hass),
+            )
+        except ValueError as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        await async_record_brewday_audit_event(
+            hass, "boil_cooling_choice", always_record=True,
+            note=(
+                "Operator BOIL cooling choice: "
+                + result["boil_cooling_choice"] + " for RCL session "
+                + str(result["boil_cooling_session_id"])
+            ),
+        )
+        await hass.services.async_call(
+            "homeassistant", "update_entity",
+            {"entity_id": "sensor.brewassistant_brewzilla_boil_cooling_status"},
+            blocking=False,
+        )
+        _LOGGER.info("BOIL cooling selection acknowledged: %s", result["boil_cooling_choice"])
+
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         assert_manual_brewday_mutation_allowed(hass, action="prepare")
         session = get_manual_brewday_session(hass)
@@ -491,6 +523,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_SNAPSHOT, _handle_brewday_audit_snapshot)
     hass.services.async_register(DOMAIN, SERVICE_EXTERNAL_RECONNECT_ACK, _handle_external_reconnect_ack)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_START_VERIFIED, _handle_brewday_start_verified)
+    hass.services.async_register(DOMAIN, SERVICE_BOIL_COOLING_CHOICE, _handle_boil_cooling_choice)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)
