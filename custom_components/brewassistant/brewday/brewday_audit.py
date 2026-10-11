@@ -612,7 +612,7 @@ async def async_clear_brewday_audit_log(hass: HomeAssistant) -> dict[str, Any]:
         await async_save_brewday_audit_log(hass)
     return build_brewday_audit_snapshot(hass)
 
- 
+
 async def async_record_brewday_audit_prebuilt_event(
     hass: HomeAssistant, event: dict[str, Any]
 ) -> dict[str, Any] | None:
