@@ -67,6 +67,9 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         out.get("fail_passive_active")
         or out.get("fail_passive_no_new_writes")
         or out.get("abort_lockout_active")
+        or out.get("resync_required")
+        or out.get("fallback_active")
+        or out.get("hot_side_actuator_writes_allowed") is False
         or out.get("rapt_cooling_handoff_active")
         or out.get("completed_runtime")
         or not out.get("connected")
