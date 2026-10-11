@@ -5,6 +5,140 @@
 # Observe-only does not stop RAPT. ACK does not prove physical OFF.
 type: vertical-stack
 cards:
+  # 0b12: CFC / cooling-loop acknowledgement from the first verified BOIL tick.
+  # No choice = OFF/0 %. No command is sent by these buttons themselves.
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewzilla_boil_cooling_status
+        triggers_update: all
+        name: "BOIL · PREPARE COOLING CIRCUIT"
+        icon: mdi:heat-wave
+        show_state: false
+        show_label: true
+        label: |
+          [[[
+            const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+            const choice = a.boil_cooling_choice || 'pending';
+            const phase = a.boil_cooling_recirc_allowed === true ? 'Final 15 min · requesting pump ON / 100%' :
+              choice === 'cfc_ready' && a.boil_cooling_timer_verified !== true ? 'RCL timing uncertain · no automatic pump start' :
+              choice === 'cfc_ready' ? 'Selected: CFC/chiller ready' :
+              choice === 'no_cooling' ? 'Selected: No cooling' : 'No selection · pump OFF / 0%';
+            const n = Number(a.boil_cooling_remaining_seconds_estimate);
+            const remaining = a.boil_cooling_timer_verified === true && Number.isFinite(n)
+              ? ' · ≈ '+ Math.ceil(n / 60)+' min' : '';
+            return 'Choose at BOIL start. Without acknowledgement pump remains OFF / 0%. ' + phase + remaining;
+          ]]]
+        styles:
+          card:
+            - display: |
+                [[[
+                  const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+                  return a.boil_cooling_prompt === true ? 'grid' : 'none';
+                ]]]
+            - border-radius: 17px
+            - padding: 14px
+            - background: rgba(255,193,7,.10)
+            - border: 2px solid rgba(255,193,7,.46)
+          name:
+            - font-size: 15px
+            - font-weight: 950
+          label:
+            - font-size: 11px
+            - white-space: normal
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewzilla_boil_cooling_status
+        triggers_update: all
+        icon: mdi:pipe-wrench
+        name: "CFC / IMMERSION CHILLER READY"
+        show_state: false
+        show_label: true
+        label: "Tap to acknowledge. Pump ON only in final 15m with fresh RCL."
+        tap_action:
+          action: |
+            [[[
+              const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+              return a.boil_cooling_can_ack === true && a.boil_cooling_prompt === true ? 'call-service' : 'none';
+            ]]]
+          service: brewassistant.boil_cooling_choice
+          data: |
+            [[[
+              const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+              return {
+                choice: 'cfc_ready',
+                confirmed: true,
+                expected_session_id: String(a.boil_cooling_session_id || ''),
+                expected_profile_id: String(a.boil_cooling_profile_id || ''),
+                expected_step_id: String(a.boil_cooling_step_id || ''),
+                expected_transition_at: String(a.boil_cooling_transition_at || ''),
+              };
+            ]]]
+          confirmation:
+            text: "Confirm the CFC / immersion chiller is connected, primed, the hoses and pump path are safe. This arms ON/100% only for the last 15 minutes verified by RCL."
+        styles:
+          card:
+            - display: |
+                [[[
+                  const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+                  return a.boil_cooling_prompt === true ? 'grid' : 'none';
+                ]]]
+            - border-radius: 15px
+            - padding: 11px
+            - background: rgba(46,160,105,.09)
+            - border: 1px solid rgba(46,160,105,.35)
+          name:
+            - font-size: 12px
+            - font-weight: 950
+          label:
+            - font-size: 10px
+            - white-space: normal
+      - type: custom:button-card
+        entity: sensor.brewassistant_brewzilla_boil_cooling_status
+        triggers_update: all
+        icon: mdi:water-off-outline
+        name: "NO COOLING"
+        show_state: false
+        show_label: true
+        label: "No cooling · pump OFF/0% in BOIL"
+        tap_action:
+          action: |
+            [[[
+              const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+              return a.boil_cooling_can_ack === true && a.boil_cooling_prompt === true ? 'call-service' : 'none';
+            ]]]
+          service: brewassistant.boil_cooling_choice
+          data: |
+            [[[
+              const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+              return {
+                choice: 'no_cooling',
+                confirmed: true,
+                expected_session_id: String(a.boil_cooling_session_id || ''),
+                expected_profile_id: String(a.boil_cooling_profile_id || ''),
+                expected_step_id: String(a.boil_cooling_step_id || ''),
+                expected_transition_at: String(a.boil_cooling_transition_at || ''),
+              };
+            ]]]
+          confirmation:
+            text: "Confirm there will be no BOIL cooling-loop recirculation. Pump remains OFF / 0% for BOIL."
+        styles:
+          card:
+            - display: |
+                [[[
+                  const a = states['sensor.brewassistant_brewzilla_boil_cooling_status']?.attributes || {};
+                  return a.boil_cooling_prompt === true ? 'grid' : 'none';
+                ]]]
+            - border-radius: 15px
+            - padding: 11px
+            - background: rgba(94,108,120,.09)
+            - border: 1px solid rgba(94,108,120,.35)
+          name:
+            - font-size: 12px
+            - font-weight: 950
+          label:
+            - font-size: 10px
+            - white-space: normal
+
   # Visually prominent OPERATOR-REQUIRED reconnection. Hidden when cleared.
   # An ACK never lifts BA READ-ONLY or authorizes heater/pump writes.
   # Operator attention uses the same runtime summary as the status card;
