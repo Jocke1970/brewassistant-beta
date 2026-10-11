@@ -1,3 +1,12 @@
+## DEV PREVIEW — 2026.10.0b11: Flight Recorder archive i JSONL-fil (2026-10-11)
+
+- Bryggdagens fullständiga händelsehistorik skrivs append-only i en ny fil per session under `/config/brewassistant/logs/brewday-*.jsonl`; ingen 250-händelsegräns för filarkivet.
+- HA-sensorn `sensor.brewassistant_brewday_event_log_summary` visar bara lätt sammanfattning och arkivväg/status, inte `events` eller `recent_events`. Befintliga fem entiteter och servicegränssnitt behålls.
+- Befintligt HA `.storage`-arkiv migreras säkert och exakt en gång med uttrycklig markering att bara de redan behållna sista händelserna kunde återvinnas. Där finns fortsatt en minimal status-/sessionkontinuitetscache.
+- Alla filskrivningar körs i executor, serialiseras per HA-instans och stör aldrig hårdvarustyrningen om disken inte fungerar. Fel syns i `archive_status: error`/ `archive_error`.
+- Ny bryggdag ger ny fil, manuell **Rensa vy** raderar INGA historiska filer. Storlek/retention/backup administreras separat.
+- Två hela Lovelace-kort (SV/EN) uppdaterade med tydlig information om arkivet. Sju CI-kontroller och fysisk verifiering krävs inför 0b11-beta; 0b10/main orörda.
+
 ## DEV PREVIEW — 2026.10.0b11: BOIL heat 100 %, pump OFF/0 % (2026-10-11)
 
 - Under **aktuellt** BOIL-steg ska BA begära **heat-utilization 100 %**, pump OFF och pump-utilization 0 % via den skyddade RCL-vägen. Det är inte heater ON, och explicit heat-safe-down/ABORT går före. Nästa planerade Boil-steg, Pre-Boil och efterföljande Cooling räknas inte som aktiv BOIL.
