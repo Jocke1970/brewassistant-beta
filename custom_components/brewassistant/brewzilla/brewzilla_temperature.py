@@ -133,7 +133,9 @@ def _boil_stage_active(hass: HomeAssistant) -> bool:
     thermometer, and must not send an RCL/BrewZilla command.
     """
     runtime_state = str(_state_value(hass, BREWDAY_RUNTIME_STATE_SENSOR) or "").casefold()
-    if runtime_state in _ACTIVE_RUNTIME_STATES or runtime_state in {"resync_required", "source_unverified"}:
+    if runtime_state in _ACTIVE_RUNTIME_STATES or runtime_state in {
+        "resync_required", "source_unverified", "source_unavailable", "unavailable"
+    }:
         for entity_id in (BREWDAY_RUNTIME_STAGE_SENSOR, BREWDAY_RUNTIME_STEP_SENSOR):
             if _is_current_boil_label(_state_value(hass, entity_id)):
                 return True
