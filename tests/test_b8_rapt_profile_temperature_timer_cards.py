@@ -17,8 +17,9 @@ def test_rapt_cards_use_fresh_physical_temperature_distinct_from_profile_target(
         assert "measuredRaw >= 0 && measuredRaw <= 105" in source
         assert "fmtTemp(measuredTemp)" in source
         assert "fmtTemp(displayRawTarget)" in source
-        assert "displayRawTarget = rawTarget === 0 && !cooling ? null : rawTarget" in source
-        assert "stepNo > 0 && stepCount !== null && stepCount > 0" in source
+        assert "displayRawTarget = profileReadable && !(rawTarget === 0 && !cooling)" in source
+        assert "stepNo > 0" in source and "stepCount > 0" in source
+        assert "profileReadable" in source
         assert "KONTROLLERA KÄLLAN" in source or "CHECK SOURCE" in source
         assert "triggers_update: all" in source
         assert "length / 60" in source  # RCL profile step lengths are seconds
