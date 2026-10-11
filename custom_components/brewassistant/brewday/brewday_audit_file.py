@@ -79,6 +79,13 @@ def _migrate_legacy_window(path: Path, events: list[dict[str, Any]]) -> bool:
             if path.read_bytes() != temporary.read_bytes():
                 raise OSError("Existing Brewday migration file is incomplete or inconsistent")
             return False
+        # Make the newly published directory entry durable before .storage
+        # discards its larger legacy event window.
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
         return True
     finally:
         if temporary is not None:
