@@ -84,6 +84,9 @@ card:
       const rawTarget = num(a.step_target_temperature);
       const nextName = clean(a.next_step_name) || nextRuntime;
       const nextTarget = num(a.next_step_target_temperature);
+      const nextCooling = /chill|cool|kyl/i.test(String(nextName));
+      const displayNextTarget = profileReadable && !(nextTarget === 0 && !nextCooling)
+        ? nextTarget : null;
       const endType = clean(a.step_end_type) || '—';
       const durationType = clean(a.step_duration_type) || '—';
       const length = num(a.step_length);
@@ -99,8 +102,8 @@ card:
         ? 'Verifiera RCL:s aktiva profil och telemetri före nästa steg.'
         : manual
           ? 'RAPT väntar på manuellt knapptryck på BrewZillan.'
-          : `Nästa: ${short(nextName, 62)}${nextTarget !== null ? ` · ${fmtTemp(nextTarget)}` : ''}`;
-      let badge = runtimeState === 'source_unavailable' ? 'KÄLLA SAKNAS' : runtimeState === 'inactive' ? 'STOPPAD' : 'RAPT → BA';
+          : `Nästa: ${short(nextName, 62)}${displayNextTarget !== null ? ` · ${fmtTemp(displayNextTarget)}` : ''}`;
+      let badge = runtimeState === 'source_unavailable' ? 'KÄLLA SAKNAS' : runtimeState === 'inactive' ? 'STOPPAD' : 'RAPT-PROFIL';
       let badgeBg = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.16)' : 'rgba(156,39,176,.13)';
       let badgeBorder = runtimeState === 'source_unavailable' ? 'rgba(244,67,54,.38)' : 'rgba(156,39,176,.30)';
 
