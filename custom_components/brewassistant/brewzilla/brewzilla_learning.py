@@ -544,13 +544,16 @@ def _temperature_source_snapshot(hass: HomeAssistant, stage_kind: str) -> dict[s
     learning_source = snapshot.get("mash_temperature_source")
     learning_role = "mash_temperature"
 
-    if stage_kind not in {"ramp", "mash_hold"}:
+    if stage_kind not in {"ramp", "mash_hold"} or snapshot.get("boil_internal_only"):
         learning_temperature = snapshot.get("wort_temperature")
         learning_entity = snapshot.get("wort_temperature_entity")
         learning_source = snapshot.get("wort_temperature_source")
         learning_role = "wort_or_kettle_temperature"
 
-    if learning_temperature is None:
+    if learning_temperature is None and stage_kind != "boil" and not snapshot.get("boil_internal_only"):
+        # Non-BOIL phases retain the existing optional probe fallback.
+        # BOIL must never recover from missing wort data via BLE/mash,
+        # even if a dashboard or stale normalized runtime still shows it.
         learning_temperature = snapshot.get("mash_temperature") or snapshot.get("wort_temperature")
         learning_entity = snapshot.get("mash_temperature_entity") or snapshot.get("wort_temperature_entity")
         learning_source = snapshot.get("mash_temperature_source") or snapshot.get("wort_temperature_source")
