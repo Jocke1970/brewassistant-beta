@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
-from .brewzilla_temperature import brewzilla_temperature_snapshot
+from .brewzilla_temperature import _boil_stage_active, brewzilla_temperature_snapshot
 
 DATA_KEY = "brewzilla_learning"
 
@@ -784,7 +784,9 @@ def build_brewzilla_learning_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     store = _learning_store(hass)
     runtime = build_brewday_runtime_snapshot(hass)
     runtime_state = str(runtime.get("runtime_state") or "idle").lower()
-    stage_kind = _stage_kind(runtime)
+    # A live RCL BOIL step may precede the normalized BA runtime refresh.
+    # Never apply mash-stage equipment learning to a current RAPT BOIL.
+    stage_kind = "boil" if _boil_stage_active(hass) else _stage_kind(runtime)
     context = learning_context(hass)
     context_mod = _context_bias(context)
     batch_context = _batch_context_snapshot(hass, runtime, stage_kind)
