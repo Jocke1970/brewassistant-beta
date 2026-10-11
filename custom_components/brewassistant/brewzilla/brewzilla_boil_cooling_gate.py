@@ -14,6 +14,8 @@ import math
 from typing import Any
 
 from ..brewday import rapt_profile_runtime
+from ..brewday.brewday_runtime import build_brewday_runtime_snapshot
+from . import brewzilla_temperature as temperature
 from ..const import DOMAIN
 
 DATA_KEY = "brewzilla_boil_cooling_choice"
@@ -71,6 +73,11 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
         return result
 
     attrs = profile.attributes
+    runtime = build_brewday_runtime_snapshot(hass)
+    if (str(runtime.get("source") or "") != rapt_profile_runtime.RAPT_PROFILE_SOURCE
+            or not temperature._is_current_boil_label(attrs.get("step_name"))):
+        result["boil_cooling_reason"] = "rcl_not_current_boil_owner"
+        return result
     key = _identities(attrs)
     if key is None:
         result["boil_cooling_reason"] = "rcl_session_or_step_unknown"
