@@ -49,6 +49,9 @@ def prep_guard(pump="on", utilization=55, active=True):
     ns = extract(GUARD, "_boil_pump_snapshot")
     h = kettle(pump, utilization)
     ns["_current_boil"] = lambda ha: active
+    ns["cooling_gate"] = SimpleNamespace(
+        observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
+    )
     ns["base"] = SimpleNamespace(
         _float=lambda ha, entity: ha.pct if entity == PCT else None,
         BREWZILLA_PUMP_UTILIZATION=PCT, BREWZILLA_PUMP_SWITCH=PUMP,
@@ -233,6 +236,9 @@ def test_source_authority_pump_positive_rejected_even_by_manual_write_path():
     ns.update(
         BREWZILLA_ENTITIES={PUMP, PCT},
         boil_pump_guard=SimpleNamespace(_current_boil=lambda ha: True),
+        cooling_gate=SimpleNamespace(
+            observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
+        ),
         base=SimpleNamespace(BREWZILLA_PUMP_SWITCH=PUMP,
             BREWZILLA_PUMP_UTILIZATION=PCT, UTILIZATION_TOLERANCE=0.1),
         _live_authority=lambda ha: (
@@ -256,3 +262,42 @@ def test_interlock_loads_before_source_authority_and_never_changes_emergency():
         "_emergency_abort.install_emergency_abort()")
     assert "rapt_cloud_link.start_brewzilla_profile" not in GUARD.read_text(encoding="utf-8")
     assert "hass.services.async_call" not in GUARD.read_text(encoding="utf-8")
+
+def test_verified_cfc_last_15_minutes_requests_positive_pump_without_heater_on():
+    fn, h = prep_guard(pump="off", utilization=0)
+    # Test only the production snapshot body; a separate test executes the
+    # real session-bound RCL timer and operator-choice gate.
+    fn.__globals__["cooling_gate"] = SimpleNamespace(
+        observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+    )
+    out = fn(h, {
+        "connected": True, "can_apply_target": False,
+        "orchestration_mode": "monitor",
+        "heat_utilization": 100,
+        "desired_heater_on": None, "heater_action_needed": False,
+    })
+    assert out["desired_pump_on"] is True
+    assert out["desired_pump_utilization"] == 100.0
+    assert out["pump_action_needed"] is True
+    assert out["pump_stop_needed"] is False
+    assert out["pump_utilization_action_needed"] is True
+    assert out["can_apply_target"] is True
+    assert out["heater_action_needed"] is False
+
+
+def test_cfc_last_15_minutes_still_respects_abort_and_rcl_loss():
+    fn, h = prep_guard(pump="off", utilization=0)
+    fn.__globals__["cooling_gate"] = SimpleNamespace(
+        observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+    )
+    for block in ({"fail_passive_active": True},
+                  {"abort_lockout_active": True},
+                  {"resync_required": True},
+                  {"connected": False},
+                  {"hot_side_actuator_writes_allowed": False}):
+        original = {"connected": True, "can_apply_target": False,
+                    "orchestration_mode": "monitor", "desired_pump_on": None}
+        original.update(block)
+        out = fn(h, original)
+        assert out["desired_pump_on"] is None
+        assert out.get("pump_action_needed") is None
