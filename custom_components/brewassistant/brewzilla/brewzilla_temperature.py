@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import re
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -113,6 +114,109 @@ def _hot_side_process_sensor_owned(hass: HomeAssistant) -> bool:
         return True
 
     return not any(word in combined for word in _RELEASE_STAGE_WORDS)
+
+
+
+def _is_current_boil_label(value: str | None) -> bool:
+    """Recognize actual BOIL names, never upcoming or pre-boil stages."""
+    label = str(value or "").casefold().strip()
+    if any(word in label for word in ("pre-boil", "pre boil", "preboil", "förkok", "forkok")):
+        return False
+    return bool(re.search(r"(?<![a-z])(?:boil(?:ing)?|kok(?:ning|giva)?)(?![a-z])", label))
+
+
+def _boil_stage_active(hass: HomeAssistant) -> bool:
+    """Use current Brewday step or *active* RCL profile, not its next step.
+
+    RCL may advance before BA refreshes the normalized Brewday snapshot.
+    Profile loss never means a STOP; this function only selects an input
+    thermometer, and must not send an RCL/BrewZilla command.
+    """
+    runtime_state = str(_state_value(hass, BREWDAY_RUNTIME_STATE_SENSOR) or "").casefold()
+    if runtime_state in _ACTIVE_RUNTIME_STATES or runtime_state in {"resync_required", "source_unverified"}:
+        for entity_id in (BREWDAY_RUNTIME_STAGE_SENSOR, BREWDAY_RUNTIME_STEP_SENSOR):
+            if _is_current_boil_label(_state_value(hass, entity_id)):
+                return True
+
+    for entity in hass.states.async_all("binary_sensor"):
+        attrs = getattr(entity, "attributes", {}) or {}
+        if attrs.get("ba_source") != "rapt_cloud_link_brewzilla_profile_runtime":
+            continue
+        if str(getattr(entity, "state", "")).casefold() != "on":
+            continue
+        if attrs.get("profile_active") is not True:
+            continue
+        if _is_current_boil_label(attrs.get("step_name")):
+            return True
+    return False
+
+
+def _boil_internal_only_snapshot(
+    hass: HomeAssistant, *, selected: str | None = None
+) -> dict[str, Any]:
+    """BOIL has exactly one process input: internal BrewZilla wort temperature.
+
+    Do not even read the BLE/control-device probes for process selection.
+    Missing internal telemetry must stay unavailable, not fall back to mash.
+    """
+    selected = selected or selected_mash_source(hass)
+    internal = _candidate(hass, BREWZILLA_INTERNAL_TEMP_SENSOR, "BrewZilla Internal")
+    store = _resolver_store(hass)
+    # Release only the mash probe selection latch, never the RAPT profile.
+    store["latched_auto_entity"] = None
+    store["latched_auto_source"] = None
+    valid = bool(internal["available"])
+    value = internal["value"] if valid else None
+    entity_id = BREWZILLA_INTERNAL_TEMP_SENSOR if valid else None
+    source = "BrewZilla Internal" if valid else "Unavailable"
+    blocked = {"eligible": False, "reject_reason": "boil_internal_only", "value": None}
+    return {
+        "source": "brewzilla_temperature_resolver",
+        "mash_source_select_entity": MASH_SOURCE_SELECT,
+        "mash_source_selected": selected,
+        "mash_temperature": value,
+        "mash_temperature_entity": entity_id,
+        "mash_temperature_source": source,
+        "mash_temperature_source_payload_key": None,
+        "mash_temperature_selected_control_device_temperature_source": None,
+        "mash_temperature_value_rejected": None,
+        "mash_temperature_reject_reason": None,
+        "mash_temperature_age_seconds": internal.get("age_seconds"),
+        "mash_temperature_freshness_ok": internal.get("freshness_ok"),
+        "mash_temperature_external_mash_candidate": False,
+        "mash_temperature_source_lock_active": False,
+        "mash_temperature_source_lock_entity": None,
+        "mash_temperature_source_lock_source": None,
+        "mash_temperature_source_lock_degraded_reason": None,
+        "hot_side_process_sensor_owned": False,
+        "verified_external_temperature_entities": dict(
+            store.get("verified_external_entities") or {}
+        ),
+        "external_temperature_available": False,
+        "external_temperature_source": None,
+        "external_temperature_entity": None,
+        "external_temperature_age_seconds": None,
+        "external_temperature_candidates": {
+            "ble": dict(blocked), "control_device": dict(blocked)
+        },
+        "wort_temperature": value,
+        "wort_temperature_entity": BREWZILLA_INTERNAL_TEMP_SENSOR,
+        "wort_temperature_source": "BrewZilla Internal",
+        "wort_temperature_age_seconds": internal.get("age_seconds"),
+        "temperature_delta_mash_wort": None,
+        "auto_priority": "BOIL: BrewZilla Internal only; no external fallback",
+        "boil_internal_only": True,
+        "process_temperature_role": "wort_temperature",
+        "candidate_policy": {
+            "boil_internal_only": True,
+            "external_mash_override_allowed": False,
+        },
+        "ordered_candidates": [{**internal, "eligible": valid}],
+        "candidates": {
+            "ble": dict(blocked), "control_device": dict(blocked),
+            "internal": {**internal, "eligible": valid},
+        },
+    }
 
 
 def selected_mash_source(hass: HomeAssistant) -> str:
@@ -329,6 +433,8 @@ def brewzilla_temperature_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     probe cannot silently replace the mash/BLE source.
     """
     selected = selected_mash_source(hass)
+    if _boil_stage_active(hass):
+        return _boil_internal_only_snapshot(hass, selected=selected)
 
     ble = _candidate(hass, BREWZILLA_BLE_TEMP_SENSOR, "RAPT BLE Thermometer")
     control = _candidate(hass, BREWZILLA_CONTROL_DEVICE_TEMP_SENSOR, "BrewZilla Control Device")
