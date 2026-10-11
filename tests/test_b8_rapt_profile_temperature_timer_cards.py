@@ -17,7 +17,8 @@ def test_rapt_cards_use_fresh_physical_temperature_distinct_from_profile_target(
         assert "measuredRaw >= 0 && measuredRaw <= 105" in source
         assert "fmtTemp(measuredTemp)" in source
         assert "fmtTemp(displayRawTarget)" in source
-        assert "displayRawTarget = profileReadable && !(rawTarget === 0 && !cooling)" in source
+        assert "displayRawTarget = stepDataReadable && !(rawTarget === 0 && !cooling)" in source
+        assert "stepIdentityMismatch" in source
         assert "stepNo > 0" in source and "stepCount > 0" in source
         assert "profileReadable" in source
         assert "KONTROLLERA KÄLLAN" in source or "CHECK SOURCE" in source
