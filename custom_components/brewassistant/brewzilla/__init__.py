@@ -42,6 +42,7 @@ from . import brewzilla_abort_lockout_final_guard as _abort_lockout_final_guard
 from . import brewzilla_fail_passive_guard as _fail_passive_guard
 from . import brewzilla_physical_mash_interlock as _physical_mash_interlock
 from . import brewzilla_rapt_sparge_controller as _rapt_sparge_controller
+from . import brewzilla_boil_pump_guard as _boil_pump_guard
 from . import brewzilla_sparge_plan_identity as _sparge_plan_identity
 from . import brewzilla_source_authority_runtime as _source_authority_runtime
 from . import brewzilla_rapt_identity_guard as _rapt_identity_guard
@@ -137,6 +138,9 @@ _physical_mash_interlock.install_physical_mash_interlock()
 _rapt_sparge_controller.install_rapt_sparge_controller()
 # Bind pending and confirmed positive Sparge plans to a particular RAPT run.
 _sparge_plan_identity.install_sparge_plan_identity()
+
+# Current, verified BOIL intent: pump OFF and utilization 0%; source guards still own writes.
+_boil_pump_guard.install_boil_pump_guard()
 
 # Source authority must enclose all the existing orchestration/safety wrappers.
 _source_authority_runtime.install_source_authority_runtime()
