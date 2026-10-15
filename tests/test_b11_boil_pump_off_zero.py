@@ -341,6 +341,7 @@ def test_cfc_pump_on_denied_in_alternate_write_path_until_100_pct_readback():
     util = SimpleNamespace(value=50.0, fresh=True)
     ns.update(
         BREWZILLA_ENTITIES={PUMP, PCT},
+        _BOIL_EXECUTION_IDENTITY=SimpleNamespace(get=lambda: None),
         boil_pump_guard=SimpleNamespace(
             _current_boil=lambda ha: True,
             _pump_utilization_fresh=lambda ha: util.fresh,
