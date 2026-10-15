@@ -90,8 +90,7 @@ def update_cooling_runtime_settings(hass: HomeAssistant, values: dict[str, Any])
     if "brewfather_target_temperature" in values:
         raw = values["brewfather_target_temperature"]
         store["brewfather_target_temperature"] = float(raw) if raw is not None and 8 <= float(raw) <= 30 else None
-    if "manual_override_confirmed" in values:
-        store["manual_override_confirmed"] = bool(values["manual_override_confirmed"])
+    # Only explicit acknowledgement may set override.
     return dict(store)
 
 
@@ -154,6 +153,13 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     stage = _stage(hass)
     remaining = _float(hass, REMAINING_MINUTES_ENTITY)
     runtime_state = _runtime_state(method, stage, remaining, sanitize_minutes)
+    previous_state = settings.get("last_cooling_state", "IDLE")
+    if runtime_state in {"IDLE", "PREPARE", "SANITIZE"} and previous_state in {"CHILLING", "TRANSFER", "COMPLETE"}:
+        settings["manual_override_confirmed"] = False
+        override = False
+    settings["last_cooling_state"] = runtime_state
+    target = manual_target if override or bf_target is None else float(bf_target)
+    target_source = "manual_override" if override else ("brewfather" if bf_target is not None else "manual")
 
     cfc_temp, cfc_source = _first_float(hass, CFC_OUTPUT_TEMP_ENTITIES)
     brewzilla_temp = _float(hass, BREWZILLA_TEMP_ENTITY)
@@ -207,3 +213,24 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "cooling_water_automatic_control_active": False,
         "target_ready_tolerance_c": READY_TOLERANCE_C,
     }
+
+
+def confirm_cooling_manual_override(hass: HomeAssistant, *, confirmed: bool, target_temperature: float) -> dict[str, Any]:
+    """Operator-confirmed override during active cooling only."""
+    if confirmed is not True:
+        raise ValueError("Explicit operator confirmation required")
+    snapshot = build_cooling_runtime_snapshot(hass)
+    if snapshot["state"] not in {"CHILLING", "TRANSFER"}:
+        raise ValueError("Cooling is not active")
+    if not math.isfinite(target_temperature) or not 8 <= target_temperature <= 30:
+        raise ValueError("Cooling target must be 8–30 °C")
+    store = _store(hass)
+    store["target_temperature"] = round(target_temperature)
+    store["manual_override_confirmed"] = True
+    return build_cooling_runtime_snapshot(hass)
+
+
+def clear_cooling_manual_override(hass: HomeAssistant) -> dict[str, Any]:
+    """Restore Brewfather priority."""
+    _store(hass)["manual_override_confirmed"] = False
+    return build_cooling_runtime_snapshot(hass)
