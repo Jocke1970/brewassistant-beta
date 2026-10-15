@@ -20,6 +20,8 @@
 
 **Fermentation Tracking – dev 2026-10-15:** Jässchema och fermenteringsstart läses nu från enda batchen i `sensor.brewfather_all_batches_data` (`recipe.fermentation.steps` och `fermentingStart`), inte BrewTracker. Vid flera batcher föreslås inget BF-schema tills säker batchmatchning finns. Kodändring är inte HA-/beta-verifierad.
 
+**Dev-testcheckpoint 2026-10-15:** Regressionstester har lagts till i `tests/test_brewfather_batch_sources.py` för att kontrollera Cooling/Tracking mot aktuell BF-batch, ignorera BrewTracker och neka godtyckligt val vid flera/inga batcher. **Testerna är ännu inte körda eller godkända i HA/CI**. Kontrollera dessutom att tidigare sparad BA-jäsningssession inte misstas för BF:s aktuella batch; explicit sessions-/batchmatchning är ett separat kvarstående arbete.
+
 ## Prioriterade nästa steg
 
 1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
