@@ -40,10 +40,18 @@ BrewAssistant får bara begära pump ON/100 % när:
 **Tvåstegsstart för pumpen (säkerhet):** När sista-15-minutersgrinden
 är uppfylld begär BA först **pump-utilization 100 % via RCL**. Pump **ON**
 får begäras först när den faktiska utilization-entiteten återlästs som ett
-**ändligt tal inom 0–100 % och vid 100 % (inom tolerans)**. NaN, infinity,
-saknad eller avvikande utilization spärrar start; en servicekvittens
+**ändligt tal inom 0–100 %, vid 100 % (inom tolerans) och med egen
+färsk tidsstämpel (högst 90 sekunder)**. NaN, infinity,
+saknad, för gammal eller avvikande utilization spärrar start; en servicekvittens
 räknas inte som verifierad readback. Även en alternativ BA-väg till
 `pump ON` stoppas av samma kontroll.
+
+**Stale BOIL-plan vid stegbyte:** Varje körning som kan påverka pumpen
+binder BOIL-CFC-åtgärderna till den verifierade sessionen, profilen,
+steget och observerade övergången. Om RAPT hinner ändra steg medan BA
+väntar på ett tidigare RCL-anrop stoppas senare positiva kommandon
+även om aktuellt steg inte längre heter BOIL. Även explicit bekräftade
+supervised-apply-planer måste kontrolleras igen vid skrivningstillfället.
 
 **Återanslutning:** Om profildata blir för gammal, källa/profil inte går
 att verifiera eller aktuellt BOIL lämnas, tas en tidigare kvittens bort
