@@ -25,7 +25,7 @@ card:
         - select.brewassistant_cooling_method
         - number.brewassistant_cooling_target_temperature
         - number.brewassistant_cooling_manual_temperature
-        - switch.brewzilla_pump
+        - sensor.brewassistant_cooling_target_temperature
       label: |
         [[[
           const st = states;
@@ -36,7 +36,8 @@ card:
             return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? fallback : s;
           };
           const fmt = (id, digits=1) => {
-            const n = Number(String(st[id]?.state ?? '').replace(',', '.'));
+            const raw = clean(id, '');
+            const n = raw === '' ? NaN : Number(raw.replace(',', '.'));
             return Number.isFinite(n) ? n.toFixed(digits) : '—';
           };
           const state = clean('sensor.brewassistant_cooling_state');
@@ -89,11 +90,19 @@ card:
         - entity: select.brewassistant_cooling_method
           name: Cooling method
         - entity: number.brewassistant_cooling_target_temperature
-          name: Target temperature
+          name: Manual cooling target (proposal)
         - entity: number.brewassistant_cooling_manual_temperature
           name: Manual measured temperature
         - entity: number.brewassistant_counterflow_chiller_sanitize_minutes
           name: Sanitation minutes
+        - type: attribute
+          entity: sensor.brewassistant_cooling_target_temperature
+          attribute: target_temperature_source
+          name: Active target source
+        - type: attribute
+          entity: sensor.brewassistant_cooling_target_temperature
+          attribute: brewfather_target_temperature
+          name: Brewfather pitch target
         - entity: sensor.brewassistant_cooling_process_temperature_source
           name: Temperature source
         - entity: sensor.brewassistant_cooling_rate
@@ -109,3 +118,21 @@ card:
         Cooling may advise that circulation is required, but it will not start,
         stop or regulate the BrewZilla pump. Cooling-water control may be manual
         from the tap or added later through an optional configured HA switch.
+
+    - type: custom:button-card
+      name: Confirm manual cooling target
+      icon: mdi:check-decagram
+      tap_action:
+        action: call-service
+        service: brewassistant.cooling_confirm_override
+        confirmation:
+          text: Override Brewfather with the manual target for this cooling session?
+        data:
+          confirmed: true
+          target_temperature: '[[[ return Number(states["number.brewassistant_cooling_target_temperature"]?.state); ]]]'
+    - type: button
+      name: Return to Brewfather
+      icon: mdi:restore
+      tap_action:
+        action: call-service
+        service: brewassistant.cooling_clear_override
