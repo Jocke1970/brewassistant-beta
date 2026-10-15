@@ -108,9 +108,6 @@ def build_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         status = "no_target"
         advice = "Set a cooling target temperature."
     elif state in {"CHILLING", "TRANSFER"}:
-        if method == METHOD_COUNTERFLOW and pump_state != "on":
-            status = "wort_pump_required"
-            advice = "Start wort circulation through the CFC."
         if target_ready:
             status = "transfer_ready" if state == "TRANSFER" else "on_target"
             advice = "Wort temperature is within the target range."
