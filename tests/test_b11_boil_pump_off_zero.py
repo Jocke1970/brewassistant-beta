@@ -6,6 +6,9 @@ No HA services/cloud hardware are invoked by these isolated tests.
 from __future__ import annotations
 
 import ast
+import asyncio
+from contextvars import ContextVar
+from datetime import datetime, timedelta, timezone
 import math
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,7 +29,7 @@ PCT = "number.brewzilla_pump_utilization"
 def extract(path, *names):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     nodes = [node for node in tree.body
-             if isinstance(node, ast.FunctionDef) and node.name in names]
+             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names]
     assert {node.name for node in nodes} == set(names)
     module = ast.Module(
         body=[ast.ImportFrom(module="__future__",
@@ -51,6 +54,7 @@ def prep_guard(pump="on", utilization=55, active=True):
     h = kettle(pump, utilization)
     ns["_current_boil"] = lambda ha: active
     ns["math"] = math
+    ns["_pump_utilization_fresh"] = lambda ha: getattr(ha, "util_fresh", True)
     ns["cooling_gate"] = SimpleNamespace(
         observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
     )
@@ -242,6 +246,7 @@ def test_source_authority_pump_positive_rejected_even_by_manual_write_path():
     ns = extract(AUTH, "_write_allowed")
     ns.update(
         BREWZILLA_ENTITIES={PUMP, PCT},
+        _BOIL_EXECUTION_IDENTITY=SimpleNamespace(get=lambda: None),
         boil_pump_guard=SimpleNamespace(_current_boil=lambda ha: True),
         cooling_gate=SimpleNamespace(
             observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
@@ -333,10 +338,13 @@ def test_cfc_never_requests_pump_on_without_verified_100_pct(utilization):
 
 def test_cfc_pump_on_denied_in_alternate_write_path_until_100_pct_readback():
     ns = extract(AUTH, "_write_allowed")
-    util = SimpleNamespace(value=50.0)
+    util = SimpleNamespace(value=50.0, fresh=True)
     ns.update(
         BREWZILLA_ENTITIES={PUMP, PCT},
-        boil_pump_guard=SimpleNamespace(_current_boil=lambda ha: True),
+        boil_pump_guard=SimpleNamespace(
+            _current_boil=lambda ha: True,
+            _pump_utilization_fresh=lambda ha: util.fresh,
+        ),
         cooling_gate=SimpleNamespace(
             observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
         ),
@@ -358,5 +366,88 @@ def test_cfc_pump_on_denied_in_alternate_write_path_until_100_pct_readback():
         assert fn(None, PUMP, switch_action="on") is False
         assert fn(None, PCT, value=100.0) is True
     util.value = 100.0
+    util.fresh = False
+    assert fn(None, PUMP, switch_action="on") is False
+    util.fresh = True
     assert fn(None, PUMP, switch_action="on") is True
     assert fn(None, PUMP, switch_action="off") is True
+
+
+def test_100_percent_stale_utilization_blocks_cfc_pump_on_snapshot():
+    fn, hass = prep_guard(pump="off", utilization=100.0)
+    hass.util_fresh = False
+    fn.__globals__["cooling_gate"] = SimpleNamespace(
+        observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+    )
+    out = fn(hass, {"connected": True, "orchestration_mode": "monitor",
+                    "can_apply_target": False, "heat_utilization": 100.0})
+    assert out["boil_pump_utilization_fresh"] is False
+    assert out["pump_action_needed"] is False
+    assert out["can_apply_target"] is False
+
+
+def test_production_pump_utilization_freshness_checks_independent_entity_age():
+    ns = extract(GUARD, "_pump_utilization_fresh")
+    now = datetime.now(timezone.utc)
+    entity = SimpleNamespace(last_reported=now, last_updated=now)
+    hass = SimpleNamespace(states=SimpleNamespace(get=lambda eid: entity if eid == PCT else None))
+    ns.update(base=SimpleNamespace(BREWZILLA_PUMP_UTILIZATION=PCT),
+              datetime=datetime, timezone=timezone,
+              MAX_PUMP_READBACK_AGE_SECONDS=90)
+    fresh = ns["_pump_utilization_fresh"]
+    assert fresh(hass) is True
+    entity.last_reported = now - timedelta(minutes=3)
+    assert fresh(hass) is False
+    entity.last_reported = None
+    entity.last_updated = now - timedelta(minutes=3)
+    assert fresh(hass) is False
+    entity.last_updated = None
+    assert fresh(hass) is False
+    entity.last_reported = now + timedelta(minutes=2)
+    assert fresh(hass) is False
+
+
+def test_inflight_cfc_plan_cannot_start_pump_after_rcl_leaves_boil():
+    # Execute the real task-bound authorization wrapper and real writer guard
+    # under a simulated step change during an awaited RCL call.
+    ns = extract(AUTH, "_write_allowed", "with_boil_execution_identity")
+    expected = ("session-A", "profile-A", "boil-A", "transition-A")
+    runtime = SimpleNamespace(identity=expected, current_boil=True)
+    ns.update(
+        _BOIL_EXECUTION_IDENTITY=ContextVar("test_boil_identity", default=None),
+        _live_boil_cfc_identity=lambda ha: runtime.identity if runtime.current_boil else None,
+        BREWZILLA_ENTITIES={PUMP, PCT},
+        boil_pump_guard=SimpleNamespace(
+            _current_boil=lambda ha: runtime.current_boil,
+            _pump_utilization_fresh=lambda ha: True,
+        ),
+        cooling_gate=SimpleNamespace(
+            observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+        ),
+        math=math,
+        base=SimpleNamespace(
+            BREWZILLA_PUMP_SWITCH=PUMP,
+            BREWZILLA_PUMP_UTILIZATION=PCT, UTILIZATION_TOLERANCE=0.1,
+            _float=lambda ha, entity: 100,
+        ),
+        _live_authority=lambda ha: (
+            SimpleNamespace(may_write_brewzilla=True, write_scope="rcl_assist",
+                            mode="rapt_controller"), {}),
+        RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
+        _rcl_assist_write_allowed=lambda ha, ent, **kwargs: True,
+    )
+    write = ns["_write_allowed"]
+
+    async def execute(_hass):
+        assert write(None, PUMP, switch_action="on") is True
+        await asyncio.sleep(0)  # RCL step advances during earlier await
+        runtime.current_boil = False
+        assert write(None, PUMP, switch_action="on") is False
+        assert write(None, PCT, value=100.0) is False
+        assert write(None, PUMP, switch_action="off") is True
+        return "blocked_stale_step"
+
+    assert asyncio.run(ns["with_boil_execution_identity"](None, execute)) == "blocked_stale_step"
+    assert ns["_BOIL_EXECUTION_IDENTITY"].get() is None
+    supervised = (BREWZILLA / "brewzilla_supervised_runtime_guard.py").read_text(encoding="utf-8")
+    assert "source_authority.with_boil_execution_identity(hass, _BASE_APPLY)" in supervised
