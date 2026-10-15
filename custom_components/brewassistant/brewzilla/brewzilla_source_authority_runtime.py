@@ -149,8 +149,18 @@ def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value
     if boil_pump_guard._current_boil(hass):
         cooling = cooling_gate.observe(hass, active_boil=True)
         recirculate = bool(cooling["boil_cooling_recirc_allowed"])
-        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action == "on" and not recirculate:
-            return False
+        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action == "on":
+            if not recirculate:
+                return False
+            # Never start the pump from a confirmed CFC choice alone.
+            # Utilization must first be written through RCL and *read back*
+            # at 100% on the physical BrewZilla state entity. NaN, infinity,
+            # unavailable and retained values below 100% block pump ON.
+            actual_utilization = base._float(hass, base.BREWZILLA_PUMP_UTILIZATION)
+            if (actual_utilization is None or not math.isfinite(actual_utilization)
+                    or not 0.0 <= actual_utilization <= 100.0
+                    or abs(actual_utilization - 100.0) > base.UTILIZATION_TOLERANCE):
+                return False
         if entity == base.BREWZILLA_PUMP_SWITCH and switch_action not in {"on", "off"}:
             return False
         if entity == base.BREWZILLA_PUMP_UTILIZATION and (
