@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+from collections.abc import Mapping
+import math
 
 from homeassistant.core import HomeAssistant
 
@@ -26,6 +28,33 @@ BREWZILLA_TEMP_ENTITY = "sensor.brewassistant_brewzilla_wort_temperature"
 PUMP_ENTITY = "switch.brewzilla_pump"
 
 CFC_OUTPUT_TEMP_ENTITIES = ("sensor.rapt_temp_a7ba_temperature",)
+
+BF_RECIPE_ENTITIES = ("sensor.brewfather_brew_tracker_raw", "sensor.brewfather_brewtracker_raw")
+
+
+def _brewfather_pitch_target(hass: HomeAssistant) -> tuple[float | None, str | None]:
+    """Read the first fermentation step, not a later ramp or rest."""
+    for entity_id in BF_RECIPE_ENTITIES:
+        state = hass.states.get(entity_id)
+        recipe = state.attributes.get("recipe") if state is not None else None
+        fermentation = recipe.get("fermentation") if isinstance(recipe, Mapping) else None
+        steps = fermentation.get("steps") if isinstance(fermentation, Mapping) else None
+        if not isinstance(steps, list):
+            continue
+        candidates = []
+        for index, step in enumerate(steps):
+            if not isinstance(step, Mapping):
+                continue
+            try:
+                temp = float(step["stepTemp"])
+                stamp = float(step.get("actualTime", index))
+            except (ValueError, TypeError, KeyError):
+                continue
+            if math.isfinite(temp) and 8 <= temp <= 30:
+                candidates.append((stamp, index, temp))
+        if candidates:
+            return min(candidates)[2], entity_id
+    return None, None
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
@@ -116,7 +145,7 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
     settings = _store(hass)
     method = str(settings.get("method", DEFAULT_METHOD))
     manual_target = float(settings.get("target_temperature", DEFAULT_TARGET_C))
-    bf_target = settings.get("brewfather_target_temperature")
+    bf_target, bf_source = _brewfather_pitch_target(hass)
     override = bool(settings.get("manual_override_confirmed", False))
     target = manual_target if override or bf_target is None else float(bf_target)
     target_source = "manual_override" if override else ("brewfather" if bf_target is not None else "manual")
@@ -147,8 +176,8 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         process_source = "number.brewassistant_cooling_manual_temperature"
         source_kind = "manual_input"
 
-    pump_state = _state(hass, PUMP_ENTITY) or "unknown"
-    wort_pump_required = method == METHOD_COUNTERFLOW and runtime_state in {"SANITIZE", "CHILLING", "TRANSFER"}
+    pump_state = "not_configured"
+    wort_pump_required = False  # Cooling never requires a HA pump entity.
     sanitize_required = method in {METHOD_COUNTERFLOW, METHOD_IMMERSION}
 
     return {
@@ -162,6 +191,7 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "target_temperature_source": target_source,
         "manual_target_temperature": manual_target,
         "brewfather_target_temperature": bf_target,
+        "brewfather_target_source": bf_source,
         "manual_override_confirmed": override,
         "manual_temperature": manual_temp,
         "process_temperature": process_temp,
@@ -173,7 +203,7 @@ def build_cooling_runtime_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         "wort_pump_state": pump_state,
         "wort_pump_required": wort_pump_required,
         "wort_pump_operator_owned": True,
-        "cooling_water_control": "manual_or_optional_switch",
+        "cooling_water_control": "manual_tap",
         "cooling_water_automatic_control_active": False,
         "target_ready_tolerance_c": READY_TOLERANCE_C,
     }
