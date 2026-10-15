@@ -6,6 +6,16 @@
 
 **Nästa dev-arbete:** [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300) – CFC/kylspiral-kvittens vid **aktuellt BOIL**. Inget val / `Ingen kylning` innebär pump OFF/0 %. `CFC/kylspiral klar` ska endast kunna ge ON/100 % sista 15 minuterna med verifierad färsk RCL-identitet och Start-baserad tid. Detta är **inte** implementerat i publicerad 0b11; före nästa beta återstår review och fältverifiering av RAPT-stegstartens noggrannhet.
 
+## Planerat: Smart Fermentation Control v2 – SG-targets
+
+**Designkontrakt:** [SG-styrda jässteg och manuell SG-mätning](smart-fermentation-control-v2-sg-targets_sv.md) (beslutad målbild, **inte implementerad**).
+
+- Brewfather äger temperaturer och stegordning; BA äger SG-targets per stegövergång.
+- TIME följer BF:s tider; SG följer BA:s SG-targets och använder BF-tider endast som referens.
+- SG-källa: konfigurerad RAPT Pill via RCL eller BLE, alternativt manuella hydrometer-/refraktometermätningar. Manuella kontrollmätningar kan registreras parallellt.
+- Kvittens före stegbyte, säkert beteende vid saknad/otillförlitlig SG, och sessionsbunden persistens.
+- **Sekvensering:** färdigställ och verifiera Cooling Runtime v2 först. Därefter implementation, tester och separat beta för SG-styrning.
+
 ## Prioriterade nästa steg
 
 1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
