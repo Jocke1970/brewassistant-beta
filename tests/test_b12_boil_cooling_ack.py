@@ -142,6 +142,31 @@ def test_reconnect_new_session_restart_and_wrong_owner_never_reuse_confirmation(
     assert ns["observe"](hass, active_boil=True)["boil_cooling_recirc_allowed"] is False
 
 
+def test_stale_then_fresh_same_session_requires_new_operator_confirmation():
+    # RCL comes back with the exact same profile/session/step/transition.
+    # That must never resurrect a former pump authorization.
+    ns, hass = runner(), kettle(minutes_elapsed=50)
+    assert choose(ns, hass)["boil_cooling_recirc_allowed"] is True
+    hass.profile.attributes["profile_observed_at"] = (
+        hass.at - timedelta(minutes=3)).isoformat()
+    stale = ns["observe"](hass, active_boil=True)
+    assert stale["boil_cooling_recirc_allowed"] is False
+    assert hass.data.get("brewassistant", {}).get("brewzilla_boil_cooling_choice") is None
+    hass.profile.attributes["profile_observed_at"] = hass.at.isoformat()
+    fresh = ns["observe"](hass, active_boil=True)
+    assert fresh["boil_cooling_choice"] == "pending"
+    assert fresh["boil_cooling_recirc_allowed"] is False
+    assert choose(ns, hass)["boil_cooling_recirc_allowed"] is True
+
+
+def test_leaving_boil_disarms_choice_even_if_old_profile_returns():
+    ns, hass = runner(), kettle(minutes_elapsed=50)
+    choose(ns, hass)
+    assert ns["observe"](hass, active_boil=True)["boil_cooling_recirc_allowed"] is True
+    assert ns["observe"](hass, active_boil=False)["boil_cooling_recirc_allowed"] is False
+    assert ns["observe"](hass, active_boil=True)["boil_cooling_recirc_allowed"] is False
+
+
 def test_choice_requires_explicit_confirmation_and_same_current_identity():
     ns, hass = runner(), kettle(minutes_elapsed=50)
     attrs = hass.profile.attributes
