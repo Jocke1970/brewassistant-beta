@@ -85,8 +85,13 @@ def test_tracking_owns_recipe_schedule_instead_of_brewfather_metadata() -> None:
     schedule_source = SCHEDULE.read_text(encoding="utf-8")
     snapshot_source = SNAPSHOT.read_text(encoding="utf-8")
 
-    assert "sensor.brewfather_brew_tracker_raw" in sensor_source
-    assert 'state.attributes.get("recipe")' in sensor_source
+    # Current fermentation schedule source is the unambiguous BF batch
+    # feed, NOT the BrewTracker feed (which only owns brewing progression).
+    assert "sensor.brewfather_all_batches_data" in sensor_source
+    assert "sensor.brewfather_brew_tracker_raw" not in sensor_source
+    assert 'state.attributes.get("data")' in sensor_source
+    assert 'batch.get("recipe")' in sensor_source
+    assert 'batch.get("fermentingStart")' in sensor_source
     assert "build_recipe_temperature_schedule" in sensor_source
     assert "schedule_target_temperature" not in sensor_source
     assert '"brewfather_recipe_schedule"' in sensor_source
