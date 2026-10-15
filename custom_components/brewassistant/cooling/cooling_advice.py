@@ -99,12 +99,8 @@ def build_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         status = "prepare"
         advice = "Prepare cooling equipment for sanitation."
     elif state == "SANITIZE":
-        if False:  # No HA pump entity; CFC flow is operator-managed.
-            status = "wort_pump_required"
-            advice = "Start wort circulation through the CFC. Cooling water must remain off."
-        else:
-            status = "sanitizing"
-            advice = "Sanitation active. Keep cooling water off."
+        status = "sanitizing"
+        advice = "Sanitation active. Keep cooling water off."
     elif process_temp is None:
         status = "no_outlet_temperature" if method == METHOD_COUNTERFLOW else "no_process_temperature"
         advice = "Required cooling temperature is unavailable."
