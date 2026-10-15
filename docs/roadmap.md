@@ -20,7 +20,7 @@
 
 **Fermentation Tracking – dev 2026-10-15:** Jässchema och fermenteringsstart läses nu från enda batchen i `sensor.brewfather_all_batches_data` (`recipe.fermentation.steps` och `fermentingStart`), inte BrewTracker. Vid flera batcher föreslås inget BF-schema tills säker batchmatchning finns. Kodändring är inte HA-/beta-verifierad.
 
-**Dev-testcheckpoint 2026-10-15:** Regressionstester har lagts till i `tests/test_brewfather_batch_sources.py` för att kontrollera Cooling/Tracking mot aktuell BF-batch, ignorera BrewTracker och neka godtyckligt val vid flera/inga batcher. **Testerna är ännu inte körda eller godkända i HA/CI**. Kontrollera dessutom att tidigare sparad BA-jäsningssession inte misstas för BF:s aktuella batch; explicit sessions-/batchmatchning är ett separat kvarstående arbete.
+**Dev-testcheckpoint 2026-10-15:** Regressionstester i `tests/test_brewfather_batch_sources.py` kontrollerar att Cooling/Tracking läser enda BF-batchen, ignorerar BrewTracker och nekar godtyckligt val vid flera/inga batcher. Vid första CI-körningen på `a512e1f5` misslyckades Python 3.11–3.13: det nya testet försökte importera HA-integrationen utan HA-beroenden. Dessutom var ett äldre test låst mot föråldrad BrewTracker-källa. **PR #305 är nu mergad till dev efter 7/7 gröna CI-jobb** på dess testfix-commit `51381773a28a80db1421a3d244872560060900f3` (Python 3.11/3.12/3.13, quality, Hassfest, HACS, isolerad HA/RCL-smoke). Testerna är därmed *CI-godkända men inte fysiskt verifierade i HA*. Kontrollera dessutom att en tidigare sparad BA-jäsningssession inte misstas för BF:s aktuella batch; explicit sessions-/batchmatchning är ett separat kvarstående arbete.
 
 ## Prioriterade nästa steg
 
