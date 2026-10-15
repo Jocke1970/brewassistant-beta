@@ -38,7 +38,25 @@ def _production_functions(path: Path, *names: str, namespace: dict):
     return namespace
 
 
+def _batch_entity_from_source(path: Path, name: str) -> str:
+    """Extract the actual production constant, never inject our expectation."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            assert isinstance(node.value, ast.Constant)
+            assert isinstance(node.value.value, str)
+            return node.value.value
+    raise AssertionError(f"Missing production constant {name} in {path}")
+
+
 def _functions():
+    cooling_entity = _batch_entity_from_source(COOLING, "BF_BATCHES_ENTITY")
+    tracking_entity = _batch_entity_from_source(TRACKING, "BREWFATHER_BATCHES_ENTITY")
+    assert cooling_entity == tracking_entity == BATCH_ENTITY, (
+        "Cooling and Fermentation Tracking must use the same actual BF batch source"
+    )
     base = dict(datetime=datetime, timedelta=timedelta, timezone=timezone,
                 Mapping=Mapping, math=math)
     schedule_ns = _production_functions(
@@ -47,12 +65,12 @@ def _functions():
     )
     cooling_ns = _production_functions(
         COOLING, "_brewfather_pitch_target",
-        namespace={**base, "BF_BATCHES_ENTITY": BATCH_ENTITY},
+        namespace={**base, "BF_BATCHES_ENTITY": cooling_entity},
     )
     tracking_ns = _production_functions(
         TRACKING, "_timestamp_from_value", "_brewfather_recipe_schedule",
         namespace={**base,
-                   "BREWFATHER_BATCHES_ENTITY": BATCH_ENTITY,
+                   "BREWFATHER_BATCHES_ENTITY": tracking_entity,
                    "INVALID_STATES": {"unknown", "unavailable", "none", ""},
                    "build_recipe_temperature_schedule":
                        schedule_ns["build_recipe_temperature_schedule"]},
