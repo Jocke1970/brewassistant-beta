@@ -18,6 +18,8 @@
 
 **Cooling Runtime v2 – dev 2026-10-15:** Kylmålet läses från `sensor.brewfather_all_batches_data` → enda batchens `recipe.fermentation.steps[0].stepTemp`, inte BrewTracker. Vid noll/flera batcher eller ogiltig temperatur används manuellt mål; säker batchmatchning och HA-fälttest återstår. Ändringen är ännu inte beta-verifierad.
 
+**Fermentation Tracking – dev 2026-10-15:** Jässchema och fermenteringsstart läses nu från enda batchen i `sensor.brewfather_all_batches_data` (`recipe.fermentation.steps` och `fermentingStart`), inte BrewTracker. Vid flera batcher föreslås inget BF-schema tills säker batchmatchning finns. Kodändring är inte HA-/beta-verifierad.
+
 ## Prioriterade nästa steg
 
 1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
