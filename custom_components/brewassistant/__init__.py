@@ -46,6 +46,7 @@ from .grainfather_fermenter.preflight_runtime import (
     clear_gf30_preflight_runtime,
     record_gf30_manual_reference,
 )
+from .cooling.cooling_runtime import confirm_cooling_manual_override, clear_cooling_manual_override
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
 from .hlt.runtime import async_setup_hlt_simulation
@@ -82,6 +83,8 @@ SERVICE_MANUAL_START_WHIRLPOOL = "manual_brewday_start_whirlpool"
 SERVICE_MANUAL_START_COOLING = "manual_brewday_start_cooling"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
+SERVICE_COOLING_CONFIRM_OVERRIDE = "cooling_confirm_override"
+SERVICE_COOLING_CLEAR_OVERRIDE = "cooling_clear_override"
 SERVICE_CARBONATION_START = "carbonation_start"
 SERVICE_CARBONATION_UPDATE = "carbonation_update"
 SERVICE_CARBONATION_PAUSE = "carbonation_pause"
@@ -479,6 +482,20 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_gf30_sensors()
         _LOGGER.info("GF30 thermal preflight history cleared")
 
+    async def _handle_cooling_confirm_override(call: ServiceCall) -> None:
+        try:
+            confirm_cooling_manual_override(hass, confirmed=call.data.get("confirmed") is True,
+                                            target_temperature=float(call.data["target_temperature"]))
+        except (ValueError, TypeError, KeyError) as err:
+            raise HomeAssistantError(str(err)) from err
+        await _refresh_runtime_sensors()
+
+    async def _handle_cooling_clear_override(call: ServiceCall) -> None:
+        clear_cooling_manual_override(hass)
+        await _refresh_runtime_sensors()
+
+    hass.services.async_register(DOMAIN, SERVICE_COOLING_CONFIRM_OVERRIDE, _handle_cooling_confirm_override)
+    hass.services.async_register(DOMAIN, SERVICE_COOLING_CLEAR_OVERRIDE, _handle_cooling_clear_override)
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
