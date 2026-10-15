@@ -394,7 +394,11 @@ async def async_execute_confirmed_plan(hass, pending: dict[str, Any]) -> dict[st
         await base.async_record_brewday_audit_tick(hass, brewzilla_result=result)
         return result
 
-    result = await _BASE_APPLY(hass)
+    # Keep confirmed plans bound to their original BOIL identity across
+    # awaited RCL calls. Source-authority _apply wraps ordinary ticks, but
+    # explicit confirmed plans invoke this inner executor directly.
+    from . import brewzilla_source_authority_runtime as source_authority
+    result = await source_authority.with_boil_execution_identity(hass, _BASE_APPLY)
     result = {
         **result,
         "supervised_confirmation_consumed": True,
