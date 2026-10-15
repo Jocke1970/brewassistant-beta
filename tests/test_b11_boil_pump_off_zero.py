@@ -50,6 +50,7 @@ def prep_guard(pump="on", utilization=55, active=True):
     ns = extract(GUARD, "_boil_pump_snapshot")
     h = kettle(pump, utilization)
     ns["_current_boil"] = lambda ha: active
+    ns["math"] = math
     ns["cooling_gate"] = SimpleNamespace(
         observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": False}
     )
@@ -120,6 +121,11 @@ def test_boil_does_not_override_loss_abort_cooling_readonly_or_blocked_owner(blo
     ("unknown", None),
     (None, None),
     ("on", None),
+    ("off", float("nan")),
+    ("off", float("inf")),
+    ("off", float("-inf")),
+    ("off", -0.1),
+    ("off", 100.1),
 ])
 def test_missing_readback_does_not_guess_physical_off(pump, pct):
     fn, h = prep_guard(pump, pct)
@@ -266,7 +272,8 @@ def test_interlock_loads_before_source_authority_and_never_changes_emergency():
     assert "hass.services.async_call" not in GUARD.read_text(encoding="utf-8")
 
 def test_verified_cfc_last_15_minutes_requests_positive_pump_without_heater_on():
-    fn, h = prep_guard(pump="off", utilization=0)
+    # Pump utilization must already be a finite, verified 100% readback.
+    fn, h = prep_guard(pump="off", utilization=100)
     # Test only the production snapshot body; a separate test executes the
     # real session-bound RCL timer and operator-choice gate.
     fn.__globals__["cooling_gate"] = SimpleNamespace(
@@ -282,7 +289,7 @@ def test_verified_cfc_last_15_minutes_requests_positive_pump_without_heater_on()
     assert out["desired_pump_utilization"] == 100.0
     assert out["pump_action_needed"] is True
     assert out["pump_stop_needed"] is False
-    assert out["pump_utilization_action_needed"] is True
+    assert out["pump_utilization_action_needed"] is False
     assert out["can_apply_target"] is True
     assert out["heater_action_needed"] is False
 
@@ -303,3 +310,53 @@ def test_cfc_last_15_minutes_still_respects_abort_and_rcl_loss():
         out = fn(h, original)
         assert out["desired_pump_on"] is None
         assert out.get("pump_action_needed") is None
+
+
+@pytest.mark.parametrize("utilization", [0.0, 55.0, float("nan"), float("inf"), -1.0, 101.0])
+def test_cfc_never_requests_pump_on_without_verified_100_pct(utilization):
+    fn, h = prep_guard(pump="off", utilization=utilization)
+    fn.__globals__["cooling_gate"] = SimpleNamespace(
+        observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+    )
+    out = fn(h, {"connected": True, "orchestration_mode": "monitor",
+                 "can_apply_target": False, "heat_utilization": 100})
+    assert out["pump_action_needed"] is False
+    assert out["boil_pump_readback_verified"] is (math.isfinite(utilization) and 0 <= utilization <= 100)
+    if math.isfinite(utilization) and 0 <= utilization <= 100:
+        assert out["desired_pump_utilization"] == 100.0
+        assert out["pump_utilization_action_needed"] is True
+    else:
+        assert out["desired_pump_utilization"] is None
+        assert out["pump_utilization_action_needed"] is False
+        assert out["can_apply_target"] is False
+
+
+def test_cfc_pump_on_denied_in_alternate_write_path_until_100_pct_readback():
+    ns = extract(AUTH, "_write_allowed")
+    util = SimpleNamespace(value=50.0)
+    ns.update(
+        BREWZILLA_ENTITIES={PUMP, PCT},
+        boil_pump_guard=SimpleNamespace(_current_boil=lambda ha: True),
+        cooling_gate=SimpleNamespace(
+            observe=lambda ha, active_boil: {"boil_cooling_recirc_allowed": True}
+        ),
+        math=math,
+        base=SimpleNamespace(
+            BREWZILLA_PUMP_SWITCH=PUMP,
+            BREWZILLA_PUMP_UTILIZATION=PCT, UTILIZATION_TOLERANCE=0.1,
+            _float=lambda ha, entity: util.value,
+        ),
+        _live_authority=lambda ha: (
+            SimpleNamespace(may_write_brewzilla=True, write_scope="rcl_assist",
+                            mode="rapt_controller"), {}),
+        RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
+        _rcl_assist_write_allowed=lambda ha, ent, **kwargs: True,
+    )
+    fn = ns["_write_allowed"]
+    for value in [float("nan"), float("inf"), -1, 0, 50, 99.0, 100.1, None]:
+        util.value = value
+        assert fn(None, PUMP, switch_action="on") is False
+        assert fn(None, PCT, value=100.0) is True
+    util.value = 100.0
+    assert fn(None, PUMP, switch_action="on") is True
+    assert fn(None, PUMP, switch_action="off") is True
