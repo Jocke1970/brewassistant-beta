@@ -37,6 +37,20 @@ BrewAssistant får bara begära pump ON/100 % när:
    `profile_step_transition_observed_at`.
 5. Beräknad tid kvar med samma observerade stegstart är **högst 900 s**.
 
+**Tvåstegsstart för pumpen (säkerhet):** När sista-15-minutersgrinden
+är uppfylld begär BA först **pump-utilization 100 % via RCL**. Pump **ON**
+får begäras först när den faktiska utilization-entiteten återlästs som ett
+**ändligt tal inom 0–100 % och vid 100 % (inom tolerans)**. NaN, infinity,
+saknad eller avvikande utilization spärrar start; en servicekvittens
+räknas inte som verifierad readback. Även en alternativ BA-väg till
+`pump ON` stoppas av samma kontroll.
+
+**Återanslutning:** Om profildata blir för gammal, källa/profil inte går
+att verifiera eller aktuellt BOIL lämnas, tas en tidigare kvittens bort
+ur BA:s processminne. Om samma RAPT-session senare återkommer måste
+operatören välja **CFC/kylspiral klar** på nytt; ingen automatisk
+återstart på en gammal kvittens.
+
 **Viktigt:** RCL:s stegstartsdatum är observerat via polling, inte
 bekräftad exakt timer på enheten. Sista-15-minutersgränsen är därför
 **ungefärlig**. Om timer, källa eller identitet inte kan verifieras
@@ -68,6 +82,6 @@ operatörskvittens, och nya normala bryggningar är säkert default OFF/0 %.
 
 - Kör alla regressioner och sju CI-kontroller på en separat releasegren.
 - Kör isolerat HA/RCL-smoke och granska verklig schema/data från RCL b5.
-- Kontrollera LOvellace-korten, fysisk CFC-anslutning och timerns beteende
+- Kontrollera Lovelace-korten, fysisk CFC-anslutning och timerns beteende
   med vatten, under uppsikt; inga fysiska resultat kan utlovas av CI.
 - `beta`/**b11** och `main` förblir orörda under utvecklingen.
