@@ -16,6 +16,8 @@
 - Kvittens före stegbyte, säkert beteende vid saknad/otillförlitlig SG, och sessionsbunden persistens.
 - **Sekvensering:** färdigställ och verifiera Cooling Runtime v2 först. Därefter implementation, tester och separat beta för SG-styrning.
 
+**Cooling Runtime v2 – dev 2026-10-15:** Kylmålet läses från `sensor.brewfather_all_batches_data` → enda batchens `recipe.fermentation.steps[0].stepTemp`, inte BrewTracker. Vid noll/flera batcher eller ogiltig temperatur används manuellt mål; säker batchmatchning och HA-fälttest återstår. Ändringen är ännu inte beta-verifierad.
+
 ## Prioriterade nästa steg
 
 1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
