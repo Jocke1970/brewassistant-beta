@@ -29,32 +29,38 @@ PUMP_ENTITY = "switch.brewzilla_pump"
 
 CFC_OUTPUT_TEMP_ENTITIES = ("sensor.rapt_temp_a7ba_temperature",)
 
-BF_RECIPE_ENTITIES = ("sensor.brewfather_brew_tracker_raw", "sensor.brewfather_brewtracker_raw")
+BF_BATCHES_ENTITY = "sensor.brewfather_all_batches_data"
 
 
 def _brewfather_pitch_target(hass: HomeAssistant) -> tuple[float | None, str | None]:
-    """Read the first fermentation step, not a later ramp or rest."""
-    for entity_id in BF_RECIPE_ENTITIES:
-        state = hass.states.get(entity_id)
-        recipe = state.attributes.get("recipe") if state is not None else None
-        fermentation = recipe.get("fermentation") if isinstance(recipe, Mapping) else None
-        steps = fermentation.get("steps") if isinstance(fermentation, Mapping) else None
-        if not isinstance(steps, list):
-            continue
-        candidates = []
-        for index, step in enumerate(steps):
-            if not isinstance(step, Mapping):
-                continue
-            try:
-                temp = float(step["stepTemp"])
-                stamp = float(step.get("actualTime", index))
-            except (ValueError, TypeError, KeyError):
-                continue
-            if math.isfinite(temp) and 8 <= temp <= 30:
-                candidates.append((stamp, index, temp))
-        if candidates:
-            return min(candidates)[2], entity_id
-    return None, None
+    """Resolve first fermentation temperature from an unambiguous BF batch.
+
+    BrewTracker is brewday-only and must never supply fermentation targets.
+    With multiple batches, fail closed until explicit batch selection exists.
+    """
+    state = hass.states.get(BF_BATCHES_ENTITY)
+    if state is None or str(state.state).lower() in {"unknown", "unavailable", "none", ""}:
+        return None, None
+    batches = state.attributes.get("data")
+    if not isinstance(batches, list) or len(batches) != 1:
+        return None, None
+
+    batch = batches[0]
+    if not isinstance(batch, Mapping):
+        return None, None
+    recipe = batch.get("recipe")
+    fermentation = recipe.get("fermentation") if isinstance(recipe, Mapping) else None
+    steps = fermentation.get("steps") if isinstance(fermentation, Mapping) else None
+    if not isinstance(steps, list) or not steps or not isinstance(steps[0], Mapping):
+        return None, None
+
+    try:
+        temperature = float(steps[0]["stepTemp"])
+    except (KeyError, TypeError, ValueError):
+        return None, None
+    if not math.isfinite(temperature) or not 8 <= temperature <= 30:
+        return None, None
+    return temperature, BF_BATCHES_ENTITY
 
 BAD_STATES = {"unknown", "unavailable", "none", ""}
 
