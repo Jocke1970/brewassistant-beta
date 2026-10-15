@@ -4,7 +4,7 @@
 
 **SOP:** `dev → beta → main`. `main` är tidigare stable-gren; ingen 0b11-promotion till stable är gjord.
 
-**Nästa dev-arbete:** [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300) – CFC/kylspiral-kvittens vid **aktuellt BOIL**. Inget val / `Ingen kylning` innebär pump OFF/0 %. `CFC/kylspiral klar` ska endast kunna ge ON/100 % sista 15 minuterna med verifierad färsk RCL-identitet och Start-baserad tid. Detta är **inte** implementerat i publicerad 0b11; före nästa beta återstår review och fältverifiering av RAPT-stegstartens noggrannhet.
+**Nästa dev-arbete, 2026-10-15:** [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300) är **mergad till dev** efter åtgärdade Codex P1-fynd (NaN/utilization, färsk readback och BOIL→Cooling-race) och 7/7 godkända CI-jobb på exakt den sammanslagna dev-committen `db7af571d9cc73131be415942b8fac373e226982`. BOIL-kvittens har valen `CFC/kylspiral klar` och `Ingen kylning`. Utan giltigt val blir pump OFF/0 %. Pump ON/100 % kan föreslås först under verifierat RCL BOIL, sista ungefärliga 15 minuterna vid Start-baserad duration och efter färsk fysisk utilization-readback 100 %. Återanslutning kräver ny kvittens; pågående handling spärras vid stegbyte. **Inte publicerad i beta 0b11**: exakt RAPT-timergenomgång, verkligt HA-vattenprov och 0b12 release/promotion återstår.
 
 ## Planerat: Smart Fermentation Control v2 – SG-targets
 
@@ -25,7 +25,7 @@
 ## Prioriterade nästa steg
 
 1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
-2. **BOIL CFC-grind på dev:** avsluta PR #300:s kodgranskning, validera tidssemantik från verklig RAPT/RCL-profil och regressionsprova kvittens + källa-/ABORT-/READ-ONLY-spärrar. Ny beta får ny kalenderbaserad tagg (tidigare `v2026.10.0b11` får inte flyttas).
+2. **BOIL CFC-grind inför nästa beta:** kodgranskning och 7/7 kombinerad CI är färdiga på `dev`; återstår att validera verklig RAPT/RCL-stegstart/timer och fysisk pump/ABORT/readback i övervakat vattenprov. En kommande beta ska ha **ny tagg**; `v2026.10.0b11` får aldrig flyttas.
 3. **Öppna fältavvikelser:** utred [issue #298](https://github.com/Jocke1970/brewassistant-beta/issues/298) om Mash-In gate under Mash Out, och [issue #288](https://github.com/Jocke1970/brewassistant-beta/issues/288) om pumpförlopp under Mash In utan att anta fysisk orsak.
 4. **Loggning och granskning:** använd nya [Flight Recorder JSONL](brewday-audit.md) för hela sekvensen utan 250-eventgräns. Tidigare testloggar migreras inte; bevara säkerhets-ABORT och källa separat.
 5. **Stable först senare:** inga `beta → main`-ändringar förrän fysisk testacceptans finns och relevanta återstående risker har bedömts.
