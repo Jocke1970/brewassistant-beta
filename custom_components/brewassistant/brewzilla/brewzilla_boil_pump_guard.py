@@ -11,6 +11,7 @@ Cooling/ChillOut pump use belongs to Cooling Runtime/operator instead.
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from . import brewzilla_orchestration as base
 from . import brewzilla_temperature as temperature
@@ -90,7 +91,8 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
     # Treat unknown pump telemetry as unverified; never infer physically OFF.
     current = base._float(hass, base.BREWZILLA_PUMP_UTILIZATION)
     pump_entity = hass.states.get(base.BREWZILLA_PUMP_SWITCH)
-    if current is None or pump_entity is None or pump_entity.state not in {"on", "off"}:
+    if (current is None or not math.isfinite(current) or not 0.0 <= current <= 100.0
+            or pump_entity is None or pump_entity.state not in {"on", "off"}):
         out.update(
             boil_pump_readback_verified=False,
             boil_pump_policy_block_reason="pump_readback_unavailable",
@@ -103,13 +105,17 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             ba_owned_reassert_action_needed=False,
             can_apply_target=False,
             orchestration_mode="blocked",
-            control_reason="BOIL pump OFF/0 required, but pump readback is unavailable; no new pump write",
+            control_reason="BOIL pump telemetry not finite/in range or switch unknown; no new pump write",
         )
         return out
 
     pump_running = pump_entity.state == "on"
     pump_pct_goal = 100.0 if recirculate else 0.0
     needs_pump_pct_change = abs(current - pump_pct_goal) > base.UTILIZATION_TOLERANCE
+    # First set utilization through RCL, then require *fresh readback* of
+    # 100% before energizing the physical pump in a later control tick.
+    # A service ACK alone cannot attest the actual BrewZilla setting.
+    positive_pump_ready = bool(recirculate and not needs_pump_pct_change)
 
     # Full heat utilization is a POWER CEILING, not heater ON or a target
     # override. BrewZilla/RAPT still owns the thermostat and actual heat switch.
@@ -147,7 +153,7 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         pump_recommended=recirculate,
         desired_pump_on=recirculate,
         desired_pump_utilization=pump_pct_goal,
-        pump_action_needed=bool(recirculate and not pump_running),
+        pump_action_needed=bool(positive_pump_ready and not pump_running),
         pump_stop_needed=bool(not recirculate and pump_running),
         pump_utilization_action_needed=needs_pump_pct_change,
         desired_heat_utilization=(
@@ -161,7 +167,7 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
         ),
         ba_owned_reassert_action_needed=False,
         can_apply_target=bool(
-            other_action or (not pump_running if recirculate else pump_running)
+            other_action or (positive_pump_ready and not pump_running if recirculate else pump_running)
             or needs_pump_pct_change or full_heat_needed
             or safety_heat_down and out.get("heat_utilization_action_needed")
         ),
@@ -169,6 +175,8 @@ def _boil_pump_snapshot(hass, snapshot: dict[str, Any]) -> dict[str, Any]:
             "Active BOIL: retain explicit heat safety reduction and guarded cooling pump intent."
             if safety_heat_down else
             "Active BOIL: confirmed CFC/kylspiral; last 15 min pump ON / 100% via guarded RCL path."
+            if recirculate and positive_pump_ready else
+            "Active BOIL: CFC armed, waiting for verified 100% pump utilization readback before pump ON."
             if recirculate else
             "Active BOIL: heat 100%, pump OFF / 0% until explicit verified last-15-min cooling window."
             if heat_known else
