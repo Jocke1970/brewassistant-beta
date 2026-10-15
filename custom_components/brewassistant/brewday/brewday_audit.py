@@ -138,6 +138,14 @@ BREWZILLA_RESULT_FIELDS = (
     "pump_utilization_action_needed",
     "heat_utilization_reassert_needed",
     "pump_utilization_reassert_needed",
+    # Operator BOIL CFC sanitation window diagnostics.
+    "boil_cooling_choice",
+    "boil_cooling_reason",
+    "boil_cooling_timer_verified",
+    "boil_cooling_remaining_seconds_estimate",
+    "boil_cooling_recirc_allowed",
+    "boil_cooling_session_id",
+    "boil_cooling_step_id",
 )
 
 RUNTIME_FIELDS = (

@@ -83,6 +83,7 @@ async def _run_case(mode, *, stop=False, abort=False):
     denied = []
     env.update(
         BREWZILLA_ENTITIES=ENTITIES, base=BASE, DOMAIN="brewassistant",
+        _BOIL_EXECUTION_IDENTITY=SimpleNamespace(get=lambda: None),
         RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
         _live_authority=lambda hass: (decision, context),
         _safe_off_allowed=F["_safe_off_allowed"],
@@ -93,6 +94,7 @@ async def _run_case(mode, *, stop=False, abort=False):
         _PREVIOUS_SET=send_number, _PREVIOUS_SWITCH=send_switch,
         _PREVIOUS_POLICY_EXECUTE=dispatch_policy, _PREVIOUS_APPLY=apply,
         _PREVIOUS_STOP=stop_handler, _PREVIOUS_BUILD=lambda hass: {"can_apply_target": True},
+        with_boil_execution_identity=lambda hass, callback: callback(hass),
         control_policy=SimpleNamespace(_store_policy_result=lambda hass, result: (denied.append(result) or result)),
         supervised=SimpleNamespace(SOURCE="brewzilla_orchestration"),
         clear_pending_action_from_source=lambda hass, source: None,

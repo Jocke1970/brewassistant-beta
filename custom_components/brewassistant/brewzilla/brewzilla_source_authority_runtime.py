@@ -14,6 +14,8 @@ are OFF.
 from __future__ import annotations
 
 from typing import Any
+from contextvars import ContextVar
+import math
 
 from homeassistant.util import dt as dt_util
 
@@ -26,6 +28,7 @@ from . import brewzilla_learning as learning
 from . import brewzilla_orchestration as base
 from . import brewzilla_rapt_sparge_controller as sparge
 from . import brewzilla_boil_pump_guard as boil_pump_guard
+from . import brewzilla_boil_cooling_gate as cooling_gate
 from . import brewzilla_supervised_runtime_guard as supervised
 from .brewzilla_source_authority_contract import HotSideAuthority, resolve_hot_side_authority
 
@@ -47,6 +50,41 @@ BREWZILLA_ENTITIES = frozenset({
     base.BREWZILLA_PUMP_SWITCH, base.BREWZILLA_HEAT_UTILIZATION,
     base.BREWZILLA_PUMP_UTILIZATION,
 })
+
+
+# Bound to the current async apply task; never store a transient intent as a
+# global HA flag shared with another executor task.
+_BOIL_EXECUTION_IDENTITY: ContextVar[tuple[str, str, str, str] | None] = ContextVar(
+    "brewassistant_boil_cfc_execution_identity", default=None,
+)
+
+
+def _live_boil_cfc_identity(hass) -> tuple[str, str, str, str] | None:
+    status = cooling_gate.observe(
+        hass, active_boil=boil_pump_guard._current_boil(hass)
+    )
+    if not status.get("boil_cooling_recirc_allowed"):
+        return None
+    identity = tuple(status.get(k) for k in (
+        "boil_cooling_session_id", "boil_cooling_profile_id",
+        "boil_cooling_step_id", "boil_cooling_transition_at",
+    ))
+    return identity if all(isinstance(v, str) and v for v in identity) else None
+
+
+async def with_boil_execution_identity(hass, apply_callback):
+    """Bind positive pump writes to the BOIL identity at plan execution start.
+
+    The step may advance during earlier awaited RCL number writes. At each
+    later actuator boundary the live step is compared again, including when
+    the *current* step is no longer BOIL. This also covers explicit supervised
+    confirmed plans which call the inner executor directly.
+    """
+    token = _BOIL_EXECUTION_IDENTITY.set(_live_boil_cfc_identity(hass))
+    try:
+        return await apply_callback(hass)
+    finally:
+        _BOIL_EXECUTION_IDENTITY.reset(token)
 
 
 def _live_authority(hass) -> tuple[HotSideAuthority, dict[str, Any]]:
@@ -141,13 +179,44 @@ def _rcl_assist_write_allowed(hass, entity: str, *, switch_action: str | None = 
 def _write_allowed(hass, entity: str, *, switch_action: str | None = None, value: float | None = None) -> bool:
     if entity not in BREWZILLA_ENTITIES:
         return True
-    # Even explicitly requested positive pump writes cannot bypass BOIL.
-    # This is a DENY-only guard, never authority to send OFF/0 on source loss.
+    # In-flight BOIL plans keep the identity they were built for even when
+    # RCL advances to Cooling during an earlier awaited service. No stale
+    # positive pump utilization/ON may leak into the newly active step.
+    expected_boil = _BOIL_EXECUTION_IDENTITY.get()
+    if expected_boil is not None and (
+        (entity == base.BREWZILLA_PUMP_SWITCH and switch_action == "on")
+        or (entity == base.BREWZILLA_PUMP_UTILIZATION
+            and isinstance(value, (int, float))
+            and math.isfinite(value) and value > base.UTILIZATION_TOLERANCE)
+    ) and _live_boil_cfc_identity(hass) != expected_boil:
+        return False
+    # BOIL is DENY-only until the exact operator-armed, currently verified
+    # last-15-minute CFC window. It NEVER grants authority or overrides
+    # READ-ONLY, ABORT, RCL source freshness or supervised apply below.
     if boil_pump_guard._current_boil(hass):
-        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action != "off":
+        cooling = cooling_gate.observe(hass, active_boil=True)
+        recirculate = bool(cooling["boil_cooling_recirc_allowed"])
+        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action == "on":
+            if not recirculate:
+                return False
+            # Never start the pump from a confirmed CFC choice alone.
+            # Utilization must first be written through RCL and *read back*
+            # at 100% on the physical BrewZilla state entity. NaN, infinity,
+            # unavailable and retained values below 100% block pump ON.
+            actual_utilization = base._float(hass, base.BREWZILLA_PUMP_UTILIZATION)
+            if (actual_utilization is None or not math.isfinite(actual_utilization)
+                    or not 0.0 <= actual_utilization <= 100.0
+                    or abs(actual_utilization - 100.0) > base.UTILIZATION_TOLERANCE
+                    or not boil_pump_guard._pump_utilization_fresh(hass)):
+                return False
+        if entity == base.BREWZILLA_PUMP_SWITCH and switch_action not in {"on", "off"}:
             return False
         if entity == base.BREWZILLA_PUMP_UTILIZATION and (
-            value is None or value > base.UTILIZATION_TOLERANCE
+            not isinstance(value, (int, float)) or not math.isfinite(value)
+            or value < 0 or value > 100
+            or (not recirculate and value > base.UTILIZATION_TOLERANCE)
+            or (recirculate and value > base.UTILIZATION_TOLERANCE
+                and abs(value - 100.0) > base.UTILIZATION_TOLERANCE)
         ):
             return False
     authority, context = _live_authority(hass)
@@ -283,7 +352,7 @@ async def _apply(hass):
     assert _PREVIOUS_APPLY is not None
     authority, _ = _live_authority(hass)
     if authority.may_write_brewzilla is not False:
-        return await _PREVIOUS_APPLY(hass)
+        return await with_boil_execution_identity(hass, _PREVIOUS_APPLY)
     clear_pending_action_from_source(hass, supervised.SOURCE)
     result = {**_observer_snapshot(_PREVIOUS_BUILD(hass), authority),
               "applied": False, "apply_result": "source_authority_no_writes", "actions": []}

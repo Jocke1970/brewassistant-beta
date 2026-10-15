@@ -84,6 +84,51 @@ brewday_start_verified:
       selector:
         text:
 
+boil_cooling_choice:
+  name: Acknowledge BOIL cooling circuit
+  description: >-
+    Confirm the CFC/immersion chiller is connected, primed and ready for
+    recirculation in the final 15 minutes, or confirm no cooling circulation.
+    This operation records a choice only. It does not itself turn on the pump;
+    the current RCL step, observed start-based duration, fresh identity and
+    all existing RCL/supervised-apply/ABORT guards are checked again at action time.
+  fields:
+    choice:
+      name: Cooling path choice
+      required: true
+      selector:
+        select:
+          options:
+            - label: CFC/immersion chiller ready
+              value: cfc_ready
+            - label: No cooling circulation
+              value: no_cooling
+    confirmed:
+      name: Physical hose/pump path inspected and explicitly confirmed
+      required: true
+      selector:
+        boolean:
+    expected_session_id:
+      name: Current RAPT session ID
+      required: true
+      selector:
+        text:
+    expected_profile_id:
+      name: Current RAPT profile ID
+      required: true
+      selector:
+        text:
+    expected_step_id:
+      name: Current RAPT step ID
+      required: true
+      selector:
+        text:
+    expected_transition_at:
+      name: RCL-observed step transition ISO timestamp
+      required: true
+      selector:
+        text:
+
 brewday_reconnect_ack:
   name: Acknowledge external Brewday reconnection
   description: >-
