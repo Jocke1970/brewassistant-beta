@@ -62,7 +62,14 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
         "boil_cooling_step_id": None,
         "boil_cooling_transition_at": None,
     }
+    def disarm_for_uncertain_source() -> None:
+        # Stale/lost RCL authority must invalidate even an armed choice.
+        # Returning to the same session ID on reconnect is NOT consent to
+        # automatically restart physical CFC circulation.
+        hass.data.setdefault(DOMAIN, {}).pop(DATA_KEY, None)
+
     if not active_boil:
+        disarm_for_uncertain_source()
         return result
 
     profile = rapt_profile_runtime._profile_state(hass)
@@ -70,6 +77,7 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
             or profile.attributes.get("profile_contract_complete") is not True
             or profile.attributes.get("profile_active") is not True):
         result["boil_cooling_reason"] = "rcl_profile_unverified"
+        disarm_for_uncertain_source()
         return result
 
     attrs = profile.attributes
@@ -77,10 +85,12 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
     if (str(runtime.get("source") or "") != rapt_profile_runtime.RAPT_PROFILE_SOURCE
             or not temperature._is_current_boil_label(attrs.get("step_name"))):
         result["boil_cooling_reason"] = "rcl_not_current_boil_owner"
+        disarm_for_uncertain_source()
         return result
     key = _identities(attrs)
     if key is None:
         result["boil_cooling_reason"] = "rcl_session_or_step_unknown"
+        disarm_for_uncertain_source()
         return result
     session, profile_id, step_id, stamp = key
     result.update(
@@ -95,6 +105,7 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
     age = (now - observed_at).total_seconds() if observed_at else None
     if age is None or not (0 <= age <= MAX_OBSERVATION_AGE_SECONDS):
         result["boil_cooling_reason"] = "rcl_profile_stale"
+        disarm_for_uncertain_source()
         return result
 
     result["boil_cooling_can_ack"] = True
@@ -116,6 +127,7 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
     if (str(attrs.get("step_end_type") or "").lower() != "duration"
             or str(attrs.get("step_duration_type") or "").lower() != "start"):
         result["boil_cooling_reason"] = "timer_not_start_based"
+        disarm_for_uncertain_source()
         return result
 
     try:
@@ -126,6 +138,7 @@ def observe(hass, *, active_boil: bool, now: datetime | None = None) -> dict[str
     elapsed = (now - transitioned_at).total_seconds() if transitioned_at else -1
     if not (math.isfinite(length) and length > 0 and 0 <= elapsed):
         result["boil_cooling_reason"] = "timer_unavailable"
+        disarm_for_uncertain_source()
         return result
 
     remaining = max(0, length - elapsed)
