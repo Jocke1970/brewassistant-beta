@@ -1,3 +1,13 @@
+> **Aktuellt 2026-10-11:** Den här backendbeskrivningen har
+> detaljer från september månads äldre styrmodell. För **publicerad
+> 2026.10.0b11** gäller enbart ordinarie **BA → RCL → BrewZilla** under
+> aktiv RAPT-profil. RAPT/RCL äger steg, timer, target och normal
+> värmarreglering; BA kan assistera heat-/pump-utilization inom verifierad
+> RCL-scope. RCL-bortfall är **inte STOP/OFF/0**. Vid BOIL gäller
+> heat-utilization 100 % och pump OFF/0 % med befintliga säkerhetsspärrar.
+> [Installationsguide](../INSTALLATION.md) ·
+> [0b11 releasenoter](../2026.10.0b11-prerelease-notes_sv.md).
+
 # BrewZilla Backend
 
 Status: **active supervised hot-side beta**  

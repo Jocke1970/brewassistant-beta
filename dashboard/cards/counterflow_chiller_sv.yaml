@@ -17,6 +17,8 @@ card:
         - sensor.brewassistant_cooling_status
         - sensor.brewassistant_cooling_advice
         - sensor.brewassistant_cooling_process_temperature
+        - sensor.brewassistant_brewzilla_wort_temperature
+        - sensor.rapt_temp_a7ba_temperature
         - sensor.brewassistant_cooling_target_temperature
         - sensor.brewassistant_cooling_delta
         - sensor.brewassistant_cooling_rate
@@ -25,7 +27,7 @@ card:
         - select.brewassistant_cooling_method
         - number.brewassistant_cooling_target_temperature
         - number.brewassistant_cooling_manual_temperature
-        - switch.brewzilla_pump
+        - sensor.brewassistant_cooling_target_temperature
       label: |
         [[[
           const st = states;
@@ -36,7 +38,8 @@ card:
             return ['unknown','unavailable','none',''].includes(s.toLowerCase()) ? fallback : s;
           };
           const fmt = (id, digits=1) => {
-            const n = Number(String(st[id]?.state ?? '').replace(',', '.'));
+            const raw = clean(id, '');
+            const n = raw === '' ? NaN : Number(raw.replace(',', '.'));
             return Number.isFinite(n) ? n.toFixed(digits) : '—';
           };
           const state = clean('sensor.brewassistant_cooling_state');
@@ -45,7 +48,16 @@ card:
           const temp = fmt('sensor.brewassistant_cooling_process_temperature');
           const target = fmt('sensor.brewassistant_cooling_target_temperature', 0);
           const delta = fmt('sensor.brewassistant_cooling_delta');
-          return `${state} · ${method}<br>${temp} °C → ${target} °C · Δ ${delta} °C<br>${advice}`;
+          const isCfc = method === 'Counterflow chiller';
+          const isImmersion = method === 'Immersion chiller';
+          const outlet = fmt('sensor.rapt_temp_a7ba_temperature');
+          const wort = fmt('sensor.brewassistant_brewzilla_wort_temperature');
+          const readings = isCfc
+            ? `CFC-utlopp: ${outlet} °C${outlet === '—' ? ' (RAPT BLE saknas)' : ''}<br>Vört (BrewZilla): ${wort} °C`
+            : isImmersion
+              ? `Vört (BrewZilla): ${wort} °C`
+              : `Manuell temperatur: ${temp} °C`;
+          return `${state} · ${method}<br>${readings}<br>Kylmål: ${target} °C · Δ ${delta} °C<br>${advice}`;
         ]]]
       styles:
         card:
@@ -89,11 +101,19 @@ card:
         - entity: select.brewassistant_cooling_method
           name: Kylmetod
         - entity: number.brewassistant_cooling_target_temperature
-          name: Måltemperatur
+          name: Manuellt kylmål (förslag)
         - entity: number.brewassistant_cooling_manual_temperature
           name: Manuellt uppmätt temperatur
         - entity: number.brewassistant_counterflow_chiller_sanitize_minutes
           name: Saneringstid
+        - type: attribute
+          entity: sensor.brewassistant_cooling_target_temperature
+          attribute: target_temperature_source
+          name: Aktiv målkälla
+        - type: attribute
+          entity: sensor.brewassistant_cooling_target_temperature
+          attribute: brewfather_target_temperature
+          name: Brewfather jästemperatur
         - entity: sensor.brewassistant_cooling_process_temperature_source
           name: Temperaturkälla
         - entity: sensor.brewassistant_cooling_rate
@@ -109,3 +129,21 @@ card:
         Cooling kan rekommendera att cirkulation behövs, men startar, stoppar eller
         reglerar inte BrewZilla-pumpen. Kylvattnet kan köras manuellt från kranen
         eller senare styras via en valfri konfigurerad HA-switch.
+
+    - type: custom:button-card
+      name: Kvittera manuellt kylmål
+      icon: mdi:check-decagram
+      tap_action:
+        action: call-service
+        service: brewassistant.cooling_confirm_override
+        confirmation:
+          text: Bekräfta att det manuella målet ska åsidosätta Brewfather under pågående kylning?
+        data:
+          confirmed: true
+          target_temperature: '[[[ return Number(states["number.brewassistant_cooling_target_temperature"]?.state); ]]]'
+    - type: button
+      name: Återgå till Brewfather
+      icon: mdi:restore
+      tap_action:
+        action: call-service
+        service: brewassistant.cooling_clear_override

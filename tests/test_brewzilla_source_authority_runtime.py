@@ -52,6 +52,7 @@ def _allowed(mode, may_write, scope="none", *, rapt_stop=False,
     ns = FN["_write_allowed"].__globals__
     ns.update(
         base=BASE, BREWZILLA_ENTITIES=ENTITIES,
+        _BOIL_EXECUTION_IDENTITY=SimpleNamespace(get=lambda: None),
         RCL_ASSIST_SCOPE="rcl_assist", FULL_SCOPE="full",
         _live_authority=lambda hass: (authority, context),
         _safe_off_allowed=FN["_safe_off_allowed"],

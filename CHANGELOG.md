@@ -1,3 +1,17 @@
+## PUBLICERAD BETA — 2026.10.0b11 (2026-10-11)
+
+- Release `v2026.10.0b11` är publicerad som GitHub **Pre-release**, pekar på exakt
+  beta merge-SHA `87d80316f53df8d46a7edf06114e8a96c902b186` och har
+  7/7 godkända releasejobb. Det är **inte** fysisk vattenprovsacceptans.
+- **BOIL heat-utilization 100 %, pump OFF/0 %** på verifierat aktuellt steg;
+  ingen direkt BA→BZ-kanal och ingen heater ON/target-övertagning.
+- **Flight Recorder:** append-only JSONL, lätt HA-sensor och ren testbaseline.
+- **UI:** premium uppmärksamhetskort och permanent synlig ABORT.
+- **Separat pågående utveckling:** [PR #300 – CFC/kylspiral sista 15 min](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+  Den funktionen finns **inte** i publicerad 0b11. Historiska DEV PREVIEW-avsnitt
+  nedan behålls oförändrade som utvecklingshistorik.
+- `main` är inte promoterad till 0b11; stable kräver separat fysisk acceptans.
+
 ## BETA CANDIDATE — 2026.10.0b11: BOIL guards, premium UI och JSONL Flight Recorder (2026-10-11)
 
 - **BOIL:** endast aktuellt/verifierat RAPT BOIL-steg begär heat-utilization **100 %**, pump **OFF** och pump-utilization **0 %** via BA → RCL → BrewZilla. Ingen heater-ON eller profil-/targetövertagning. Säkerhetsreduktion, READ-ONLY, ABORT, källa/telemetrifel och resync går före.

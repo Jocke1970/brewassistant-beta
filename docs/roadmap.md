@@ -1,3 +1,45 @@
+# BrewAssistant – aktuella milstolpar (11 oktober 2026)
+
+**Gällande release:** [2026.10.0b11 – publicerad HACS Pre-release](2026.10.0b11-prerelease-notes_sv.md). Manifest och betatagg matchar testad beta-merge-SHA `87d80316f53df8d46a7edf06114e8a96c902b186`. 7/7 CI, Hassfest, HACS och isolerad HA/RCL-smoke godkända. **Detta är inte fysisk acceptans.**
+
+**SOP:** `dev → beta → main`. `main` är tidigare stable-gren; ingen 0b11-promotion till stable är gjord.
+
+**Nästa dev-arbete, 2026-10-15:** [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300) är **mergad till dev** efter åtgärdade Codex P1-fynd (NaN/utilization, färsk readback och BOIL→Cooling-race) och 7/7 godkända CI-jobb på exakt den sammanslagna dev-committen `db7af571d9cc73131be415942b8fac373e226982`. BOIL-kvittens har valen `CFC/kylspiral klar` och `Ingen kylning`. Utan giltigt val blir pump OFF/0 %. Pump ON/100 % kan föreslås först under verifierat RCL BOIL, sista ungefärliga 15 minuterna vid Start-baserad duration och efter färsk fysisk utilization-readback 100 %. Återanslutning kräver ny kvittens; pågående handling spärras vid stegbyte. **Inte publicerad i beta 0b11**: exakt RAPT-timergenomgång, verkligt HA-vattenprov och 0b12 release/promotion återstår.
+
+## Planerat: Smart Fermentation Control v2 – SG-targets
+
+**Designkontrakt:** [SG-styrda jässteg och manuell SG-mätning](smart-fermentation-control-v2-sg-targets_sv.md) (beslutad målbild, **inte implementerad**).
+
+- Brewfather äger temperaturer och stegordning; BA äger SG-targets per stegövergång.
+- TIME följer BF:s tider; SG följer BA:s SG-targets och använder BF-tider endast som referens.
+- SG-källa: konfigurerad RAPT Pill via RCL eller BLE, alternativt manuella hydrometer-/refraktometermätningar. Manuella kontrollmätningar kan registreras parallellt.
+- Kvittens före stegbyte, säkert beteende vid saknad/otillförlitlig SG, och sessionsbunden persistens.
+- **Sekvensering:** färdigställ och verifiera Cooling Runtime v2 först. Därefter implementation, tester och separat beta för SG-styrning.
+
+**Cooling Runtime v2 – dev 2026-10-15:** Kylmålet läses från `sensor.brewfather_all_batches_data` → enda batchens `recipe.fermentation.steps[0].stepTemp`, inte BrewTracker. Vid noll/flera batcher eller ogiltig temperatur används manuellt mål; säker batchmatchning och HA-fälttest återstår. Ändringen är ännu inte beta-verifierad.
+
+**Fermentation Tracking – dev 2026-10-15:** Jässchema och fermenteringsstart läses nu från enda batchen i `sensor.brewfather_all_batches_data` (`recipe.fermentation.steps` och `fermentingStart`), inte BrewTracker. Vid flera batcher föreslås inget BF-schema tills säker batchmatchning finns. Kodändring är inte HA-/beta-verifierad.
+
+**Dev-testcheckpoint 2026-10-15:** Regressionstester i `tests/test_brewfather_batch_sources.py` kontrollerar att Cooling/Tracking läser enda BF-batchen, ignorerar BrewTracker och nekar godtyckligt val vid flera/inga batcher. Vid första CI-körningen på `a512e1f5` misslyckades Python 3.11–3.13: det nya testet försökte importera HA-integrationen utan HA-beroenden. Dessutom var ett äldre test låst mot föråldrad BrewTracker-källa. **PR #305 är nu mergad till dev efter 7/7 gröna CI-jobb** på dess testfix-commit `51381773a28a80db1421a3d244872560060900f3` (Python 3.11/3.12/3.13, quality, Hassfest, HACS, isolerad HA/RCL-smoke). Testerna är därmed *CI-godkända men inte fysiskt verifierade i HA*. Kontrollera dessutom att en tidigare sparad BA-jäsningssession inte misstas för BF:s aktuella batch; explicit sessions-/batchmatchning är ett separat kvarstående arbete.
+
+## Prioriterade nästa steg
+
+1. **Fysiskt övervakat vattenprov på 0b11:** kontrollera normal RCL-profilägare, aktuell stegidentitet, BOIL heat-utilization 100 %, pump OFF/0 %, manuellt byte till intern BrewZilla-givare, RAPT-profilens egna pumpval och fysisk ABORT/readback.
+2. **BOIL CFC-grind inför nästa beta:** kodgranskning och 7/7 kombinerad CI är färdiga på `dev`; återstår att validera verklig RAPT/RCL-stegstart/timer och fysisk pump/ABORT/readback i övervakat vattenprov. En kommande beta ska ha **ny tagg**; `v2026.10.0b11` får aldrig flyttas.
+3. **Öppna fältavvikelser:** utred [issue #298](https://github.com/Jocke1970/brewassistant-beta/issues/298) om Mash-In gate under Mash Out, och [issue #288](https://github.com/Jocke1970/brewassistant-beta/issues/288) om pumpförlopp under Mash In utan att anta fysisk orsak.
+4. **Loggning och granskning:** använd nya [Flight Recorder JSONL](brewday-audit.md) för hela sekvensen utan 250-eventgräns. Tidigare testloggar migreras inte; bevara säkerhets-ABORT och källa separat.
+5. **Stable först senare:** inga `beta → main`-ändringar förrän fysisk testacceptans finns och relevanta återstående risker har bedömts.
+
+**Viktigt styrkontrakt:** vid RCL-kommunikationsbortfall gäller fail-passive och kvarhållet RAPT-ägarskap, **inte** STOP/OFF/0. BA skickar enbart via RCL:s exponerade HA-väg. Ingen automatisk takeover, heater ON eller step-advance på grund av otillgänglig data.
+
+Dokumentation: [README](../README.md), [HACS-installation](INSTALLATION.md), [BOIL 0b11](2026.10.0b11-boil-pump-off-zero_sv.md), [CFC PR](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+
+---
+
+## Historisk roadmap / äldre planeringsstatus
+
+**Materialet nedan dokumenterar läget ungefär september–1 oktober 2026.** Versioner, rekommenderade installationssteg och statusbeskrivningar i den historiska sektionen är **inte** gällande för 0b11. Ändra inte historiska testresultat retroaktivt; använd avsnittet ovan för nuläge.
+
 > **Brewday checkpoint 2026-10-09:** `dev` inför **Manual Brewing / Brewfather Brewing / RCL Brewing**. RCL Assist låser target/heater till RAPT/BrewZilla och ger BA Learning endast heat-utilization + pump ON/OFF/%. RCL/BF source-loss går via retained-recipe Manual fallback; reconnect återtar source ownership. Full persistent recipe→ManualPlan över HA-restart återstår. Se [designkontraktet](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
 
 # BrewAssistant – roadmap och acceptansgrindar

@@ -99,12 +99,8 @@ def build_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         status = "prepare"
         advice = "Prepare cooling equipment for sanitation."
     elif state == "SANITIZE":
-        if method == METHOD_COUNTERFLOW and pump_state != "on":
-            status = "wort_pump_required"
-            advice = "Start wort circulation through the CFC. Cooling water must remain off."
-        else:
-            status = "sanitizing"
-            advice = "Sanitation active. Keep cooling water off."
+        status = "sanitizing"
+        advice = "Sanitation active. Keep cooling water off."
     elif process_temp is None:
         status = "no_outlet_temperature" if method == METHOD_COUNTERFLOW else "no_process_temperature"
         advice = "Required cooling temperature is unavailable."
@@ -112,10 +108,7 @@ def build_cooling_snapshot(hass: HomeAssistant) -> dict[str, Any]:
         status = "no_target"
         advice = "Set a cooling target temperature."
     elif state in {"CHILLING", "TRANSFER"}:
-        if method == METHOD_COUNTERFLOW and pump_state != "on":
-            status = "wort_pump_required"
-            advice = "Start wort circulation through the CFC."
-        elif target_ready:
+        if target_ready:
             status = "transfer_ready" if state == "TRANSFER" else "on_target"
             advice = "Wort temperature is within the target range."
         elif delta is not None and delta < -READY_TOLERANCE_C:

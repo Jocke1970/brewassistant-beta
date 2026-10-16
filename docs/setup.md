@@ -1,6 +1,16 @@
-# Setup
+# Setup (backend layout and historical entity reference)
 
-This guide describes the current BrewAssistant beta setup in Home Assistant.
+> **Current release (2026-10-11):** install **2026.10.0b11** using
+> [the maintained HACS/install guide](INSTALLATION.md). Sections below
+> are a historical setup/diagnostic reference and may mention older entities,
+> dashboard cards and beta milestones. Use the tagged full cards for the actual
+> version installed. The upcoming BOIL CFC cooling acknowledgement is **not**
+> part of published 0b11; see [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+>
+> Current RAPT/BrewZilla safety path is **BA → RCL → BrewZilla** with
+> RAPT/RCL retaining profile ownership on link loss; no automatic STOP/OFF/0,
+> target takeover or unverified positive actuator write.
+
 
 BrewAssistant is centered on the Python custom integration in `custom_components/brewassistant/`. Old YAML package files are no longer the source of truth for mainline setup.
 
@@ -66,7 +76,7 @@ If Home Assistant keeps old entity IDs from the entity registry, verify the actu
 
 ## 3. Post-update smoke test
 
-After a beta.7 update, verify the entities used by the latest BrewZilla mash-in flow:
+For older Mash-In experiments, the following diagnostic entities were used (verify their actual names and availability in the installed 0b11 integration):
 
 ```text
 binary_sensor.brewassistant_brewzilla_mash_in_gate_pending
@@ -111,7 +121,6 @@ dashboard/cards/brewtracker_runtime.yaml
 dashboard/cards/brewzilla.yaml
 dashboard/cards/brewzilla_mash_in_confirm.yaml
 dashboard/cards/brewzilla_local_control.yaml
-dashboard/cards/brewzilla_advice_auto.yaml
 dashboard/cards/brewzilla_safety_rcl.yaml
 dashboard/cards/brewzilla_learning.yaml
 dashboard/cards/counterflow_chiller.yaml

@@ -1,3 +1,12 @@
+> **Nuvarande uppdatering 2026-10-11:** Läs
+> [0b11-releasenoterna](2026.10.0b11-prerelease-notes_sv.md) för den
+> publicerade testversionen. **RAPT/RCL äger profil, steg, timer och
+> temperaturmål**, medan BA:s assistans till heat-utilization och pump
+> endast får ske genom verifierad RCL-scope. Under källbortfall stoppas
+> inte profilen. Äldre BA-target-/heater-kontroll längre ned är
+> **historiskt och inte ett giltigt driftförslag**. BOIL CFC-kvittens
+> finns enbart i [PR #300](https://github.com/Jocke1970/brewassistant-beta/pull/300).
+
 > **Aktuellt 2026-10-09:** den äldre BA-ägda target-arkitekturen nedan är historik. På `dev` gäller nu **RCL Brewing / RCL Assist**: RAPT/BrewZilla äger recept, steg, timer och target; BA Learning får endast styra heat-utilization och pump ON/OFF/%. Se [aktuellt kontrakt](brewday-three-mode-rcl-assist-2026-10-09_sv.md).
 
 # RAPT BrewZilla profile runtime

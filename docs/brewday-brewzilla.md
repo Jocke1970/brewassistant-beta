@@ -1,3 +1,12 @@
+> **Aktuell version 2026-10-11:** Nedan följer äldre
+> (september) implementerings-/testhistorik för Brewday→BrewZilla.
+> För installerad **0b11** gäller i RCL-läge **BA → RCL → BrewZilla**
+> med RAPT som ensam profil-/timer-/targetägare, supervised apply,
+> separat ABORT och fail-passive källbortfall. En direkt BA→BZ-väg får
+> inte återinföras. Se [0b11 releasenoter](2026.10.0b11-prerelease-notes_sv.md)
+> och [senaste roadmap](roadmap.md). PR #300:s CFC-kvittens är
+> utveckling, inte redan publicerad beta.
+
 # Brewday / BrewZilla Direct Flow
 
 This document describes the current BrewAssistant hot-side control path from Brewfather Brew Tracker or Manual Brewday through BrewAssistant to BrewZilla/RAPT hardware.

@@ -1,3 +1,12 @@
+> **Aktuellt (2026-10-11):** Installerbar version är **2026.10.0b11**;
+> hämta hela YAML-kort från [den låsta betataggen](https://github.com/Jocke1970/brewassistant-beta/tree/v2026.10.0b11/dashboard/cards).
+> `brewday_control_status_sv.yaml`, `rapt_profile_runtime_sv.yaml` och
+> `brewassistant_brewday_event_log_sv.yaml` klistras in manuellt.
+> **PR #300:s CFC-/kylspiralkvittens är endast utveckling**, inte del av 0b11.
+> RAPT-profilen äger steg, timer och target. BA assisterar endast inom
+> verifierad RCL-scope och säkerhetsspärrar; på förlorad källa skickas
+> inga nya normalstyrkommandon och ingen automatisk STOP/OFF/0.
+
 # BrewAssistant dashboard
 
 This directory contains the current dashboard card baseline for BrewAssistant Beta.
@@ -165,7 +174,7 @@ The ownership chain is:
 RAPT Profile -> BrewAssistant -> RAPT Cloud Link -> BrewZilla
 ```
 
-RAPT provides the current profile step, target, end condition and next-step intent. BrewAssistant remains the hot-side controller for target application, heat utilization, pump utilization and hardware ON/OFF decisions.
+RAPT/RCL owns current profile step, timer, target and normal heater regulation. BrewAssistant's verified RCL Assist scope may recommend heat utilization and pump ON/OFF/utilization through RCL when permitted by current identity, read-only, supervised-apply, telemetry and ABORT guards. It must not take over profile target, heater switch or step advancement. RCL source loss is fail-passive, not STOP.
 
 The reference Mash-In convention is:
 

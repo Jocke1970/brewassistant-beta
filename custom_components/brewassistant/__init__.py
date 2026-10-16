@@ -31,6 +31,7 @@ from .brewzilla.brewzilla_mash_in_gate import (
     async_start_mash_circulation,
 )
 from .brewzilla.brewzilla_orchestration import async_abort_brewzilla, async_apply_brewzilla_target_if_allowed
+from .brewzilla import brewzilla_boil_pump_guard, brewzilla_boil_cooling_gate
 from .carbonation_backend.carbonation_runtime import (
     async_load_carbonation_runtime,
     async_save_carbonation_runtime,
@@ -46,6 +47,7 @@ from .grainfather_fermenter.preflight_runtime import (
     clear_gf30_preflight_runtime,
     record_gf30_manual_reference,
 )
+from .cooling.cooling_runtime import confirm_cooling_manual_override, clear_cooling_manual_override
 from .const import DOMAIN, PLATFORMS
 from .coordinator import BrewAssistantCoordinator
 from .hlt.runtime import async_setup_hlt_simulation
@@ -72,6 +74,7 @@ SERVICE_BREWDAY_AUDIT_CLEAR = "brewday_audit_clear"
 SERVICE_BREWDAY_AUDIT_SNAPSHOT = "brewday_audit_snapshot"
 SERVICE_EXTERNAL_RECONNECT_ACK = "brewday_reconnect_ack"
 SERVICE_BREWDAY_START_VERIFIED = "brewday_start_verified"
+SERVICE_BOIL_COOLING_CHOICE = "boil_cooling_choice"
 SERVICE_MANUAL_PREPARE = "manual_brewday_prepare"
 SERVICE_MANUAL_START = "manual_brewday_start"
 SERVICE_MANUAL_PAUSE = "manual_brewday_pause"
@@ -82,6 +85,8 @@ SERVICE_MANUAL_START_WHIRLPOOL = "manual_brewday_start_whirlpool"
 SERVICE_MANUAL_START_COOLING = "manual_brewday_start_cooling"
 SERVICE_MANUAL_FINISH = "manual_brewday_finish"
 SERVICE_MANUAL_RESET = "manual_brewday_reset"
+SERVICE_COOLING_CONFIRM_OVERRIDE = "cooling_confirm_override"
+SERVICE_COOLING_CLEAR_OVERRIDE = "cooling_clear_override"
 SERVICE_CARBONATION_START = "carbonation_start"
 SERVICE_CARBONATION_UPDATE = "carbonation_update"
 SERVICE_CARBONATION_PAUSE = "carbonation_pause"
@@ -184,6 +189,11 @@ def _register_services(hass: HomeAssistant) -> None:
                 "sensor.brewassistant_brewday_stage_priority",
                 "sensor.brewassistant_brewday_stage_suggested_action",
                 "sensor.brewassistant_brewday_stage_control_hint",
+                "sensor.brewassistant_cooling_status",
+                "sensor.brewassistant_cooling_target_temperature",
+                "sensor.brewassistant_cooling_summary",
+                "sensor.brewassistant_cooling_advice",
+                "number.brewassistant_cooling_target_temperature",
                 "sensor.brewassistant_wort_cooling_status",
                 "sensor.brewassistant_wort_cooling_summary",
                 "sensor.brewassistant_wort_cooling_reference_temperature",
@@ -378,6 +388,36 @@ def _register_services(hass: HomeAssistant) -> None:
         )
         await _refresh_runtime_sensors()
 
+    async def _handle_boil_cooling_choice(call: ServiceCall) -> None:
+        """Arm only the current verified RCL BOIL; no immediate hardware write."""
+        try:
+            result = brewzilla_boil_cooling_gate.select(
+                hass,
+                choice=str(call.data.get("choice") or ""),
+                confirmed=call.data.get("confirmed") is True,
+                expected_session_id=str(call.data.get("expected_session_id") or ""),
+                expected_profile_id=str(call.data.get("expected_profile_id") or ""),
+                expected_step_id=str(call.data.get("expected_step_id") or ""),
+                expected_transition_at=str(call.data.get("expected_transition_at") or ""),
+                active_boil=brewzilla_boil_pump_guard._current_boil(hass),
+            )
+        except ValueError as exc:
+            raise HomeAssistantError(str(exc)) from exc
+        await async_record_brewday_audit_event(
+            hass, "boil_cooling_choice", always_record=True,
+            note=(
+                "Operator BOIL cooling choice: "
+                + result["boil_cooling_choice"] + " for RCL session "
+                + str(result["boil_cooling_session_id"])
+            ),
+        )
+        await hass.services.async_call(
+            "homeassistant", "update_entity",
+            {"entity_id": "sensor.brewassistant_brewzilla_boil_cooling_status"},
+            blocking=False,
+        )
+        _LOGGER.info("BOIL cooling selection acknowledged: %s", result["boil_cooling_choice"])
+
     async def _handle_manual_prepare(call: ServiceCall) -> None:
         assert_manual_brewday_mutation_allowed(hass, action="prepare")
         session = get_manual_brewday_session(hass)
@@ -479,6 +519,20 @@ def _register_services(hass: HomeAssistant) -> None:
         await _refresh_gf30_sensors()
         _LOGGER.info("GF30 thermal preflight history cleared")
 
+    async def _handle_cooling_confirm_override(call: ServiceCall) -> None:
+        try:
+            confirm_cooling_manual_override(hass, confirmed=call.data.get("confirmed") is True,
+                                            target_temperature=float(call.data["target_temperature"]))
+        except (ValueError, TypeError, KeyError) as err:
+            raise HomeAssistantError(str(err)) from err
+        await _refresh_runtime_sensors()
+
+    async def _handle_cooling_clear_override(call: ServiceCall) -> None:
+        clear_cooling_manual_override(hass)
+        await _refresh_runtime_sensors()
+
+    hass.services.async_register(DOMAIN, SERVICE_COOLING_CONFIRM_OVERRIDE, _handle_cooling_confirm_override)
+    hass.services.async_register(DOMAIN, SERVICE_COOLING_CLEAR_OVERRIDE, _handle_cooling_clear_override)
     hass.services.async_register(DOMAIN, SERVICE_FORCE_BREWFATHER_REFRESH, _handle_force_brewfather_refresh)
     hass.services.async_register(DOMAIN, SERVICE_APPLY_BREWZILLA_TARGET, _handle_apply_brewzilla_target)
     hass.services.async_register(DOMAIN, SERVICE_ABORT_BREWZILLA, _handle_abort_brewzilla)
@@ -491,6 +545,7 @@ def _register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_AUDIT_SNAPSHOT, _handle_brewday_audit_snapshot)
     hass.services.async_register(DOMAIN, SERVICE_EXTERNAL_RECONNECT_ACK, _handle_external_reconnect_ack)
     hass.services.async_register(DOMAIN, SERVICE_BREWDAY_START_VERIFIED, _handle_brewday_start_verified)
+    hass.services.async_register(DOMAIN, SERVICE_BOIL_COOLING_CHOICE, _handle_boil_cooling_choice)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PREPARE, _handle_manual_prepare)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_START, _handle_manual_start)
     hass.services.async_register(DOMAIN, SERVICE_MANUAL_PAUSE, _handle_manual_pause)

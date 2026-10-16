@@ -17,6 +17,7 @@ from ..entity import BrewAssistantEntity
 
 ORCHESTRATION_SENSORS: dict[str, dict[str, Any]] = {
     "brewzilla_orchestration_mode": {"field": "orchestration_mode"},
+    "brewzilla_boil_cooling_status": {"field": "boil_cooling_choice"},
     "brewzilla_control_reason": {"field": "control_reason"},
     "brewzilla_safety_state": {"field": "safety_state"},
     "brewzilla_requested_target": {

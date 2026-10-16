@@ -17,16 +17,7 @@ from .recipe_schedule import build_recipe_temperature_schedule
 from .snapshot import build_fermentation_snapshot
 
 INVALID_STATES = {"unknown", "unavailable", "none", ""}
-BREWFATHER_RECIPE_CANDIDATES = (
-    "sensor.brewfather_brew_tracker_raw",
-    "sensor.brewfather_brewtracker_raw",
-)
-BREWFATHER_FERMENTATION_START_CANDIDATES = (
-    "sensor.brewfather_fermentation_start",
-    "sensor.brewfather_fermentation_start_date",
-    "sensor.brewfather_brewfather_fermentation_start",
-)
-
+BREWFATHER_BATCHES_ENTITY = "sensor.brewfather_all_batches_data"
 
 @dataclass(frozen=True, kw_only=True)
 class FermentationTrackingSensorConfig:
@@ -56,61 +47,51 @@ def _external_numeric(
     return value, state.last_updated, entity_id
 
 
-def _timestamp_from_state(state: Any) -> datetime | None:
-    if state is None or str(state.state).lower() in INVALID_STATES:
+def _timestamp_from_value(value: Any) -> datetime | None:
+    """Parse the fermentation start from the selected batch, not BrewTracker."""
+    if not isinstance(value, str) or not value.strip():
         return None
     try:
-        value = datetime.fromisoformat(str(state.state).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
         return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _brewfather_recipe_schedule(
     coordinator: BrewAssistantCoordinator,
 ) -> tuple[float | None, str | None, str | None, dict[str, Any] | None]:
-    """Interpret Brewfather's read-only recipe inside BrewAssistant.
+    """Use the current Brewfather batch feed; never the brewday BrewTracker.
 
-    The Brewfather fork is intentionally only a data adapter: it exposes the full
-    recipe on the BrewTracker raw sensor.  Temperature-step and ramp semantics are
-    owned here by the BrewAssistant fermentation tracking backend.
+    Multiple batches require explicit selection before a target can be proposed.
     """
-    recipe_state = None
-    recipe_entity = None
-    recipe: Mapping[str, Any] | None = None
-    for entity_id in BREWFATHER_RECIPE_CANDIDATES:
-        state = coordinator.hass.states.get(entity_id)
-        candidate = state.attributes.get("recipe") if state is not None else None
-        if isinstance(candidate, Mapping):
-            recipe_state = state
-            recipe_entity = entity_id
-            recipe = candidate
-            break
-
-    if recipe_state is None or recipe is None:
+    state = coordinator.hass.states.get(BREWFATHER_BATCHES_ENTITY)
+    if state is None or str(state.state).lower() in INVALID_STATES:
         return None, None, None, None
-
-    fermentation_started_at = None
-    for entity_id in BREWFATHER_FERMENTATION_START_CANDIDATES:
-        state = coordinator.hass.states.get(entity_id)
-        fermentation_started_at = _timestamp_from_state(state)
-        if fermentation_started_at is not None:
-            break
+    batches = state.attributes.get("data")
+    if not isinstance(batches, list) or len(batches) != 1:
+        return None, None, None, None
+    batch = batches[0]
+    if not isinstance(batch, Mapping):
+        return None, None, None, None
+    recipe = batch.get("recipe")
+    if not isinstance(recipe, Mapping):
+        return None, None, None, None
 
     schedule = build_recipe_temperature_schedule(
         recipe,
-        fermentation_started_at=fermentation_started_at,
+        fermentation_started_at=_timestamp_from_value(batch.get("fermentingStart")),
         now=datetime.now(timezone.utc),
     )
     if schedule is None:
-        return None, recipe_entity, None, None
+        return None, BREWFATHER_BATCHES_ENTITY, None, None
 
     target = schedule.get("target_temperature_c")
     if target is None:
-        return None, recipe_entity, None, schedule
-    return float(target), recipe_entity, "brewfather_recipe_schedule", schedule
+        return None, BREWFATHER_BATCHES_ENTITY, None, schedule
+    return float(target), BREWFATHER_BATCHES_ENTITY, "brewfather_recipe_schedule", schedule
 
 
 def build_tracking_sensor_snapshot(coordinator: BrewAssistantCoordinator) -> dict[str, Any]:
