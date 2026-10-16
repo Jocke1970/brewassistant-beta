@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install test runner
-        run: python -m pip install pytest
+        run: python -m pip install pytest PyYAML
       - name: Compile backend
         run: python -m compileall -q custom_components/brewassistant
       - name: Run backend regression suite
