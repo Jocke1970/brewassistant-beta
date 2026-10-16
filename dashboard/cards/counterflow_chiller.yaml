@@ -17,6 +17,8 @@ card:
         - sensor.brewassistant_cooling_status
         - sensor.brewassistant_cooling_advice
         - sensor.brewassistant_cooling_process_temperature
+        - sensor.brewassistant_brewzilla_wort_temperature
+        - sensor.rapt_temp_a7ba_temperature
         - sensor.brewassistant_cooling_target_temperature
         - sensor.brewassistant_cooling_delta
         - sensor.brewassistant_cooling_rate
@@ -46,7 +48,16 @@ card:
           const temp = fmt('sensor.brewassistant_cooling_process_temperature');
           const target = fmt('sensor.brewassistant_cooling_target_temperature', 0);
           const delta = fmt('sensor.brewassistant_cooling_delta');
-          return `${state} · ${method}<br>${temp} °C → ${target} °C · Δ ${delta} °C<br>${advice}`;
+          const isCfc = method === 'Counterflow chiller';
+          const isImmersion = method === 'Immersion chiller';
+          const outlet = fmt('sensor.rapt_temp_a7ba_temperature');
+          const wort = fmt('sensor.brewassistant_brewzilla_wort_temperature');
+          const readings = isCfc
+            ? `CFC outlet: ${outlet} °C${outlet === '—' ? ' (RAPT BLE unavailable)' : ''}<br>Wort (BrewZilla): ${wort} °C`
+            : isImmersion
+              ? `Wort (BrewZilla): ${wort} °C`
+              : `Manual temperature: ${temp} °C`;
+          return `${state} · ${method}<br>${readings}<br>Cooling target: ${target} °C · Δ ${delta} °C<br>${advice}`;
         ]]]
       styles:
         card:
